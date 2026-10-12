@@ -8,6 +8,7 @@ An automated developer workflow script for building and deploying privileged sys
 |---|---|
 | `build_apk.sh` | Core execution script (orchestration logic) |
 | `apk.config` | Project configuration (profile selection, lunch targets, deploy flags, debug tags) |
+| `const_audio.config` | Global Audio & ADB shell commands configuration (shared across projects) |
 | `config_crypto.py` | Encrypt / decrypt `apk.config` with a password (PBKDF2 + Fernet) |
 
 ---
@@ -141,11 +142,11 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `--repo-reset` | Executes `repo forall -c "git reset --hard && git clean -xdf"` before `repo sync` (discards local edits) |
 | `--git-diff` | Displays `git diff HEAD^ HEAD` in the script's git repository and exits |
 | `--git-amend` | Runs `git commit --amend --no-edit` (staged changes only) and exits |
-| `--update, update` | Updates this toolkit repository via `git pull origin main` (auto-resets hard on error) |
+| `--update`, `update` | Updates this toolkit repository via `git pull origin main` (auto-resets hard on error) |
 | `--git-help`, `git` | Displays cheatsheet of commonly used Git commands and exits |
 | `--docker-help`, `docker` | Displays cheatsheet of commonly used Docker commands and exits |
 | `--network-help`, `network` | Displays cheatsheet of commonly used Network & Port commands and exits |
-| `--audio, audio [action]` | Controls audio via ADB shell (`vol-up`, `vol-down`, `vol-mute`, `d`/`dump`) using commands from `apk.config` |
+| `--audio`, `audio [action]` | Controls audio via ADB shell (`vol-up`, `vol-down`, `vol-mute`, `d`/`dump`) using commands from `const_audio.config` (or overrides in `apk.config`) |
 | `--find-file <pattern> [path]` | Searches for files by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-dir <pattern> [path]` | Searches for directories by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-text <text> [path]` | Greps for text string in files under `[path]` (defaults to `.` if omitted) |
@@ -269,9 +270,9 @@ This ensures `Log.isLoggable(TAG, Log.DEBUG)` returns `true` in Java code and pe
 
 ---
 
-### 5.3b Audio & Custom ADB Shell Commands
+### 5.3b Audio & Custom ADB Shell Commands (`const_audio.config`)
 
-Configure commands executed when running `telua audio <action>` or `telua --audio <action>`:
+Các lệnh ADB điều khiển âm lượng và audio status được quản lý tập trung trong file cố định **`const_audio.config`** (nằm cùng thư mục với `build_apk.sh`), dùng chung cho tất cả các workspace:
 
 | Variable | Default | Description |
 |---|---|---|
@@ -281,10 +282,9 @@ Configure commands executed when running `telua audio <action>` or `telua --audi
 | `ADB_SHELL_AUDIO_DUMP` | `"dumpsys audio"` | Command executed for `dump` / `d` (alternative: `"dumpsys car_service --services CarAudioService"`) |
 | `AUDIO_CLI_LIST` | Mảng 4 lệnh CLI | Danh sách lệnh hiển thị cho người dùng khi chạy `telua audio` |
 
-> **Danh sách Audio CLI tuỳ biến (`AUDIO_CLI_LIST`):**
-> Trong `apk.config`, bạn có thể thêm/bớt/sửa các phần tử trong mảng `AUDIO_CLI_LIST` theo cú pháp:
-> `"action :: mô tả :: câu_lệnh_adb"`
-> Khi gõ `telua audio` (hoặc `telua --audio`), script sẽ tự động hiển thị danh sách các lệnh này để hỗ trợ người dùng và cho phép gọi trực tiếp `telua audio <action>`.
+> **Ghi chú về tách biệt cấu hình:**
+> - `const_audio.config` giữ các giá trị mặc định dùng chung cho mọi dự án.
+> - Nếu một dự án cụ thể cần tùy biến riêng câu lệnh âm thanh, bạn có thể khai báo đè (override) trực tiếp các biến này trong file `apk.config` của dự án đó.
 
 > **Android Automotive (AAOS) & CarShellCommand:**
 > In AAOS environments, you can customize these commands to invoke `CarShellCommand` (`cmd car_service ...`) or dump `CarAudioService`.
@@ -356,6 +356,28 @@ echo "12345" | ./config_crypto.py encrypt -
 |---|---|---|---|
 | `encrypt` | `apk.config` | `enc_apk.config` | Overwrites existing output file automatically |
 | `decrypt` | `enc_apk.config` | `dec_apk.config` | Preserves existing file; requires `--force` to overwrite |
+
+---
+
+### 5.6 Toolkit Auto-Update (`telua update` / `--update`)
+
+Tự động cập nhật kho lưu trữ master của bộ công cụ `telua` lên commit mới nhất từ nhánh `origin/main`:
+
+```bash
+telua update
+# Hoặc:
+./build_apk.sh --update
+```
+
+* **Cơ chế tự phục hồi xung đột (Self-Healing / Auto-Recovery):**
+  1. Script thực thi lệnh: `git pull origin main` trên thư mục repo gốc của `build_apk.sh`.
+  2. Nếu phát hiện lỗi merge conflict hoặc working tree bị thay đổi cục bộ ngoài ý muốn, kịch bản sẽ tự động kích hoạt chế độ phục hồi:
+     ```bash
+     git fetch origin main
+     git reset --hard origin/main
+     git pull origin main
+     ```
+  3. Giúp các kỹ sư và workspace luôn đồng bộ được phiên bản script mới nhất một cách trơn tru, không bị kẹt lỗi git.
 
 ---
 

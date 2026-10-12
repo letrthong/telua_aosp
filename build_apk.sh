@@ -9,10 +9,25 @@
 set -e
 
 # --- Constants & Global Defaults ---
-SCRIPT_VERSION="2.7.0"
-SCRIPT_LAST_UPDATED="2026-10-12"
+SCRIPT_VERSION="2.7.1"
+SCRIPT_LAST_UPDATED="2026-10-13"
 CONFIG_FILE_NAME="apk.config"
+AUDIO_CONFIG_FILE_NAME="const_audio.config"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Resolve master script directory (even if executed through symlink)
+get_master_script_dir() {
+    local real_script
+    if command -v realpath >/dev/null 2>&1; then
+        real_script="$(realpath "${BASH_SOURCE[0]}")"
+    elif command -v readlink >/dev/null 2>&1; then
+        real_script="$(readlink -f "${BASH_SOURCE[0]}")"
+    else
+        real_script="${BASH_SOURCE[0]}"
+    fi
+    cd "$(dirname "$real_script")" && pwd
+}
+MASTER_SCRIPT_DIR="$(get_master_script_dir)"
 
 # Tìm apk.config: ưu tiên tại $PWD hoặc duyệt ngược lên các thư mục cha của dự án
 find_config_file() {
@@ -31,6 +46,27 @@ find_config_file() {
 }
 
 CONFIG_FILE="$(find_config_file)"
+
+# Tìm const_audio.config: ưu tiên tại MASTER_SCRIPT_DIR (cùng thư mục build_apk.sh gốc) hoặc SCRIPT_DIR
+find_audio_config_file() {
+    if [ -f "$MASTER_SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME" ]; then
+        echo "$MASTER_SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME"
+        return 0
+    fi
+    if [ -f "$SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME" ]; then
+        echo "$SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME"
+        return 0
+    fi
+    local cfg_dir
+    cfg_dir="$(dirname "$CONFIG_FILE" 2>/dev/null || echo "")"
+    if [ -n "$cfg_dir" ] && [ -f "$cfg_dir/$AUDIO_CONFIG_FILE_NAME" ]; then
+        echo "$cfg_dir/$AUDIO_CONFIG_FILE_NAME"
+        return 0
+    fi
+    echo "$MASTER_SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME"
+}
+
+AUDIO_CONFIG_FILE="$(find_audio_config_file)"
 
 # Logging helpers with colors
 log_info()    { echo -e "\033[1;34m[INFO]\033[0m $*"; }
@@ -79,7 +115,7 @@ Options:
   --softlink [path]           Symlink this script + copy $CONFIG_FILE_NAME into [path] (overwrites)
                               (defaults to SOFTLINK_TARGET_PATH from $CONFIG_FILE_NAME if omitted)
   --audio, audio [action]     Control audio via ADB shell: vol-up | vol-down | vol-mute | dump (or d)
-                              Commands are read dynamically from $CONFIG_FILE_NAME:
+                              Commands are read dynamically from $AUDIO_CONFIG_FILE_NAME:
                               ADB_SHELL_AUDIO_UP, DOWN, MUTE, DUMP
   --repo-sync                 Run 'repo sync' in ROOT_DIR, cd to android/qssi & run post_sync_cli before build
   --repo-reset                Run 'repo forall -c "git reset --hard && git clean -xdf"' and exit (no sync, no build)
@@ -97,6 +133,7 @@ Options:
 
 Configuration Info:
   Active Config:              $CONFIG_FILE
+  Audio Config (Global):      $AUDIO_CONFIG_FILE
   Master Template:            $SCRIPT_DIR/$CONFIG_FILE_NAME
   Encrypted Template:         $SCRIPT_DIR/enc_apk.config
 EOF
@@ -303,15 +340,16 @@ parse_arguments() {
 
 # --- 1d. Audio Control & Custom ADB Shell Commands (--audio / audio) ---
 show_audio_help() {
-    local up_cmd="${ADB_SHELL_AUDIO_UP:-${ADB_SHELL_AUDIO_VOL_UP:-${ADB_SHELL_VOL_UP:-cmd media_session volume --show --adj raise}}}"
-    local down_cmd="${ADB_SHELL_AUDIO_DOWN:-${ADB_SHELL_AUDIO_DONW:-${ADB_SHELL_AUDIO_VOL_DOWN:-${ADB_SHELL_VOL_DOWN:-cmd media_session volume --show --adj lower}}}}"
-    local mute_cmd="${ADB_SHELL_AUDIO_MUTE:-${ADB_SHELL_AUDIO_VOL_MUTE:-${ADB_SHELL_VOL_MUTE:-cmd media_session volume --show --adj mute}}}"
-    local dump_cmd="${ADB_SHELL_AUDIO_DUMP:-${ADB_SHELL_AUDIO_D:-${ADB_SHELL_DUMP:-dumpsys audio}}}"
+    local up_cmd="${ADB_SHELL_AUDIO_UP:-cmd media_session volume --show --adj raise}"
+    local down_cmd="${ADB_SHELL_AUDIO_DOWN:-cmd media_session volume --show --adj lower}"
+    local mute_cmd="${ADB_SHELL_AUDIO_MUTE:-cmd media_session volume --show --adj mute}"
+    local dump_cmd="${ADB_SHELL_AUDIO_DUMP:-${ADB_SHELL_AUDIO_D:-dumpsys audio}}"
 
     echo ""
     echo -e "\033[1;36m================================================================================\033[0m"
     echo -e "\033[1;32m  telua audio - Danh sách lệnh điều khiển Audio qua ADB Shell\033[0m"
-    echo -e "  Config File: \033[0;33m$CONFIG_FILE\033[0m"
+    echo -e "  Config File:       \033[0;33m$CONFIG_FILE\033[0m"
+    echo -e "  Audio Config File: \033[0;33m$AUDIO_CONFIG_FILE\033[0m"
     echo -e "\033[1;36m================================================================================\033[0m"
     echo ""
     echo -e "\033[1;33mDANH SÁCH LỆNH AUDIO HỖ TRỢ (Audio CLI Commands):\033[0m"
@@ -366,22 +404,22 @@ show_audio_help() {
     else
         cat <<EOF
   1. telua audio vol-up
-     Mô tả:       Tăng âm lượng (Volume Up)
+     Mô tả:       Volume Up
      Biến config: ADB_SHELL_AUDIO_UP
      Lệnh ADB:    adb shell $up_cmd
 
   2. telua audio vol-down
-     Mô tả:       Giảm âm lượng (Volume Down)
+     Mô tả:       Volume Down
      Biến config: ADB_SHELL_AUDIO_DOWN
      Lệnh ADB:    adb shell $down_cmd
 
   3. telua audio vol-mute
-     Mô tả:       Bật / Tắt mute âm lượng (Volume Mute)
+     Mô tả:       Volume Mute
      Biến config: ADB_SHELL_AUDIO_MUTE
      Lệnh ADB:    adb shell $mute_cmd
 
   4. telua audio dump   (alias: telua audio d)
-     Mô tả:       Dump trạng thái Audio / CarAudioService
+     Mô tả:       Dump Audio / CarAudio status
      Biến config: ADB_SHELL_AUDIO_D / ADB_SHELL_AUDIO_DUMP
      Lệnh ADB:    adb shell $dump_cmd
 
@@ -389,7 +427,7 @@ EOF
     fi
 
     echo -e "\033[1;36m--------------------------------------------------------------------------------\033[0m"
-    echo -e "\033[1;33mBIẾN CẤU HÌNH ADB_SHELL_AUDIO_* VÀ MẢNG AUDIO_CLI_LIST TRONG $CONFIG_FILE_NAME:\033[0m"
+    echo -e "\033[1;33mBIẾN CẤU HÌNH ADB_SHELL_AUDIO_* VÀ MẢNG AUDIO_CLI_LIST ($AUDIO_CONFIG_FILE_NAME):\033[0m"
     local has_dynamic_vars=0
     for var_name in ${!ADB_SHELL_AUDIO_@}; do
         echo -e "  \033[1;35m$var_name\033[0m = \"\033[0;32m${!var_name}\033[0m\""
@@ -408,7 +446,7 @@ EOF
             echo -e "  - \033[0;36m\"$item\"\033[0m"
         done
     else
-        echo -e "  \033[0;90m(Chưa khai báo mảng AUDIO_CLI_LIST trong $CONFIG_FILE_NAME)\033[0m"
+        echo -e "  \033[0;90m(Chưa khai báo mảng AUDIO_CLI_LIST trong $AUDIO_CONFIG_FILE_NAME hoặc $CONFIG_FILE_NAME)\033[0m"
     fi
 
     echo -e "\033[1;36m--------------------------------------------------------------------------------\033[0m"
@@ -466,19 +504,19 @@ handle_audio_command() {
     case "$action_normalized" in
         vol-up|up|volup|volume-up|raise)
             action_label="Volume Up"
-            adb_cmd="${ADB_SHELL_AUDIO_UP:-${ADB_SHELL_AUDIO_VOL_UP:-${ADB_SHELL_VOL_UP:-cmd media_session volume --show --adj raise}}}"
+            adb_cmd="${ADB_SHELL_AUDIO_UP:-cmd media_session volume --show --adj raise}"
             ;;
         vol-down|down|voldown|volume-down|lower)
             action_label="Volume Down"
-            adb_cmd="${ADB_SHELL_AUDIO_DOWN:-${ADB_SHELL_AUDIO_DONW:-${ADB_SHELL_AUDIO_VOL_DOWN:-${ADB_SHELL_VOL_DOWN:-cmd media_session volume --show --adj lower}}}}"
+            adb_cmd="${ADB_SHELL_AUDIO_DOWN:-cmd media_session volume --show --adj lower}"
             ;;
         vol-mute|mute|volmute|volume-mute)
             action_label="Volume Mute"
-            adb_cmd="${ADB_SHELL_AUDIO_MUTE:-${ADB_SHELL_AUDIO_VOL_MUTE:-${ADB_SHELL_VOL_MUTE:-cmd media_session volume --show --adj mute}}}"
+            adb_cmd="${ADB_SHELL_AUDIO_MUTE:-cmd media_session volume --show --adj mute}"
             ;;
         dump|d|dumpsys|status)
             action_label="Audio Dump"
-            adb_cmd="${ADB_SHELL_AUDIO_DUMP:-${ADB_SHELL_AUDIO_D:-${ADB_SHELL_DUMP:-dumpsys audio}}}"
+            adb_cmd="${ADB_SHELL_AUDIO_DUMP:-${ADB_SHELL_AUDIO_D:-dumpsys audio}}"
             ;;
         *)
             # Check if matching action in AUDIO_CLI_LIST
@@ -719,6 +757,7 @@ show_info_general() {
     echo -e "\n\033[1;36m=== 1. GENERAL BUILD CONFIGURATION ===\033[0m"
     echo "  Script Version:   v$SCRIPT_VERSION (Updated: $SCRIPT_LAST_UPDATED)"
     echo "  Config File:      $CONFIG_FILE"
+    echo "  Audio Config:     $AUDIO_CONFIG_FILE"
     echo "  Project:          ${ACTIVE_PROJECT:-default}"
     echo "  Target Platform:  $target_platform"
     echo "  Target Lunch:     ${CONFIG_TARGET_PRODUCT}-${CONFIG_TARGET_BUILD_VARIANT}"
@@ -755,10 +794,10 @@ show_info_android() {
     echo "  Logcat Filter:    ${LOGCAT_FILTER:-None (full)}"
     echo "  Debug Tags:       ${DEBUG_LOG_TAGS:-None} (Enabled: ${ENABLE_DEBUG_LOG:-false})"
     echo "  Audio Controls (ADB Shell):"
-    echo "    Vol Up:         ${ADB_SHELL_AUDIO_UP:-${ADB_SHELL_AUDIO_VOL_UP:-${ADB_SHELL_VOL_UP:-cmd media_session volume --show --adj raise}}}"
-    echo "    Vol Down:       ${ADB_SHELL_AUDIO_DOWN:-${ADB_SHELL_AUDIO_DONW:-${ADB_SHELL_AUDIO_VOL_DOWN:-${ADB_SHELL_VOL_DOWN:-cmd media_session volume --show --adj lower}}}}"
-    echo "    Vol Mute:       ${ADB_SHELL_AUDIO_MUTE:-${ADB_SHELL_AUDIO_VOL_MUTE:-${ADB_SHELL_VOL_MUTE:-cmd media_session volume --show --adj mute}}}"
-    echo "    Audio Dump:     ${ADB_SHELL_AUDIO_DUMP:-${ADB_SHELL_AUDIO_D:-${ADB_SHELL_DUMP:-dumpsys audio}}}"
+    echo "    Vol Up:         ${ADB_SHELL_AUDIO_UP:-cmd media_session volume --show --adj raise}"
+    echo "    Vol Down:       ${ADB_SHELL_AUDIO_DOWN:-cmd media_session volume --show --adj lower}"
+    echo "    Vol Mute:       ${ADB_SHELL_AUDIO_MUTE:-cmd media_session volume --show --adj mute}"
+    echo "    Audio Dump:     ${ADB_SHELL_AUDIO_DUMP:-${ADB_SHELL_AUDIO_D:-dumpsys audio}}"
     if command -v adb >/dev/null 2>&1; then
         local dev_state build_type internal_id vendor_build_type
         dev_state=$(adb get-state 2>/dev/null || echo "offline")
@@ -813,13 +852,22 @@ show_info() {
 
 # --- 2. Load & Validate Configuration ---
 load_and_validate_config() {
+    # 1. Nạp cấu hình Audio chung (nằm cùng thư mục với build_apk.sh)
+    if [ -f "$AUDIO_CONFIG_FILE" ]; then
+        source "$AUDIO_CONFIG_FILE"
+    elif [ -f "$MASTER_SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME" ]; then
+        source "$MASTER_SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME"
+    elif [ -f "$SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME" ]; then
+        source "$SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME"
+    fi
+
     if [ ! -f "$CONFIG_FILE" ]; then
         log_error "Configuration file '$CONFIG_FILE_NAME' not found in $PWD or $SCRIPT_DIR!"
         log_error "Please create $CONFIG_FILE_NAME with required variables."
         exit 1
     fi
 
-    # Load configuration
+    # 2. Nạp cấu hình dự án (có thể ghi đè bất kỳ biến Audio nào nếu cần)
     source "$CONFIG_FILE"
 
     local missing_vars=0
