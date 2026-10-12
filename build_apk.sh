@@ -9,11 +9,13 @@
 set -e
 
 # --- Constants & Global Defaults ---
-SCRIPT_VERSION="2.7.2"
+SCRIPT_VERSION="2.7.3"
 SCRIPT_LAST_UPDATED="2026-10-13"
 CONFIG_FILE_NAME="apk.config"
 AUDIO_CONFIG_FILE_NAME="const_audio.config"
 GIT_CONFIG_FILE_NAME="const_git.config"
+DOCKER_CONFIG_FILE_NAME="const_docker.config"
+NETWORK_CONFIG_FILE_NAME="const_network.config"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Resolve master script directory (even if executed through symlink)
@@ -90,6 +92,48 @@ find_git_config_file() {
 
 GIT_CONFIG_FILE="$(find_git_config_file)"
 
+# Tìm const_docker.config: ưu tiên tại MASTER_SCRIPT_DIR (cùng thư mục build_apk.sh gốc) hoặc SCRIPT_DIR
+find_docker_config_file() {
+    if [ -f "$MASTER_SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME" ]; then
+        echo "$MASTER_SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME"
+        return 0
+    fi
+    if [ -f "$SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME" ]; then
+        echo "$SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME"
+        return 0
+    fi
+    local cfg_dir
+    cfg_dir="$(dirname "$CONFIG_FILE" 2>/dev/null || echo "")"
+    if [ -n "$cfg_dir" ] && [ -f "$cfg_dir/$DOCKER_CONFIG_FILE_NAME" ]; then
+        echo "$cfg_dir/$DOCKER_CONFIG_FILE_NAME"
+        return 0
+    fi
+    echo "$MASTER_SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME"
+}
+
+DOCKER_CONFIG_FILE="$(find_docker_config_file)"
+
+# Tìm const_network.config: ưu tiên tại MASTER_SCRIPT_DIR (cùng thư mục build_apk.sh gốc) hoặc SCRIPT_DIR
+find_network_config_file() {
+    if [ -f "$MASTER_SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME" ]; then
+        echo "$MASTER_SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME"
+        return 0
+    fi
+    if [ -f "$SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME" ]; then
+        echo "$SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME"
+        return 0
+    fi
+    local cfg_dir
+    cfg_dir="$(dirname "$CONFIG_FILE" 2>/dev/null || echo "")"
+    if [ -n "$cfg_dir" ] && [ -f "$cfg_dir/$NETWORK_CONFIG_FILE_NAME" ]; then
+        echo "$cfg_dir/$NETWORK_CONFIG_FILE_NAME"
+        return 0
+    fi
+    echo "$MASTER_SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME"
+}
+
+NETWORK_CONFIG_FILE="$(find_network_config_file)"
+
 # Logging helpers with colors
 log_info()    { echo -e "\033[1;34m[INFO]\033[0m $*"; }
 log_success() { echo -e "\033[1;32m[SUCCESS]\033[0m $*"; }
@@ -157,6 +201,8 @@ Configuration Info:
   Active Config:              $CONFIG_FILE
   Audio Config (Global):      $AUDIO_CONFIG_FILE
   Git Cheatsheet (Global):    $GIT_CONFIG_FILE
+  Docker Cheatsheet (Global): $DOCKER_CONFIG_FILE
+  Network Cheatsheet (Global):$NETWORK_CONFIG_FILE
   Master Template:            $SCRIPT_DIR/$CONFIG_FILE_NAME
   Encrypted Template:         $SCRIPT_DIR/enc_apk.config
 EOF
@@ -1134,128 +1180,32 @@ find_text() {
 }
 
 # --- 4e. Docker Help Utility (--docker-help: frequently used Docker commands) ---
+# Commands are read dynamically from const_docker.config (located with build_apk.sh)
 show_docker_help() {
-    cat <<'EOF'
-
-==============================================================================
-                    FREQUENTLY USED DOCKER COMMANDS CHEATSHEET
-==============================================================================
-
-[1. SERVICE & DAEMON MANAGEMENT (SYSTEMD)]
-  sudo systemctl status docker              # Check Docker daemon service status
-  sudo systemctl start docker               # Start Docker daemon
-  sudo systemctl stop docker                # Stop Docker daemon
-  sudo systemctl restart docker             # Restart Docker daemon
-  sudo systemctl enable docker              # Enable Docker to start automatically on boot
-  sudo journalctl -u docker -f              # Follow live Docker service logs
-
-[2. CONTAINER LIFECYCLE]
-  docker ps                                 # List running containers
-  docker ps -a                              # List all containers (including exited)
-  docker run -it --name <name> <image> bash # Run container interactively
-  docker start <container_id/name>          # Start stopped container
-  docker stop <container_id/name>           # Stop running container gracefully
-  docker restart <container_id/name>        # Restart container
-  docker rm <container_id/name>             # Remove a stopped container
-  docker rm -f $(docker ps -aq)             # Force remove ALL containers
-
-[3. EXEC & INTERACTIVE SHELL]
-  docker exec -it <container> /bin/bash     # Enter container bash terminal
-  docker exec -it <container> sh            # Enter container sh terminal
-  docker exec -u 0 -it <container> bash     # Enter container as root user
-  docker logs -f <container>                # Follow real-time container stdout/stderr
-  docker logs --tail 100 <container>        # View last 100 log lines
-
-[4. IMAGE MANAGEMENT]
-  docker images                             # List downloaded/built images
-  docker pull <image>:<tag>                 # Download image from registry
-  docker build -t <tag_name> .              # Build image from Dockerfile in current dir
-  docker rmi <image_id>                     # Remove specific local image
-  docker rmi -f $(docker images -q)         # Force remove ALL unused images
-
-[5. VOLUMES & WORKSPACE MOUNTING]
-  docker cp <local_path> <container>:<path> # Copy files from host into container
-  docker cp <container>:<path> <local_path> # Copy files from container to host
-  docker run -v $(pwd):/workspace <image>   # Mount current directory into container
-  docker volume ls                          # List all persistent volumes
-  docker volume prune -f                    # Remove unused volumes
-
-[6. RESOURCE STATS & SYSTEM CLEANUP]
-  docker stats                              # Live CPU, memory, I/O usage per container
-  docker system df                          # Summary of Docker disk usage
-  docker system prune -f                    # Remove stopped containers, dangling images
-  docker system prune -a --volumes -f       # Deep clean: remove ALL unused docker assets
-
-==============================================================================
-TIP: When compiling AOSP inside Docker, preserve file ownership with:
-     docker run -u $(id -u):$(id -g) -v $(pwd):/src <image>
-==============================================================================
-
-EOF
+    if [ -f "$DOCKER_CONFIG_FILE" ]; then
+        cat "$DOCKER_CONFIG_FILE"
+    elif [ -f "$MASTER_SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME" ]; then
+        cat "$MASTER_SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME"
+    elif [ -f "$SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME" ]; then
+        cat "$SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME"
+    else
+        log_warn "Docker cheatsheet file '$DOCKER_CONFIG_FILE_NAME' not found!"
+    fi
     exit 0
 }
 
 # --- 4f. Network Help Utility (--network-help: frequently used Network & Port commands) ---
+# Commands are read dynamically from const_network.config (located with build_apk.sh)
 show_network_help() {
-    cat <<'EOF'
-
-==============================================================================
-                    FREQUENTLY USED NETWORK COMMANDS CHEATSHEET
-==============================================================================
-
-[1. OPEN PORTS & TCP/UDP LISTENING (LỖ HỔNG & TIẾN TRÌNH CHIẾM PORT)]
-  sudo ss -tulpn                            # Show ALL listening TCP/UDP ports with PID & process name
-  ss -tuln                                  # Show listening TCP/UDP ports numerically (no root needed)
-  sudo netstat -tulpn                       # Classic netstat: listening ports with PID & program name
-  sudo lsof -i :<port>                      # Find which process/PID is occupying a specific port (e.g. :5555)
-  sudo lsof -iTCP -sTCP:LISTEN -P -n        # List all active TCP listening sockets without hostname lookup
-  sudo fuser <port>/tcp                     # Show PID using a TCP port
-  sudo fuser -k <port>/tcp                  # Force KILL the process occupying a specific TCP port!
-  ss -ta                                    # Show all TCP sockets (ESTABLISHED, CLOSE_WAIT, TIME_WAIT)
-
-[2. IP ADDRESSES & NETWORK INTERFACES (IFCONFIG / IP)]
-  ip addr show (or 'ip a')                  # Display all network interfaces with assigned IPs
-  ip -br addr                               # Brief one-line overview of interfaces (UP/DOWN, IP)
-  ifconfig -a                               # Classic interface overview (IP, netmask, MAC, packets)
-  hostname -I                               # Print all host IP addresses quickly
-  ip route show                             # View routing table & default gateway
-  ip link set <eth0> up/down                # Bring interface UP or DOWN
-
-[3. CONNECTIVITY & PORT TESTING (PING, CURL, NETCAT)]
-  ping -c 4 <ip_or_domain>                  # Test ICMP echo reachability (4 packets)
-  nc -zv <host> <port>                      # Test if a remote TCP port is open (e.g. nc -zv 192.168.1.50 5555)
-  curl -I <url>                             # Fetch HTTP response headers only
-  curl -v telnet://<host>:<port>            # Test TCP connection using curl
-  traceroute <host>                         # Trace route packet hops to destination
-  mtr <host>                                # Real-time combined ping + traceroute
-
-[4. DNS LOOKUP & RESOLUTION]
-  dig +short <domain>                       # Query DNS A-records quickly
-  nslookup <domain>                         # Basic DNS name server lookup
-  resolvectl status                         # View systemd-resolved DNS servers & cache
-
-[5. PACKET CAPTURE & LIVE TRAFFIC (ADB & DEBUGGING)]
-  sudo tcpdump -i any -n port 5555          # Capture raw packets on ADB port 5555
-  sudo tcpdump -i <eth0> -n "icmp"          # Capture ping packets on specific interface
-  sudo iftop -i <eth0>                      # Live interactive bandwidth usage per connection
-  nload                                     # Visual real-time network traffic monitor
-
-[6. ADB OVER WI-FI / NETWORK (ANDROID)]
-  adb tcpip 5555                            # Restart adbd on device listening on TCP port 5555
-  adb connect <device_ip>:5555              # Connect ADB over network/Wi-Fi
-  adb disconnect                            # Disconnect all wireless ADB sessions
-  adb -s <device_ip>:5555 shell             # Open shell on specific networked device
-
-[7. FIREWALL (UFW & IPTABLES)]
-  sudo ufw status verbose                   # View Ubuntu UFW firewall status & allowed ports
-  sudo ufw allow <port>/tcp                 # Open specific incoming port in firewall
-  sudo iptables -L -n -v                    # List detailed Linux kernel firewall rules
-
-==============================================================================
-TIP: If ADB port 5037 is locked: 'sudo fuser -k 5037/tcp && adb start-server'
-==============================================================================
-
-EOF
+    if [ -f "$NETWORK_CONFIG_FILE" ]; then
+        cat "$NETWORK_CONFIG_FILE"
+    elif [ -f "$MASTER_SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME" ]; then
+        cat "$MASTER_SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME"
+    elif [ -f "$SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME" ]; then
+        cat "$SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME"
+    else
+        log_warn "Network cheatsheet file '$NETWORK_CONFIG_FILE_NAME' not found!"
+    fi
     exit 0
 }
 

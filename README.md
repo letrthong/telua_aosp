@@ -10,6 +10,8 @@ An automated developer workflow script for building and deploying privileged sys
 | `apk.config` | Project configuration (profile selection, lunch targets, deploy flags, debug tags) |
 | `const_audio.config` | Global Audio & ADB shell commands configuration (shared across projects) |
 | `const_git.config` | Frequently used Git & Google Repo commands cheatsheet |
+| `const_docker.config` | Frequently used Docker daemon, container & image commands cheatsheet |
+| `const_network.config` | Frequently used Network, Port & ADB over Wi-Fi commands cheatsheet |
 | `config_crypto.py` | Encrypt / decrypt `apk.config` with a password (PBKDF2 + Fernet) |
 
 ---
