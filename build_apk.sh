@@ -9,10 +9,11 @@
 set -e
 
 # --- Constants & Global Defaults ---
-SCRIPT_VERSION="2.7.1"
+SCRIPT_VERSION="2.7.2"
 SCRIPT_LAST_UPDATED="2026-10-13"
 CONFIG_FILE_NAME="apk.config"
 AUDIO_CONFIG_FILE_NAME="const_audio.config"
+GIT_CONFIG_FILE_NAME="const_git.config"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Resolve master script directory (even if executed through symlink)
@@ -67,6 +68,27 @@ find_audio_config_file() {
 }
 
 AUDIO_CONFIG_FILE="$(find_audio_config_file)"
+
+# Tìm const_git.config: ưu tiên tại MASTER_SCRIPT_DIR (cùng thư mục build_apk.sh gốc) hoặc SCRIPT_DIR
+find_git_config_file() {
+    if [ -f "$MASTER_SCRIPT_DIR/$GIT_CONFIG_FILE_NAME" ]; then
+        echo "$MASTER_SCRIPT_DIR/$GIT_CONFIG_FILE_NAME"
+        return 0
+    fi
+    if [ -f "$SCRIPT_DIR/$GIT_CONFIG_FILE_NAME" ]; then
+        echo "$SCRIPT_DIR/$GIT_CONFIG_FILE_NAME"
+        return 0
+    fi
+    local cfg_dir
+    cfg_dir="$(dirname "$CONFIG_FILE" 2>/dev/null || echo "")"
+    if [ -n "$cfg_dir" ] && [ -f "$cfg_dir/$GIT_CONFIG_FILE_NAME" ]; then
+        echo "$cfg_dir/$GIT_CONFIG_FILE_NAME"
+        return 0
+    fi
+    echo "$MASTER_SCRIPT_DIR/$GIT_CONFIG_FILE_NAME"
+}
+
+GIT_CONFIG_FILE="$(find_git_config_file)"
 
 # Logging helpers with colors
 log_info()    { echo -e "\033[1;34m[INFO]\033[0m $*"; }
@@ -134,6 +156,7 @@ Options:
 Configuration Info:
   Active Config:              $CONFIG_FILE
   Audio Config (Global):      $AUDIO_CONFIG_FILE
+  Git Cheatsheet (Global):    $GIT_CONFIG_FILE
   Master Template:            $SCRIPT_DIR/$CONFIG_FILE_NAME
   Encrypted Template:         $SCRIPT_DIR/enc_apk.config
 EOF
@@ -340,11 +363,6 @@ parse_arguments() {
 
 # --- 1d. Audio Control & Custom ADB Shell Commands (--audio / audio) ---
 show_audio_help() {
-    local up_cmd="${ADB_SHELL_AUDIO_UP:-cmd media_session volume --show --adj raise}"
-    local down_cmd="${ADB_SHELL_AUDIO_DOWN:-cmd media_session volume --show --adj lower}"
-    local mute_cmd="${ADB_SHELL_AUDIO_MUTE:-cmd media_session volume --show --adj mute}"
-    local dump_cmd="${ADB_SHELL_AUDIO_DUMP:-${ADB_SHELL_AUDIO_D:-dumpsys audio}}"
-
     echo ""
     echo -e "\033[1;36m================================================================================\033[0m"
     echo -e "\033[1;32m  telua audio - Danh sách lệnh điều khiển Audio qua ADB Shell\033[0m"
@@ -381,72 +399,25 @@ show_audio_help() {
                 extra_alias=" (alias: telua audio d)"
             fi
 
-            local var_name=""
-            case "$item_action" in
-                vol-up|up)     var_name="ADB_SHELL_AUDIO_UP" ;;
-                vol-down|down) var_name="ADB_SHELL_AUDIO_DOWN" ;;
-                vol-mute|mute) var_name="ADB_SHELL_AUDIO_MUTE" ;;
-                dump|d)        var_name="ADB_SHELL_AUDIO_D / ADB_SHELL_AUDIO_DUMP" ;;
-                *)
-                    local var_suf
-                    var_suf=$(echo "$item_action" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-                    var_name="ADB_SHELL_AUDIO_${var_suf}"
-                    ;;
-            esac
-
             echo -e "  \033[1;32m$idx.\033[0m \033[1;37mtelua audio $item_action\033[0m\033[0;36m$extra_alias\033[0m"
             echo -e "     \033[0;90mMô tả:\033[0m       $item_desc"
-            echo -e "     \033[0;90mBiến config:\033[0m \033[1;35m$var_name\033[0m"
             echo -e "     \033[0;90mLệnh ADB:\033[0m    \033[0;33madb shell $item_cmd\033[0m"
             echo ""
             idx=$((idx + 1))
         done
     else
-        cat <<EOF
-  1. telua audio vol-up
-     Mô tả:       Volume Up
-     Biến config: ADB_SHELL_AUDIO_UP
-     Lệnh ADB:    adb shell $up_cmd
-
-  2. telua audio vol-down
-     Mô tả:       Volume Down
-     Biến config: ADB_SHELL_AUDIO_DOWN
-     Lệnh ADB:    adb shell $down_cmd
-
-  3. telua audio vol-mute
-     Mô tả:       Volume Mute
-     Biến config: ADB_SHELL_AUDIO_MUTE
-     Lệnh ADB:    adb shell $mute_cmd
-
-  4. telua audio dump   (alias: telua audio d)
-     Mô tả:       Dump Audio / CarAudio status
-     Biến config: ADB_SHELL_AUDIO_D / ADB_SHELL_AUDIO_DUMP
-     Lệnh ADB:    adb shell $dump_cmd
-
-EOF
+        echo -e "  \033[0;90m(Chưa khai báo mảng AUDIO_CLI_LIST trong $AUDIO_CONFIG_FILE_NAME hoặc $CONFIG_FILE_NAME)\033[0m"
     fi
 
     echo -e "\033[1;36m--------------------------------------------------------------------------------\033[0m"
-    echo -e "\033[1;33mBIẾN CẤU HÌNH ADB_SHELL_AUDIO_* VÀ MẢNG AUDIO_CLI_LIST ($AUDIO_CONFIG_FILE_NAME):\033[0m"
+    echo -e "\033[1;33mBIẾN CẤU HÌNH ADB_SHELL_AUDIO_* ($AUDIO_CONFIG_FILE_NAME):\033[0m"
     local has_dynamic_vars=0
     for var_name in ${!ADB_SHELL_AUDIO_@}; do
         echo -e "  \033[1;35m$var_name\033[0m = \"\033[0;32m${!var_name}\033[0m\""
         has_dynamic_vars=1
     done
     if [ "$has_dynamic_vars" -eq 0 ]; then
-        echo -e "  \033[1;35mADB_SHELL_AUDIO_UP\033[0m   = \"\033[0;32m$up_cmd\033[0m\""
-        echo -e "  \033[1;35mADB_SHELL_AUDIO_DOWN\033[0m = \"\033[0;32m$down_cmd\033[0m\""
-        echo -e "  \033[1;35mADB_SHELL_AUDIO_MUTE\033[0m = \"\033[0;32m$mute_cmd\033[0m\""
-        echo -e "  \033[1;35mADB_SHELL_AUDIO_D\033[0m    = \"\033[0;32m$dump_cmd\033[0m\""
-    fi
-    echo ""
-    echo -e "\033[1;33mMảng AUDIO_CLI_LIST:\033[0m"
-    if [ -n "${AUDIO_CLI_LIST[*]}" ] && [ "${#AUDIO_CLI_LIST[@]}" -gt 0 ]; then
-        for item in "${AUDIO_CLI_LIST[@]}"; do
-            echo -e "  - \033[0;36m\"$item\"\033[0m"
-        done
-    else
-        echo -e "  \033[0;90m(Chưa khai báo mảng AUDIO_CLI_LIST trong $AUDIO_CONFIG_FILE_NAME hoặc $CONFIG_FILE_NAME)\033[0m"
+        echo -e "  \033[0;90m(Không tìm thấy biến ADB_SHELL_AUDIO_* nào)\033[0m"
     fi
 
     echo -e "\033[1;36m--------------------------------------------------------------------------------\033[0m"
@@ -461,9 +432,9 @@ EOF
 
 is_audio_action() {
     local target="$1"
-    case "$target" in
-        vol-up|vol-down|vol-mute|dump|d|up|down|mute) return 0 ;;
-    esac
+    target=$(echo "$target" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+    [ "$target" = "d" ] && target="dump"
+
     if [ -n "${AUDIO_CLI_LIST[*]}" ]; then
         for item in "${AUDIO_CLI_LIST[@]}"; do
             local act=""
@@ -497,73 +468,57 @@ handle_audio_command() {
 
     local action_normalized
     action_normalized=$(echo "$action" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+    [ "$action_normalized" = "d" ] && action_normalized="dump"
 
     local adb_cmd=""
     local action_label=""
 
-    case "$action_normalized" in
-        vol-up|up|volup|volume-up|raise)
-            action_label="Volume Up"
-            adb_cmd="${ADB_SHELL_AUDIO_UP:-cmd media_session volume --show --adj raise}"
-            ;;
-        vol-down|down|voldown|volume-down|lower)
-            action_label="Volume Down"
-            adb_cmd="${ADB_SHELL_AUDIO_DOWN:-cmd media_session volume --show --adj lower}"
-            ;;
-        vol-mute|mute|volmute|volume-mute)
-            action_label="Volume Mute"
-            adb_cmd="${ADB_SHELL_AUDIO_MUTE:-cmd media_session volume --show --adj mute}"
-            ;;
-        dump|d|dumpsys|status)
-            action_label="Audio Dump"
-            adb_cmd="${ADB_SHELL_AUDIO_DUMP:-${ADB_SHELL_AUDIO_D:-dumpsys audio}}"
-            ;;
-        *)
-            # Check if matching action in AUDIO_CLI_LIST
-            if [ -n "${AUDIO_CLI_LIST[*]}" ]; then
-                for item in "${AUDIO_CLI_LIST[@]}"; do
-                    local it_action="" it_desc="" it_cmd=""
-                    if [[ "$item" == *" :: "* ]]; then
-                        it_action="${item%% :: *}"
-                        local it_rest="${item#* :: }"
-                        it_desc="${it_rest%% :: *}"
-                        it_cmd="${it_rest#* :: }"
-                    elif [[ "$item" == *"|"* ]]; then
-                        it_action="$(echo "$item" | cut -d'|' -f1)"
-                        it_desc="$(echo "$item" | cut -d'|' -f2)"
-                        it_cmd="$(echo "$item" | cut -d'|' -f3-)"
-                    fi
-                    it_action="$(echo "$it_action" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
-                    if [ "$it_action" = "$action_normalized" ]; then
-                        action_label="$(echo "$it_desc" | xargs)"
-                        adb_cmd="$(echo "$it_cmd" | xargs)"
-                        break
-                    fi
-                done
+    # 1. Tìm action trực tiếp trong mảng AUDIO_CLI_LIST (Single Source of Truth)
+    if [ -n "${AUDIO_CLI_LIST[*]}" ]; then
+        for item in "${AUDIO_CLI_LIST[@]}"; do
+            local it_action="" it_desc="" it_cmd=""
+            if [[ "$item" == *" :: "* ]]; then
+                it_action="${item%% :: *}"
+                local it_rest="${item#* :: }"
+                it_desc="${item_rest%% :: *}"
+                it_cmd="${item_rest#* :: }"
+            elif [[ "$item" == *"|"* ]]; then
+                it_action="$(echo "$item" | cut -d'|' -f1)"
+                it_desc="$(echo "$item" | cut -d'|' -f2)"
+                it_cmd="$(echo "$item" | cut -d'|' -f3-)"
             fi
-
-            # If still empty, check matching custom variable ADB_SHELL_AUDIO_<ACTION> or ADB_SHELL_<ACTION>
-            if [ -z "$adb_cmd" ]; then
-                local var_suffix
-                var_suffix=$(echo "$action" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-                local var_audio="ADB_SHELL_AUDIO_${var_suffix}"
-                local var_generic="ADB_SHELL_${var_suffix}"
-
-                if [ -n "${!var_audio}" ]; then
-                    action_label="Custom Audio ($action)"
-                    adb_cmd="${!var_audio}"
-                elif [ -n "${!var_generic}" ]; then
-                    action_label="Custom ADB Shell ($action)"
-                    adb_cmd="${!var_generic}"
-                else
-                    log_error "Unknown audio action '$action'!"
-                    log_error "Supported actions: vol-up | vol-down | vol-mute | dump (or configure AUDIO_CLI_LIST in $CONFIG_FILE_NAME)"
-                    show_audio_help
-                    exit 1
-                fi
+            it_action="$(echo "$it_action" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
+            if [ "$it_action" = "$action_normalized" ]; then
+                action_label="$(echo "$it_desc" | xargs)"
+                adb_cmd="$(echo "$it_cmd" | xargs)"
+                break
             fi
-            ;;
-    esac
+        done
+    fi
+
+    # 2. Nếu chưa có trong AUDIO_CLI_LIST, kiểm tra biến động ADB_SHELL_AUDIO_<ACTION> hoặc ADB_SHELL_<ACTION>
+    if [ -z "$adb_cmd" ]; then
+        local var_suffix
+        var_suffix=$(echo "$action_normalized" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+        local var_audio="ADB_SHELL_AUDIO_${var_suffix}"
+        local var_generic="ADB_SHELL_${var_suffix}"
+
+        if [ -n "${!var_audio}" ]; then
+            action_label="Audio ($action)"
+            adb_cmd="${!var_audio}"
+        elif [ -n "${!var_generic}" ]; then
+            action_label="ADB Shell ($action)"
+            adb_cmd="${!var_generic}"
+        fi
+    fi
+
+    # 3. Nếu vẫn không tìm thấy, báo lỗi và hiển thị trợ giúp
+    if [ -z "$adb_cmd" ]; then
+        log_error "Unknown audio action '$action'!"
+        log_error "Supported actions: vol-up | vol-down | vol-mute | dump (or configure AUDIO_CLI_LIST in $AUDIO_CONFIG_FILE_NAME)"
+        show_audio_help
+        exit 1
+    fi
 
     if ! command -v adb >/dev/null 2>&1; then
         log_error "'adb' command not found. Please ensure Android platform-tools is in your PATH."
@@ -1129,74 +1084,17 @@ run_git_update() {
 }
 
 # --- 4c. Git Help Utility (--git-help: frequently used Git commands) ---
-# Add or customize your most-used Git commands in this function.
+# Commands are read dynamically from const_git.config (located with build_apk.sh)
 show_git_help() {
-    cat <<'EOF'
-
-==============================================================================
-                    FREQUENTLY USED GIT COMMANDS CHEATSHEET
-==============================================================================
-
-[1. STATUS & INSPECTION]
-  git status -s                             # Short status (modified/untracked)
-  git log --oneline -n 10                   # View last 10 commits compactly
-  git log --graph --oneline --decorate -15  # Visual branch commit history graph
-  git show HEAD                             # View latest commit changes & metadata
-  git diff HEAD^ HEAD                       # Diff between previous commit and HEAD
-
-[2. STAGING & COMMIT]
-  git add -u                                # Stage tracked modified/deleted files only
-  git add .                                 # Stage all modified and new files
-  git commit -m "feat: message"             # Commit staged changes with message
-  git commit -s -m "feat: message"          # Commit with Signed-off-by (AOSP standard)
-  git commit --amend --no-edit              # Add staged changes to last commit silently
-  git commit --amend                        # Modify last commit message / content
-
-[3. DIFF & COMPARISON]
-  git diff                                  # Diff unstaged changes vs working tree
-  git diff --cached (or --staged)           # Diff staged changes vs HEAD
-  git diff HEAD~2 HEAD                      # Compare changes across last 2 commits
-  git diff <branch_a>..<branch_b>           # Compare changes between two branches
-
-[4. STASH & WORKSPACE ISOLATION]
-  git stash push -m "WIP work"              # Stash uncommitted changes with note
-  git stash list                            # List all stashed changes
-  git stash pop                             # Re-apply latest stash and drop it
-  git stash apply                           # Re-apply latest stash and keep it
-  git stash drop                            # Discard latest stash
-
-[5. RESET, UNDO & CLEAN]
-  git restore <file>                        # Discard changes in working directory
-  git restore --staged <file>               # Unstage file (keep local modifications)
-  git reset --soft HEAD^                    # Undo last commit, keep changes staged
-  git reset --mixed HEAD^                   # Undo last commit, keep changes unstaged
-  git reset --hard HEAD                     # Discard all uncommitted changes
-  telua update                              # Pull origin main with auto-reset hard on conflict
-  git clean -fd                             # Remove untracked files & directories
-  git clean -xdf                            # Remove ALL untracked + gitignored files
-
-[6. BRANCHING & SWITCHING]
-  git branch -a                             # List local and remote branches
-  git checkout -b <new_branch>              # Create and switch to new branch
-  git switch <existing_branch>              # Switch branch (modern Git syntax)
-  git branch -D <branch_name>               # Force delete a local branch
-
-[7. GOOGLE REPO (MULTI-GIT AOSP TOOLS)]
-  repo forall -c "git status -s"            # Check git status across all sub-repos
-  repo forall -c "git reset --hard && git clean -xdf" # Hard reset all repos
-  repo diff -u                              # View diff across all repos
-  repo upload .                             # Upload current project to Gerrit
-
-[8. SEARCH UTILITIES (FILE, DIRECTORY & TEXT)]
-  ./build_apk.sh --find-file <pattern> [path] # Find file by name (default: '.')
-  ./build_apk.sh --find-dir <pattern> [path]  # Find directory by name (default: '.')
-  ./build_apk.sh --find-text <text> [path]    # Grep text in files (default: '.')
-
-==============================================================================
-TIP: You can edit show_git_help() in build_apk.sh to add your own custom commands!
-==============================================================================
-
-EOF
+    if [ -f "$GIT_CONFIG_FILE" ]; then
+        cat "$GIT_CONFIG_FILE"
+    elif [ -f "$MASTER_SCRIPT_DIR/$GIT_CONFIG_FILE_NAME" ]; then
+        cat "$MASTER_SCRIPT_DIR/$GIT_CONFIG_FILE_NAME"
+    elif [ -f "$SCRIPT_DIR/$GIT_CONFIG_FILE_NAME" ]; then
+        cat "$SCRIPT_DIR/$GIT_CONFIG_FILE_NAME"
+    else
+        log_warn "Git cheatsheet file '$GIT_CONFIG_FILE_NAME' not found!"
+    fi
     exit 0
 }
 

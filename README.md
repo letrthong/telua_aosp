@@ -9,6 +9,7 @@ An automated developer workflow script for building and deploying privileged sys
 | `build_apk.sh` | Core execution script (orchestration logic) |
 | `apk.config` | Project configuration (profile selection, lunch targets, deploy flags, debug tags) |
 | `const_audio.config` | Global Audio & ADB shell commands configuration (shared across projects) |
+| `const_git.config` | Frequently used Git & Google Repo commands cheatsheet |
 | `config_crypto.py` | Encrypt / decrypt `apk.config` with a password (PBKDF2 + Fernet) |
 
 ---
