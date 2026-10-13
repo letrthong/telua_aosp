@@ -79,8 +79,25 @@ To maintain high code quality across the codebase, please adhere to these rules:
 - Always include the standard Apache License 2.0 header at the top of new files:
   ```bash
   # ==============================================================================
-  # Copyright (C) 2026 letrthong@gmail.com
-  # Licensed under the Apache License, Version 2.0
+  # Copyright (C) 2026 Thong Le <letrthong@gmail.com>
+  # Author & Maintainer: Thong Le <letrthong@gmail.com>
+  #
+  # Contribution History:
+  #   - 2026-10: Thong Le <letrthong@gmail.com> (Architecture & Domain Design)
+  #   - 2026-10: Gemini 3.8 Pro - Google DeepMind (Implementation & Refactoring)
+  #   - <YYYY-MM>: <Contributor Name> <<email>> (<Description of contribution>)
+  #
+  # Licensed under the Apache License, Version 2.0 (the "License");
+  # you may not use this file except in compliance with the License.
+  # You may obtain a copy of the License at
+  #
+  #     http://www.apache.org/licenses/LICENSE-2.0
+  #
+  # Unless required by applicable law or agreed to in writing, software
+  # distributed under the License is distributed on an "AS IS" BASIS,
+  # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  # See the License for the specific language governing permissions and
+  # limitations under the License.
   # ==============================================================================
   ```
 
