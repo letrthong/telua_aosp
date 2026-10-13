@@ -66,131 +66,58 @@ find_config_file() {
 
 CONFIG_FILE="$(find_config_file)"
 
-# Tìm const_audio.config: ưu tiên tại MASTER_SCRIPT_DIR (cùng thư mục build_apk.sh gốc) hoặc SCRIPT_DIR
-find_audio_config_file() {
-    if [ -f "$MASTER_SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME" ]; then
-        echo "$MASTER_SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME"
+# Thư mục con chứa các cấu hình constant
+CONST_CONFIG_DIR_NAME="config"
+
+# Tìm các file const_*.config: ưu tiên tại config/ của MASTER_SCRIPT_DIR, sau đó là root (tương thích ngược)
+find_const_config_file() {
+    local fname="$1"
+    # 1. Ưu tiên trong thư mục config/ của MASTER_SCRIPT_DIR
+    if [ -f "$MASTER_SCRIPT_DIR/$CONST_CONFIG_DIR_NAME/$fname" ]; then
+        echo "$MASTER_SCRIPT_DIR/$CONST_CONFIG_DIR_NAME/$fname"
         return 0
     fi
-    if [ -f "$SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME" ]; then
-        echo "$SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME"
+    # 2. Tìm trong thư mục gốc của MASTER_SCRIPT_DIR (tương thích ngược)
+    if [ -f "$MASTER_SCRIPT_DIR/$fname" ]; then
+        echo "$MASTER_SCRIPT_DIR/$fname"
         return 0
     fi
+    # 3. Tìm trong thư mục config/ hoặc gốc của SCRIPT_DIR
+    if [ -f "$SCRIPT_DIR/$CONST_CONFIG_DIR_NAME/$fname" ]; then
+        echo "$SCRIPT_DIR/$CONST_CONFIG_DIR_NAME/$fname"
+        return 0
+    fi
+    if [ -f "$SCRIPT_DIR/$fname" ]; then
+        echo "$SCRIPT_DIR/$fname"
+        return 0
+    fi
+    # 4. Tìm trong thư mục dự án (nếu dự án tự override file const)
     local cfg_dir
     cfg_dir="$(dirname "$CONFIG_FILE" 2>/dev/null || echo "")"
-    if [ -n "$cfg_dir" ] && [ -f "$cfg_dir/$AUDIO_CONFIG_FILE_NAME" ]; then
-        echo "$cfg_dir/$AUDIO_CONFIG_FILE_NAME"
-        return 0
+    if [ -n "$cfg_dir" ]; then
+        if [ -f "$cfg_dir/$CONST_CONFIG_DIR_NAME/$fname" ]; then
+            echo "$cfg_dir/$CONST_CONFIG_DIR_NAME/$fname"
+            return 0
+        fi
+        if [ -f "$cfg_dir/$fname" ]; then
+            echo "$cfg_dir/$fname"
+            return 0
+        fi
     fi
-    echo "$MASTER_SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME"
+    # Fallback mặc định
+    if [ -d "$MASTER_SCRIPT_DIR/$CONST_CONFIG_DIR_NAME" ]; then
+        echo "$MASTER_SCRIPT_DIR/$CONST_CONFIG_DIR_NAME/$fname"
+    else
+        echo "$MASTER_SCRIPT_DIR/$fname"
+    fi
 }
 
-AUDIO_CONFIG_FILE="$(find_audio_config_file)"
-
-# Tìm const_dumpsys.config: ưu tiên tại MASTER_SCRIPT_DIR (cùng thư mục build_apk.sh gốc) hoặc SCRIPT_DIR
-find_dump_config_file() {
-    if [ -f "$MASTER_SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME" ]; then
-        echo "$MASTER_SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME"
-        return 0
-    fi
-    if [ -f "$SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME" ]; then
-        echo "$SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME"
-        return 0
-    fi
-    local cfg_dir
-    cfg_dir="$(dirname "$CONFIG_FILE" 2>/dev/null || echo "")"
-    if [ -n "$cfg_dir" ] && [ -f "$cfg_dir/$DUMP_CONFIG_FILE_NAME" ]; then
-        echo "$cfg_dir/$DUMP_CONFIG_FILE_NAME"
-        return 0
-    fi
-    echo "$MASTER_SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME"
-}
-
-DUMP_CONFIG_FILE="$(find_dump_config_file)"
-
-# Tìm const_git.config: ưu tiên tại MASTER_SCRIPT_DIR (cùng thư mục build_apk.sh gốc) hoặc SCRIPT_DIR
-find_git_config_file() {
-    if [ -f "$MASTER_SCRIPT_DIR/$GIT_CONFIG_FILE_NAME" ]; then
-        echo "$MASTER_SCRIPT_DIR/$GIT_CONFIG_FILE_NAME"
-        return 0
-    fi
-    if [ -f "$SCRIPT_DIR/$GIT_CONFIG_FILE_NAME" ]; then
-        echo "$SCRIPT_DIR/$GIT_CONFIG_FILE_NAME"
-        return 0
-    fi
-    local cfg_dir
-    cfg_dir="$(dirname "$CONFIG_FILE" 2>/dev/null || echo "")"
-    if [ -n "$cfg_dir" ] && [ -f "$cfg_dir/$GIT_CONFIG_FILE_NAME" ]; then
-        echo "$cfg_dir/$GIT_CONFIG_FILE_NAME"
-        return 0
-    fi
-    echo "$MASTER_SCRIPT_DIR/$GIT_CONFIG_FILE_NAME"
-}
-
-GIT_CONFIG_FILE="$(find_git_config_file)"
-
-# Tìm const_docker.config: ưu tiên tại MASTER_SCRIPT_DIR (cùng thư mục build_apk.sh gốc) hoặc SCRIPT_DIR
-find_docker_config_file() {
-    if [ -f "$MASTER_SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME" ]; then
-        echo "$MASTER_SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME"
-        return 0
-    fi
-    if [ -f "$SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME" ]; then
-        echo "$SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME"
-        return 0
-    fi
-    local cfg_dir
-    cfg_dir="$(dirname "$CONFIG_FILE" 2>/dev/null || echo "")"
-    if [ -n "$cfg_dir" ] && [ -f "$cfg_dir/$DOCKER_CONFIG_FILE_NAME" ]; then
-        echo "$cfg_dir/$DOCKER_CONFIG_FILE_NAME"
-        return 0
-    fi
-    echo "$MASTER_SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME"
-}
-
-DOCKER_CONFIG_FILE="$(find_docker_config_file)"
-
-# Tìm const_network.config: ưu tiên tại MASTER_SCRIPT_DIR (cùng thư mục build_apk.sh gốc) hoặc SCRIPT_DIR
-find_network_config_file() {
-    if [ -f "$MASTER_SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME" ]; then
-        echo "$MASTER_SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME"
-        return 0
-    fi
-    if [ -f "$SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME" ]; then
-        echo "$SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME"
-        return 0
-    fi
-    local cfg_dir
-    cfg_dir="$(dirname "$CONFIG_FILE" 2>/dev/null || echo "")"
-    if [ -n "$cfg_dir" ] && [ -f "$cfg_dir/$NETWORK_CONFIG_FILE_NAME" ]; then
-        echo "$cfg_dir/$NETWORK_CONFIG_FILE_NAME"
-        return 0
-    fi
-    echo "$MASTER_SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME"
-}
-
-NETWORK_CONFIG_FILE="$(find_network_config_file)"
-
-# Tìm const_multi_cli.config: ưu tiên tại MASTER_SCRIPT_DIR (cùng thư mục build_apk.sh gốc) hoặc SCRIPT_DIR
-find_multi_config_file() {
-    if [ -f "$MASTER_SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME" ]; then
-        echo "$MASTER_SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME"
-        return 0
-    fi
-    if [ -f "$SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME" ]; then
-        echo "$SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME"
-        return 0
-    fi
-    local cfg_dir
-    cfg_dir="$(dirname "$CONFIG_FILE" 2>/dev/null || echo "")"
-    if [ -n "$cfg_dir" ] && [ -f "$cfg_dir/$MULTI_CONFIG_FILE_NAME" ]; then
-        echo "$cfg_dir/$MULTI_CONFIG_FILE_NAME"
-        return 0
-    fi
-    echo "$MASTER_SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME"
-}
-
-MULTI_CONFIG_FILE="$(find_multi_config_file)"
+AUDIO_CONFIG_FILE="$(find_const_config_file "$AUDIO_CONFIG_FILE_NAME")"
+DUMP_CONFIG_FILE="$(find_const_config_file "$DUMP_CONFIG_FILE_NAME")"
+GIT_CONFIG_FILE="$(find_const_config_file "$GIT_CONFIG_FILE_NAME")"
+DOCKER_CONFIG_FILE="$(find_const_config_file "$DOCKER_CONFIG_FILE_NAME")"
+NETWORK_CONFIG_FILE="$(find_const_config_file "$NETWORK_CONFIG_FILE_NAME")"
+MULTI_CONFIG_FILE="$(find_const_config_file "$MULTI_CONFIG_FILE_NAME")"
 
 # Logging helpers with colors
 log_info()    { echo -e "\033[1;34m[INFO]\033[0m $*"; }

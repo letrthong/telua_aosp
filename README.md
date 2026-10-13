@@ -68,7 +68,15 @@ Maintain **a single golden copy of `build_apk.sh`** shared across multiple indep
 ├── build_apk.sh
 ├── apk.config                          ← Configuration Template
 ├── config_crypto.py                    ← Configuration Encryption Utility
-└── enc_apk.config                      ← Encrypted Configuration (Base64)
+├── enc_apk.config                      ← Encrypted Configuration (Base64)
+├── requirements.txt                    ← Python Dependencies
+└── config/                             ← Shared Constants & Cheatsheets
+    ├── const_audio.config              ← Audio & AAOS Key Injections
+    ├── const_dumpsys.config            ← System Diagnostics
+    ├── const_multi_cli.config          ← Multi-Command Pipelines
+    ├── const_docker.config             ← Docker & Systemd Cheatsheet
+    ├── const_git.config                ← Git Cheatsheet
+    └── const_network.config            ← Network Cheatsheet
 
 ~/ws_main/android/qssi/tools/
 ├── build_apk.sh  -> (symlink to master build_apk.sh)
@@ -286,9 +294,9 @@ This ensures `Log.isLoggable(TAG, Log.DEBUG)` returns `true` in Java code and pe
 
 ---
 
-### 5.3b Audio Control & Test Harness (`const_audio.config`)
+### 5.3b Audio Control & Test Harness (`config/const_audio.config`)
 
-Các lệnh ADB điều khiển âm lượng và ứng dụng test âm thanh (KitchenSink) được quản lý tập trung trong file cố định **`const_audio.config`** (nằm cùng thư mục với `build_apk.sh`), dùng chung cho tất cả các workspace:
+Các lệnh ADB điều khiển âm lượng và ứng dụng test âm thanh (KitchenSink) được quản lý tập trung trong file cố định **`config/const_audio.config`** (nằm trong thư mục `config/` của toolkit gốc), dùng chung cho tất cả các workspace:
 
 | Variable | Default | Description |
 |---|---|---|
@@ -300,14 +308,14 @@ Các lệnh ADB điều khiển âm lượng và ứng dụng test âm thanh (Ki
 | `AUDIO_CLI_LIST` | Mảng 5 lệnh CLI (`vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`) | Danh sách lệnh hiển thị cho người dùng khi chạy `telua audio` |
 
 > **Ghi chú về tách biệt cấu hình:**
-> - `const_audio.config` giữ các giá trị mặc định dùng chung cho mọi dự án.
+> - `config/const_audio.config` giữ các giá trị mặc định dùng chung cho mọi dự án.
 > - Nếu một dự án cụ thể cần tùy biến riêng câu lệnh âm thanh, bạn có thể khai báo đè (override) trực tiếp các biến này trong file `apk.config` của dự án đó.
 
 ---
 
-### 5.3c Dumpsys & Diagnostics (`const_dumpsys.config`)
+### 5.3c Dumpsys & Diagnostics (`config/const_dumpsys.config`)
 
-Các lệnh ADB dumpsys chẩn đoán hệ thống được quản lý tập trung trong file cố định **`const_dumpsys.config`** (gọi qua `telua dump <target>` hoặc `telua --dump <target>`):
+Các lệnh ADB dumpsys chẩn đoán hệ thống được quản lý tập trung trong file cố định **`config/const_dumpsys.config`** (gọi qua `telua dump <target>` hoặc `telua --dump <target>`):
 
 | Variable | Default | Description |
 |---|---|---|
@@ -321,9 +329,9 @@ Các lệnh ADB dumpsys chẩn đoán hệ thống được quản lý tập tru
 
 ---
 
-### 5.3d Multi-Command Sequential Pipelines (`const_multi_cli.config`)
+### 5.3d Multi-Command Sequential Pipelines (`config/const_multi_cli.config`)
 
-Các quy trình chạy tuần tự nhiều bước (pipeline / macro) được cấu hình tập trung trong **`const_multi_cli.config`** (gọi qua `telua run <group>` hoặc `telua multi <group>`):
+Các quy trình chạy tuần tự nhiều bước (pipeline / macro) được cấu hình tập trung trong **`config/const_multi_cli.config`** (gọi qua `telua run <group>` hoặc `telua multi <group>`):
 
 | Variable / Group | Commands in Pipeline | Purpose |
 |---|---|---|

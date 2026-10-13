@@ -16,7 +16,7 @@ When contributing to this toolkit, please keep our core design principles in min
 2. **Defensive & Enterprise-Safe:** This tool is used in corporate and shared server environments. Never introduce automated destructive actions (such as git resets or container prunings) without an explicit, interactive confirmation prompt (`[y/N]`) and an optional `-y` bypass flag.
 3. **Modular Separation of Concerns:**
    - Script orchestration logic belongs in `build_apk.sh`.
-   - Domain-specific actions belong in their respective `const_*.config` files.
+   - Domain-specific actions belong in their respective `config/const_*.config` files.
    - Project-specific parameters belong in `apk.config`.
 4. **Clean Code & Universal English:** All code comments, CLI descriptions, and documentation must be written in clear, professional technical English.
 
@@ -26,17 +26,17 @@ When contributing to this toolkit, please keep our core design principles in min
 
 There are many ways you can help improve `telua`:
 
-### A. Add New Automotive Commands (`const_audio.config` / `const_dumpsys.config`)
+### A. Add New Automotive Commands (`config/const_audio.config` / `config/const_dumpsys.config`)
 If you work with Android Automotive OS (AAOS) and have useful ADB shell shortcuts:
-- Add volume controls, CarInputService inject keys, or audio focus tests to `const_audio.config`.
-- Add new diagnostic targets (e.g., VHAL, CarPropertyService, SensorService) to `const_dumpsys.config` via `DUMP_CLI_LIST`.
+- Add volume controls, CarInputService inject keys, or audio focus tests to `config/const_audio.config`.
+- Add new diagnostic targets (e.g., VHAL, CarPropertyService, SensorService) to `config/const_dumpsys.config` via `DUMP_CLI_LIST`.
 
-### B. Add Multi-Command Pipelines (`const_multi_cli.config`)
+### B. Add Multi-Command Pipelines (`config/const_multi_cli.config`)
 Have a sequence of commands you run frequently together (e.g., restarting Bluetooth, clearing app cache and relaunching, or probing audio zones)?
 - Register the group in `MULTI_GROUP_LIST`.
 - Define the sequential step array `MULTI_CMD_<GROUP_NAME>`.
 
-### C. Expand Developer Cheatsheets (`const_git.config`, `const_docker.config`, `const_network.config`)
+### C. Expand Developer Cheatsheets (`config/const_git.config`, `config/const_docker.config`, `config/const_network.config`)
 If there are high-frequency Git, Google Repo, Docker, or Linux networking commands that developers constantly look up, suggest adding them to the relevant cheatsheet.
 
 ### D. Enhance Core Orchestration (`build_apk.sh`)
@@ -55,7 +55,7 @@ To maintain high code quality across the codebase, please adhere to these rules:
 > All shell scripts (`.sh`) and configuration files (`.config`) **must maintain Linux (LF) line endings**. Do not commit Windows CRLF endings.
 > If editing on Windows, ensure your editor is configured for LF, or run:
 > ```bash
-> dos2unix build_apk.sh *.config requirements.txt
+> dos2unix build_apk.sh *.config config/*.config requirements.txt
 > ```
 
 ### Shell Scripting Standards (`build_apk.sh`)
