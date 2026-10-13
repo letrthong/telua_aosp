@@ -9,6 +9,7 @@ An automated developer workflow script for building and deploying privileged sys
 | `build_apk.sh` | Core execution script (orchestration logic) |
 | `apk.config` | Project configuration (profile selection, lunch targets, deploy flags, debug tags) |
 | `const_audio.config` | Global Audio & ADB shell commands configuration (shared across projects) |
+| `const_dumpsys.config` | Global Dumpsys & AAOS diagnostics commands configuration (shared across projects) |
 | `const_git.config` | Frequently used Git & Google Repo commands cheatsheet |
 | `const_docker.config` | Frequently used Docker daemon, container & image commands cheatsheet |
 | `const_network.config` | Frequently used Network, Port & ADB over Wi-Fi commands cheatsheet |
@@ -149,7 +150,8 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `--git-help`, `git` | Displays cheatsheet of commonly used Git commands and exits |
 | `--docker-help`, `docker` | Displays cheatsheet of commonly used Docker commands and exits |
 | `--network-help`, `network` | Displays cheatsheet of commonly used Network & Port commands and exits |
-| `--audio`, `audio [action]` | Controls audio via ADB shell (`vol-up`, `vol-down`, `vol-mute`, `d`/`dump`) using commands from `const_audio.config` (or overrides in `apk.config`) |
+| `--audio`, `audio [action]` | Controls audio via ADB shell (`vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`) using commands from `const_audio.config` (or overrides in `apk.config`) |
+| `--dump`, `dump [target]` | Runs dumpsys diagnostics via ADB shell (`audio`, `car-service`, `car-audio`, `media`, `battery`, `activity`) using commands from `const_dumpsys.config` (or overrides in `apk.config`) |
 | `--find-file <pattern> [path]` | Searches for files by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-dir <pattern> [path]` | Searches for directories by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-text <text> [path]` | Greps for text string in files under `[path]` (defaults to `.` if omitted) |
@@ -162,10 +164,14 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 telua init                            # Initialize apk.config in current workspace
 telua info                            # Inspect environment and device state
 telua update                          # Update toolkit: git pull origin main (auto-resets hard on error)
-telua audio vol-up                    # Increase volume on target device (or: telua --audio vol-up)
-telua audio vol-down                  # Decrease volume on target device
-telua audio vol-mute                  # Mute volume on target device
-telua audio dump                      # Dump audio service status (or: telua audio d)
+telua audio vol-up                    # Increase volume (AAOS inject-key 24) (or: telua --audio vol-up)
+telua audio vol-down                  # Decrease volume (AAOS inject-key 25)
+telua audio vol-mute                  # Mute volume (AAOS inject-key 164)
+telua audio ks                        # Start KitchenSink test app (or: telua ks)
+telua audio ks-stop                   # Force stop KitchenSink test app (or: telua ks-stop)
+telua dump audio                      # Dump audio service status (or: telua --dump audio)
+telua dump car-service                # Dump AAOS CarService state
+telua dump car-audio                  # Dump AAOS CarAudioService
 telua git                             # View Git cheatsheet (or: telua --git-help)
 telua docker                          # View Docker daemon & container cheatsheet
 telua network                         # View Network & Port cheatsheet
@@ -273,24 +279,38 @@ This ensures `Log.isLoggable(TAG, Log.DEBUG)` returns `true` in Java code and pe
 
 ---
 
-### 5.3b Audio & Custom ADB Shell Commands (`const_audio.config`)
+### 5.3b Audio Control & Test Harness (`const_audio.config`)
 
-Các lệnh ADB điều khiển âm lượng và audio status được quản lý tập trung trong file cố định **`const_audio.config`** (nằm cùng thư mục với `build_apk.sh`), dùng chung cho tất cả các workspace:
+Các lệnh ADB điều khiển âm lượng và ứng dụng test âm thanh (KitchenSink) được quản lý tập trung trong file cố định **`const_audio.config`** (nằm cùng thư mục với `build_apk.sh`), dùng chung cho tất cả các workspace:
 
 | Variable | Default | Description |
 |---|---|---|
-| `ADB_SHELL_AUDIO_UP` | `"cmd media_session volume --show --adj raise"` | Command executed for `vol-up` / `up` (alternative: `"input keyevent 24"`) |
-| `ADB_SHELL_AUDIO_DOWN` | `"cmd media_session volume --show --adj lower"` | Command executed for `vol-down` / `down` (alternative: `"input keyevent 25"`) |
-| `ADB_SHELL_AUDIO_MUTE` | `"cmd media_session volume --show --adj mute"` | Command executed for `vol-mute` / `mute` (alternative: `"input keyevent 164"` or `cmd car_service set-audio-muted 0 0 true`) |
-| `ADB_SHELL_AUDIO_DUMP` | `"dumpsys audio"` | Command executed for `dump` / `d` (alternative: `"dumpsys car_service --services CarAudioService"`) |
-| `AUDIO_CLI_LIST` | Mảng 4 lệnh CLI | Danh sách lệnh hiển thị cho người dùng khi chạy `telua audio` |
+| `ADB_SHELL_AUDIO_UP` | `"dumpsys car_service inject-key 24"` | Command executed for `vol-up` (AAOS CarInputService inject key 24) |
+| `ADB_SHELL_AUDIO_DOWN` | `"dumpsys car_service inject-key 25"` | Command executed for `vol-down` (AAOS CarInputService inject key 25) |
+| `ADB_SHELL_AUDIO_MUTE` | `"dumpsys car_service inject-key 164"` | Command executed for `vol-mute` (AAOS CarInputService inject key 164) |
+| `ADB_SHELL_AUDIO_KS_START` | `"am start com.google.android.car.kitchensink/.KitchenSinkActivity"` | Launch KitchenSink test app |
+| `ADB_SHELL_AUDIO_KS_STOP` | `"am force-stop com.google.android.car.kitchensink"` | Force-stop KitchenSink test app |
+| `AUDIO_CLI_LIST` | Mảng 5 lệnh CLI (`vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`) | Danh sách lệnh hiển thị cho người dùng khi chạy `telua audio` |
 
 > **Ghi chú về tách biệt cấu hình:**
 > - `const_audio.config` giữ các giá trị mặc định dùng chung cho mọi dự án.
 > - Nếu một dự án cụ thể cần tùy biến riêng câu lệnh âm thanh, bạn có thể khai báo đè (override) trực tiếp các biến này trong file `apk.config` của dự án đó.
 
-> **Android Automotive (AAOS) & CarShellCommand:**
-> In AAOS environments, you can customize these commands to invoke `CarShellCommand` (`cmd car_service ...`) or dump `CarAudioService`.
+---
+
+### 5.3c Dumpsys & Diagnostics (`const_dumpsys.config`)
+
+Các lệnh ADB dumpsys chẩn đoán hệ thống được quản lý tập trung trong file cố định **`const_dumpsys.config`** (gọi qua `telua dump <target>` hoặc `telua --dump <target>`):
+
+| Variable | Default | Description |
+|---|---|---|
+| `ADB_SHELL_DUMP_AUDIO` | `"dumpsys audio"` | Command for `telua dump audio` (standard AudioService) |
+| `ADB_SHELL_DUMP_CAR_SERVICE` | `"dumpsys car_service"` | Command for `telua dump car-service` (AAOS CarService) |
+| `ADB_SHELL_DUMP_CAR_AUDIO` | `"dumpsys car_audio"` | Command for `telua dump car-audio` (AAOS CarAudioService) |
+| `ADB_SHELL_DUMP_MEDIA_SESSION` | `"dumpsys media_session"` | Command for `telua dump media` |
+| `ADB_SHELL_DUMP_BATTERY` | `"dumpsys battery"` | Command for `telua dump battery` |
+| `ADB_SHELL_DUMP_ACTIVITY` | `"dumpsys activity top"` | Command for `telua dump activity` |
+| `DUMP_CLI_LIST` | Mảng 6 mục chẩn đoán | Danh sách mục dumpsys hiển thị khi chạy `telua dump` |
 
 ---
 
