@@ -35,24 +35,40 @@ An automated developer workflow script for building and deploying privileged sys
 - Execute permissions and Linux (LF) line endings:
   ```bash
   chmod +x build_apk.sh config_crypto.py
-  dos2unix build_apk.sh apk.config config_crypto.py   # required if files were transferred from Windows
+  dos2unix build_apk.sh *.config config/*.config config_crypto.py   # required if files were transferred from Windows
   ```
 
 ---
 
-## 2. Quick Start (Single Workspace)
+## 2. Quick Start & CLI Installation
 
-Place `build_apk.sh` and `apk.config` anywhere inside the `android/` directory tree of your AOSP repo, then:
+### Step 1: One-Time CLI Installation
+Make the scripts executable and install the global `telua` alias into your `~/.bashrc` (this also automatically installs any required Python packages from `requirements.txt`):
 
 ```bash
-# 1. Select ACTIVE_PROJECT and set your lunch target
+# 1. Grant execution permissions
+chmod +x build_apk.sh config_crypto.py
+
+# 2. Install 'telua' command into ~/.bashrc
+./build_apk.sh --install
+source ~/.bashrc
+```
+
+Now you can invoke `telua` anywhere in your terminal!
+
+### Step 2: Build & Deployment
+
+Place `apk.config` (or run `telua init`) inside your project directory within the AOSP tree:
+
+```bash
+# 1. Select ACTIVE_PROJECT and verify your lunch target
 nano apk.config
 
 # 2. Inspect target, module paths, and connected device info
-./build_apk.sh --info
+telua --info
 
-# 3. Build module, push to system partition, and reboot
-./build_apk.sh
+# 3. Build module, push to system partition, and reboot (or use ./build_apk.sh)
+telua
 ```
 
 > **AOSP Discovery:** The script resolves the AOSP root by walking upwards from its directory until it finds an ancestor directory named `android`, setting `ANDROID_TOP=<...>/android/qssi`.
