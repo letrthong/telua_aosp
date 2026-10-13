@@ -480,8 +480,8 @@ handle_audio_command() {
             if [[ "$item" == *" :: "* ]]; then
                 it_action="${item%% :: *}"
                 local it_rest="${item#* :: }"
-                it_desc="${item_rest%% :: *}"
-                it_cmd="${item_rest#* :: }"
+                it_desc="${it_rest%% :: *}"
+                it_cmd="${it_rest#* :: }"
             elif [[ "$item" == *"|"* ]]; then
                 it_action="$(echo "$item" | cut -d'|' -f1)"
                 it_desc="$(echo "$item" | cut -d'|' -f2)"
