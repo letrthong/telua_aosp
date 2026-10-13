@@ -13,6 +13,7 @@ SCRIPT_VERSION="2.7.2"
 SCRIPT_LAST_UPDATED="2026-10-13"
 CONFIG_FILE_NAME="apk.config"
 AUDIO_CONFIG_FILE_NAME="const_audio.config"
+DUMP_CONFIG_FILE_NAME="const_dumpsys.config"
 GIT_CONFIG_FILE_NAME="const_git.config"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -68,6 +69,27 @@ find_audio_config_file() {
 }
 
 AUDIO_CONFIG_FILE="$(find_audio_config_file)"
+
+# Tìm const_dumpsys.config: ưu tiên tại MASTER_SCRIPT_DIR (cùng thư mục build_apk.sh gốc) hoặc SCRIPT_DIR
+find_dump_config_file() {
+    if [ -f "$MASTER_SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME" ]; then
+        echo "$MASTER_SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME"
+        return 0
+    fi
+    if [ -f "$SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME" ]; then
+        echo "$SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME"
+        return 0
+    fi
+    local cfg_dir
+    cfg_dir="$(dirname "$CONFIG_FILE" 2>/dev/null || echo "")"
+    if [ -n "$cfg_dir" ] && [ -f "$cfg_dir/$DUMP_CONFIG_FILE_NAME" ]; then
+        echo "$cfg_dir/$DUMP_CONFIG_FILE_NAME"
+        return 0
+    fi
+    echo "$MASTER_SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME"
+}
+
+DUMP_CONFIG_FILE="$(find_dump_config_file)"
 
 # Tìm const_git.config: ưu tiên tại MASTER_SCRIPT_DIR (cùng thư mục build_apk.sh gốc) hoặc SCRIPT_DIR
 find_git_config_file() {
@@ -136,9 +158,10 @@ Options:
   --no-reboot                 Fast restart (stop && start) instead of full device reboot
   --softlink [path]           Symlink this script + copy $CONFIG_FILE_NAME into [path] (overwrites)
                               (defaults to SOFTLINK_TARGET_PATH from $CONFIG_FILE_NAME if omitted)
-  --audio, audio [action]     Control audio via ADB shell: vol-up | vol-down | vol-mute | dump (or d)
-                              Commands are read dynamically from $AUDIO_CONFIG_FILE_NAME:
-                              ADB_SHELL_AUDIO_UP, DOWN, MUTE, DUMP
+  --audio, audio [action]     Control audio via ADB shell (actions from AUDIO_CLI_LIST
+                              in $AUDIO_CONFIG_FILE_NAME: vol-up | vol-down | vol-mute | ks | ...)
+  --dump, dump [target]       Run dumpsys diagnostics via ADB shell (targets from DUMP_CLI_LIST
+                              in $DUMP_CONFIG_FILE_NAME: audio | car-service | car-audio | ...)
   --repo-sync                 Run 'repo sync' in ROOT_DIR, cd to android/qssi & run post_sync_cli before build
   --repo-reset                Run 'repo forall -c "git reset --hard && git clean -xdf"' and exit (no sync, no build)
   --git-diff                  Run 'git diff HEAD^ HEAD' in this script's git repo and exit
@@ -156,6 +179,7 @@ Options:
 Configuration Info:
   Active Config:              $CONFIG_FILE
   Audio Config (Global):      $AUDIO_CONFIG_FILE
+  Dump Config (Global):       $DUMP_CONFIG_FILE
   Git Cheatsheet (Global):    $GIT_CONFIG_FILE
   Master Template:            $SCRIPT_DIR/$CONFIG_FILE_NAME
   Encrypted Template:         $SCRIPT_DIR/enc_apk.config
@@ -326,6 +350,17 @@ parse_arguments() {
                 handle_audio_command "$AUDIO_ACTION"
                 exit 0
                 ;;
+            --dump|dump)
+                if [ -n "$2" ] && [[ "$2" != --* ]]; then
+                    DUMP_ACTION="$2"
+                    shift 2
+                else
+                    DUMP_ACTION=""
+                    shift 1
+                fi
+                handle_dump_command "$DUMP_ACTION"
+                exit 0
+                ;;
             vol-up|--vol-up)
                 handle_audio_command "vol-up"
                 exit 0
@@ -338,10 +373,6 @@ parse_arguments() {
                 handle_audio_command "vol-mute"
                 exit 0
                 ;;
-            dump|--dump)
-                handle_audio_command "dump"
-                exit 0
-                ;;
             -h|--help|help)
                 print_help
                 exit 0
@@ -351,6 +382,10 @@ parse_arguments() {
                 stripped_arg=$(echo "$stripped_arg" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
                 if is_audio_action "$stripped_arg"; then
                     handle_audio_command "$stripped_arg"
+                    exit 0
+                fi
+                if is_dump_action "$stripped_arg"; then
+                    handle_dump_command "$stripped_arg"
                     exit 0
                 fi
                 log_error "Unknown argument '$1'"
@@ -365,12 +400,12 @@ parse_arguments() {
 show_audio_help() {
     echo ""
     echo -e "\033[1;36m================================================================================\033[0m"
-    echo -e "\033[1;32m  telua audio - Danh sách lệnh điều khiển Audio qua ADB Shell\033[0m"
+    echo -e "\033[1;32m  telua audio - Audio control commands via ADB Shell\033[0m"
     echo -e "  Config File:       \033[0;33m$CONFIG_FILE\033[0m"
     echo -e "  Audio Config File: \033[0;33m$AUDIO_CONFIG_FILE\033[0m"
     echo -e "\033[1;36m================================================================================\033[0m"
     echo ""
-    echo -e "\033[1;33mDANH SÁCH LỆNH AUDIO HỖ TRỢ (Audio CLI Commands):\033[0m"
+    echo -e "\033[1;33mSUPPORTED AUDIO CLI COMMANDS:\033[0m"
 
     if [ -n "${AUDIO_CLI_LIST[*]}" ] && [ "${#AUDIO_CLI_LIST[@]}" -gt 0 ]; then
         local idx=1
@@ -387,45 +422,34 @@ show_audio_help() {
                 item_cmd="$(echo "$item" | cut -d'|' -f3-)"
             else
                 item_action="$item"
-                item_desc="Tự định nghĩa"
+                item_desc="Custom"
                 item_cmd=""
             fi
             item_action="$(echo "$item_action" | xargs)"
             item_desc="$(echo "$item_desc" | xargs)"
             item_cmd="$(echo "$item_cmd" | xargs)"
 
-            local extra_alias=""
-            if [ "$item_action" = "dump" ]; then
-                extra_alias=" (alias: telua audio d)"
-            fi
-
-            echo -e "  \033[1;32m$idx.\033[0m \033[1;37mtelua audio $item_action\033[0m\033[0;36m$extra_alias\033[0m"
-            echo -e "     \033[0;90mMô tả:\033[0m       $item_desc"
-            echo -e "     \033[0;90mLệnh ADB:\033[0m    \033[0;33madb shell $item_cmd\033[0m"
+            echo -e "  \033[1;32m$idx.\033[0m \033[1;37mtelua audio $item_action\033[0m"
+            echo -e "     \033[0;90mDescription:\033[0m  $item_desc"
+            echo -e "     \033[0;90mADB Command:\033[0m  \033[0;33madb shell $item_cmd\033[0m"
             echo ""
             idx=$((idx + 1))
         done
     else
-        echo -e "  \033[0;90m(Chưa khai báo mảng AUDIO_CLI_LIST trong $AUDIO_CONFIG_FILE_NAME hoặc $CONFIG_FILE_NAME)\033[0m"
+        echo -e "  \033[0;90m(AUDIO_CLI_LIST not declared in $AUDIO_CONFIG_FILE_NAME or $CONFIG_FILE_NAME)\033[0m"
     fi
 
     echo -e "\033[1;36m--------------------------------------------------------------------------------\033[0m"
-    echo -e "\033[1;33mBIẾN CẤU HÌNH ADB_SHELL_AUDIO_* ($AUDIO_CONFIG_FILE_NAME):\033[0m"
+    echo -e "\033[1;33mADB_SHELL_AUDIO_* CONFIG VARIABLES ($AUDIO_CONFIG_FILE_NAME):\033[0m"
     local has_dynamic_vars=0
     for var_name in ${!ADB_SHELL_AUDIO_@}; do
         echo -e "  \033[1;35m$var_name\033[0m = \"\033[0;32m${!var_name}\033[0m\""
         has_dynamic_vars=1
     done
     if [ "$has_dynamic_vars" -eq 0 ]; then
-        echo -e "  \033[0;90m(Không tìm thấy biến ADB_SHELL_AUDIO_* nào)\033[0m"
+        echo -e "  \033[0;90m(No ADB_SHELL_AUDIO_* variables found)\033[0m"
     fi
 
-    echo -e "\033[1;36m--------------------------------------------------------------------------------\033[0m"
-    echo -e "\033[1;33mCÁCH THỰC THI NHANH (Quick CLI Execution):\033[0m"
-    echo "  telua audio vol-up"
-    echo "  telua audio vol-down"
-    echo "  telua audio vol-mute"
-    echo "  telua audio dump       (hoặc: telua audio d)"
     echo -e "\033[1;36m================================================================================\033[0m"
     echo ""
 }
@@ -433,7 +457,6 @@ show_audio_help() {
 is_audio_action() {
     local target="$1"
     target=$(echo "$target" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
-    [ "$target" = "d" ] && target="dump"
 
     if [ -n "${AUDIO_CLI_LIST[*]}" ]; then
         for item in "${AUDIO_CLI_LIST[@]}"; do
@@ -468,7 +491,6 @@ handle_audio_command() {
 
     local action_normalized
     action_normalized=$(echo "$action" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
-    [ "$action_normalized" = "d" ] && action_normalized="dump"
 
     local adb_cmd=""
     local action_label=""
@@ -515,8 +537,181 @@ handle_audio_command() {
     # 3. Nếu vẫn không tìm thấy, báo lỗi và hiển thị trợ giúp
     if [ -z "$adb_cmd" ]; then
         log_error "Unknown audio action '$action'!"
-        log_error "Supported actions: vol-up | vol-down | vol-mute | dump (or configure AUDIO_CLI_LIST in $AUDIO_CONFIG_FILE_NAME)"
+        log_error "Supported actions: vol-up | vol-down | vol-mute | ks | ks-stop (or configure AUDIO_CLI_LIST in $AUDIO_CONFIG_FILE_NAME)"
+        if [ "$action_normalized" = "d" ] || [ "$action_normalized" = "dump" ]; then
+            log_warn "'dump' has moved to: telua dump audio | telua dump car-service"
+        fi
         show_audio_help
+        exit 1
+    fi
+
+    if ! command -v adb >/dev/null 2>&1; then
+        log_error "'adb' command not found. Please ensure Android platform-tools is in your PATH."
+        exit 1
+    fi
+
+    # Verify device state
+    local dev_state
+    dev_state=$(adb get-state 2>/dev/null || echo "offline")
+    if [ "$dev_state" != "device" ]; then
+        log_error "No Android device connected or device is not ready (state: $dev_state)."
+        log_error "Please connect a device via USB/TCP and verify with 'adb devices'."
+        exit 1
+    fi
+
+    log_info "Executing $action_label via ADB Shell..."
+    echo -e "  \033[1;36m[ADB CMD]\033[0m adb shell $adb_cmd"
+
+    # Execute ADB shell command
+    adb shell "$adb_cmd"
+    local ret=$?
+    if [ $ret -eq 0 ]; then
+        log_success "$action_label command executed successfully."
+    else
+        log_error "Failed to execute '$action_label' command on device (exit code: $ret)."
+        exit $ret
+    fi
+}
+
+# --- 1d. Audio Control & Custom ADB Shell Commands (--audio / audio) ---
+show_dump_help() {
+    echo ""
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo -e "\033[1;32m  telua dump - Dumpsys diagnostics commands via ADB Shell\033[0m"
+    echo -e "  Config File:       \033[0;33m$CONFIG_FILE\033[0m"
+    echo -e "  Dump Config File:  \033[0;33m$DUMP_CONFIG_FILE\033[0m"
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo ""
+    echo -e "\033[1;33mSUPPORTED DUMP CLI COMMANDS:\033[0m"
+
+    if [ -n "${DUMP_CLI_LIST[*]}" ] && [ "${#DUMP_CLI_LIST[@]}" -gt 0 ]; then
+        local idx=1
+        for item in "${DUMP_CLI_LIST[@]}"; do
+            local item_action="" item_desc="" item_cmd=""
+            if [[ "$item" == *" :: "* ]]; then
+                item_action="${item%% :: *}"
+                local item_rest="${item#* :: }"
+                item_desc="${item_rest%% :: *}"
+                item_cmd="${item_rest#* :: }"
+            elif [[ "$item" == *"|"* ]]; then
+                item_action="$(echo "$item" | cut -d'|' -f1)"
+                item_desc="$(echo "$item" | cut -d'|' -f2)"
+                item_cmd="$(echo "$item" | cut -d'|' -f3-)"
+            else
+                item_action="$item"
+                item_desc="Custom"
+                item_cmd=""
+            fi
+            item_action="$(echo "$item_action" | xargs)"
+            item_desc="$(echo "$item_desc" | xargs)"
+            item_cmd="$(echo "$item_cmd" | xargs)"
+
+            echo -e "  \033[1;32m$idx.\033[0m \033[1;37mtelua dump $item_action\033[0m"
+            echo -e "     \033[0;90mDescription:\033[0m  $item_desc"
+            echo -e "     \033[0;90mADB Command:\033[0m  \033[0;33madb shell $item_cmd\033[0m"
+            echo ""
+            idx=$((idx + 1))
+        done
+    else
+        echo -e "  \033[0;90m(DUMP_CLI_LIST not declared in $DUMP_CONFIG_FILE_NAME or $CONFIG_FILE_NAME)\033[0m"
+    fi
+
+    echo -e "\033[1;36m--------------------------------------------------------------------------------\033[0m"
+    echo -e "\033[1;33mADB_SHELL_DUMP_* CONFIG VARIABLES ($DUMP_CONFIG_FILE_NAME):\033[0m"
+    local has_dynamic_vars=0
+    for var_name in ${!ADB_SHELL_DUMP_@}; do
+        echo -e "  \033[1;35m$var_name\033[0m = \"\033[0;32m${!var_name}\033[0m\""
+        has_dynamic_vars=1
+    done
+    if [ "$has_dynamic_vars" -eq 0 ]; then
+        echo -e "  \033[0;90m(No ADB_SHELL_DUMP_* variables found)\033[0m"
+    fi
+
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo ""
+}
+
+is_dump_action() {
+    local target="$1"
+    target=$(echo "$target" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+
+    if [ -n "${DUMP_CLI_LIST[*]}" ]; then
+        for item in "${DUMP_CLI_LIST[@]}"; do
+            local act=""
+            if [[ "$item" == *" :: "* ]]; then
+                act="${item%% :: *}"
+            elif [[ "$item" == *"|"* ]]; then
+                act="$(echo "$item" | cut -d'|' -f1)"
+            fi
+            act="$(echo "$act" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
+            if [ "$act" = "$target" ]; then
+                return 0
+            fi
+        done
+    fi
+    local suf
+    suf=$(echo "$target" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+    local v="ADB_SHELL_DUMP_${suf}"
+    if [ -n "${!v}" ]; then
+        return 0
+    fi
+    return 1
+}
+
+handle_dump_command() {
+    local action="$1"
+
+    if [ -z "$action" ] || [ "$action" = "help" ] || [ "$action" = "--help" ] || [ "$action" = "-h" ]; then
+        show_dump_help
+        return 0
+    fi
+
+    local action_normalized
+    action_normalized=$(echo "$action" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+
+    local adb_cmd=""
+    local action_label=""
+
+    # 1. Tìm action trực tiếp trong mảng DUMP_CLI_LIST (Single Source of Truth)
+    if [ -n "${DUMP_CLI_LIST[*]}" ]; then
+        for item in "${DUMP_CLI_LIST[@]}"; do
+            local it_action="" it_desc="" it_cmd=""
+            if [[ "$item" == *" :: "* ]]; then
+                it_action="${item%% :: *}"
+                local it_rest="${item#* :: }"
+                it_desc="${it_rest%% :: *}"
+                it_cmd="${it_rest#* :: }"
+            elif [[ "$item" == *"|"* ]]; then
+                it_action="$(echo "$item" | cut -d'|' -f1)"
+                it_desc="$(echo "$item" | cut -d'|' -f2)"
+                it_cmd="$(echo "$item" | cut -d'|' -f3-)"
+            fi
+            it_action="$(echo "$it_action" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
+            if [ "$it_action" = "$action_normalized" ]; then
+                action_label="$(echo "$it_desc" | xargs)"
+                adb_cmd="$(echo "$it_cmd" | xargs)"
+                break
+            fi
+        done
+    fi
+
+    # 2. Nếu chưa có trong DUMP_CLI_LIST, kiểm tra biến động ADB_SHELL_DUMP_<ACTION>
+    if [ -z "$adb_cmd" ]; then
+        local var_suffix
+        var_suffix=$(echo "$action_normalized" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+        local var_dump="ADB_SHELL_DUMP_${var_suffix}"
+
+        if [ -n "${!var_dump}" ]; then
+            action_label="Dump ($action)"
+            adb_cmd="${!var_dump}"
+        fi
+    fi
+
+    # 3. Nếu vẫn không tìm thấy, báo lỗi và hiển thị trợ giúp
+    if [ -z "$adb_cmd" ]; then
+        log_error "Unknown dump action '$action'!"
+        log_error "Supported actions: audio | car-service | car-audio (or configure DUMP_CLI_LIST in $DUMP_CONFIG_FILE_NAME)"
+        show_dump_help
         exit 1
     fi
 
@@ -816,6 +1011,15 @@ load_and_validate_config() {
         source "$SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME"
     fi
 
+    # 1b. Nạp cấu hình Dumpsys chung (nằm cùng thư mục với build_apk.sh)
+    if [ -f "$DUMP_CONFIG_FILE" ]; then
+        source "$DUMP_CONFIG_FILE"
+    elif [ -f "$MASTER_SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME" ]; then
+        source "$MASTER_SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME"
+    elif [ -f "$SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME" ]; then
+        source "$SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME"
+    fi
+
     if [ ! -f "$CONFIG_FILE" ]; then
         log_error "Configuration file '$CONFIG_FILE_NAME' not found in $PWD or $SCRIPT_DIR!"
         log_error "Please create $CONFIG_FILE_NAME with required variables."
@@ -900,6 +1104,7 @@ resolve_android_paths() {
 
     if [ -z "$android_dir" ]; then
         log_error "Could not find the 'android' root directory in ancestor paths!"
+        log_info "Must check apk.config"
         # 'return' (not 'exit') so callers like show_info can recover.
         return 1
     fi
@@ -1129,8 +1334,15 @@ find_text() {
         log_error "Usage: find_text <text_pattern> [search_path]"
         exit 1
     fi
-    log_info "Searching for text '$text' in '$search_path'..."
-    grep -rnw "$search_path" -e "$text" 2>/dev/null
+    # Prefer ripgrep (much faster on large AOSP trees, full-text match,
+    # auto-skips out/.repo/ via .gitignore & hidden dirs). Fallback: grep -w.
+    if command -v rg >/dev/null 2>&1; then
+        log_info "Searching for text '$text' in '$search_path' (ripgrep)..."
+        rg -n --no-heading -S -- "$text" "$search_path" 2>/dev/null
+    else
+        log_info "Searching for text '$text' in '$search_path' (grep; tip: install ripgrep for faster search)..."
+        grep -rnw "$search_path" -e "$text" 2>/dev/null
+    fi
 }
 
 # --- 4e. Docker Help Utility (--docker-help: frequently used Docker commands) ---
