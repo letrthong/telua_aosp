@@ -10,6 +10,7 @@ An automated developer workflow script for building and deploying privileged sys
 | `apk.config` | Project configuration (profile selection, lunch targets, deploy flags, debug tags) |
 | `const_audio.config` | Global Audio & ADB shell commands configuration (shared across projects) |
 | `const_dumpsys.config` | Global Dumpsys & AAOS diagnostics commands configuration (shared across projects) |
+| `const_multi_cli.config` | Global Multi-command sequential pipelines & macros (shared across projects) |
 | `const_git.config` | Frequently used Git & Google Repo commands cheatsheet |
 | `const_docker.config` | Frequently used Docker daemon, container & image commands cheatsheet |
 | `const_network.config` | Frequently used Network, Port & ADB over Wi-Fi commands cheatsheet |
@@ -143,7 +144,8 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `--softlink [path]` | Creates symlink to `build_apk.sh` and copies `apk.config` to `[path]` (falls back to `SOFTLINK_TARGET_PATH` from `apk.config` if omitted) |
 | `--repo-sync` | Executes `repo sync` from `ROOT_DIR`, navigates to `android/qssi`, and runs `post_sync_cli` before building |
 | `--repo-sync-only` | Executes `repo sync` and `post_sync_cli` only, then exits without building |
-| `--repo-reset` | Executes `repo forall -c "git reset --hard && git clean -xdf"` before `repo sync` (discards local edits) |
+| `--repo-reset` | Executes `repo forall -c "git reset --hard && git clean -xdf"` (requires interactive `y` confirmation; bypass with `-y`) |
+| `-y`, `--yes` | Bypasses interactive confirmation prompts for dangerous operations (e.g., `--repo-reset`) |
 | `--git-diff` | Displays `git diff HEAD^ HEAD` in the script's git repository and exits |
 | `--git-amend` | Runs `git commit --amend --no-edit` (staged changes only) and exits |
 | `--update`, `update` | Updates this toolkit repository via `git pull origin main` (auto-resets hard on error) |
@@ -152,6 +154,7 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `--network-help`, `network` | Displays cheatsheet of commonly used Network & Port commands and exits |
 | `--audio`, `audio [action]` | Controls audio via ADB shell (`vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`) using commands from `const_audio.config` (or overrides in `apk.config`) |
 | `--dump`, `dump [target]` | Runs dumpsys diagnostics via ADB shell (`audio`, `car-service`, `car-audio`, `media`, `battery`, `activity`) using commands from `const_dumpsys.config` (or overrides in `apk.config`) |
+| `--run`, `run [group]` | Executes multi-command sequential pipeline group from `const_multi_cli.config` (or: `telua multi [group]`) |
 | `--find-file <pattern> [path]` | Searches for files by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-dir <pattern> [path]` | Searches for directories by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-text <text> [path]` | Greps for text string in files under `[path]` (defaults to `.` if omitted) |
@@ -172,6 +175,9 @@ telua audio ks-stop                   # Force stop KitchenSink test app (or: tel
 telua dump audio                      # Dump audio service status (or: telua --dump audio)
 telua dump car-service                # Dump AAOS CarService state
 telua dump car-audio                  # Dump AAOS CarAudioService
+telua run                             # View all pipeline macro groups and steps (or: telua multi)
+telua run audio-cycle                 # Run KitchenSink restart & volume test pipeline
+telua run dev-prep                    # Run device prep pipeline (root, remount, debug tags)
 telua git                             # View Git cheatsheet (or: telua --git-help)
 telua docker                          # View Docker daemon & container cheatsheet
 telua network                         # View Network & Port cheatsheet
@@ -311,6 +317,22 @@ Các lệnh ADB dumpsys chẩn đoán hệ thống được quản lý tập tru
 | `ADB_SHELL_DUMP_BATTERY` | `"dumpsys battery"` | Command for `telua dump battery` |
 | `ADB_SHELL_DUMP_ACTIVITY` | `"dumpsys activity top"` | Command for `telua dump activity` |
 | `DUMP_CLI_LIST` | Mảng 6 mục chẩn đoán | Danh sách mục dumpsys hiển thị khi chạy `telua dump` |
+
+---
+
+### 5.3d Multi-Command Sequential Pipelines (`const_multi_cli.config`)
+
+Các quy trình chạy tuần tự nhiều bước (pipeline / macro) được cấu hình tập trung trong **`const_multi_cli.config`** (gọi qua `telua run <group>` hoặc `telua multi <group>`):
+
+| Variable / Group | Commands in Pipeline | Purpose |
+|---|---|---|
+| `MULTI_CMD_AUDIO_CYCLE` | `am force-stop` $\rightarrow$ `sleep` $\rightarrow$ `am start` $\rightarrow$ `inject-key 24/25` | Chu trình khởi động KitchenSink và test phím volume |
+| `MULTI_CMD_DEV_PREP` | `adb root` $\rightarrow$ `adb remount` $\rightarrow$ `setprop persist.log.tag.* DEBUG` | Chuẩn bị quyền root, remount và bật log debug CarAudio |
+| `MULTI_CMD_REMOUNT_REBOOT` | `adb root` $\rightarrow$ `adb remount` $\rightarrow$ `adb reboot` | Root, remount phân vùng hệ thống và khởi động lại thiết bị |
+| `MULTI_CMD_AUDIO_DUMP` | `dumpsys audio` $\rightarrow$ `dumpsys car_audio` $\rightarrow$ `dumpsys media_session` | Thu thập chẩn đoán toàn diện âm thanh hệ thống |
+| `MULTI_GROUP_LIST` | Danh sách đăng ký các nhóm | Hiển thị bảng tra cứu khi chạy `telua run` |
+
+> **Cơ chế Fail-Fast:** Nếu bất kỳ bước nào trong pipeline trả về mã lỗi (`exit code != 0`), kịch bản sẽ lập tức dừng lại và thông báo chính xác bước thất bại, bảo vệ an toàn cho thiết bị.
 
 ---
 

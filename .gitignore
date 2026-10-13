@@ -221,3 +221,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ==============================================================================
+# Telua AOSP - Decrypted Configs & Sensitive Outputs
+# ==============================================================================
+dec_apk.config
+dec_*.config
+my_dec.config
+deployment_log.txt
+*.apk
+

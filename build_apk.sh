@@ -9,11 +9,12 @@
 set -e
 
 # --- Constants & Global Defaults ---
-SCRIPT_VERSION="2.7.3"
+SCRIPT_VERSION="2.8.0"
 SCRIPT_LAST_UPDATED="2026-10-13"
 CONFIG_FILE_NAME="apk.config"
 AUDIO_CONFIG_FILE_NAME="const_audio.config"
 DUMP_CONFIG_FILE_NAME="const_dumpsys.config"
+MULTI_CONFIG_FILE_NAME="const_multi_cli.config"
 GIT_CONFIG_FILE_NAME="const_git.config"
 DOCKER_CONFIG_FILE_NAME="const_docker.config"
 NETWORK_CONFIG_FILE_NAME="const_network.config"
@@ -156,6 +157,27 @@ find_network_config_file() {
 
 NETWORK_CONFIG_FILE="$(find_network_config_file)"
 
+# Tìm const_multi_cli.config: ưu tiên tại MASTER_SCRIPT_DIR (cùng thư mục build_apk.sh gốc) hoặc SCRIPT_DIR
+find_multi_config_file() {
+    if [ -f "$MASTER_SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME" ]; then
+        echo "$MASTER_SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME"
+        return 0
+    fi
+    if [ -f "$SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME" ]; then
+        echo "$SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME"
+        return 0
+    fi
+    local cfg_dir
+    cfg_dir="$(dirname "$CONFIG_FILE" 2>/dev/null || echo "")"
+    if [ -n "$cfg_dir" ] && [ -f "$cfg_dir/$MULTI_CONFIG_FILE_NAME" ]; then
+        echo "$cfg_dir/$MULTI_CONFIG_FILE_NAME"
+        return 0
+    fi
+    echo "$MASTER_SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME"
+}
+
+MULTI_CONFIG_FILE="$(find_multi_config_file)"
+
 # Logging helpers with colors
 log_info()    { echo -e "\033[1;34m[INFO]\033[0m $*"; }
 log_success() { echo -e "\033[1;32m[SUCCESS]\033[0m $*"; }
@@ -206,8 +228,11 @@ Options:
                               in $AUDIO_CONFIG_FILE_NAME: vol-up | vol-down | vol-mute | ks | ...)
   --dump, dump [target]       Run dumpsys diagnostics via ADB shell (targets from DUMP_CLI_LIST
                               in $DUMP_CONFIG_FILE_NAME: audio | car-service | car-audio | ...)
+  --run, run [group]          Execute multi-command sequential pipeline group from
+                              $MULTI_CONFIG_FILE_NAME (or: telua multi [group])
   --repo-sync                 Run 'repo sync' in ROOT_DIR, cd to android/qssi & run post_sync_cli before build
-  --repo-reset                Run 'repo forall -c "git reset --hard && git clean -xdf"' and exit (no sync, no build)
+  --repo-reset                Run 'repo forall -c "git reset --hard && git clean -xdf"' (prompts for 'y' or use -y)
+  -y, --yes                   Bypass confirmation prompts for dangerous operations (e.g. --repo-reset)
   --git-diff                  Run 'git diff HEAD^ HEAD' in this script's git repo and exit
   --git-amend                 Run 'git commit --amend --no-edit' (staged changes only) in this script's git repo and exit
   --update, update            Update script repo: 'git pull origin main' (auto-resets hard on error)
@@ -224,6 +249,7 @@ Configuration Info:
   Active Config:              $CONFIG_FILE
   Audio Config (Global):      $AUDIO_CONFIG_FILE
   Dump Config (Global):       $DUMP_CONFIG_FILE
+  Multi-CLI Pipelines (Global):$MULTI_CONFIG_FILE
   Git Cheatsheet (Global):    $GIT_CONFIG_FILE
   Docker Cheatsheet (Global): $DOCKER_CONFIG_FILE
   Network Cheatsheet (Global):$NETWORK_CONFIG_FILE
@@ -312,6 +338,10 @@ parse_arguments() {
                 ;;
             --repo-reset)
                 REPO_RESET="true"
+                shift
+                ;;
+            -y|--yes|--force|-f)
+                CONFIRM_YES="true"
                 shift
                 ;;
             --git-diff)
@@ -405,6 +435,17 @@ parse_arguments() {
                     shift 1
                 fi
                 handle_dump_command "$DUMP_ACTION"
+                exit 0
+                ;;
+            --run|run|--multi|multi)
+                if [ -n "$2" ] && [[ "$2" != --* ]]; then
+                    RUN_GROUP="$2"
+                    shift 2
+                else
+                    RUN_GROUP=""
+                    shift 1
+                fi
+                handle_run_command "$RUN_GROUP"
                 exit 0
                 ;;
             vol-up|--vol-up)
@@ -789,6 +830,169 @@ handle_dump_command() {
     fi
 }
 
+# --- 1f. Multi-CLI Command Pipelines (--run / run / --multi / multi) ---
+show_run_help() {
+    echo ""
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo -e "\033[1;32m  telua run - Sequential Multi-CLI Pipelines & Macro Execution\033[0m"
+    echo -e "  Config File:       \033[0;33m$CONFIG_FILE\033[0m"
+    echo -e "  Pipeline Config:   \033[0;33m$MULTI_CONFIG_FILE\033[0m"
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo ""
+    echo -e "\033[1;33mAVAILABLE PIPELINE GROUPS:\033[0m"
+
+    if [ -n "${MULTI_GROUP_LIST[*]}" ] && [ "${#MULTI_GROUP_LIST[@]}" -gt 0 ]; then
+        local idx=1
+        for item in "${MULTI_GROUP_LIST[@]}"; do
+            local grp_name="" grp_desc=""
+            if [[ "$item" == *" :: "* ]]; then
+                grp_name="${item%% :: *}"
+                grp_desc="${item#* :: }"
+            else
+                grp_name="$item"
+                grp_desc="Pipeline group"
+            fi
+            grp_name="$(echo "$grp_name" | xargs)"
+            grp_desc="$(echo "$grp_desc" | xargs)"
+
+            local var_suffix
+            var_suffix=$(echo "$grp_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+            local array_name="MULTI_CMD_${var_suffix}"
+            local -a steps=()
+            if declare -p "$array_name" >/dev/null 2>&1; then
+                eval "steps=(\"\${${array_name}[@]}\")"
+            fi
+
+            echo -e "  \033[1;32m$idx.\033[0m \033[1;37mtelua run $grp_name\033[0m"
+            echo -e "     \033[0;90mDescription:\033[0m  $grp_desc"
+            if [ "${#steps[@]}" -gt 0 ]; then
+                echo -e "     \033[0;90mSteps:\033[0m        \033[0;36m(${#steps[@]} commands sequential)\033[0m"
+                local step_i=1
+                for step_cmd in "${steps[@]}"; do
+                    echo -e "       \033[1;33m[$step_i/${#steps[@]}]\033[0m \033[0;37m$step_cmd\033[0m"
+                    step_i=$((step_i + 1))
+                done
+            else
+                echo -e "     \033[0;90mSteps:\033[0m        \033[0;31m(No steps declared in $array_name)\033[0m"
+            fi
+            echo ""
+            idx=$((idx + 1))
+        done
+    else
+        echo -e "  \033[0;90m(No MULTI_GROUP_LIST declared in $MULTI_CONFIG_FILE_NAME or $CONFIG_FILE_NAME)\033[0m"
+    fi
+
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo ""
+}
+
+is_run_group() {
+    local target="$1"
+    target=$(echo "$target" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+
+    if [ -n "${MULTI_GROUP_LIST[*]}" ]; then
+        for item in "${MULTI_GROUP_LIST[@]}"; do
+            local grp=""
+            if [[ "$item" == *" :: "* ]]; then
+                grp="${item%% :: *}"
+            else
+                grp="$item"
+            fi
+            grp="$(echo "$grp" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
+            if [ "$grp" = "$target" ]; then
+                return 0
+            fi
+        done
+    fi
+
+    local suf
+    suf=$(echo "$target" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+    local array_name="MULTI_CMD_${suf}"
+    if declare -p "$array_name" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    return 1
+}
+
+handle_run_command() {
+    local group="$1"
+
+    if [ -z "$group" ] || [ "$group" = "help" ] || [ "$group" = "--help" ] || [ "$group" = "-h" ]; then
+        show_run_help
+        return 0
+    fi
+
+    local group_normalized
+    group_normalized=$(echo "$group" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+
+    local group_label=""
+    if [ -n "${MULTI_GROUP_LIST[*]}" ]; then
+        for item in "${MULTI_GROUP_LIST[@]}"; do
+            local g_name="" g_desc=""
+            if [[ "$item" == *" :: "* ]]; then
+                g_name="${item%% :: *}"
+                g_desc="${item#* :: }"
+            else
+                g_name="$item"
+                g_desc="$item"
+            fi
+            g_name="$(echo "$g_name" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
+            if [ "$g_name" = "$group_normalized" ]; then
+                group_label="$(echo "$g_desc" | xargs)"
+                break
+            fi
+        done
+    fi
+
+    local var_suffix
+    var_suffix=$(echo "$group_normalized" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+    local array_name="MULTI_CMD_${var_suffix}"
+    local -a step_cmds=()
+    if declare -p "$array_name" >/dev/null 2>&1; then
+        eval "step_cmds=(\"\${${array_name}[@]}\")"
+    fi
+
+    if [ "${#step_cmds[@]}" -eq 0 ]; then
+        log_error "Pipeline group '$group' not found or has no steps defined!"
+        log_error "Expected array '$array_name' in $MULTI_CONFIG_FILE_NAME or $CONFIG_FILE_NAME"
+        show_run_help
+        exit 1
+    fi
+
+    local total_steps="${#step_cmds[@]}"
+    echo ""
+    log_info "============================================================"
+    log_info " Executing Multi-CLI Pipeline: '$group_normalized'"
+    [ -n "$group_label" ] && log_info " Description: $group_label"
+    log_info " Total Steps: $total_steps"
+    log_info "============================================================"
+
+    local step_idx=1
+    for cmd in "${step_cmds[@]}"; do
+        echo ""
+        echo -e "\033[1;36m[STEP $step_idx/$total_steps]\033[0m \033[1;37m$cmd\033[0m"
+        local step_start
+        step_start=$(date +%s)
+
+        if eval "$cmd"; then
+            local step_end
+            step_end=$(date +%s)
+            local step_dur=$((step_end - step_start))
+            log_success "Step $step_idx/$total_steps finished (${step_dur}s)."
+        else
+            local exit_code=$?
+            log_error "Step $step_idx failed with exit code $exit_code! Aborting pipeline."
+            exit $exit_code
+        fi
+        step_idx=$((step_idx + 1))
+    done
+
+    echo ""
+    log_success "All $total_steps steps of pipeline '$group_normalized' completed successfully."
+    echo ""
+}
+
 # --- 1a. Install Alias into ~/.bashrc (--install) ---
 install_bashrc_alias() {
     local real_script
@@ -1064,6 +1268,15 @@ load_and_validate_config() {
         source "$MASTER_SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME"
     elif [ -f "$SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME" ]; then
         source "$SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME"
+    fi
+
+    # 1c. Nạp cấu hình Multi-CLI Pipelines chung (nằm cùng thư mục với build_apk.sh)
+    if [ -f "$MULTI_CONFIG_FILE" ]; then
+        source "$MULTI_CONFIG_FILE"
+    elif [ -f "$MASTER_SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME" ]; then
+        source "$MASTER_SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME"
+    elif [ -f "$SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME" ]; then
+        source "$SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME"
     fi
 
     if [ ! -f "$CONFIG_FILE" ]; then
@@ -1438,17 +1651,42 @@ run_repo_reset() {
     fi
 
     cd "$ROOT_DIR"
+    echo ""
     log_warn "============================================================"
-    log_warn " CAUTION: Hard resetting and cleaning all repos (repo forall)!"
-    log_warn " Running in $ROOT_DIR: repo forall -c \"git reset --hard && git clean -xdf\""
-    log_warn " All uncommitted changes and untracked files will be lost."
+    log_warn " ⚠️  CAUTION: HARD RESET & CLEAN ALL REPOSITORIES (repo forall)!"
+    log_warn " Target Directory: $ROOT_DIR"
+    log_warn " Command:          repo forall -c \"git reset --hard && git clean -xdf\""
+    log_warn " ALL uncommitted changes, staged files, and untracked files"
+    log_warn " across ALL sub-repositories will be PERMANENTLY DESTROYED!"
     log_warn "============================================================"
+
+    if [ "$CONFIRM_YES" != "true" ]; then
+        local user_confirm=""
+        read -r -p "Are you sure you want to proceed with hard reset? [y/N]: " user_confirm
+        case "$user_confirm" in
+            [yY]|[yY][eE][sS])
+                log_info "Confirmation received ('$user_confirm'). Proceeding with repo reset..."
+                ;;
+            *)
+                log_warn "Operation cancelled by user. No files were modified."
+                exit 0
+                ;;
+        esac
+    else
+        log_info "Bypassing confirmation (-y / --yes specified)."
+    fi
+
     if ! repo forall -c "git reset --hard && git clean -xdf"; then
         log_error "'repo forall' git reset failed in $ROOT_DIR!"
         exit 1
     fi
-    log_success "All repositories reset and cleaned successfully. Exiting (no sync, no build)."
-    exit 0
+
+    if [ "$REPO_SYNC" = "true" ]; then
+        log_success "All repositories reset and cleaned successfully. Proceeding to repo sync..."
+    else
+        log_success "All repositories reset and cleaned successfully. Exiting (no sync, no build)."
+        exit 0
+    fi
 }
 
 # --- 4d. Repo Sync Utility ---
