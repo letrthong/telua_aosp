@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# adroid
+*.apk
+
 # C extensions
 *.so
 
