@@ -993,8 +993,55 @@ handle_run_command() {
     echo ""
 }
 
+# --- 1a-pre. Install Python Dependencies (--install / --init) ---
+install_python_requirements() {
+    local req_file="$MASTER_SCRIPT_DIR/requirements.txt"
+    [ ! -f "$req_file" ] && req_file="$SCRIPT_DIR/requirements.txt"
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # Check if cryptography module is already available
+    if python3 -c "import cryptography" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    echo ""
+    log_info "============================================================"
+    log_info " Checking & Installing Python Dependencies"
+    log_info " Missing package: 'cryptography' (used by config_crypto.py)"
+    log_info "============================================================"
+
+    if command -v pip3 >/dev/null 2>&1 || python3 -m pip --version >/dev/null 2>&1; then
+        if [ -f "$req_file" ]; then
+            log_info "Executing: python3 -m pip install -r $req_file"
+            if python3 -m pip install -r "$req_file"; then
+                log_success "Python dependencies installed successfully."
+            else
+                log_warn "Failed to install Python dependencies via pip. You can install manually:"
+                log_warn "  python3 -m pip install -r $req_file"
+            fi
+        else
+            log_info "Executing: python3 -m pip install cryptography"
+            if python3 -m pip install cryptography; then
+                log_success "'cryptography' installed successfully."
+            else
+                log_warn "Failed to install 'cryptography' via pip."
+            fi
+        fi
+    else
+        log_warn "'pip' not found. Please install manually:"
+        log_warn "  sudo apt install python3-pip && python3 -m pip install cryptography"
+    fi
+    echo ""
+}
+
 # --- 1a. Install Alias into ~/.bashrc (--install) ---
 install_bashrc_alias() {
+    # Check and install python dependencies if missing
+    install_python_requirements
+
     local real_script
     if command -v realpath >/dev/null 2>&1; then
         real_script="$(realpath "${BASH_SOURCE[0]}")"
@@ -1071,6 +1118,7 @@ init_project_config() {
         if [ -z "$input_pw" ]; then
             log_info "No password entered. Copying default $CONFIG_FILE_NAME..."
         else
+            install_python_requirements
             log_info "Decrypting template using config_crypto.py..."
             if echo "$input_pw" | python3 "$crypto_script" decrypt -i "$enc_config" -o "$target_config" --force - 2>/dev/null; then
                 unset input_pw

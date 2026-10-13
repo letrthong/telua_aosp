@@ -15,6 +15,7 @@ An automated developer workflow script for building and deploying privileged sys
 | `const_docker.config` | Frequently used Docker daemon, container & image commands cheatsheet |
 | `const_network.config` | Frequently used Network, Port & ADB over Wi-Fi commands cheatsheet |
 | `config_crypto.py` | Encrypt / decrypt `apk.config` with a password (PBKDF2 + Fernet) |
+| `requirements.txt` | Python package dependencies for `config_crypto.py` (`cryptography`) |
 
 ---
 
@@ -26,9 +27,9 @@ An automated developer workflow script for building and deploying privileged sys
 - **Linux build host** with an initialized AOSP source tree adhering to `.../android/qssi/` (must contain `build/envsetup.sh`).
 - **ADB** (`platform-tools`) installed and accessible in `$PATH`.
 - **Target Device** running a **`userdebug`** or **`eng`** build image. Production `user` builds strictly disallow `adb root` and `adb remount` (script will safely abort).
-- **Python 3** with `cryptography` package (optional, required only for `config_crypto.py`):
+- **Python 3** with `cryptography` package (automatically installed during `./build_apk.sh --install` via `requirements.txt`, or install manually):
   ```bash
-  python3 -m pip install cryptography
+  python3 -m pip install -r requirements.txt
   ```
 - Exactly **one** ADB device/DUT connected.
 - Execute permissions and Linux (LF) line endings:
@@ -496,3 +497,19 @@ flowchart TD
 | `Captured log is empty` | Application didn't start within timeout or regex filter mismatched. Increase `LOGCAT_SETTLE_SECONDS` or broaden `LOGCAT_FILTER`. |
 | Newly pushed code changes not executing | Code change involves manifest, permissions, or system signatures requiring full reboot. Remove `--no-reboot`. |
 | `/bin/bash^M: bad interpreter` | Windows CRLF line endings present. Run `dos2unix build_apk.sh apk.config`. |
+
+---
+
+## 8. Community & Contributing
+
+Contributions from the developer community are welcome! Whether you are adding new automotive shortcuts, improving diagnostic dumps, or hardening build orchestration, please read our contribution guide:
+
+👉 **[Contribution Guidelines & Workflow](CONTRIBUTING.md)**
+
+### Quick Guidelines:
+* **Zero Cognitive Load:** Ensure interactive help and self-documenting cheatsheets exist for all CLI additions.
+* **Enterprise Safety:** Require `[y/N]` interactive confirmation for any destructive actions.
+* **Separation of Concerns:** Keep core logic in `build_apk.sh`, declarative commands in `const_*.config`, and project specifics in `apk.config`.
+* **Line Endings:** Enforce Linux `LF` line endings (`dos2unix`).
+* **Universal Language:** All code comments, help strings, and documentation must be written in professional English.
+
