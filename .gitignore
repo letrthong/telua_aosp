@@ -232,8 +232,4 @@ deployment_log.txt
 *.apk
 *.pid
 .logcat.pid
-config/const_project_cli.config
-const_project_cli.config
-config/const_my_cli.config
-const_my_cli.config
-
+ 
