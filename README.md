@@ -86,6 +86,7 @@ Maintain **a single golden copy of `build_apk.sh`** shared across multiple indep
 ├── config_crypto.py                    ← Configuration Encryption Utility
 ├── enc_apk.config                      ← Encrypted Configuration (Base64)
 ├── requirements.txt                    ← Python Dependencies
+├── AI.md                               ← AI Assistant & LLM Instruction Reference
 └── config/                             ← Shared Constants & Cheatsheets
     ├── const_audio.config              ← Audio & AAOS Key Injections
     ├── const_dumpsys.config            ← System Diagnostics
@@ -536,4 +537,18 @@ Contributions from the developer community are welcome! Whether you are adding n
 * **Separation of Concerns:** Keep core logic in `build_apk.sh`, declarative commands in `const_*.config`, and project specifics in `apk.config`.
 * **Line Endings:** Enforce Linux `LF` line endings (`dos2unix`).
 * **Universal Language:** All code comments, help strings, and documentation must be written in professional English.
+
+---
+
+## 9. AI Agent & LLM Integration (`AI.md`)
+
+Working with AI coding assistants (e.g., Gemini, Claude, Cursor, Copilot, Antigravity)?
+Refer to our dedicated LLM reference guide:
+
+👉 **[AI Agent & LLM Reference (AI.md)](AI.md)**
+
+* Machine-readable intent-to-command mapping.
+* Non-interactive execution rules (e.g. `-y` flag usage).
+* Fast diagnostic & code inspection shortcuts for AI subagents.
+
 
