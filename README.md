@@ -365,7 +365,7 @@ Các quy trình chạy tuần tự nhiều bước (pipeline / macro) được c
 | `MULTI_CMD_DEV_PREP` | `adb root` $\rightarrow$ `adb remount` $\rightarrow$ `setprop persist.log.tag.* DEBUG` | Chuẩn bị quyền root, remount và bật log debug CarAudio |
 | `MULTI_CMD_REMOUNT_REBOOT` | `adb root` $\rightarrow$ `adb remount` $\rightarrow$ `adb reboot` | Root, remount phân vùng hệ thống và khởi động lại thiết bị |
 | `MULTI_CMD_AUDIO_DUMP` | `dumpsys audio` $\rightarrow$ `dumpsys car_audio` $\rightarrow$ `dumpsys media_session` | Thu thập chẩn đoán toàn diện âm thanh hệ thống |
-| `MULTI_CMD_LOGCAT_START` | `wait-for-device` $\rightarrow$ `kill old pid` $\rightarrow$ `logcat -c` $\rightarrow$ `nohup adb logcat ... &` | Đợi thiết bị, dọn tiến trình cũ, xóa buffer & ghi logcat mới ra file |
+| `MULTI_CMD_LOGCAT_START` | `kill old pid` $\rightarrow$ `wait-for-device` $\rightarrow$ `logcat -c` $\rightarrow$ `nohup adb logcat ... &` | Dọn tiến trình cũ, đợi thiết bị, xóa buffer & ghi logcat mới ra file |
 | `MULTI_CMD_LOGCAT_STOP` | `kill $(cat .logcat.pid) \|\| pkill adb logcat` $\rightarrow$ `ls -lh device_logcat.log` | Dừng tiến trình logcat trên máy tính và hiển thị kích thước file log |
 | `MULTI_CMD_LOGCAT_SNAP` | `adb logcat -d -v threadtime > logcat_snapshot.log` | Chụp nhanh toàn bộ buffer logcat hiện tại ra file |
 | `MULTI_GROUP_LIST` | Danh sách đăng ký các nhóm | Hiển thị bảng tra cứu khi chạy `telua run` |
