@@ -36,6 +36,7 @@ An automated developer workflow script for building and deploying privileged sys
   ```bash
   chmod +x build_apk.sh config_crypto.py
   dos2unix build_apk.sh *.config config/*.config config_crypto.py   # required if files were transferred from Windows
+  git update-index --chmod=+x build_apk.sh config_crypto.py         # ensures execution mode (100755) is preserved in Git
   ```
 
 ---
