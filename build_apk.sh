@@ -427,6 +427,39 @@ parse_arguments() {
 }
 
 # --- 1d. Audio Control & Custom ADB Shell Commands (--audio / audio) ---
+# Short one-line-per-action listing (shown by: telua audio)
+show_audio_short_help() {
+    echo ""
+    echo -e "\033[1;32m  telua audio <action> - Audio control via ADB Shell\033[0m"
+    echo -e "  Audio Config File: \033[0;33m$AUDIO_CONFIG_FILE\033[0m"
+    echo ""
+    if [ -n "${AUDIO_CLI_LIST[*]}" ] && [ "${#AUDIO_CLI_LIST[@]}" -gt 0 ]; then
+        for item in "${AUDIO_CLI_LIST[@]}"; do
+            local item_action="" item_desc=""
+            if [[ "$item" == *" :: "* ]]; then
+                item_action="${item%% :: *}"
+                local item_rest="${item#* :: }"
+                item_desc="${item_rest%% :: *}"
+            elif [[ "$item" == *"|"* ]]; then
+                item_action="$(echo "$item" | cut -d'|' -f1)"
+                item_desc="$(echo "$item" | cut -d'|' -f2)"
+            else
+                item_action="$item"
+                item_desc="Custom"
+            fi
+            item_action="$(echo "$item_action" | xargs)"
+            item_desc="$(echo "$item_desc" | xargs)"
+            printf "  \033[1;37m%-26s\033[0m %s\n" "telua audio $item_action" "$item_desc"
+        done
+    else
+        echo -e "  \033[0;90m(AUDIO_CLI_LIST not declared in $AUDIO_CONFIG_FILE_NAME or $CONFIG_FILE_NAME)\033[0m"
+    fi
+    echo ""
+    echo -e "  \033[0;90mTip: 'telua audio help' (or --help / -h) shows detailed ADB commands.\033[0m"
+    echo ""
+}
+
+# Detailed listing with ADB command per action (shown by: telua audio help)
 show_audio_help() {
     echo ""
     echo -e "\033[1;36m================================================================================\033[0m"
@@ -514,7 +547,12 @@ is_audio_action() {
 handle_audio_command() {
     local action="$1"
 
-    if [ -z "$action" ] || [ "$action" = "help" ] || [ "$action" = "--help" ] || [ "$action" = "-h" ]; then
+    if [ -z "$action" ]; then
+        show_audio_short_help
+        return 0
+    fi
+
+    if [ "$action" = "help" ] || [ "$action" = "--help" ] || [ "$action" = "-h" ]; then
         show_audio_help
         return 0
     fi
@@ -603,7 +641,40 @@ handle_audio_command() {
     fi
 }
 
-# --- 1d. Audio Control & Custom ADB Shell Commands (--audio / audio) ---
+# --- 1d. Dumpsys Diagnostics Commands (--dump / dump) ---
+# Short one-line-per-target listing (shown by: telua dump)
+show_dump_short_help() {
+    echo ""
+    echo -e "\033[1;32m  telua dump <target> - Dumpsys diagnostics via ADB Shell\033[0m"
+    echo -e "  Dump Config File:  \033[0;33m$DUMP_CONFIG_FILE\033[0m"
+    echo ""
+    if [ -n "${DUMP_CLI_LIST[*]}" ] && [ "${#DUMP_CLI_LIST[@]}" -gt 0 ]; then
+        for item in "${DUMP_CLI_LIST[@]}"; do
+            local item_action="" item_desc=""
+            if [[ "$item" == *" :: "* ]]; then
+                item_action="${item%% :: *}"
+                local item_rest="${item#* :: }"
+                item_desc="${item_rest%% :: *}"
+            elif [[ "$item" == *"|"* ]]; then
+                item_action="$(echo "$item" | cut -d'|' -f1)"
+                item_desc="$(echo "$item" | cut -d'|' -f2)"
+            else
+                item_action="$item"
+                item_desc="Custom"
+            fi
+            item_action="$(echo "$item_action" | xargs)"
+            item_desc="$(echo "$item_desc" | xargs)"
+            printf "  \033[1;37m%-26s\033[0m %s\n" "telua dump $item_action" "$item_desc"
+        done
+    else
+        echo -e "  \033[0;90m(DUMP_CLI_LIST not declared in $DUMP_CONFIG_FILE_NAME or $CONFIG_FILE_NAME)\033[0m"
+    fi
+    echo ""
+    echo -e "  \033[0;90mTip: 'telua dump help' (or --help / -h) shows detailed ADB commands.\033[0m"
+    echo ""
+}
+
+# Detailed listing with ADB command per target (shown by: telua dump help)
 show_dump_help() {
     echo ""
     echo -e "\033[1;36m================================================================================\033[0m"
@@ -691,7 +762,12 @@ is_dump_action() {
 handle_dump_command() {
     local action="$1"
 
-    if [ -z "$action" ] || [ "$action" = "help" ] || [ "$action" = "--help" ] || [ "$action" = "-h" ]; then
+    if [ -z "$action" ]; then
+        show_dump_short_help
+        return 0
+    fi
+
+    if [ "$action" = "help" ] || [ "$action" = "--help" ] || [ "$action" = "-h" ]; then
         show_dump_help
         return 0
     fi
@@ -774,6 +850,35 @@ handle_dump_command() {
 }
 
 # --- 1f. Multi-CLI Command Pipelines (--run / run / --multi / multi) ---
+# Short one-line-per-group listing (shown by: telua run)
+show_run_short_help() {
+    echo ""
+    echo -e "\033[1;32m  telua run <group> - Multi-CLI Pipelines\033[0m"
+    echo -e "  Pipeline Config:   \033[0;33m$MULTI_CONFIG_FILE\033[0m"
+    echo ""
+    if [ -n "${MULTI_GROUP_LIST[*]}" ] && [ "${#MULTI_GROUP_LIST[@]}" -gt 0 ]; then
+        for item in "${MULTI_GROUP_LIST[@]}"; do
+            local grp_name="" grp_desc=""
+            if [[ "$item" == *" :: "* ]]; then
+                grp_name="${item%% :: *}"
+                grp_desc="${item#* :: }"
+            else
+                grp_name="$item"
+                grp_desc="Pipeline group"
+            fi
+            grp_name="$(echo "$grp_name" | xargs)"
+            grp_desc="$(echo "$grp_desc" | xargs)"
+            printf "  \033[1;37m%-30s\033[0m %s\n" "telua run $grp_name" "$grp_desc"
+        done
+    else
+        echo -e "  \033[0;90m(No MULTI_GROUP_LIST declared in $MULTI_CONFIG_FILE_NAME or $CONFIG_FILE_NAME)\033[0m"
+    fi
+    echo ""
+    echo -e "  \033[0;90mTip: 'telua run help' (or --help / -h) shows detailed steps for each group.\033[0m"
+    echo ""
+}
+
+# Detailed listing with every step of every group (shown by: telua run help)
 show_run_help() {
     echo ""
     echo -e "\033[1;36m================================================================================\033[0m"
@@ -861,7 +966,12 @@ is_run_group() {
 handle_run_command() {
     local group="$1"
 
-    if [ -z "$group" ] || [ "$group" = "help" ] || [ "$group" = "--help" ] || [ "$group" = "-h" ]; then
+    if [ -z "$group" ]; then
+        show_run_short_help
+        return 0
+    fi
+
+    if [ "$group" = "help" ] || [ "$group" = "--help" ] || [ "$group" = "-h" ]; then
         show_run_help
         return 0
     fi
