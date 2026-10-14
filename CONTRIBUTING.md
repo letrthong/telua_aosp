@@ -133,6 +133,12 @@ To maintain high code quality across the codebase, please adhere to these rules:
    - `feat: add camera service to dumpsys cheatsheet`
    - `fix: resolve overlayfs remount timeout on Android 14`
    - `docs: update README with new multi-cli options`
+
+   > [!TIP]
+   > If developing on Windows or cross-platform environments, ensure executable file modes (`100755`) are preserved in Git before committing:
+   > ```bash
+   > git update-index --chmod=+x build_apk.sh config_crypto.py
+   > ```
 7. **Submit a Pull Request (PR):**
    - Open a PR against the `main` branch.
    - Provide a concise description of the motivation and testing performed.
