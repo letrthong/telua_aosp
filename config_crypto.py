@@ -37,6 +37,8 @@ File format: base64( salt(16 bytes) || Fernet token ); key = PBKDF2-HMAC-SHA256(
 NOTE: a password given on the command line is visible in shell history and `ps`.
 """
 
+from __future__ import annotations
+
 import argparse
 import base64
 import binascii

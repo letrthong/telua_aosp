@@ -18,6 +18,7 @@ When assisting a developer, **ALWAYS prefer using `telua` (or `./build_apk.sh`) 
 > 1. **Non-Interactive CI/Agent Execution**: When executing `--repo-reset`, ALWAYS pass the `-y` or `--yes` flag to bypass the interactive `[y/N]` prompt (e.g., `telua --repo-sync --repo-reset -y`).
 > 2. **Config Protection**: Never commit or display sensitive decrypted config files (`dec_apk.config`, `dec_*.config`).
 > 3. **Line Endings**: Always maintain Linux `LF` line endings for all script and config files.
+> 4. **Executable Permissions (Git Mode 100755)**: When modifying or adding scripts from Windows/cross-platform hosts, ALWAYS enforce executable permissions in Git using `git update-index --chmod=+x build_apk.sh config_crypto.py` so the files run immediately upon checkout on Linux without requiring manual `chmod`.
 
 ---
 

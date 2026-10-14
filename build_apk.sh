@@ -1173,7 +1173,7 @@ init_project_config() {
         else
             install_python_requirements
             log_info "Decrypting template using config_crypto.py..."
-            if echo "$input_pw" | python3 "$crypto_script" decrypt -i "$enc_config" -o "$target_config" --force - 2>/dev/null; then
+            if printf '%s\n' "$input_pw" | python3 "$crypto_script" decrypt -i "$enc_config" -o "$target_config" --force - 2>/dev/null; then
                 unset input_pw
                 log_success "Successfully decrypted and created: $target_config"
                 log_info "Next: edit $CONFIG_FILE_NAME, then run: telua --info"
