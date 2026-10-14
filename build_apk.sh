@@ -23,8 +23,8 @@
 set -e
 
 # --- Constants & Global Defaults ---
-SCRIPT_VERSION="2.8.0"
-SCRIPT_LAST_UPDATED="2026-10-13"
+SCRIPT_VERSION="2.9.0"
+SCRIPT_LAST_UPDATED="2026-10-14"
 CONFIG_FILE_NAME="apk.config"
 AUDIO_CONFIG_FILE_NAME="const_audio.config"
 DUMP_CONFIG_FILE_NAME="const_dumpsys.config"
@@ -148,43 +148,35 @@ Version:      v$SCRIPT_VERSION (Updated: $SCRIPT_LAST_UPDATED)
 Maintained by: letrthong@gmail.com
 Script Path:  $real_script
 
-Usage: telua [OPTIONS]  (or: $0 [OPTIONS])
+Usage: telua [COMMAND] [OPTIONS]  (or: $0 [COMMAND] [OPTIONS])
 
-Options:
-  --install, install          Install/update 'telua' alias in ~/.bashrc pointing to:
-                              $real_script
-                              (auto-sources ~/.bashrc upon completion)
-  --init, init                Initialize $CONFIG_FILE_NAME in current directory (\$PWD):
-                              - Prompts for password to decrypt enc_apk.config
-                              - Press Enter to use default plain $CONFIG_FILE_NAME
-  --config <path>             Explicitly specify path to $CONFIG_FILE_NAME file
-  -v, --version, version      Display script version and last update date, then exit
-  --info, info                Display general build config and platform target info
-  --platform android|qnx      Target platform: 'android' (default) or 'qnx' (reserved)
-  --start-deploy true|false   Override ENABLE_DEPLOY from $CONFIG_FILE_NAME
+Primary Subcommands:
+  build, b                    Build active module, push APK to device, and reboot
+  init                        Initialize $CONFIG_FILE_NAME in current directory (\$PWD)
+  install                     Install 'telua' alias in ~/.bashrc & dependencies
+  info                        Display general build config, paths, and connected DUT
+  update                      Update toolkit: git pull origin main (with auto-recovery)
+  audio [action]              Control AAOS audio (vol-up, vol-down, vol-mute, ks, ks-stop)
+  dump [target]               Run dumpsys diagnostics (audio, car-service, car-audio, ...)
+  run [group]                 Execute multi-command pipeline macro (dev-prep, audio-cycle, ...)
+  git                         Display Git & Google Repo cheatsheet
+  docker                      Display Docker daemon & container cheatsheet
+  network                     Display Network & socket inspection cheatsheet
+
+Build & Deployment Options (used with 'build' or standalone):
   --no-reboot                 Fast restart (stop && start) instead of full device reboot
-  --softlink [path]           Symlink this script + copy $CONFIG_FILE_NAME into [path] (overwrites)
-                              (defaults to SOFTLINK_TARGET_PATH from $CONFIG_FILE_NAME if omitted)
-  --audio, audio [action]     Control audio via ADB shell (actions from AUDIO_CLI_LIST
-                              in $AUDIO_CONFIG_FILE_NAME: vol-up | vol-down | vol-mute | ks | ...)
-  --dump, dump [target]       Run dumpsys diagnostics via ADB shell (targets from DUMP_CLI_LIST
-                              in $DUMP_CONFIG_FILE_NAME: audio | car-service | car-audio | ...)
-  --run, run [group]          Execute multi-command sequential pipeline group from
-                              $MULTI_CONFIG_FILE_NAME (or: telua multi [group])
-  --repo-sync                 Run 'repo sync' in ROOT_DIR, cd to android/qssi & run post_sync_cli before build
-  --repo-reset                Run 'repo forall -c "git reset --hard && git clean -xdf"' (prompts for 'y' or use -y)
-  -y, --yes                   Bypass confirmation prompts for dangerous operations (e.g. --repo-reset)
-  --git-diff                  Run 'git diff HEAD^ HEAD' in this script's git repo and exit
-  --git-amend                 Run 'git commit --amend --no-edit' (staged changes only) in this script's git repo and exit
-  --update, update            Update script repo: 'git pull origin main' (auto-resets hard on error)
-  --git-help, git             Display cheatsheet of commonly used Git commands and exit
-  --docker-help, docker       Display cheatsheet of commonly used Docker commands and exit
-  --network-help, network     Display cheatsheet of commonly used Network & Port commands and exit
+  --start-deploy true|false   Override ENABLE_DEPLOY from $CONFIG_FILE_NAME
+  --platform android|qnx      Target platform: 'android' (default) or 'qnx' (reserved)
+  --repo-sync                 Run 'repo sync' in ROOT_DIR before building module
+  --repo-reset                Hard reset all repos before sync (prompts for 'y' or use -y)
+  -y, --yes                   Bypass confirmation prompts (e.g. for --repo-reset)
+  --config <path>             Explicitly specify custom path to config file
+  --softlink [path]           Symlink this script + copy $CONFIG_FILE_NAME into [path]
+  --test-mode true|false      Run unit test suite instead of full build
   --find-file <pattern> [path] Search for files by pattern in [path] (default: '.')
   --find-dir <pattern> [path]  Search for directories by pattern in [path] (default: '.')
   --find-text <text> [path]    Search for text in files under [path] (default: '.')
-  --test-mode true|false     Run unit test suite instead of full build
-  -h, --help, help           Display this help message and exit
+  -h, --help, help            Display this help message and exit
 
 Configuration Info:
   Active Config:              $CONFIG_FILE
@@ -216,8 +208,18 @@ parse_early_arguments() {
 
 # --- 1. Parse Command Line Arguments ---
 parse_arguments() {
+    # If invoked with no arguments at all, display help by default (Zero Cognitive Load & Safe)
+    if [ $# -eq 0 ]; then
+        print_help
+        exit 0
+    fi
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            build|--build|b)
+                # Primary build subcommand: consume it and parse subsequent options
+                shift
+                ;;
             --config)
                 # Handled early in parse_early_arguments
                 shift 2

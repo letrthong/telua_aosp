@@ -47,10 +47,11 @@ When the user asks you to perform a task, map their intent to the corresponding 
 
 | User Intent | Recommended Command | Notes |
 |---|---|---|
-| **Build & Deploy APK (Full Reboot)** | `telua` or `./build_apk.sh` | Builds module, pushes APK, reboots device, captures logcat |
-| **Fast Build & Deploy (No Reboot)** | `telua --no-reboot` | Uses `stop && start` runtime framework restart |
-| **Compile APK Only (No Push)** | `telua --start-deploy false` | Skips ADB remount and device transfer |
-| **Check Environment & Device Status** | `telua --info` | Verifies lunch target, module name, paths, and connected DUT |
+| **View General Help & Commands** | `telua` or `telua -h` | Displays primary subcommands, build options, and config paths |
+| **Build & Deploy APK (Full Reboot)** | `telua build` (or `telua b`) | Builds module, pushes APK, reboots device, captures logcat |
+| **Fast Build & Deploy (No Reboot)** | `telua build --no-reboot` | Uses `stop && start` runtime framework restart |
+| **Compile APK Only (No Push)** | `telua build --start-deploy false` | Skips ADB remount and device transfer |
+| **Check Environment & Device Status** | `telua info` (or `telua --info`) | Verifies lunch target, module name, paths, and connected DUT |
 | **Sync Source Code via Repo** | `telua --repo-sync` | Runs `repo sync` + executes post-sync hook |
 | **Sync with Clean Reset** | `telua --repo-sync --repo-reset -y` | Hard resets dirty repos before sync (AI must pass `-y`) |
 | **Run Unit Tests** | `telua --test-mode true` | Runs project test script configured in `apk.config` |

@@ -55,6 +55,7 @@ source ~/.bashrc
 ```
 
 Now you can invoke `telua` anywhere in your terminal!
+- Run `telua` with no arguments to display the interactive help menu.
 
 ### Step 2: Build & Deployment
 
@@ -65,10 +66,13 @@ Place `apk.config` (or run `telua init`) inside your project directory within th
 nano apk.config
 
 # 2. Inspect target, module paths, and connected device info
-telua --info
+telua info
 
-# 3. Build module, push to system partition, and reboot (or use ./build_apk.sh)
-telua
+# 3. Build module, push to system partition, and reboot (or: telua b)
+telua build
+
+# Or fast deploy after editing Java/Kotlin source files (5-10s):
+telua build --no-reboot
 ```
 
 > **AOSP Discovery:** The script resolves the AOSP root by walking upwards from its directory until it finds an ancestor directory named `android`, setting `ANDROID_TOP=<...>/android/qssi`.
@@ -156,9 +160,11 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 
 ## 4. Command Line Options
 
-| Option | Description |
+| Option / Subcommand | Description |
 |---|---|
-| *(none)* | Full cycle: Build + Deploy (if `ENABLE_DEPLOY="true"`) + Full Device Reboot |
+| *(none)*, `-h`, `--help`, `help` | Displays interactive help menu, subcommands, and configuration file paths |
+| `build`, `b`, `--build` | Full cycle: Build module + Push APK (if `ENABLE_DEPLOY="true"`) + Full Device Reboot |
+| `--no-reboot` | Fast runtime restart (`stop && start`, ~10–15s) instead of full device reboot |
 | `--config <path>` | Explicitly specifies path to `apk.config` to load |
 | `--init`, `init` | Initializes `apk.config` in current directory (`$PWD`) by decrypting `enc_apk.config` with password (or copying plain template) |
 | `--install`, `install` | Adds or updates alias `telua` in `~/.bashrc` pointing to `build_apk.sh`, and sources `~/.bashrc` |
@@ -166,7 +172,6 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `--info`, `info` | Displays general build configuration followed by platform-specific target info (Android / QNX), then exits |
 | `--platform android\|qnx` | Target deployment platform: `android` (default, active) or `qnx` (reserved, currently skips deployment) |
 | `--start-deploy true\|false` | Overrides `ENABLE_DEPLOY` defined in `apk.config` |
-| `--no-reboot` | Fast runtime restart (`stop && start`, ~10–15s) instead of full device reboot |
 | `--softlink [path]` | Creates symlink to `build_apk.sh` and copies `apk.config` to `[path]` (falls back to `SOFTLINK_TARGET_PATH` from `apk.config` if omitted) |
 | `--repo-sync` | Executes `repo sync` from `ROOT_DIR`, navigates to `android/qssi`, and runs `post_sync_cli` before building |
 | `--repo-sync-only` | Executes `repo sync` and `post_sync_cli` only, then exits without building |
@@ -178,17 +183,20 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `--git-help`, `git` | Displays cheatsheet of commonly used Git commands and exits |
 | `--docker-help`, `docker` | Displays cheatsheet of commonly used Docker commands and exits |
 | `--network-help`, `network` | Displays cheatsheet of commonly used Network & Port commands and exits |
-| `--audio`, `audio [action]` | Controls audio via ADB shell (`vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`) using commands from `const_audio.config` (or overrides in `apk.config`) |
-| `--dump`, `dump [target]` | Runs dumpsys diagnostics via ADB shell (`audio`, `car-service`, `car-audio`, `media`, `battery`, `activity`) using commands from `const_dumpsys.config` (or overrides in `apk.config`) |
-| `--run`, `run [group]` | Executes multi-command sequential pipeline group from `const_multi_cli.config` (or: `telua multi [group]`) |
+| `--audio`, `audio [action]` | Controls audio via ADB shell (`vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`) using commands from `config/const_audio.config` |
+| `--dump`, `dump [target]` | Runs dumpsys diagnostics via ADB shell (`audio`, `car-service`, `car-audio`, `media`, `battery`, `activity`) using commands from `config/const_dumpsys.config` |
+| `--run`, `run [group]` | Executes multi-command sequential pipeline group from `config/const_multi_cli.config` (or: `telua multi [group]`) |
 | `--find-file <pattern> [path]` | Searches for files by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-dir <pattern> [path]` | Searches for directories by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-text <text> [path]` | Greps for text string in files under `[path]` (defaults to `.` if omitted) |
 | `--test-mode true|false` | Runs unit test suite instead of compiling the APK |
-| `-h`, `--help`, `help` | Displays help message and exits |
 
 #### Usage Examples:
 ```bash
+telua                                 # View interactive help menu & available subcommands
+telua build                           # Build active module, push APK, and reboot device
+telua build --no-reboot               # Fast deploy after editing Java/Kotlin code (~5-10s)
+telua b                               # Short alias for 'telua build'
 ./build_apk.sh --install              # Install/update 'telua' alias in ~/.bashrc
 telua init                            # Initialize apk.config in current workspace
 telua info                            # Inspect environment and device state
