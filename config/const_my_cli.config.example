@@ -1,0 +1,41 @@
+#!/bin/bash
+# ==============================================================================
+# const_my_cli.config.example - Template for Personal & Private Workflows
+# Antigravity / telua AOSP & Automotive Toolkit
+# ==============================================================================
+# This template is provided for developers to configure private, local workflows.
+# To use for your local environment or personal project tasks:
+#   cp config/const_my_cli.config.example config/const_my_cli.config
+#
+# (The file 'config/const_my_cli.config' is excluded by .gitignore so your
+#  private scripts and confidential commands are never committed to Git).
+#
+# Usage:
+#   telua my                    (display list of available personal actions)
+#   telua my <action_name>      (execute commands in specified personal action)
+#   telua proj <action_name>    (alias equivalent to 'my')
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Personal Commands Registry (Displayed when running: telua my)
+# Syntax per line: "action_name :: Concise English description"
+# ------------------------------------------------------------------------------
+MY_GROUP_LIST=(
+    "hello   :: Print Hello World and sleep 1s (example pipeline)"
+)
+
+# ------------------------------------------------------------------------------
+# 2. Command Pipeline Step Definitions
+# Syntax: MY_CMD_<ACTION_NAME_UPPERCASE>=( "cmd 1" "cmd 2" ... )
+# Variable names are dynamically mapped from action_name:
+#   e.g.: hello -> MY_CMD_HELLO
+#
+# Supports ADB commands, host shell commands, sleep, git, repo, etc.
+# If any step fails (exit code != 0), execution aborts immediately (fail-fast).
+# ------------------------------------------------------------------------------
+
+# Example 1: hello (Demonstration template: print hello world and sleep 1)
+MY_CMD_HELLO=(
+    "echo \"Hello World\""
+    "sleep 1"
+)

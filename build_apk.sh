@@ -29,6 +29,8 @@ CONFIG_FILE_NAME="apk.config"
 AUDIO_CONFIG_FILE_NAME="const_audio.config"
 DUMP_CONFIG_FILE_NAME="const_dumpsys.config"
 MULTI_CONFIG_FILE_NAME="const_multi_cli.config"
+MY_CONFIG_FILE_NAME="const_my_cli.config"
+PROJECT_CONFIG_FILE_NAME="const_project_cli.config"
 GIT_CONFIG_FILE_NAME="const_git.config"
 DOCKER_CONFIG_FILE_NAME="const_docker.config"
 NETWORK_CONFIG_FILE_NAME="const_network.config"
@@ -118,6 +120,9 @@ GIT_CONFIG_FILE="$(find_const_config_file "$GIT_CONFIG_FILE_NAME")"
 DOCKER_CONFIG_FILE="$(find_const_config_file "$DOCKER_CONFIG_FILE_NAME")"
 NETWORK_CONFIG_FILE="$(find_const_config_file "$NETWORK_CONFIG_FILE_NAME")"
 MULTI_CONFIG_FILE="$(find_const_config_file "$MULTI_CONFIG_FILE_NAME")"
+MY_CONFIG_FILE="$(find_const_config_file "$MY_CONFIG_FILE_NAME")"
+[ ! -f "$MY_CONFIG_FILE" ] && MY_CONFIG_FILE="$(find_const_config_file "$PROJECT_CONFIG_FILE_NAME")"
+PROJECT_CONFIG_FILE="$MY_CONFIG_FILE"
 
 # Logging helpers with colors
 log_info()    { echo -e "\033[1;34m[INFO]\033[0m $*"; }
@@ -159,6 +164,7 @@ Primary Subcommands:
   audio [action]              Control AAOS audio (vol-up, vol-down, vol-mute, ks, ks-stop)
   dump [target]               Run dumpsys diagnostics (audio, car-service, car-audio, ...)
   run [group]                 Execute multi-command pipeline macro (dev-prep, audio-cycle, ...)
+  my, proj [action]           Execute personal / private pipeline macro (hello, ...)
   git                         Display Git & Google Repo cheatsheet
   docker                      Display Docker daemon & container cheatsheet
   network                     Display Network & socket inspection cheatsheet
@@ -183,6 +189,7 @@ Configuration Info:
   Audio Config (Global):      $AUDIO_CONFIG_FILE
   Dump Config (Global):       $DUMP_CONFIG_FILE
   Multi-CLI Pipelines (Global):$MULTI_CONFIG_FILE
+  Personal Pipelines (Private):$MY_CONFIG_FILE
   Git Cheatsheet (Global):    $GIT_CONFIG_FILE
   Docker Cheatsheet (Global): $DOCKER_CONFIG_FILE
   Network Cheatsheet (Global):$NETWORK_CONFIG_FILE
@@ -391,6 +398,17 @@ parse_arguments() {
                 handle_run_command "$RUN_GROUP"
                 exit 0
                 ;;
+            --my|my|--proj|proj|--project|project)
+                if [ -n "$2" ] && [[ "$2" != --* ]]; then
+                    PROJ_ACTION="$2"
+                    shift 2
+                else
+                    PROJ_ACTION=""
+                    shift 1
+                fi
+                handle_project_command "$PROJ_ACTION"
+                exit 0
+                ;;
             vol-up|--vol-up)
                 handle_audio_command "vol-up"
                 exit 0
@@ -416,6 +434,10 @@ parse_arguments() {
                 fi
                 if is_dump_action "$stripped_arg"; then
                     handle_dump_command "$stripped_arg"
+                    exit 0
+                fi
+                if is_project_action "$stripped_arg"; then
+                    handle_project_command "$stripped_arg"
                     exit 0
                 fi
                 log_error "Unknown argument '$1'"
@@ -1046,6 +1068,234 @@ handle_run_command() {
     echo ""
 }
 
+# --- 1g. Personal & Project Command Pipelines (--my / my / --proj / proj) ---
+# Short one-line-per-action listing (shown by: telua my)
+show_project_short_help() {
+    echo ""
+    echo -e "\033[1;32m  telua my <action> - Personal & Private Pipelines (or: telua proj)\033[0m"
+    echo -e "  Active Project:    \033[1;37m${ACTIVE_PROJECT:-default}\033[0m"
+    echo -e "  Personal Config:   \033[0;33m$MY_CONFIG_FILE\033[0m"
+    echo ""
+    local -a grp_list=()
+    if [ -n "${MY_GROUP_LIST[*]}" ] && [ "${#MY_GROUP_LIST[@]}" -gt 0 ]; then
+        grp_list=("${MY_GROUP_LIST[@]}")
+    elif [ -n "${PROJECT_GROUP_LIST[*]}" ] && [ "${#PROJECT_GROUP_LIST[@]}" -gt 0 ]; then
+        grp_list=("${PROJECT_GROUP_LIST[@]}")
+    fi
+
+    if [ "${#grp_list[@]}" -gt 0 ]; then
+        for item in "${grp_list[@]}"; do
+            local grp_name="" grp_desc=""
+            if [[ "$item" == *" :: "* ]]; then
+                grp_name="${item%% :: *}"
+                grp_desc="${item#* :: }"
+            else
+                grp_name="$item"
+                grp_desc="Personal action"
+            fi
+            grp_name="$(echo "$grp_name" | xargs)"
+            grp_desc="$(echo "$grp_desc" | xargs)"
+            printf "  \033[1;37m%-30s\033[0m %s\n" "telua my $grp_name" "$grp_desc"
+        done
+    else
+        echo -e "  \033[0;90m(No MY_GROUP_LIST declared in $MY_CONFIG_FILE_NAME or $CONFIG_FILE_NAME)\033[0m"
+    fi
+    echo ""
+    echo -e "  \033[0;90mTip: 'telua my help' (or --help / -h) shows detailed steps for each action.\033[0m"
+    echo ""
+}
+
+# Detailed listing with every step of every action (shown by: telua my help)
+show_project_help() {
+    echo ""
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo -e "\033[1;32m  telua my - Personal & Private Pipelines (or: telua proj)\033[0m"
+    echo -e "  Active Project:    \033[1;37m${ACTIVE_PROJECT:-default}\033[0m"
+    echo -e "  Config File:       \033[0;33m$CONFIG_FILE\033[0m"
+    echo -e "  Personal Config:   \033[0;33m$MY_CONFIG_FILE\033[0m"
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo ""
+    echo -e "\033[1;33mAVAILABLE PERSONAL ACTIONS:\033[0m"
+
+    local -a grp_list=()
+    if [ -n "${MY_GROUP_LIST[*]}" ] && [ "${#MY_GROUP_LIST[@]}" -gt 0 ]; then
+        grp_list=("${MY_GROUP_LIST[@]}")
+    elif [ -n "${PROJECT_GROUP_LIST[*]}" ] && [ "${#PROJECT_GROUP_LIST[@]}" -gt 0 ]; then
+        grp_list=("${PROJECT_GROUP_LIST[@]}")
+    fi
+
+    if [ "${#grp_list[@]}" -gt 0 ]; then
+        local idx=1
+        for item in "${grp_list[@]}"; do
+            local grp_name="" grp_desc=""
+            if [[ "$item" == *" :: "* ]]; then
+                grp_name="${item%% :: *}"
+                grp_desc="${item#* :: }"
+            else
+                grp_name="$item"
+                grp_desc="Personal action"
+            fi
+            grp_name="$(echo "$grp_name" | xargs)"
+            grp_desc="$(echo "$grp_desc" | xargs)"
+
+            local var_suffix
+            var_suffix=$(echo "$grp_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+            local -a steps=()
+            if declare -p "MY_CMD_${var_suffix}" >/dev/null 2>&1; then
+                eval "steps=(\"\${MY_CMD_${var_suffix}[@]}\")"
+            elif declare -p "PROJECT_CMD_${var_suffix}" >/dev/null 2>&1; then
+                eval "steps=(\"\${PROJECT_CMD_${var_suffix}[@]}\")"
+            fi
+
+            echo -e "  \033[1;32m$idx.\033[0m \033[1;37mtelua my $grp_name\033[0m"
+            echo -e "     \033[0;90mDescription:\033[0m  $grp_desc"
+            if [ "${#steps[@]}" -gt 0 ]; then
+                echo -e "     \033[0;90mSteps:\033[0m        \033[0;36m(${#steps[@]} commands sequential)\033[0m"
+                local step_i=1
+                for step_cmd in "${steps[@]}"; do
+                    echo -e "       \033[1;33m[$step_i/${#steps[@]}]\033[0m \033[0;37m$step_cmd\033[0m"
+                    step_i=$((step_i + 1))
+                done
+            else
+                echo -e "     \033[0;90mSteps:\033[0m        \033[0;31m(No steps declared in MY_CMD_${var_suffix})\033[0m"
+            fi
+            echo ""
+            idx=$((idx + 1))
+        done
+    else
+        echo -e "  \033[0;90m(No MY_GROUP_LIST declared in $MY_CONFIG_FILE_NAME or $CONFIG_FILE_NAME)\033[0m"
+    fi
+
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo ""
+}
+
+is_project_action() {
+    local target="$1"
+    target=$(echo "$target" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+
+    local -a grp_list=()
+    if [ -n "${MY_GROUP_LIST[*]}" ]; then
+        grp_list=("${MY_GROUP_LIST[@]}")
+    elif [ -n "${PROJECT_GROUP_LIST[*]}" ]; then
+        grp_list=("${PROJECT_GROUP_LIST[@]}")
+    fi
+
+    if [ "${#grp_list[@]}" -gt 0 ]; then
+        for item in "${grp_list[@]}"; do
+            local grp=""
+            if [[ "$item" == *" :: "* ]]; then
+                grp="${item%% :: *}"
+            else
+                grp="$item"
+            fi
+            grp="$(echo "$grp" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
+            if [ "$grp" = "$target" ]; then
+                return 0
+            fi
+        done
+    fi
+
+    local suf
+    suf=$(echo "$target" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+    if declare -p "MY_CMD_${suf}" >/dev/null 2>&1 || declare -p "PROJECT_CMD_${suf}" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    return 1
+}
+
+handle_project_command() {
+    local action="$1"
+
+    if [ -z "$action" ]; then
+        show_project_short_help
+        return 0
+    fi
+
+    if [ "$action" = "help" ] || [ "$action" = "--help" ] || [ "$action" = "-h" ]; then
+        show_project_help
+        return 0
+    fi
+
+    local action_normalized
+    action_normalized=$(echo "$action" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+
+    local -a grp_list=()
+    if [ -n "${MY_GROUP_LIST[*]}" ]; then
+        grp_list=("${MY_GROUP_LIST[@]}")
+    elif [ -n "${PROJECT_GROUP_LIST[*]}" ]; then
+        grp_list=("${PROJECT_GROUP_LIST[@]}")
+    fi
+
+    local action_label=""
+    if [ "${#grp_list[@]}" -gt 0 ]; then
+        for item in "${grp_list[@]}"; do
+            local g_name="" g_desc=""
+            if [[ "$item" == *" :: "* ]]; then
+                g_name="${item%% :: *}"
+                g_desc="${item#* :: }"
+            else
+                g_name="$item"
+                g_desc="$item"
+            fi
+            g_name="$(echo "$g_name" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
+            if [ "$g_name" = "$action_normalized" ]; then
+                action_label="$(echo "$g_desc" | xargs)"
+                break
+            fi
+        done
+    fi
+
+    local var_suffix
+    var_suffix=$(echo "$action_normalized" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+    local -a step_cmds=()
+    if declare -p "MY_CMD_${var_suffix}" >/dev/null 2>&1; then
+        eval "step_cmds=(\"\${MY_CMD_${var_suffix}[@]}\")"
+    elif declare -p "PROJECT_CMD_${var_suffix}" >/dev/null 2>&1; then
+        eval "step_cmds=(\"\${PROJECT_CMD_${var_suffix}[@]}\")"
+    fi
+
+    if [ "${#step_cmds[@]}" -eq 0 ]; then
+        log_error "Personal action '$action' not found or has no steps defined!"
+        log_error "Expected array 'MY_CMD_${var_suffix}' in $MY_CONFIG_FILE_NAME or $CONFIG_FILE_NAME"
+        show_project_help
+        exit 1
+    fi
+
+    local total_steps="${#step_cmds[@]}"
+    echo ""
+    log_info "============================================================"
+    log_info " Executing Personal Pipeline: '$action_normalized'"
+    [ -n "$action_label" ] && log_info " Description: $action_label"
+    log_info " Total Steps: $total_steps"
+    log_info "============================================================"
+
+    local step_idx=1
+    for cmd in "${step_cmds[@]}"; do
+        echo ""
+        echo -e "\033[1;36m[STEP $step_idx/$total_steps]\033[0m \033[1;37m$cmd\033[0m"
+        local step_start
+        step_start=$(date +%s)
+
+        if eval "$cmd"; then
+            local step_end
+            step_end=$(date +%s)
+            local step_dur=$((step_end - step_start))
+            log_success "Step $step_idx/$total_steps finished (${step_dur}s)."
+        else
+            local exit_code=$?
+            log_error "Step $step_idx failed with exit code $exit_code! Aborting pipeline."
+            exit $exit_code
+        fi
+        step_idx=$((step_idx + 1))
+    done
+
+    echo ""
+    log_success "All $total_steps steps of personal action '$action_normalized' completed successfully."
+    echo ""
+}
+
 # --- 1a-pre. Install Python Dependencies (--install / --init) ---
 install_python_requirements() {
     local req_file="$MASTER_SCRIPT_DIR/requirements.txt"
@@ -1378,6 +1628,17 @@ load_and_validate_config() {
         source "$MASTER_SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME"
     elif [ -f "$SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME" ]; then
         source "$SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME"
+    fi
+
+    # 1d. Nạp cấu hình Personal Pipelines (const_my_cli.config hoặc fallback const_project_cli.config)
+    if [ -f "$MY_CONFIG_FILE" ]; then
+        source "$MY_CONFIG_FILE"
+    elif [ -f "$PROJECT_CONFIG_FILE" ]; then
+        source "$PROJECT_CONFIG_FILE"
+    elif [ -f "$MASTER_SCRIPT_DIR/$MY_CONFIG_FILE_NAME" ]; then
+        source "$MASTER_SCRIPT_DIR/$MY_CONFIG_FILE_NAME"
+    elif [ -f "$SCRIPT_DIR/$MY_CONFIG_FILE_NAME" ]; then
+        source "$SCRIPT_DIR/$MY_CONFIG_FILE_NAME"
     fi
 
     if [ ! -f "$CONFIG_FILE" ]; then
