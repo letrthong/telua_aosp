@@ -230,4 +230,6 @@ dec_*.config
 my_dec.config
 deployment_log.txt
 *.apk
+*.pid
+.logcat.pid
 
