@@ -26,7 +26,7 @@ set -e
 SCRIPT_VERSION="2.10.0"
 SCRIPT_LAST_UPDATED="2026-10-15"
 CONFIG_FILE_NAME="apk.config"
-AUDIO_CONFIG_FILE_NAME="const_audio.config"
+CAR_CONFIG_FILE_NAME="const_car.config"
 DUMP_CONFIG_FILE_NAME="const_dumpsys.config"
 MULTI_CONFIG_FILE_NAME="const_multi_cli.config"
 MY_CONFIG_FILE_NAME="const_my_cli.config"
@@ -114,7 +114,7 @@ find_const_config_file() {
     fi
 }
 
-AUDIO_CONFIG_FILE="$(find_const_config_file "$AUDIO_CONFIG_FILE_NAME")"
+CAR_CONFIG_FILE="$(find_const_config_file "$CAR_CONFIG_FILE_NAME")"
 DUMP_CONFIG_FILE="$(find_const_config_file "$DUMP_CONFIG_FILE_NAME")"
 GIT_CONFIG_FILE="$(find_const_config_file "$GIT_CONFIG_FILE_NAME")"
 DOCKER_CONFIG_FILE="$(find_const_config_file "$DOCKER_CONFIG_FILE_NAME")"
@@ -230,7 +230,7 @@ Primary Subcommands:
   install                     Install 'telua' alias in ~/.bashrc & dependencies
   info                        Display general build config, paths, and connected DUT
   update                      Update toolkit: git pull origin main (with auto-recovery)
-  audio [action]              Control AAOS audio (vol-up, vol-down, vol-mute, ks, ks-stop)
+  car [action]                Control AAOS car (vol-up, vol-down, vol-mute, ks, ks-stop, car-status)
   dump [target]               Run dumpsys diagnostics (audio, car-service, car-audio, ...)
   run [group]                 Execute multi-command pipeline macro (dev-prep, audio-cycle, ...)
   my, proj [action]           Execute personal / private pipeline macro (hello, ...)
@@ -256,7 +256,7 @@ Build & Deployment Options (used with 'build' or standalone):
 
 Configuration Info:
   Active Config:              $CONFIG_FILE
-  Audio Config (Global):      $AUDIO_CONFIG_FILE
+  Car Config (Global):        $CAR_CONFIG_FILE
   Dump Config (Global):       $DUMP_CONFIG_FILE
   Multi-CLI Pipelines (Global):$MULTI_CONFIG_FILE
   Personal Pipelines (Private):$MY_CONFIG_FILE
@@ -443,15 +443,15 @@ parse_arguments() {
                 ENABLE_RAM_MONITOR="$2"
                 shift 2
                 ;;
-            --audio|audio)
+            --car|car)
                 if [ -n "$2" ] && [[ "$2" != --* ]]; then
-                    AUDIO_ACTION="$2"
+                    CAR_ACTION="$2"
                     shift 2
                 else
-                    AUDIO_ACTION=""
+                    CAR_ACTION=""
                     shift 1
                 fi
-                handle_audio_command "$AUDIO_ACTION"
+                handle_car_command "$CAR_ACTION"
                 exit 0
                 ;;
             --dump|dump)
@@ -488,15 +488,15 @@ parse_arguments() {
                 exit 0
                 ;;
             vol-up|--vol-up)
-                handle_audio_command "vol-up"
+                handle_car_command "vol-up"
                 exit 0
                 ;;
             vol-down|--vol-down)
-                handle_audio_command "vol-down"
+                handle_car_command "vol-down"
                 exit 0
                 ;;
             vol-mute|--vol-mute)
-                handle_audio_command "vol-mute"
+                handle_car_command "vol-mute"
                 exit 0
                 ;;
             -h|--help|help)
@@ -506,8 +506,8 @@ parse_arguments() {
             *)
                 local stripped_arg="${1#--}"
                 stripped_arg=$(echo "$stripped_arg" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
-                if is_audio_action "$stripped_arg"; then
-                    handle_audio_command "$stripped_arg"
+                if is_car_action "$stripped_arg"; then
+                    handle_car_command "$stripped_arg"
                     exit 0
                 fi
                 if is_dump_action "$stripped_arg"; then
@@ -526,15 +526,15 @@ parse_arguments() {
     done
 }
 
-# --- 1d. Audio Control & Custom ADB Shell Commands (--audio / audio) ---
-# Short one-line-per-action listing (shown by: telua audio)
-show_audio_short_help() {
+# --- 1d. Car Control & Custom ADB Shell Commands (--car / car) ---
+# Short one-line-per-action listing (shown by: telua car)
+show_car_short_help() {
     echo ""
-    echo -e "\033[1;32m  telua audio <action> - Audio control via ADB Shell\033[0m"
-    echo -e "  Audio Config File: \033[0;33m$AUDIO_CONFIG_FILE\033[0m"
+    echo -e "\033[1;32m  telua car <action> - Car (AAOS) control via ADB Shell\033[0m"
+    echo -e "  Car Config File:   \033[0;33m$CAR_CONFIG_FILE\033[0m"
     echo ""
-    if [ -n "${AUDIO_CLI_LIST[*]}" ] && [ "${#AUDIO_CLI_LIST[@]}" -gt 0 ]; then
-        for item in "${AUDIO_CLI_LIST[@]}"; do
+    if [ -n "${CAR_CLI_LIST[*]}" ] && [ "${#CAR_CLI_LIST[@]}" -gt 0 ]; then
+        for item in "${CAR_CLI_LIST[@]}"; do
             local item_action="" item_desc=""
             if [[ "$item" == *" :: "* ]]; then
                 item_action="${item%% :: *}"
@@ -549,30 +549,30 @@ show_audio_short_help() {
             fi
             item_action="$(echo "$item_action" | xargs)"
             item_desc="$(echo "$item_desc" | xargs)"
-            printf "  \033[1;37m%-26s\033[0m %s\n" "telua audio $item_action" "$item_desc"
+            printf "  \033[1;37m%-26s\033[0m %s\n" "telua car $item_action" "$item_desc"
         done
     else
-        echo -e "  \033[0;90m(AUDIO_CLI_LIST not declared in $AUDIO_CONFIG_FILE_NAME or $CONFIG_FILE_NAME)\033[0m"
+        echo -e "  \033[0;90m(CAR_CLI_LIST not declared in $CAR_CONFIG_FILE_NAME or $CONFIG_FILE_NAME)\033[0m"
     fi
     echo ""
-    echo -e "  \033[0;90mTip: 'telua audio help' (or --help / -h) shows detailed ADB commands.\033[0m"
+    echo -e "  \033[0;90mTip: 'telua car help' (or --help / -h) shows detailed ADB commands.\033[0m"
     echo ""
 }
 
-# Detailed listing with ADB command per action (shown by: telua audio help)
-show_audio_help() {
+# Detailed listing with ADB command per action (shown by: telua car help)
+show_car_help() {
     echo ""
     echo -e "\033[1;36m================================================================================\033[0m"
-    echo -e "\033[1;32m  telua audio - Audio control commands via ADB Shell\033[0m"
-    echo -e "  Config File:       \033[0;33m$CONFIG_FILE\033[0m"
-    echo -e "  Audio Config File: \033[0;33m$AUDIO_CONFIG_FILE\033[0m"
+    echo -e "\033[1;32m  telua car - Car (AAOS) control commands via ADB Shell\033[0m"
+    echo -e "  Config File:      \033[0;33m$CONFIG_FILE\033[0m"
+    echo -e "  Car Config File:  \033[0;33m$CAR_CONFIG_FILE\033[0m"
     echo -e "\033[1;36m================================================================================\033[0m"
     echo ""
-    echo -e "\033[1;33mSUPPORTED AUDIO CLI COMMANDS:\033[0m"
+    echo -e "\033[1;33mSUPPORTED CAR CLI COMMANDS:\033[0m"
 
-    if [ -n "${AUDIO_CLI_LIST[*]}" ] && [ "${#AUDIO_CLI_LIST[@]}" -gt 0 ]; then
+    if [ -n "${CAR_CLI_LIST[*]}" ] && [ "${#CAR_CLI_LIST[@]}" -gt 0 ]; then
         local idx=1
-        for item in "${AUDIO_CLI_LIST[@]}"; do
+        for item in "${CAR_CLI_LIST[@]}"; do
             local item_action="" item_desc="" item_cmd=""
             if [[ "$item" == *" :: "* ]]; then
                 item_action="${item%% :: *}"
@@ -592,37 +592,37 @@ show_audio_help() {
             item_desc="$(echo "$item_desc" | xargs)"
             item_cmd="$(echo "$item_cmd" | xargs)"
 
-            echo -e "  \033[1;32m$idx.\033[0m \033[1;37mtelua audio $item_action\033[0m"
+            echo -e "  \033[1;32m$idx.\033[0m \033[1;37mtelua car $item_action\033[0m"
             echo -e "     \033[0;90mDescription:\033[0m  $item_desc"
             echo -e "     \033[0;90mADB Command:\033[0m  \033[0;33madb shell $item_cmd\033[0m"
             echo ""
             idx=$((idx + 1))
         done
     else
-        echo -e "  \033[0;90m(AUDIO_CLI_LIST not declared in $AUDIO_CONFIG_FILE_NAME or $CONFIG_FILE_NAME)\033[0m"
+        echo -e "  \033[0;90m(CAR_CLI_LIST not declared in $CAR_CONFIG_FILE_NAME or $CONFIG_FILE_NAME)\033[0m"
     fi
 
     echo -e "\033[1;36m--------------------------------------------------------------------------------\033[0m"
-    echo -e "\033[1;33mADB_SHELL_AUDIO_* CONFIG VARIABLES ($AUDIO_CONFIG_FILE_NAME):\033[0m"
+    echo -e "\033[1;33mADB_SHELL_CAR_* CONFIG VARIABLES ($CAR_CONFIG_FILE_NAME):\033[0m"
     local has_dynamic_vars=0
-    for var_name in ${!ADB_SHELL_AUDIO_@}; do
+    for var_name in ${!ADB_SHELL_CAR_@}; do
         echo -e "  \033[1;35m$var_name\033[0m = \"\033[0;32m${!var_name}\033[0m\""
         has_dynamic_vars=1
     done
     if [ "$has_dynamic_vars" -eq 0 ]; then
-        echo -e "  \033[0;90m(No ADB_SHELL_AUDIO_* variables found)\033[0m"
+        echo -e "  \033[0;90m(No ADB_SHELL_CAR_* variables found)\033[0m"
     fi
 
     echo -e "\033[1;36m================================================================================\033[0m"
     echo ""
 }
 
-is_audio_action() {
+is_car_action() {
     local target="$1"
     target=$(echo "$target" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
 
-    if [ -n "${AUDIO_CLI_LIST[*]}" ]; then
-        for item in "${AUDIO_CLI_LIST[@]}"; do
+    if [ -n "${CAR_CLI_LIST[*]}" ]; then
+        for item in "${CAR_CLI_LIST[@]}"; do
             local act=""
             if [[ "$item" == *" :: "* ]]; then
                 act="${item%% :: *}"
@@ -637,23 +637,23 @@ is_audio_action() {
     fi
     local suf
     suf=$(echo "$target" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-    local v="ADB_SHELL_AUDIO_${suf}"
+    local v="ADB_SHELL_CAR_${suf}"
     if [ -n "${!v}" ]; then
         return 0
     fi
     return 1
 }
 
-handle_audio_command() {
+handle_car_command() {
     local action="$1"
 
     if [ -z "$action" ]; then
-        show_audio_short_help
+        show_car_short_help
         return 0
     fi
 
     if [ "$action" = "help" ] || [ "$action" = "--help" ] || [ "$action" = "-h" ]; then
-        show_audio_help
+        show_car_help
         return 0
     fi
 
@@ -663,9 +663,9 @@ handle_audio_command() {
     local adb_cmd=""
     local action_label=""
 
-    # 1. Tìm action trực tiếp trong mảng AUDIO_CLI_LIST (Single Source of Truth)
-    if [ -n "${AUDIO_CLI_LIST[*]}" ]; then
-        for item in "${AUDIO_CLI_LIST[@]}"; do
+    # 1. Tìm action trực tiếp trong mảng CAR_CLI_LIST (Single Source of Truth)
+    if [ -n "${CAR_CLI_LIST[*]}" ]; then
+        for item in "${CAR_CLI_LIST[@]}"; do
             local it_action="" it_desc="" it_cmd=""
             if [[ "$item" == *" :: "* ]]; then
                 it_action="${item%% :: *}"
@@ -686,16 +686,16 @@ handle_audio_command() {
         done
     fi
 
-    # 2. Nếu chưa có trong AUDIO_CLI_LIST, kiểm tra biến động ADB_SHELL_AUDIO_<ACTION> hoặc ADB_SHELL_<ACTION>
+    # 2. Nếu chưa có trong CAR_CLI_LIST, kiểm tra biến động ADB_SHELL_CAR_<ACTION> hoặc ADB_SHELL_<ACTION>
     if [ -z "$adb_cmd" ]; then
         local var_suffix
         var_suffix=$(echo "$action_normalized" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-        local var_audio="ADB_SHELL_AUDIO_${var_suffix}"
+        local var_car="ADB_SHELL_CAR_${var_suffix}"
         local var_generic="ADB_SHELL_${var_suffix}"
 
-        if [ -n "${!var_audio}" ]; then
-            action_label="Audio ($action)"
-            adb_cmd="${!var_audio}"
+        if [ -n "${!var_car}" ]; then
+            action_label="Car ($action)"
+            adb_cmd="${!var_car}"
         elif [ -n "${!var_generic}" ]; then
             action_label="ADB Shell ($action)"
             adb_cmd="${!var_generic}"
@@ -704,12 +704,12 @@ handle_audio_command() {
 
     # 3. Nếu vẫn không tìm thấy, báo lỗi và hiển thị trợ giúp
     if [ -z "$adb_cmd" ]; then
-        log_error "Unknown audio action '$action'!"
-        log_error "Supported actions: vol-up | vol-down | vol-mute | ks | ks-stop (or configure AUDIO_CLI_LIST in $AUDIO_CONFIG_FILE_NAME)"
+        log_error "Unknown car action '$action'!"
+        log_error "Supported actions: vol-up | vol-down | vol-mute | ks | ks-stop | car-status (or configure CAR_CLI_LIST in $CAR_CONFIG_FILE_NAME)"
         if [ "$action_normalized" = "d" ] || [ "$action_normalized" = "dump" ]; then
             log_warn "'dump' has moved to: telua dump audio | telua dump car-service"
         fi
-        show_audio_help
+        show_car_help
         exit 1
     fi
 
@@ -1619,7 +1619,7 @@ show_info_general() {
     echo -e "\n\033[1;36m=== 1. GENERAL BUILD CONFIGURATION ===\033[0m"
     echo "  Script Version:   v$SCRIPT_VERSION (Updated: $SCRIPT_LAST_UPDATED)"
     echo "  Config File:      $CONFIG_FILE"
-    echo "  Audio Config:     $AUDIO_CONFIG_FILE"
+    echo "  Car Config:       $CAR_CONFIG_FILE"
     echo "  Project:          ${ACTIVE_PROJECT:-default}"
     echo "  Target Platform:  $target_platform"
     echo "  Target Lunch:     ${CONFIG_TARGET_PRODUCT}-${CONFIG_TARGET_BUILD_VARIANT}"
@@ -1656,11 +1656,11 @@ show_info_android() {
     echo "  Logcat Enabled:   $logcat_enabled"
     echo "  Logcat Filter:    ${LOGCAT_FILTER:-None (full)}"
     echo "  Debug Tags:       ${DEBUG_LOG_TAGS:-None} (Enabled: ${ENABLE_DEBUG_LOG:-false})"
-    echo "  Audio Controls (ADB Shell):"
-    echo "    Vol Up:         ${ADB_SHELL_AUDIO_UP:-cmd media_session volume --show --adj raise}"
-    echo "    Vol Down:       ${ADB_SHELL_AUDIO_DOWN:-cmd media_session volume --show --adj lower}"
-    echo "    Vol Mute:       ${ADB_SHELL_AUDIO_MUTE:-cmd media_session volume --show --adj mute}"
-    echo "    Audio Dump:     ${ADB_SHELL_AUDIO_DUMP:-${ADB_SHELL_AUDIO_D:-dumpsys audio}}"
+    echo "  Car Controls (ADB Shell):"
+    echo "    Vol Up:         ${ADB_SHELL_CAR_UP:-cmd media_session volume --show --adj raise}"
+    echo "    Vol Down:       ${ADB_SHELL_CAR_DOWN:-cmd media_session volume --show --adj lower}"
+    echo "    Vol Mute:       ${ADB_SHELL_CAR_MUTE:-cmd media_session volume --show --adj mute}"
+    echo "    Audio Dump:     ${ADB_SHELL_CAR_DUMP:-${ADB_SHELL_CAR_D:-dumpsys audio}}"
     if command -v adb >/dev/null 2>&1; then
         local dev_state build_type internal_id vendor_build_type
         dev_state=$(adb get-state 2>/dev/null || echo "offline")
@@ -1753,13 +1753,13 @@ show_info() {
 
 # --- 2. Load & Validate Configuration ---
 load_and_validate_config() {
-    # 1. Nạp cấu hình Audio chung (nằm cùng thư mục với build_apk.sh)
-    if [ -f "$AUDIO_CONFIG_FILE" ]; then
-        source "$AUDIO_CONFIG_FILE"
-    elif [ -f "$MASTER_SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME" ]; then
-        source "$MASTER_SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME"
-    elif [ -f "$SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME" ]; then
-        source "$SCRIPT_DIR/$AUDIO_CONFIG_FILE_NAME"
+    # 1. Nạp cấu hình Car chung (nằm cùng thư mục với build_apk.sh)
+    if [ -f "$CAR_CONFIG_FILE" ]; then
+        source "$CAR_CONFIG_FILE"
+    elif [ -f "$MASTER_SCRIPT_DIR/$CAR_CONFIG_FILE_NAME" ]; then
+        source "$MASTER_SCRIPT_DIR/$CAR_CONFIG_FILE_NAME"
+    elif [ -f "$SCRIPT_DIR/$CAR_CONFIG_FILE_NAME" ]; then
+        source "$SCRIPT_DIR/$CAR_CONFIG_FILE_NAME"
     fi
 
     # 1b. Nạp cấu hình Dumpsys chung (nằm cùng thư mục với build_apk.sh)
@@ -1797,7 +1797,7 @@ load_and_validate_config() {
         exit 1
     fi
 
-    # 2. Nạp cấu hình dự án (có thể ghi đè bất kỳ biến Audio nào nếu cần)
+    # 2. Nạp cấu hình dự án (có thể ghi đè bất kỳ biến Car nào nếu cần)
     source "$CONFIG_FILE"
 
     local missing_vars=0
