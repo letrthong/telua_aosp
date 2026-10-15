@@ -23,8 +23,8 @@
 set -e
 
 # --- Constants & Global Defaults ---
-SCRIPT_VERSION="2.9.0"
-SCRIPT_LAST_UPDATED="2026-10-14"
+SCRIPT_VERSION="2.10.0"
+SCRIPT_LAST_UPDATED="2026-10-15"
 CONFIG_FILE_NAME="apk.config"
 AUDIO_CONFIG_FILE_NAME="const_audio.config"
 DUMP_CONFIG_FILE_NAME="const_dumpsys.config"
@@ -130,6 +130,75 @@ log_success() { echo -e "\033[1;32m[SUCCESS]\033[0m $*"; }
 log_warn()    { echo -e "\033[1;33m[WARN]\033[0m $*"; }
 log_error()   { echo -e "\033[1;31m[ERROR]\033[0m $*"; }
 
+# --- RAM Monitoring (snapshot at start/end + peak usage sampler) ---
+ENABLE_RAM_MONITOR="${ENABLE_RAM_MONITOR:-true}"
+RAM_SAMPLE_INTERVAL="${RAM_SAMPLE_INTERVAL:-2}"
+RAM_SAMPLER_PID=""
+RAM_PEAK_FILE=""
+
+# Summarize system memory from /proc/meminfo (values in kB -> GB)
+get_mem_summary() {
+    awk '/^MemTotal:/ {t=$2} /^MemAvailable:/ {a=$2} /^SwapTotal:/ {st=$2} /^SwapFree:/ {sf=$2} END {
+        printf "Total: %.2f GB | Used: %.2f GB | Avail: %.2f GB | Swap Used: %.2f GB",
+               t/1048576, (t-a)/1048576, a/1048576, (st-sf)/1048576
+    }' /proc/meminfo 2>/dev/null
+}
+
+# Current used RAM in MB (MemTotal - MemAvailable, the modern 'used' metric)
+get_mem_used_mb() {
+    awk '/^MemTotal:/ {t=$2} /^MemAvailable:/ {a=$2} END {printf "%d", (t-a)/1024}' /proc/meminfo 2>/dev/null || echo 0
+}
+
+log_ram_snapshot() {
+    log_info "RAM [$1]: $(get_mem_summary)"
+}
+
+# Background sampler: records peak used RAM into a temp file while the build runs
+start_ram_sampler() {
+    [ "$ENABLE_RAM_MONITOR" = "true" ] || return 0
+    RAM_PEAK_FILE="$(mktemp "${TMPDIR:-/tmp}/telua_ram_peak.XXXXXX")"
+    echo 0 > "$RAM_PEAK_FILE"
+    (
+        peak=0
+        while :; do
+            used=$(get_mem_used_mb)
+            if [ "$used" -gt "$peak" ] 2>/dev/null; then
+                peak="$used"
+                echo "$peak" > "$RAM_PEAK_FILE"
+            fi
+            sleep "$RAM_SAMPLE_INTERVAL"
+        done
+    ) &
+    RAM_SAMPLER_PID=$!
+    log_info "RAM monitor: peak sampler started (every ${RAM_SAMPLE_INTERVAL}s, PID: $RAM_SAMPLER_PID)"
+}
+
+# Stop the background sampler (safe to call multiple times)
+stop_ram_sampler() {
+    if [ -n "$RAM_SAMPLER_PID" ]; then
+        kill "$RAM_SAMPLER_PID" 2>/dev/null || true
+        wait "$RAM_SAMPLER_PID" 2>/dev/null || true
+        RAM_SAMPLER_PID=""
+    fi
+}
+
+# Final report: END snapshot + peak usage observed during the run
+report_ram_summary() {
+    stop_ram_sampler
+    log_ram_snapshot "END"
+    local peak
+    peak="$(cat "$RAM_PEAK_FILE" 2>/dev/null || echo 0)"
+    if [ -n "$RAM_PEAK_FILE" ] && [ -f "$RAM_PEAK_FILE" ]; then
+        rm -f "$RAM_PEAK_FILE"
+        RAM_PEAK_FILE=""
+    fi
+    if [ "${peak:-0}" -gt 0 ] 2>/dev/null; then
+        log_success "RAM peak usage during this run: $(awk -v p="$peak" 'BEGIN {printf "%.2f GB (%d MB)", p/1024, p}')"
+    else
+        log_warn "RAM peak usage: no samples collected (ENABLE_RAM_MONITOR=$ENABLE_RAM_MONITOR)"
+    fi
+}
+
 show_version() {
     echo "build_apk.sh v$SCRIPT_VERSION (Last updated: $SCRIPT_LAST_UPDATED)"
     echo "AOSP & QNX Automotive Build, Deployment and Automation Tool"
@@ -179,6 +248,7 @@ Build & Deployment Options (used with 'build' or standalone):
   --config <path>             Explicitly specify custom path to config file
   --softlink [path]           Symlink this script + copy $CONFIG_FILE_NAME into [path]
   --test-mode true|false      Run unit test suite instead of full build
+  --ram-monitor true|false    Show RAM usage at start/end and track peak RAM (default: true)
   --find-file <pattern> [path] Search for files by pattern in [path] (default: '.')
   --find-dir <pattern> [path]  Search for directories by pattern in [path] (default: '.')
   --find-text <text> [path]    Search for text in files under [path] (default: '.')
@@ -363,6 +433,14 @@ parse_arguments() {
                     exit 1
                 fi
                 TEST_MODE="$2"
+                shift 2
+                ;;
+            --ram-monitor)
+                if [[ "$2" != "true" && "$2" != "false" ]]; then
+                    log_error "--ram-monitor requires 'true' or 'false', got '$2'"
+                    exit 1
+                fi
+                ENABLE_RAM_MONITOR="$2"
                 shift 2
                 ;;
             --audio|audio)
@@ -1499,10 +1577,43 @@ install_to_project() {
     log_info "Next: edit $real_target/$CONFIG_FILE_NAME, then run: cd \"$real_target\" && ./build_apk.sh --info"
 }
 
+# --- Resolve build jobs: BUILD_JOBS from config, or auto-detect based on available RAM ---
+# Sets BUILD_JOBS_RESOLVED (number) and BUILD_JOBS_SOURCE ("config" | "auto")
+# Auto mode scales parallel jobs by FREE RAM (MemAvailable) to avoid OOM during builds:
+#   avail > 80 GB -> nproc/2   (plenty of RAM, go fast)
+#   avail > 40 GB -> nproc/4   (moderate, be careful)
+#   avail <= 40 GB -> nproc/8  (low RAM, be conservative)
+resolve_build_jobs() {
+    local nproc_count avail_gb
+    nproc_count=$(nproc 2>/dev/null || echo 8)
+    if [ -n "$BUILD_JOBS" ]; then
+        BUILD_JOBS_RESOLVED="$BUILD_JOBS"
+        BUILD_JOBS_SOURCE="config"
+        return 0
+    fi
+
+    avail_gb=$(awk '/^MemAvailable:/ {printf "%d", $2/1048576}' /proc/meminfo 2>/dev/null || echo 0)
+    if [ "$avail_gb" -gt 80 ] 2>/dev/null; then
+        BUILD_JOBS_RESOLVED=$((nproc_count / 2))
+        BUILD_JOBS_SOURCE="auto (RAM ${avail_gb}GB>80 -> nproc/2)"
+    elif [ "$avail_gb" -gt 40 ] 2>/dev/null; then
+        BUILD_JOBS_RESOLVED=$((nproc_count / 4))
+        BUILD_JOBS_SOURCE="auto (RAM ${avail_gb}GB 40-80 -> nproc/4)"
+    else
+        BUILD_JOBS_RESOLVED=$((nproc_count / 8))
+        BUILD_JOBS_SOURCE="auto (RAM ${avail_gb}GB<=40 -> nproc/8)"
+    fi
+    # NOTE: use 'if' (not '[ ] &&') so the function always returns 0 under 'set -e'
+    if [ "$BUILD_JOBS_RESOLVED" -lt 1 ]; then
+        BUILD_JOBS_RESOLVED=1
+    fi
+    return 0
+}
+
 # --- 1b. Diagnostic Info (--info) ---
 show_info_general() {
     local module_name="${MODULE_NAME:-${APK_FILE_NAME%.apk}}"
-    local jobs="${BUILD_JOBS:-$(nproc 2>/dev/null || echo 8)}"
+    resolve_build_jobs
     local target_platform="${PLATFORM:-${TARGET_PLATFORM:-android}}"
 
     echo -e "\n\033[1;36m=== 1. GENERAL BUILD CONFIGURATION ===\033[0m"
@@ -1512,7 +1623,8 @@ show_info_general() {
     echo "  Project:          ${ACTIVE_PROJECT:-default}"
     echo "  Target Platform:  $target_platform"
     echo "  Target Lunch:     ${CONFIG_TARGET_PRODUCT}-${CONFIG_TARGET_BUILD_VARIANT}"
-    echo "  Module Build Jobs:-j$jobs (m $module_name)"
+    echo "  Module Build Jobs:-j$BUILD_JOBS_RESOLVED (m $module_name) [${BUILD_JOBS_SOURCE}]"
+    echo "  RAM Monitor:      ${ENABLE_RAM_MONITOR:-true} (sample interval: ${RAM_SAMPLE_INTERVAL:-2}s)"
     echo "  Module Name:      $module_name"
     echo "  Source Path:      $SOURCE_CODE_RELATIVE_PATH"
     echo "  APK Output:       $APK_OUTPUT_RELATIVE_PATH/$APK_FILE_NAME"
@@ -1578,6 +1690,41 @@ show_info_qnx() {
     echo "  Note:             Android ADB properties are skipped on QNX platform."
 }
 
+# --- 1c. System RAM Info (--info) ---
+show_info_ram() {
+    echo -e "\n\033[1;35m=== 3. SYSTEM RAM INFO ===\033[0m"
+    if [ ! -r /proc/meminfo ]; then
+        echo "  RAM Info:         Not available (/proc/meminfo not readable)"
+        return 0
+    fi
+
+    local total_kb avail_kb free_kb swap_total_kb swap_free_kb buffers_kb cached_kb
+    total_kb=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)
+    avail_kb=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)
+    free_kb=$(awk '/^MemFree:/ {print $2}' /proc/meminfo)
+    buffers_kb=$(awk '/^Buffers:/ {print $2}' /proc/meminfo)
+    cached_kb=$(awk '/^Cached:/ {print $2}' /proc/meminfo)
+    swap_total_kb=$(awk '/^SwapTotal:/ {print $2}' /proc/meminfo)
+    swap_free_kb=$(awk '/^SwapFree:/ {print $2}' /proc/meminfo)
+
+    local used_kb=$((total_kb - avail_kb))
+    local used_pct=0
+    [ "$total_kb" -gt 0 ] 2>/dev/null && used_pct=$((used_kb * 100 / total_kb))
+
+    echo "  RAM Total:        $(awk -v t="$total_kb" 'BEGIN {printf "%.2f GB (%d MB)", t/1048576, t/1024}')"
+    echo "  RAM Used:         $(awk -v u="$used_kb" 'BEGIN {printf "%.2f GB (%d MB)", u/1048576, u/1024}')  [${used_pct}%]"
+    echo "  RAM Available:    $(awk -v a="$avail_kb" 'BEGIN {printf "%.2f GB (%d MB)", a/1048576, a/1024}')  (free: $(awk -v f="$free_kb" 'BEGIN {printf "%.2f GB", f/1048576}'))"
+    echo "  Buffers/Cached:   $(awk -v b="$buffers_kb" -v c="$cached_kb" 'BEGIN {printf "%.2f GB / %.2f GB", b/1048576, c/1048576}')"
+    if [ "${swap_total_kb:-0}" -gt 0 ] 2>/dev/null; then
+        echo "  Swap Total:       $(awk -v s="$swap_total_kb" 'BEGIN {printf "%.2f GB", s/1048576}')"
+        echo "  Swap Used:        $(awk -v st="$swap_total_kb" -v sf="$swap_free_kb" 'BEGIN {printf "%.2f GB", (st-sf)/1048576}')"
+    else
+        echo "  Swap:             Not enabled"
+    fi
+    echo "  CPU Cores:        $(nproc 2>/dev/null || echo unknown)"
+    echo "  RAM Monitor:      ${ENABLE_RAM_MONITOR:-true} (peak sampler interval: ${RAM_SAMPLE_INTERVAL:-2}s)"
+}
+
 show_info() {
     resolve_android_paths >/dev/null 2>&1 || true
 
@@ -1597,6 +1744,9 @@ show_info() {
             echo "  Unsupported platform: '$target_platform'. Supported: 'android' | 'qnx'"
             ;;
     esac
+
+    show_info_ram
+
     echo -e "\033[1;36m====================================================\033[0m\n"
     exit 0
 }
@@ -2206,8 +2356,9 @@ build_apk() {
     # 'mm' builds every module under the directory, including tests/androidTest,
     # so build only the APK module (name = APK file name without .apk).
     local module_name="${MODULE_NAME:-${APK_FILE_NAME%.apk}}"
-    local jobs="${BUILD_JOBS:-$(nproc 2>/dev/null || echo 8)}"
-    log_info "Compiling module '$module_name' with m -j$jobs..."
+    resolve_build_jobs
+    local jobs="$BUILD_JOBS_RESOLVED"
+    log_info "Compiling module '$module_name' with m -j$jobs... [BUILD_JOBS source: ${BUILD_JOBS_SOURCE}]"
     m "$module_name" -j"$jobs"
 
     if [ ! -f "$APK_OUT" ]; then
@@ -2579,6 +2730,13 @@ main() {
     load_and_validate_config
     parse_arguments "$@"
 
+    # RAM monitoring: snapshot at start + peak sampler for the whole run
+    if [ "$ENABLE_RAM_MONITOR" = "true" ]; then
+        log_ram_snapshot "START"
+        start_ram_sampler
+        trap stop_ram_sampler EXIT
+    fi
+
     if [ -n "$SOFTLINK_PATH" ]; then
         install_to_project "$SOFTLINK_PATH"
         exit 0
@@ -2623,6 +2781,9 @@ main() {
     build_apk
     deploy_apk
     capture_logs
+
+    # RAM monitoring: snapshot at end + peak usage report
+    report_ram_summary
 
     log_success "All tasks completed successfully."
     exit 0
