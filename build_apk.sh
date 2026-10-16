@@ -2034,8 +2034,7 @@ run_git_update() {
     log_info "Executing: git pull origin main..."
     if git -C "$target_repo" pull origin main; then
         log_success "Successfully pulled latest updates from origin/main."
-        chmod 777 "$target_repo/*.sh"
-        chmod 777 "$target_repo/*.py"
+        chmod +x "$target_repo/build_apk.sh"
         exit 0
     fi
 
@@ -2050,8 +2049,7 @@ run_git_update() {
         log_info "Retrying: git pull origin main..."
         if git -C "$target_repo" pull origin main; then
             log_success "Successfully pulled latest updates after hard reset."
-            chmod 777 "$target_repo/*.sh"
-            chmod 777 "$target_repo/*.py"
+            chmod +x "$target_repo/build_apk.sh"
             exit 0
         else
             log_error "'git pull origin main' failed after hard reset."
