@@ -233,7 +233,7 @@ deployment_log.txt
 *.pid
 .logcat.pid
 
-config/const_my_cli.config
+
 const_my_cli.config
 apk_overlays.config
 
