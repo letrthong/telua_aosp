@@ -16,7 +16,21 @@
 # Test without writing: python3 config_overlay.py ./apk.config --dry-run
 # ==============================================================================
 
-# ACTIVE_PROJECT="car_audio"
+ACTIVE_PROJECT="oem_service"
+case "$ACTIVE_PROJECT" in
+    "oem_service")
+        MODULE_NAME="OemService"
+        SOURCE_CODE_RELATIVE_PATH="packages/apps/Car/OemService"
+        APK_OUTPUT_RELATIVE_PATH="out/target/product/qssi/system/priv-app/OemService"
+        APK_FILE_NAME="OemService.apk"
+        APK_DEPLOY_PATH="/system/priv-app/OemService"
+        DEFAULT_LOGCAT_FILTER="OemService"
+        DEFAULT_DEBUG_LOG_TAGS="OemService"
+        ;;
+
+     
+esac
+
 # CONFIG_TARGET_PRODUCT="my_board_in"
 # CONFIG_TARGET_BUILD_VARIANT="userdebug"
 # BUILD_JOBS="16"
