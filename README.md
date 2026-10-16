@@ -458,9 +458,28 @@ echo "12345" | ./config_crypto.py encrypt -
 
 ---
 
+### 5.5 Personal Overrides & Smart Merge (`apk_overlays.config` & `config_overlay.py`)
+
+Bộ công cụ hỗ trợ cơ chế nạp đè cấu hình cá nhân (**Personal & Private Overrides**) nhằm tách biệt hoàn toàn giữa cấu hình chuẩn của kho mã nguồn chung và các thông số riêng tư của từng lập trình viên/dự án mật:
+
+* **File cấu hình cá nhân:** `apk_overlays.config` (được tạo tự động từ `apk_overlays.config.example` khi chạy `telua init` nếu chưa có).
+* **Bảo mật tuyệt đối (Zero Git Leak):** `apk_overlays.config` được đưa vào `.gitignore`, ngăn chặn triệt để nguy cơ commit nhầm đường dẫn nội bộ, key bí mật hay profile dự án riêng lên GitHub.
+* **Quy tắc Smart Merge (`config_overlay.py`):**
+  1. **Top-level variables:** Các biến ngoài cùng (`ACTIVE_PROJECT`, `BUILD_JOBS`, `CONFIG_TARGET_PRODUCT`, ...) được thay thế chính xác tại chỗ (in-place replacement) trong `apk.config`.
+  2. **Case branch merge:** Các nhánh profile trong khối `case "$ACTIVE_PROJECT" in` (ví dụ `"oem_service")`) được thay thế theo từng nhánh độc lập. Các nhánh khác (`car_audio`, `vehicle_service`) hoàn toàn không bị ảnh hưởng.
+  3. **Custom profile addition:** Nếu bạn khai báo một profile mới (ví dụ `"my_custom_service")`), engine sẽ tự động chèn nhánh mới ngay trước nhánh mặc định `*)`.
+  4. **Multi-command macros:** Hỗ trợ mảng nhiều dòng (như `MULTI_CMD_CUSTOM_SETUP=(...)`).
+
+```bash
+# Kiểm tra thử kết quả merge mà không làm thay đổi file (Dry-run mode):
+python3 config_overlay.py ./apk.config --dry-run
+```
+
+---
+
 ### 5.6 Toolkit Auto-Update (`telua update` / `--update`)
 
-Tự động cập nhật kho lưu trữ master của bộ công cụ `telua` lên commit mới nhất từ nhánh `origin/main`:
+Tự động cập nhật kho lưu trữ master của bộ công cụ `telua` lên commit mới nhất từ nhánh `origin/main` với cơ chế bảo vệ file cá nhân toàn diện:
 
 ```bash
 telua update
@@ -468,15 +487,12 @@ telua update
 ./build_apk.sh --update
 ```
 
-* **Cơ chế tự phục hồi xung đột (Self-Healing / Auto-Recovery):**
-  1. Script thực thi lệnh: `git pull origin main` trên thư mục repo gốc của `build_apk.sh`.
-  2. Nếu phát hiện lỗi merge conflict hoặc working tree bị thay đổi cục bộ ngoài ý muốn, kịch bản sẽ tự động kích hoạt chế độ phục hồi:
-     ```bash
-     git fetch origin main
-     git reset --hard origin/main
-     git pull origin main
-     ```
-  3. Giúp các kỹ sư và workspace luôn đồng bộ được phiên bản script mới nhất một cách trơn tru, không bị kẹt lỗi git.
+* **Bảo vệ cấu hình cá nhân (Personal Configs Protection):**
+  1. Trước khi thực hiện `git pull`, script tự động sao lưu an toàn các file cá nhân (`apk_overlays.config` và `config/const_my_cli.config`) vào thư mục tạm `/tmp/`.
+  2. Tiến hành kéo mã nguồn từ `origin/main`.
+  3. **Tự phục hồi xung đột (Self-Healing / Auto-Recovery):** Nếu phát hiện merge conflict hoặc tree bị dirty, kịch bản tự kích hoạt `git fetch origin main` và `git reset --hard origin/main`.
+  4. Sau khi cập nhật xong, các file cá nhân được **tự động phục hồi nguyên vẹn** từ bản sao lưu tạm, đảm bảo không bao giờ bị mất cấu hình riêng khi update.
+  5. Tự động kiểm tra và khôi phục quyền thực thi (`chmod +x`) cho tất cả các script trong bộ công cụ.
 
 ---
 
