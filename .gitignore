@@ -235,4 +235,5 @@ deployment_log.txt
 
 config/const_my_cli.config
 const_my_cli.config
+apk_overlays.config
 

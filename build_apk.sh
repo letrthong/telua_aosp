@@ -34,6 +34,9 @@ PROJECT_CONFIG_FILE_NAME="const_project_cli.config"
 GIT_CONFIG_FILE_NAME="const_git.config"
 DOCKER_CONFIG_FILE_NAME="const_docker.config"
 NETWORK_CONFIG_FILE_NAME="const_network.config"
+# Personal (untracked, git-ignored) files relative to the toolkit repo.
+# 'telua init' creates them from '<file>.example' if missing; 'telua update' backs them up and restores them.
+PERSONAL_CONFIG_FILES=("apk_overlays.config" "config/const_my_cli.config")
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Resolve master script directory (even if executed through symlink)
@@ -1518,6 +1521,9 @@ init_project_config() {
         ensure_script_permissions "$MASTER_SCRIPT_DIR"
     fi
 
+    # Create missing personal configs (apk_overlays.config, const_my_cli.config) from *.example
+    ensure_personal_configs "$MASTER_SCRIPT_DIR"
+
     if [ "$PWD" = "$SCRIPT_DIR" ]; then
         log_warn "Already in master script directory ($PWD). Template config is here."
         exit 0
@@ -2062,6 +2068,102 @@ ensure_script_permissions() {
     done
 }
 
+# Create missing personal configs from their tracked '<file>.example' templates.
+# Existing files are never overwritten. Usage: ensure_personal_configs <repo_dir>
+ensure_personal_configs() {
+    local repo_dir="$1"
+    local rel
+    for rel in "${PERSONAL_CONFIG_FILES[@]}"; do
+        if [ ! -f "$repo_dir/$rel" ] && [ -f "$repo_dir/$rel.example" ]; then
+            if cp "$repo_dir/$rel.example" "$repo_dir/$rel"; then
+                log_info "Created personal config: $repo_dir/$rel (from $rel.example)"
+            else
+                log_warn "Failed to create $repo_dir/$rel from $rel.example"
+            fi
+        fi
+    done
+}
+
+# Back up personal configs before 'telua update' (git reset --hard would wipe tracked edits).
+# Prints the backup directory on stdout (empty if nothing to back up). Usage: backup_personal_configs <repo_dir>
+backup_personal_configs() {
+    local repo_dir="$1"
+    local backup_dir rel saved=0
+    backup_dir="$(mktemp -d "${TMPDIR:-/tmp}/telua_personal_backup.XXXXXX")" || return 1
+    for rel in "${PERSONAL_CONFIG_FILES[@]}"; do
+        if [ -f "$repo_dir/$rel" ]; then
+            mkdir -p "$backup_dir/$(dirname "$rel")" || { rm -rf "$backup_dir"; return 1; }
+            cp -p "$repo_dir/$rel" "$backup_dir/$rel" || { rm -rf "$backup_dir"; return 1; }
+            saved=$((saved + 1))
+        fi
+    done
+    if [ "$saved" -eq 0 ]; then
+        rm -rf "$backup_dir"
+        return 0
+    fi
+    echo "$backup_dir"
+}
+
+# Copy backed-up personal configs back into the repo, then remove the backup.
+# The backup is kept (and its path printed) if any file fails to restore.
+# Usage: restore_personal_configs <repo_dir> <backup_dir>
+restore_personal_configs() {
+    local repo_dir="$1"
+    local backup_dir="$2"
+    local rel failed=0
+    if [ -z "$backup_dir" ] || [ ! -d "$backup_dir" ]; then
+        return 0
+    fi
+    for rel in "${PERSONAL_CONFIG_FILES[@]}"; do
+        if [ -f "$backup_dir/$rel" ]; then
+            mkdir -p "$repo_dir/$(dirname "$rel")" 2>/dev/null || true
+            if cp -p "$backup_dir/$rel" "$repo_dir/$rel"; then
+                log_info "Restored personal config: $rel"
+            else
+                log_warn "Failed to restore personal config: $rel"
+                failed=1
+            fi
+        fi
+    done
+    if [ "$failed" -eq 0 ]; then
+        rm -rf "$backup_dir"
+    else
+        log_warn "Backup kept at: $backup_dir (copy files back manually)"
+    fi
+}
+
+# git pull origin main; on failure: fetch + reset --hard origin/main, then pull again.
+# Returns 0 on success, 1 on failure (never exits, so the caller can restore backups).
+git_pull_with_recovery() {
+    local target_repo="$1"
+
+    log_info "Executing: git pull origin main..."
+    if git -C "$target_repo" pull origin main; then
+        log_success "Successfully pulled latest updates from origin/main."
+        return 0
+    fi
+
+    # Neu loi thi reset hard va pull ve lai
+    log_warn "'git pull origin main' encountered an error or merge conflict!"
+    log_info "Initiating automatic recovery: fetching origin main..."
+    git -C "$target_repo" fetch origin main || true
+
+    log_info "Running: git reset --hard origin/main..."
+    if ! git -C "$target_repo" reset --hard origin/main; then
+        log_error "Failed to execute 'git reset --hard origin/main'."
+        return 1
+    fi
+    log_success "Reset repository to origin/main successfully."
+
+    log_info "Retrying: git pull origin main..."
+    if git -C "$target_repo" pull origin main; then
+        log_success "Successfully pulled latest updates after hard reset."
+        return 0
+    fi
+    log_error "'git pull origin main' failed after hard reset."
+    return 1
+}
+
 # --- 4c. Git Update Utility (--update / update: git pull origin main with auto reset hard) ---
 run_git_update() {
     local target_repo="$SCRIPT_DIR"
@@ -2093,34 +2195,26 @@ run_git_update() {
     current_branch="$(git -C "$target_repo" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")"
     log_info "Active Git branch: $current_branch"
 
-    log_info "Executing: git pull origin main..."
-    if git -C "$target_repo" pull origin main; then
-        log_success "Successfully pulled latest updates from origin/main."
+    # Protect personal configs: reset --hard below would overwrite them if they are tracked.
+    local backup_dir=""
+    if ! backup_dir="$(backup_personal_configs "$target_repo")"; then
+        log_error "Failed to back up personal configs. Update aborted to protect your files."
+        exit 1
+    fi
+    if [ -n "$backup_dir" ]; then
+        log_info "Backed up personal configs to: $backup_dir"
+    fi
+
+    local update_status=0
+    git_pull_with_recovery "$target_repo" || update_status=$?
+
+    restore_personal_configs "$target_repo" "$backup_dir"
+
+    if [ "$update_status" -eq 0 ]; then
         ensure_script_permissions "$target_repo"
         exit 0
     fi
-
-    # Neu loi thi reset hard va pull ve lai
-    log_warn "'git pull origin main' encountered an error or merge conflict!"
-    log_info "Initiating automatic recovery: fetching origin main..."
-    git -C "$target_repo" fetch origin main || true
-
-    log_info "Running: git reset --hard origin/main..."
-    if git -C "$target_repo" reset --hard origin/main; then
-        log_success "Reset repository to origin/main successfully."
-        log_info "Retrying: git pull origin main..."
-        if git -C "$target_repo" pull origin main; then
-            log_success "Successfully pulled latest updates after hard reset."
-            ensure_script_permissions "$target_repo"
-            exit 0
-        else
-            log_error "'git pull origin main' failed after hard reset."
-            exit 1
-        fi
-    else
-        log_error "Failed to execute 'git reset --hard origin/main'."
-        exit 1
-    fi
+    exit 1
 }
 
 # --- 4c. Git Help Utility (--git-help: frequently used Git commands) ---
