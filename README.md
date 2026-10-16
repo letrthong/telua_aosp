@@ -6,15 +6,19 @@ An automated developer workflow script for building and deploying privileged sys
 
 | File | Purpose |
 |---|---|
-| `build_apk.sh` | Core execution script (orchestration logic) |
-| `apk.config` | Project configuration (profile selection, lunch targets, deploy flags, debug tags) |
-| `const_audio.config` | Global Audio & ADB shell commands configuration (shared across projects) |
-| `const_dumpsys.config` | Global Dumpsys & AAOS diagnostics commands configuration (shared across projects) |
-| `const_multi_cli.config` | Global Multi-command sequential pipelines & macros (shared across projects) |
-| `const_my_cli.config` | Personal private pipelines & macros (`telua my <action>`) |
-| `const_git.config` | Frequently used Git & Google Repo commands cheatsheet |
-| `const_docker.config` | Frequently used Docker daemon, container & image commands cheatsheet |
-| `const_network.config` | Frequently used Network, Port & ADB over Wi-Fi commands cheatsheet |
+| `build_apk.sh` | Core execution script (orchestration logic, alias `telua`) |
+| `apk.config` | Active project configuration (profile selection, lunch targets, deploy flags, debug tags) |
+| `apk_overlays.config.example` | Template for personal/private project overrides (auto-applied by `telua init`) |
+| `apk_overlays.config` | Local confidential project overrides (untracked in Git, preserved across updates) |
+| `config_overlay.py` | Smart overlay merge engine (merges `apk_overlays.config` onto `apk.config`) |
+| `config/const_car.config` | Global AAOS Car & Audio ADB key injection commands configuration |
+| `config/const_dumpsys.config` | Global Dumpsys & AAOS diagnostics commands configuration |
+| `config/const_multi_cli.config` | Global Multi-command sequential pipelines & macros with fail-fast safety |
+| `config/const_my_cli.config.example` | Template for personal private pipelines & macros (`telua my <action>`) |
+| `config/const_my_cli.config` | Personal private pipelines & macros (untracked in Git, preserved across updates) |
+| `config/const_git.config` | Frequently used Git & Google Repo commands cheatsheet (`telua git`) |
+| `config/const_docker.config` | Frequently used Docker daemon, container & image commands cheatsheet (`telua docker`) |
+| `config/const_network.config` | Frequently used Network, Port & ADB over Wi-Fi commands cheatsheet (`telua network`) |
 | `config_crypto.py` | Encrypt / decrypt `apk.config` with a password (PBKDF2 + Fernet) |
 | `requirements.txt` | Python package dependencies for `config_crypto.py` (`cryptography`) |
 
@@ -35,9 +39,9 @@ An automated developer workflow script for building and deploying privileged sys
 - Exactly **one** ADB device/DUT connected.
 - Execute permissions and Linux (LF) line endings:
   ```bash
-  chmod +x build_apk.sh config_crypto.py
-  dos2unix build_apk.sh *.config config/*.config config_crypto.py   # required if files were transferred from Windows
-  git update-index --chmod=+x build_apk.sh config_crypto.py         # ensures execution mode (100755) is preserved in Git
+  chmod +x build_apk.sh config_crypto.py config_overlay.py
+  dos2unix build_apk.sh *.config config/*.config *.py *.example      # required if files were transferred from Windows
+  git update-index --chmod=+x build_apk.sh config_crypto.py config_overlay.py # preserves 100755 in Git
   ```
 
 ---
@@ -49,7 +53,7 @@ Make the scripts executable and install the global `telua` alias into your `~/.b
 
 ```bash
 # 1. Grant execution permissions
-chmod +x build_apk.sh config_crypto.py
+chmod +x build_apk.sh config_crypto.py config_overlay.py
 
 # 2. Install 'telua' command into ~/.bashrc
 ./build_apk.sh --install
@@ -87,30 +91,29 @@ Maintain **a single golden copy of `build_apk.sh`** shared across multiple indep
 
 ```
 ~/code/telua_skill/.../build/           ← Master Repository (edit logic here)
-├── build_apk.sh
-├── apk.config                          ← Configuration Template
-├── config_crypto.py                    ← Configuration Encryption Utility
-├── enc_apk.config                      ← Encrypted Configuration (Base64)
-├── requirements.txt                    ← Python Dependencies
-├── AI.md                               ← AI Assistant & LLM Instruction Reference
-└── config/                             ← Shared Constants & Cheatsheets
-    ├── const_audio.config              ← Audio & AAOS Key Injections
-    ├── const_dumpsys.config            ← System Diagnostics
-    ├── const_multi_cli.config          ← Multi-Command Pipelines
-    ├── const_docker.config             ← Docker & Systemd Cheatsheet
-    ├── const_git.config                ← Git Cheatsheet
-    └── const_network.config            ← Network Cheatsheet
+├── build_apk.sh                        ← Master CLI engine & orchestration logic
+├── apk.config                          ← Active configuration profile
+├── apk_overlays.config.example         ← Personal override template (auto-copied by telua init)
+├── config_overlay.py                   ← Smart overlay merge engine (merges overrides into apk.config)
+├── config_crypto.py                    ← Configuration encryption utility (PBKDF2 + Fernet)
+├── enc_apk.config                      ← Encrypted configuration template (Base64)
+├── requirements.txt                    ← Python dependencies (cryptography)
+├── AI.md                               ← AI Assistant & LLM instruction reference
+└── config/                             ← Shared constants, macros & cheatsheets
+    ├── const_car.config                ← AAOS car & audio key injections
+    ├── const_dumpsys.config            ← System dumpsys diagnostics
+    ├── const_multi_cli.config          ← Multi-command sequential pipelines
+    ├── const_my_cli.config.example     ← Personal private pipeline macro template
+    ├── const_docker.config             ← Docker & systemd cheatsheet
+    ├── const_git.config                ← Git & Google Repo cheatsheet
+    └── const_network.config            ← Network & Wi-Fi debugging cheatsheet
 
-~/ws_main/android/qssi/tools/
+~/ws_main/android/qssi/tools/           ← Local Workspace (created via telua init / --softlink)
 ├── build_apk.sh  -> (symlink to master build_apk.sh)
 ├── apk.config        (ACTIVE_PROJECT="oem_service", target A)
+├── apk_overlays.config (Local confidential overrides, git-ignored)
 ├── OemService.apk    (Build output artifact copied here)
 └── deployment_log.txt
-
-~/ws_release/android/qssi/tools/
-├── build_apk.sh  -> (symlink to master build_apk.sh)
-├── apk.config        (ACTIVE_PROJECT="car_audio", target B)
-└── ...
 ```
 
 ### Installing to a Workspace
