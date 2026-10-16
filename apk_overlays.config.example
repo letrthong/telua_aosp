@@ -1,0 +1,22 @@
+# ==============================================================================
+# apk_overlays.config.example - Personal / site overrides applied by 'telua init'
+# ==============================================================================
+# Copy to 'apk_overlays.config' (next to build_apk.sh) and keep only what you need.
+# After 'telua init' copies or decrypts apk.config, each KEY=value below is applied:
+#   - Top-level keys in apk.config are replaced in place.
+#   - Keys not found at top level (e.g. MODULE_NAME from the case block) are
+#     appended at the end of apk.config, so they win when it is sourced.
+# Test without writing: python3 config_overlay.py ./apk.config --dry-run
+# ==============================================================================
+
+ACTIVE_PROJECT="car_audio"
+CONFIG_TARGET_PRODUCT="my_board_in"
+CONFIG_TARGET_BUILD_VARIANT="userdebug"
+BUILD_JOBS="16"
+ENABLE_ANDROID_LOGCAT="true"
+
+# Multi-line arrays are supported:
+# MULTI_CMD_CUSTOM_SETUP=(
+#     "adb root"
+#     "adb remount"
+# )

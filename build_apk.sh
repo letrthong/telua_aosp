@@ -1469,11 +1469,54 @@ install_bashrc_alias() {
 }
 
 # --- 1b. Initialize Project Config (--init) ---
+# Apply apk_overlays.config (personal/site overrides) on top of a freshly created apk.config.
+# Looked up next to the script (SCRIPT_DIR), then in the master toolkit dir. No-op if absent.
+apply_config_overlay() {
+    local target_config="$1"
+    local overlay_name="apk_overlays.config"
+    local overlay_file="" overlay_script="" dir
+
+    for dir in "$SCRIPT_DIR" "$MASTER_SCRIPT_DIR"; do
+        if [ -z "$overlay_file" ] && [ -f "$dir/$overlay_name" ]; then
+            overlay_file="$dir/$overlay_name"
+        fi
+        if [ -z "$overlay_script" ] && [ -f "$dir/config_overlay.py" ]; then
+            overlay_script="$dir/config_overlay.py"
+        fi
+    done
+
+    if [ -z "$overlay_file" ]; then
+        return 0
+    fi
+    if [ -z "$overlay_script" ]; then
+        log_warn "Found $overlay_file but config_overlay.py is missing. Overlay skipped."
+        return 0
+    fi
+    if ! command -v python3 >/dev/null 2>&1; then
+        log_warn "python3 not found. $overlay_name was not applied."
+        return 0
+    fi
+
+    log_info "Applying overlay: $overlay_file"
+    if python3 "$overlay_script" "$target_config" "$overlay_file"; then
+        log_success "Overlay applied to: $target_config"
+    else
+        log_warn "Failed to apply $overlay_name. $CONFIG_FILE_NAME was created without overlay."
+    fi
+}
+
 init_project_config() {
     local target_config="$PWD/$CONFIG_FILE_NAME"
     local template_config="$SCRIPT_DIR/$CONFIG_FILE_NAME"
     local enc_config="$SCRIPT_DIR/enc_apk.config"
     local crypto_script="$SCRIPT_DIR/config_crypto.py"
+
+    # Make sure helper scripts (config_crypto.py, config_overlay.py, ...) are executable.
+    # Covers both the script dir and the master dir (they differ when run via symlink).
+    ensure_script_permissions "$SCRIPT_DIR"
+    if [ "$MASTER_SCRIPT_DIR" != "$SCRIPT_DIR" ]; then
+        ensure_script_permissions "$MASTER_SCRIPT_DIR"
+    fi
 
     if [ "$PWD" = "$SCRIPT_DIR" ]; then
         log_warn "Already in master script directory ($PWD). Template config is here."
@@ -1504,6 +1547,7 @@ init_project_config() {
             if printf '%s\n' "$input_pw" | python3 "$crypto_script" decrypt -i "$enc_config" -o "$target_config" --force - 2>/dev/null; then
                 unset input_pw
                 log_success "Successfully decrypted and created: $target_config"
+                apply_config_overlay "$target_config"
                 log_info "Next: edit $CONFIG_FILE_NAME, then run: telua --info"
                 exit 0
             else
@@ -1518,6 +1562,7 @@ init_project_config() {
     if [ -f "$template_config" ]; then
         cp "$template_config" "$target_config"
         log_success "Initialized with default template: $target_config"
+        apply_config_overlay "$target_config"
         log_info "Next: edit $CONFIG_FILE_NAME, then run: telua --info"
         exit 0
     fi
@@ -2000,6 +2045,23 @@ run_git_amend() {
     exit 0
 }
 
+# Restore executable bits on toolkit scripts inside the given repo directory.
+# Missing files are skipped so 'set -e' never aborts the update.
+# Usage: ensure_script_permissions <repo_dir>
+ensure_script_permissions() {
+    local repo_dir="$1"
+    local script
+    if [ -z "$repo_dir" ] || [ ! -d "$repo_dir" ]; then
+        log_warn "ensure_script_permissions: invalid directory '$repo_dir'"
+        return 0
+    fi
+    for script in build_apk.sh config_crypto.py config_overlay.py; do
+        if [ -f "$repo_dir/$script" ]; then
+            chmod +x "$repo_dir/$script" || log_warn "Failed to chmod +x $repo_dir/$script"
+        fi
+    done
+}
+
 # --- 4c. Git Update Utility (--update / update: git pull origin main with auto reset hard) ---
 run_git_update() {
     local target_repo="$SCRIPT_DIR"
@@ -2034,8 +2096,7 @@ run_git_update() {
     log_info "Executing: git pull origin main..."
     if git -C "$target_repo" pull origin main; then
         log_success "Successfully pulled latest updates from origin/main."
-        chmod +x "$target_repo/build_apk.sh"
-        chmod +x "$target_repo/config_crypto.py"
+        ensure_script_permissions "$target_repo"
         exit 0
     fi
 
@@ -2050,8 +2111,7 @@ run_git_update() {
         log_info "Retrying: git pull origin main..."
         if git -C "$target_repo" pull origin main; then
             log_success "Successfully pulled latest updates after hard reset."
-            chmod +x "$target_repo/build_apk.sh"
-            chmod +x "$target_repo/config_crypto.py"
+            ensure_script_permissions "$target_repo"
             exit 0
         else
             log_error "'git pull origin main' failed after hard reset."
