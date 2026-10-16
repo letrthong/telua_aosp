@@ -1,18 +1,22 @@
+#!/bin/bash
 # ==============================================================================
-# apk_overlays.config.example - Personal / site overrides applied by 'telua init'
+# apk_overlays.config.example - Template for Personal & Private Project Overrides
+# Antigravity / telua AOSP & Automotive Toolkit
 # ==============================================================================
+# This template is provided for developers to configure private, local overrides.
 # 'telua init' copies this file to 'apk_overlays.config' if it does not exist yet.
-# apk_overlays.config is git-ignored and backed up/restored by 'telua update'.
 #
-# After 'telua init' copies or decrypts apk.config, each KEY=value below is applied:
+# ⚠️ CONFIDENTIALITY NOTICE:
+# The resulting 'apk_overlays.config' is excluded by .gitignore so your private
+# project paths, custom credentials, and confidential profiles are NEVER committed
+# or shared to Git. It is also safely backed up and restored during 'telua update'.
+#
+# After 'telua init' copies or decrypts apk.config, each KEY=value is applied:
 #   - Top-level keys in apk.config are replaced in place.
-#   - Keys not found at top level (e.g. MODULE_NAME from the case block) are
-#     appended at the end of apk.config, so they win when it is sourced.
+#   - Case branches (e.g. "oem_service") in case "$ACTIVE_PROJECT" are merged
+#     per-branch; custom branches are inserted before the default '*)' branch.
+#   - Unmatched keys/blocks are appended at the end of apk.config.
 #
-# Put ONLY the keys you want to change. Do NOT copy the 'case ... esac' block:
-# indented keys inside it are appended flat and would override every profile.
-#
-# Everything is commented out, so a freshly copied file changes nothing.
 # Test without writing: python3 config_overlay.py ./apk.config --dry-run
 # ==============================================================================
 
@@ -36,8 +40,26 @@ esac
 # BUILD_JOBS="16"
 # ENABLE_ANDROID_LOGCAT="true"
 
-# Multi-line arrays are supported:
+# ------------------------------------------------------------------------------
+# 4b. Global Modular Overrides (Audio, Dumpsys & Multi-CLI Pipelines)
+# Centrally managed in shared files under config/: const_car.config,
+# const_dumpsys.config, and const_multi_cli.config.
+#
+# If this specific project/developer requires custom overrides or extra commands,
+# uncomment and customize below:
+#
+# [Audio Overrides]
+# ADB_SHELL_AUDIO_UP="dumpsys car_service inject-key 24"
+# ADB_SHELL_AUDIO_DOWN="dumpsys car_service inject-key 25"
+# ADB_SHELL_AUDIO_MUTE="dumpsys car_service inject-key 164"
+#
+# [Dumpsys Overrides]
+# ADB_SHELL_DUMP_CUSTOM="dumpsys media.camera"
+#
+# [Custom Multi-CLI Pipeline Groups]
 # MULTI_CMD_CUSTOM_SETUP=(
 #     "adb root"
 #     "adb remount"
 # )
+# ------------------------------------------------------------------------------
+
