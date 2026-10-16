@@ -171,7 +171,7 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `build`, `b`, `--build` | Full cycle: Build module + Push APK (if `ENABLE_DEPLOY="true"`) + Full Device Reboot |
 | `--no-reboot` | Fast runtime restart (`stop && start`, ~10–15s) instead of full device reboot |
 | `--config <path>` | Explicitly specifies path to `apk.config` to load |
-| `--init`, `init` | Initializes `apk.config` in current directory (`$PWD`) by decrypting `enc_apk.config` with password (or copying plain template) |
+| `--init`, `init` | Initializes `apk.config` in current directory (`$PWD`), auto-creates missing personal configs from `*.example`, enforces script permissions, and merges `apk_overlays.config` via `config_overlay.py` |
 | `--install`, `install` | Adds or updates alias `telua` in `~/.bashrc` pointing to `build_apk.sh`, and sources `~/.bashrc` |
 | `-v`, `--version`, `version` | Displays script version, release update date, and exits |
 | `--info`, `info` | Displays general build configuration followed by platform-specific target info (Android / QNX), then exits |
@@ -184,13 +184,14 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `-y`, `--yes` | Bypasses interactive confirmation prompts for dangerous operations (e.g., `--repo-reset`) |
 | `--git-diff` | Displays `git diff HEAD^ HEAD` in the script's git repository and exits |
 | `--git-amend` | Runs `git commit --amend --no-edit` (staged changes only) and exits |
-| `--update`, `update` | Updates this toolkit repository via `git pull origin main` (auto-resets hard on error) |
+| `--update`, `update` | Updates this toolkit repository via `git pull origin main` (auto-backs up & restores personal configs, auto-recovers hard reset on conflict) |
 | `--git-help`, `git` | Displays cheatsheet of commonly used Git commands and exits |
 | `--docker-help`, `docker` | Displays cheatsheet of commonly used Docker commands and exits |
 | `--network-help`, `network` | Displays cheatsheet of commonly used Network & Port commands and exits |
-| `--audio`, `audio [action]` | Controls audio via ADB shell (`vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`) using commands from `config/const_audio.config` |
+| `car [action]`, `audio [action]` | Controls car/audio via ADB shell (`vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`, `car-status`) using commands from `config/const_car.config` |
 | `--dump`, `dump [target]` | Runs dumpsys diagnostics via ADB shell (`audio`, `car-service`, `car-audio`, `media`, `battery`, `activity`) using commands from `config/const_dumpsys.config` |
-| `--run`, `run [group]` | Executes multi-command sequential pipeline group from `config/const_multi_cli.config` (or: `telua multi [group]`) |
+| `--run`, `run [group]` | Executes multi-command sequential pipeline group from `config/const_multi_cli.config` (alias: `telua multi [group]`) |
+| `my [action]`, `proj [action]` | Executes personal private pipeline macro from `config/const_my_cli.config` (`telua my hello`) |
 | `--find-file <pattern> [path]` | Searches for files by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-dir <pattern> [path]` | Searches for directories by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-text <text> [path]` | Greps for text string in files under `[path]` (defaults to `.` if omitted) |
@@ -203,20 +204,21 @@ telua build                           # Build active module, push APK, and reboo
 telua build --no-reboot               # Fast deploy after editing Java/Kotlin code (~5-10s)
 telua b                               # Short alias for 'telua build'
 ./build_apk.sh --install              # Install/update 'telua' alias in ~/.bashrc
-telua init                            # Initialize apk.config in current workspace
+telua init                            # Initialize workspace & apply apk_overlays.config
 telua info                            # Inspect environment and device state
-telua update                          # Update toolkit: git pull origin main (auto-resets hard on error)
-telua audio vol-up                    # Increase volume (AAOS inject-key 24) (or: telua --audio vol-up)
-telua audio vol-down                  # Decrease volume (AAOS inject-key 25)
-telua audio vol-mute                  # Mute volume (AAOS inject-key 164)
-telua audio ks                        # Start KitchenSink test app (or: telua ks)
-telua audio ks-stop                   # Force stop KitchenSink test app (or: telua ks-stop)
+telua update                          # Update toolkit: pulls origin/main & preserves personal configs
+telua car vol-up                      # Increase volume (AAOS inject-key 24) (or: telua audio vol-up)
+telua car vol-down                    # Decrease volume (AAOS inject-key 25)
+telua car vol-mute                    # Mute volume (AAOS inject-key 164)
+telua car ks                          # Start KitchenSink test app (or: telua audio ks)
+telua car ks-stop                     # Force stop KitchenSink test app
 telua dump audio                      # Dump audio service status (or: telua --dump audio)
 telua dump car-service                # Dump AAOS CarService state
 telua dump car-audio                  # Dump AAOS CarAudioService
 telua run                             # View all pipeline macro groups and steps (or: telua multi)
 telua run audio-cycle                 # Run KitchenSink restart & volume test pipeline
 telua run dev-prep                    # Run device prep pipeline (root, remount, debug tags)
+telua my hello                        # Run personal private macro from config/const_my_cli.config
 telua git                             # View Git cheatsheet (or: telua --git-help)
 telua docker                          # View Docker daemon & container cheatsheet
 telua network                         # View Network & Port cheatsheet
@@ -324,9 +326,9 @@ This ensures `Log.isLoggable(TAG, Log.DEBUG)` returns `true` in Java code and pe
 
 ---
 
-### 5.3b Audio Control & Test Harness (`config/const_audio.config`)
+### 5.3b AAOS Car & Audio Control (`config/const_car.config`)
 
-Các lệnh ADB điều khiển âm lượng và ứng dụng test âm thanh (KitchenSink) được quản lý tập trung trong file cố định **`config/const_audio.config`** (nằm trong thư mục `config/` của toolkit gốc), dùng chung cho tất cả các workspace:
+Các lệnh ADB điều khiển âm lượng và ứng dụng test âm thanh (KitchenSink) được quản lý tập trung trong file cố định **`config/const_car.config`** (nằm trong thư mục `config/` của toolkit gốc), gọi qua `telua car [action]` hoặc `telua audio [action]`:
 
 | Variable | Default | Description |
 |---|---|---|
@@ -335,11 +337,11 @@ Các lệnh ADB điều khiển âm lượng và ứng dụng test âm thanh (Ki
 | `ADB_SHELL_AUDIO_MUTE` | `"dumpsys car_service inject-key 164"` | Command executed for `vol-mute` (AAOS CarInputService inject key 164) |
 | `ADB_SHELL_AUDIO_KS_START` | `"am start com.google.android.car.kitchensink/.KitchenSinkActivity"` | Launch KitchenSink test app |
 | `ADB_SHELL_AUDIO_KS_STOP` | `"am force-stop com.google.android.car.kitchensink"` | Force-stop KitchenSink test app |
-| `AUDIO_CLI_LIST` | Mảng 5 lệnh CLI (`vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`) | Danh sách lệnh hiển thị cho người dùng khi chạy `telua audio` |
+| `AUDIO_CLI_LIST` | Mảng 5 lệnh CLI (`vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`) | Danh sách lệnh hiển thị cho người dùng khi chạy `telua car` hoặc `telua audio` |
 
 > **Ghi chú về tách biệt cấu hình:**
-> - `config/const_audio.config` giữ các giá trị mặc định dùng chung cho mọi dự án.
-> - Nếu một dự án cụ thể cần tùy biến riêng câu lệnh âm thanh, bạn có thể khai báo đè (override) trực tiếp các biến này trong file `apk.config` của dự án đó.
+> - `config/const_car.config` giữ các giá trị mặc định dùng chung cho mọi dự án.
+> - Nếu một dự án cụ thể cần tùy biến riêng câu lệnh âm thanh, bạn có thể khai báo đè (override) trực tiếp các biến này trong file `apk.config` hoặc `apk_overlays.config`.
 
 ---
 
