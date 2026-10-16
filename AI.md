@@ -18,7 +18,7 @@ When assisting a developer, **ALWAYS prefer using `telua` (or `./build_apk.sh`) 
 > 1. **Non-Interactive CI/Agent Execution**: When executing `--repo-reset`, ALWAYS pass the `-y` or `--yes` flag to bypass the interactive `[y/N]` prompt (e.g., `telua --repo-sync --repo-reset -y`).
 > 2. **Config Protection**: Never commit or display sensitive decrypted config files (`dec_apk.config`, `dec_*.config`).
 > 3. **Line Endings**: Always maintain Linux `LF` line endings for all script and config files.
-> 4. **Executable Permissions (Git Mode 100755)**: When modifying or adding scripts from Windows/cross-platform hosts, ALWAYS enforce executable permissions in Git using `git update-index --chmod=+x build_apk.sh config_crypto.py` so the files run immediately upon checkout on Linux without requiring manual `chmod`.
+> 4. **Executable Permissions (Git Mode 100755)**: When modifying or adding scripts from Windows/cross-platform hosts, ALWAYS enforce executable permissions in Git using `git update-index --chmod=+x build_apk.sh config_crypto.py config_overlay.py` so the files run immediately upon checkout on Linux without requiring manual `chmod`.
 
 ---
 
@@ -28,12 +28,15 @@ When assisting a developer, **ALWAYS prefer using `telua` (or `./build_apk.sh`) 
 .
 ├── build_apk.sh              # Core orchestration engine & CLI entrypoint
 ├── apk.config                # Project-specific active profile & lunch target
+├── apk_overlays.config.example # Personal/private override template
+├── config_overlay.py         # Smart overlay merger (merges apk_overlays.config)
 ├── config_crypto.py          # Configuration encryption/decryption (Fernet AES)
 ├── requirements.txt          # Python dependencies (cryptography)
 ├── config/                   # Declarative global constant cheatsheets & commands
-│   ├── const_audio.config    # Audio key injection & KitchenSink test harness
+│   ├── const_car.config      # AAOS car & audio key injection & test harness
 │   ├── const_dumpsys.config  # System diagnostics & AAOS dumpsys targets
 │   ├── const_multi_cli.config# Multi-command sequential pipelines / macros
+│   ├── const_my_cli.config.example # Personal pipeline template (telua my <action>)
 │   ├── const_docker.config   # Docker & systemd service cheatsheet
 │   ├── const_git.config      # Git & Google Repo cheatsheet
 │   └── const_network.config  # Linux ports & socket inspection cheatsheet
@@ -61,18 +64,18 @@ When the user asks you to perform a task, map their intent to the corresponding 
 
 ---
 
-## 4. Android Automotive (AAOS) Audio & Diagnostics
-
+## 4. Android Automotive (AAOS) Car & Diagnostics
+ 
 All commands execute directly on the target device via ADB shell:
 
-### 4.1 Audio Key Injection & App Harness (`telua audio <action>`)
+### 4.1 AAOS Car & Audio Control (`telua car <action>` / `telua audio <action>`)
 ```bash
-telua audio               # View interactive audio command list
-telua audio vol-up        # Increase volume (AAOS CarInputService inject-key 24)
-telua audio vol-down      # Decrease volume (AAOS CarInputService inject-key 25)
-telua audio vol-mute      # Mute volume (AAOS CarInputService inject-key 164)
-telua audio ks            # Launch KitchenSink test application
-telua audio ks-stop       # Force-stop KitchenSink test application
+telua car                 # View interactive car & audio command list (alias: telua audio)
+telua car vol-up          # Increase volume (AAOS CarInputService inject-key 24)
+telua car vol-down        # Decrease volume (AAOS CarInputService inject-key 25)
+telua car vol-mute        # Mute volume (AAOS CarInputService inject-key 164)
+telua car ks              # Launch KitchenSink test application
+telua car ks-stop         # Force-stop KitchenSink test application
 ```
 
 ### 4.2 Dumpsys Diagnostics (`telua dump <target>`)
