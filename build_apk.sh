@@ -1046,6 +1046,16 @@ run_tests() {
         exit 1
     fi
 
+    # Project test scripts may need the AOSP build environment (e.g.
+    # ANDROID_BUILD_TOP exported by lunch). Set it up best-effort: mandatory
+    # inside an AOSP tree, skipped gracefully when this repo is standalone
+    # (no 'android' ancestor directory) so self-contained suites still run.
+    if resolve_android_paths >/dev/null 2>&1; then
+        setup_build_environment "${PLATFORM:-${TARGET_PLATFORM:-android}}"
+    else
+        log_warn "AOSP tree not found; running tests without build environment"
+    fi
+
     local config_dir
     config_dir="$(dirname "$CONFIG_FILE")"
     local test_dir="$config_dir/$TEST_RELATIVE_PATH"
@@ -1107,10 +1117,10 @@ main() {
     run_git_amend
 
     # Test mode runs the project test suite (tests/run_unittest_test.sh) and
-    # exits. The suite is self-contained and does NOT need the AOSP tree, so it
-    # must run BEFORE resolve_android_paths: that helper requires an 'android'
-    # ancestor directory and aborts (exit 1) when this repo is standalone,
-    # which would make '--test-mode true' impossible outside an AOSP checkout.
+    # exits. run_tests sets up the AOSP build environment best-effort (needed
+    # by project scripts like run_coverage.sh) but does not abort when this
+    # repo is standalone, where resolve_android_paths would otherwise fail
+    # with 'Could not find the android root directory' before tests could run.
     run_tests
 
     resolve_android_paths || exit 1
