@@ -127,11 +127,20 @@ MY_CONFIG_FILE="$(find_const_config_file "$MY_CONFIG_FILE_NAME")"
 [ ! -f "$MY_CONFIG_FILE" ] && MY_CONFIG_FILE="$(find_const_config_file "$PROJECT_CONFIG_FILE_NAME")"
 PROJECT_CONFIG_FILE="$MY_CONFIG_FILE"
 
-# Logging helpers with colors
-log_info()    { echo -e "\033[1;34m[INFO]\033[0m $*"; }
-log_success() { echo -e "\033[1;32m[SUCCESS]\033[0m $*"; }
-log_warn()    { echo -e "\033[1;33m[WARN]\033[0m $*"; }
-log_error()   { echo -e "\033[1;31m[ERROR]\033[0m $*"; }
+# --- Logging helpers (single source of truth: src/telua_log.sh) ---
+# Shared color logging helpers (log_info/log_success/log_warn/log_error) were
+# extracted to src/telua_log.sh; sourcing it sets TELUA_LOG_SOURCED=1 and its
+# internal guard makes double-sourcing (e.g. via src/telua_git.sh) a no-op.
+# Lookup order: script dir -> master dir (both resolved through symlinks).
+if [ "${TELUA_LOG_SOURCED:-}" != "1" ]; then
+    if [ -f "$SCRIPT_DIR/src/telua_log.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$SCRIPT_DIR/src/telua_log.sh"
+    elif [ -f "$MASTER_SCRIPT_DIR/src/telua_log.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$MASTER_SCRIPT_DIR/src/telua_log.sh"
+    fi
+fi
 
 # --- RAM Monitoring (snapshot at start/end + peak usage sampler) ---
 ENABLE_RAM_MONITOR="${ENABLE_RAM_MONITOR:-true}"
