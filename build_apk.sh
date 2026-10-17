@@ -1106,7 +1106,13 @@ main() {
     run_git_diff
     run_git_amend
 
-    # Test scripts need ANDROID_BUILD_TOP, so set up the build env before them.
+    # Test mode runs the project test suite (tests/run_unittest_test.sh) and
+    # exits. The suite is self-contained and does NOT need the AOSP tree, so it
+    # must run BEFORE resolve_android_paths: that helper requires an 'android'
+    # ancestor directory and aborts (exit 1) when this repo is standalone,
+    # which would make '--test-mode true' impossible outside an AOSP checkout.
+    run_tests
+
     resolve_android_paths || exit 1
 
     # Repo utilities are parameter-driven (see src/telua_repo.sh):
@@ -1124,8 +1130,6 @@ main() {
     #   deploy_apk [platform] [deploy_enabled]
     #   capture_logs [platform] [deploy_enabled] [log_enabled]
     setup_build_environment "${PLATFORM:-${TARGET_PLATFORM:-android}}"
-
-    run_tests
 
     build_apk "${MODULE_NAME:-${APK_FILE_NAME%.apk}}" "$BUILD_JOBS_RESOLVED"
     deploy_apk "${PLATFORM:-${TARGET_PLATFORM:-android}}" "${CLI_START_DEPLOY:-}"
