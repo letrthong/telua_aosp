@@ -208,6 +208,22 @@ if [ "${TELUA_NETWORK_SOURCED:-}" != "1" ]; then
     fi
 fi
 
+# --- Search utilities (single source of truth: src/telua_find.sh) ---
+# Code behind 'telua --find-file' (find_file), 'telua --find-dir' (find_dir)
+# and 'telua --find-text' (find_text) was extracted to src/telua_find.sh.
+# Sourcing it sets TELUA_FIND_SOURCED=1 and its internal guard makes
+# double-sourcing a no-op.
+# Lookup order: script dir -> master dir (both resolved through symlinks).
+if [ "${TELUA_FIND_SOURCED:-}" != "1" ]; then
+    if [ -f "$SCRIPT_DIR/src/telua_find.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$SCRIPT_DIR/src/telua_find.sh"
+    elif [ -f "$MASTER_SCRIPT_DIR/src/telua_find.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$MASTER_SCRIPT_DIR/src/telua_find.sh"
+    fi
+fi
+
 # --- Car control commands (single source of truth: src/telua_car.sh) ---
 # Code behind 'telua car <action>' (show_car_short_help, show_car_help,
 # is_car_action, handle_car_command) was extracted to src/telua_car.sh; it is
@@ -1366,49 +1382,6 @@ post_sync_cli() {
     # --------------------------------------------------------------------------
 
     log_success "Post-sync CLI hook completed."
-}
-
-# --- 4d. Search Utilities (find_file, find_dir, find_text) ---
-# (run_git_diff, run_git_amend and show_git_help live in src/telua_git.sh)
-# Supports passing target search path as optional 2nd argument (defaults to '.')
-find_file() {
-    local pattern="$1"
-    local search_path="${2:-.}"
-    if [ -z "$pattern" ]; then
-        log_error "Usage: find_file <file_pattern> [search_path]"
-        exit 1
-    fi
-    log_info "Searching for file '$pattern' in '$search_path'..."
-    find "$search_path" -type f -name "$pattern" 2>/dev/null
-}
-
-find_dir() {
-    local pattern="$1"
-    local search_path="${2:-.}"
-    if [ -z "$pattern" ]; then
-        log_error "Usage: find_dir <dir_pattern> [search_path]"
-        exit 1
-    fi
-    log_info "Searching for directory '$pattern' in '$search_path'..."
-    find "$search_path" -type d -name "$pattern" 2>/dev/null
-}
-
-find_text() {
-    local text="$1"
-    local search_path="${2:-.}"
-    if [ -z "$text" ]; then
-        log_error "Usage: find_text <text_pattern> [search_path]"
-        exit 1
-    fi
-    # Prefer ripgrep (much faster on large AOSP trees, full-text match,
-    # auto-skips out/.repo/ via .gitignore & hidden dirs). Fallback: grep -w.
-    if command -v rg >/dev/null 2>&1; then
-        log_info "Searching for text '$text' in '$search_path' (ripgrep)..."
-        rg -n --no-heading -S -- "$text" "$search_path" 2>/dev/null
-    else
-        log_info "Searching for text '$text' in '$search_path' (grep; tip: install ripgrep for faster search)..."
-        grep -rnw "$search_path" -e "$text" 2>/dev/null
-    fi
 }
 
 # --- 4c. Repo Reset Utility (--repo-reset: reset only, then exit) ---
