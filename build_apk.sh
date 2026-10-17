@@ -176,6 +176,38 @@ if [ "${TELUA_GIT_SOURCED:-}" != "1" ]; then
     fi
 fi
 
+# --- Docker utilities (single source of truth: src/telua_docker.sh) ---
+# Code behind 'telua --docker-help' / 'telua docker' (show_docker_help) was
+# extracted to src/telua_docker.sh; it is driven by const_docker.config
+# (DOCKER_CONFIG_FILE). Sourcing it sets TELUA_DOCKER_SOURCED=1 and its
+# internal guard makes double-sourcing a no-op.
+# Lookup order: script dir -> master dir (both resolved through symlinks).
+if [ "${TELUA_DOCKER_SOURCED:-}" != "1" ]; then
+    if [ -f "$SCRIPT_DIR/src/telua_docker.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$SCRIPT_DIR/src/telua_docker.sh"
+    elif [ -f "$MASTER_SCRIPT_DIR/src/telua_docker.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$MASTER_SCRIPT_DIR/src/telua_docker.sh"
+    fi
+fi
+
+# --- Network utilities (single source of truth: src/telua_network.sh) ---
+# Code behind 'telua --network-help' / 'telua network' (show_network_help) was
+# extracted to src/telua_network.sh; it is driven by const_network.config
+# (NETWORK_CONFIG_FILE). Sourcing it sets TELUA_NETWORK_SOURCED=1 and its
+# internal guard makes double-sourcing a no-op.
+# Lookup order: script dir -> master dir (both resolved through symlinks).
+if [ "${TELUA_NETWORK_SOURCED:-}" != "1" ]; then
+    if [ -f "$SCRIPT_DIR/src/telua_network.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$SCRIPT_DIR/src/telua_network.sh"
+    elif [ -f "$MASTER_SCRIPT_DIR/src/telua_network.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$MASTER_SCRIPT_DIR/src/telua_network.sh"
+    fi
+fi
+
 # --- Car control commands (single source of truth: src/telua_car.sh) ---
 # Code behind 'telua car <action>' (show_car_short_help, show_car_help,
 # is_car_action, handle_car_command) was extracted to src/telua_car.sh; it is
@@ -1377,36 +1409,6 @@ find_text() {
         log_info "Searching for text '$text' in '$search_path' (grep; tip: install ripgrep for faster search)..."
         grep -rnw "$search_path" -e "$text" 2>/dev/null
     fi
-}
-
-# --- 4e. Docker Help Utility (--docker-help: frequently used Docker commands) ---
-# Commands are read dynamically from const_docker.config (located with build_apk.sh)
-show_docker_help() {
-    if [ -f "$DOCKER_CONFIG_FILE" ]; then
-        cat "$DOCKER_CONFIG_FILE"
-    elif [ -f "$MASTER_SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME" ]; then
-        cat "$MASTER_SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME"
-    elif [ -f "$SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME" ]; then
-        cat "$SCRIPT_DIR/$DOCKER_CONFIG_FILE_NAME"
-    else
-        log_warn "Docker cheatsheet file '$DOCKER_CONFIG_FILE_NAME' not found!"
-    fi
-    exit 0
-}
-
-# --- 4f. Network Help Utility (--network-help: frequently used Network & Port commands) ---
-# Commands are read dynamically from const_network.config (located with build_apk.sh)
-show_network_help() {
-    if [ -f "$NETWORK_CONFIG_FILE" ]; then
-        cat "$NETWORK_CONFIG_FILE"
-    elif [ -f "$MASTER_SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME" ]; then
-        cat "$MASTER_SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME"
-    elif [ -f "$SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME" ]; then
-        cat "$SCRIPT_DIR/$NETWORK_CONFIG_FILE_NAME"
-    else
-        log_warn "Network cheatsheet file '$NETWORK_CONFIG_FILE_NAME' not found!"
-    fi
-    exit 0
 }
 
 # --- 4c. Repo Reset Utility (--repo-reset: reset only, then exit) ---
