@@ -241,6 +241,22 @@ if [ "${TELUA_MY_SOURCED:-}" != "1" ]; then
     fi
 fi
 
+# --- Repo sync & reset utilities (single source of truth: src/telua_repo.sh) ---
+# Code behind 'telua --repo-sync' (run_repo_sync), 'telua --repo-reset'
+# (run_repo_reset) and the post-sync hooks (post_sync_root_cli, post_sync_cli)
+# was extracted to src/telua_repo.sh. Sourcing it sets TELUA_REPO_SOURCED=1
+# and its internal guard makes double-sourcing a no-op.
+# Lookup order: script dir -> master dir (both resolved through symlinks).
+if [ "${TELUA_REPO_SOURCED:-}" != "1" ]; then
+    if [ -f "$SCRIPT_DIR/src/telua_repo.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$SCRIPT_DIR/src/telua_repo.sh"
+    elif [ -f "$MASTER_SCRIPT_DIR/src/telua_repo.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$MASTER_SCRIPT_DIR/src/telua_repo.sh"
+    fi
+fi
+
 # --- Car control commands (single source of truth: src/telua_car.sh) ---
 # Code behind 'telua car <action>' (show_car_short_help, show_car_help,
 # is_car_action, handle_car_command) was extracted to src/telua_car.sh; it is
@@ -322,74 +338,23 @@ if [ "${TELUA_QNX_SOURCED:-}" != "1" ]; then
     fi
 fi
 
-# --- RAM Monitoring (snapshot at start/end + peak usage sampler) ---
-ENABLE_RAM_MONITOR="${ENABLE_RAM_MONITOR:-true}"
-RAM_SAMPLE_INTERVAL="${RAM_SAMPLE_INTERVAL:-2}"
-RAM_SAMPLER_PID=""
-RAM_PEAK_FILE=""
-
-# Summarize system memory from /proc/meminfo (values in kB -> GB)
-get_mem_summary() {
-    awk '/^MemTotal:/ {t=$2} /^MemAvailable:/ {a=$2} /^SwapTotal:/ {st=$2} /^SwapFree:/ {sf=$2} END {
-        printf "Total: %.2f GB | Used: %.2f GB | Avail: %.2f GB | Swap Used: %.2f GB",
-               t/1048576, (t-a)/1048576, a/1048576, (st-sf)/1048576
-    }' /proc/meminfo 2>/dev/null
-}
-
-# Current used RAM in MB (MemTotal - MemAvailable, the modern 'used' metric)
-get_mem_used_mb() {
-    awk '/^MemTotal:/ {t=$2} /^MemAvailable:/ {a=$2} END {printf "%d", (t-a)/1024}' /proc/meminfo 2>/dev/null || echo 0
-}
-
-log_ram_snapshot() {
-    log_info "RAM [$1]: $(get_mem_summary)"
-}
-
-# Background sampler: records peak used RAM into a temp file while the build runs
-start_ram_sampler() {
-    [ "$ENABLE_RAM_MONITOR" = "true" ] || return 0
-    RAM_PEAK_FILE="$(mktemp "${TMPDIR:-/tmp}/telua_ram_peak.XXXXXX")"
-    echo 0 > "$RAM_PEAK_FILE"
-    (
-        peak=0
-        while :; do
-            used=$(get_mem_used_mb)
-            if [ "$used" -gt "$peak" ] 2>/dev/null; then
-                peak="$used"
-                echo "$peak" > "$RAM_PEAK_FILE"
-            fi
-            sleep "$RAM_SAMPLE_INTERVAL"
-        done
-    ) &
-    RAM_SAMPLER_PID=$!
-    log_info "RAM monitor: peak sampler started (every ${RAM_SAMPLE_INTERVAL}s, PID: $RAM_SAMPLER_PID)"
-}
-
-# Stop the background sampler (safe to call multiple times)
-stop_ram_sampler() {
-    if [ -n "$RAM_SAMPLER_PID" ]; then
-        kill "$RAM_SAMPLER_PID" 2>/dev/null || true
-        wait "$RAM_SAMPLER_PID" 2>/dev/null || true
-        RAM_SAMPLER_PID=""
+# --- RAM Monitoring (single source of truth: src/telua_ram.sh) ---
+# Code behind the RAM monitor (get_mem_summary, get_mem_used_mb,
+# log_ram_snapshot, start_ram_sampler, stop_ram_sampler, report_ram_summary)
+# was extracted to src/telua_ram.sh. Sourcing it sets TELUA_RAM_SOURCED=1 and
+# its internal guard makes double-sourcing a no-op. The module owns the state
+# variables RAM_SAMPLER_PID / RAM_PEAK_FILE and honors ENABLE_RAM_MONITOR /
+# RAM_SAMPLE_INTERVAL (settable from CLI via --ram-monitor).
+# Lookup order: script dir -> master dir (both resolved through symlinks).
+if [ "${TELUA_RAM_SOURCED:-}" != "1" ]; then
+    if [ -f "$SCRIPT_DIR/src/telua_ram.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$SCRIPT_DIR/src/telua_ram.sh"
+    elif [ -f "$MASTER_SCRIPT_DIR/src/telua_ram.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$MASTER_SCRIPT_DIR/src/telua_ram.sh"
     fi
-}
-
-# Final report: END snapshot + peak usage observed during the run
-report_ram_summary() {
-    stop_ram_sampler
-    log_ram_snapshot "END"
-    local peak
-    peak="$(cat "$RAM_PEAK_FILE" 2>/dev/null || echo 0)"
-    if [ -n "$RAM_PEAK_FILE" ] && [ -f "$RAM_PEAK_FILE" ]; then
-        rm -f "$RAM_PEAK_FILE"
-        RAM_PEAK_FILE=""
-    fi
-    if [ "${peak:-0}" -gt 0 ] 2>/dev/null; then
-        log_success "RAM peak usage during this run: $(awk -v p="$peak" 'BEGIN {printf "%.2f GB (%d MB)", p/1024, p}')"
-    else
-        log_warn "RAM peak usage: no samples collected (ENABLE_RAM_MONITOR=$ENABLE_RAM_MONITOR)"
-    fi
-}
+fi
 
 show_version() {
     echo "build_apk.sh v$SCRIPT_VERSION (Last updated: $SCRIPT_LAST_UPDATED)"
@@ -1097,199 +1062,6 @@ run_tests() {
 
     log_success "Tests completed successfully."
     exit 0
-}
-
-# --- 4b. Post-Sync CLI Hook 1: ROOT_DIR (BEFORE entering android/qssi) ---
-# Customize this function to run CLI commands at ROOT_DIR right after repo sync finishes.
-# (e.g. BSP scripts, vendor setup, git status across repos)
-post_sync_root_cli() {
-    log_info "============================================================"
-    log_info " Running Post-Sync Hook 1: ROOT_DIR (Before android/qssi)"
-    log_info " Current Directory: $(pwd)"
-    log_info "============================================================"
-
-    local root_cmd="${REPO_POST_SYNC_ROOT_COMMAND:-$POST_SYNC_ROOT_COMMAND}"
-    if [ -n "$root_cmd" ]; then
-        log_info "Executing root command from config: $root_cmd"
-        local r_start
-        r_start=$(date +%s)
-        eval "$root_cmd"
-        local r_end
-        r_end=$(date +%s)
-        local r_dur=$((r_end - r_start))
-        log_success "Root command completed in $((r_dur / 60))m $((r_dur % 60))s."
-    else
-        log_info "No REPO_POST_SYNC_ROOT_COMMAND set in $CONFIG_FILE_NAME."
-        log_info "Add custom root commands directly in post_sync_root_cli() or config."
-        # Example commands in ROOT_DIR:
-        #   ./scripts/setup_bsp.sh
-        #   git status -s
-    fi
-
-    log_success "Post-sync ROOT_DIR hook completed."
-}
-
-# --- 4c. Post-Sync CLI Hook 2: ANDROID_TOP (AFTER entering android/qssi) ---
-# Customize this function to run CLI commands after entering $ROOT_DIR/android/qssi ($ANDROID_TOP).
-# (e.g. full project rebuild, lunch, target compile)
-post_sync_cli() {
-    log_info "============================================"
-    log_info " Running Post-Sync Custom CLI Hook"
-    log_info " Current Directory: $(pwd)"
-    log_info "============================================"
-
-    # --------------------------------------------------------------------------
-    # 1. FULL PROJECT REBUILD (CẬP NHẬT CLI TẠI ĐÂY)
-    # Nếu đã cấu hình REPO_POST_SYNC_BUILD_COMMAND trong apk.config thì tự động chạy:
-    # --------------------------------------------------------------------------
-    local build_cmd="${REPO_POST_SYNC_BUILD_COMMAND:-$POST_SYNC_BUILD_COMMAND}"
-    if [ -n "$build_cmd" ]; then
-        log_info "Executing full project rebuild command from config:"
-        log_info ">> $build_cmd"
-        local b_start
-        b_start=$(date +%s)
-        eval "$build_cmd"
-        local b_end
-        b_end=$(date +%s)
-        local b_dur=$((b_end - b_start))
-        log_success "Full project rebuild completed in $((b_dur / 60))m $((b_dur % 60))s."
-    else
-        log_info "No REPO_POST_SYNC_BUILD_COMMAND set in $CONFIG_FILE_NAME."
-        log_info "You can configure REPO_POST_SYNC_BUILD_COMMAND in $CONFIG_FILE_NAME"
-        log_info "or insert your custom build commands directly below in this function."
-    fi
-
-    # --------------------------------------------------------------------------
-    # 2. CUSTOM POST-SYNC CLI COMMANDS (THÊM LỆNH TÙY CHỌN TẠI ĐÂY):
-    # Ví dụ khi cần cập nhật sau này:
-    #   source build/envsetup.sh
-    #   lunch ${CONFIG_TARGET_PRODUCT}-${CONFIG_TARGET_BUILD_VARIANT}
-    #   m -j$(nproc)
-    #   git status -s
-    # --------------------------------------------------------------------------
-
-    log_success "Post-sync CLI hook completed."
-}
-
-# --- 4c. Repo Reset Utility (--repo-reset: reset only, then exit) ---
-run_repo_reset() {
-    if [ "$REPO_RESET" != "true" ]; then
-        return 0
-    fi
-
-    if ! command -v repo >/dev/null 2>&1; then
-        log_error "'repo' binary not found in PATH! Please ensure Google repo is installed and accessible."
-        exit 1
-    fi
-
-    if [ ! -d "$ROOT_DIR" ]; then
-        log_error "ROOT_DIR '$ROOT_DIR' does not exist!"
-        exit 1
-    fi
-
-    cd "$ROOT_DIR"
-    echo ""
-    log_warn "============================================================"
-    log_warn " ⚠️  CAUTION: HARD RESET & CLEAN ALL REPOSITORIES (repo forall)!"
-    log_warn " Target Directory: $ROOT_DIR"
-    log_warn " Command:          repo forall -c \"git reset --hard && git clean -xdf\""
-    log_warn " ALL uncommitted changes, staged files, and untracked files"
-    log_warn " across ALL sub-repositories will be PERMANENTLY DESTROYED!"
-    log_warn "============================================================"
-
-    if [ "$CONFIRM_YES" != "true" ]; then
-        local user_confirm=""
-        read -r -p "Are you sure you want to proceed with hard reset? [y/N]: " user_confirm
-        case "$user_confirm" in
-            [yY]|[yY][eE][sS])
-                log_info "Confirmation received ('$user_confirm'). Proceeding with repo reset..."
-                ;;
-            *)
-                log_warn "Operation cancelled by user. No files were modified."
-                exit 0
-                ;;
-        esac
-    else
-        log_info "Bypassing confirmation (-y / --yes specified)."
-    fi
-
-    if ! repo forall -c "git reset --hard && git clean -xdf"; then
-        log_error "'repo forall' git reset failed in $ROOT_DIR!"
-        exit 1
-    fi
-
-    if [ "$REPO_SYNC" = "true" ]; then
-        log_success "All repositories reset and cleaned successfully. Proceeding to repo sync..."
-    else
-        log_success "All repositories reset and cleaned successfully. Exiting (no sync, no build)."
-        exit 0
-    fi
-}
-
-# --- 4d. Repo Sync Utility ---
-run_repo_sync() {
-    if [ "$REPO_SYNC" != "true" ]; then
-        return 0
-    fi
-
-    log_info "============================================"
-    log_info " Starting Repo Sync in ROOT_DIR"
-    log_info "============================================"
-
-    if ! command -v repo >/dev/null 2>&1; then
-        log_error "'repo' binary not found in PATH! Please ensure Google repo is installed and accessible."
-        exit 1
-    fi
-
-    if [ ! -d "$ROOT_DIR" ]; then
-        log_error "ROOT_DIR '$ROOT_DIR' does not exist!"
-        exit 1
-    fi
-
-    log_info "Navigating to ROOT_DIR: $ROOT_DIR"
-    cd "$ROOT_DIR"
-
-    if [ ! -d ".repo" ]; then
-        log_warn "No '.repo' directory found in ROOT_DIR ($ROOT_DIR). Attempting repo sync anyway..."
-    fi
-
-    local jobs="${REPO_SYNC_JOBS:-4}"
-    local sync_flags="${REPO_SYNC_FLAGS:--d -c --force-sync --no-clone-bundle --tags}"
-    local start_ts
-    start_ts=$(date +%s)
-    local start_str
-    start_str=$(date '+%Y-%m-%d %H:%M:%S')
-
-    log_info "Sync started at: $start_str"
-    log_info "Executing: repo sync -j$jobs $sync_flags"
-    log_warn "NOTE: 'repo sync' can take a substantial amount of time. Please wait..."
-
-    if ! repo sync -j"$jobs" $sync_flags; then
-        log_error "repo sync failed in $ROOT_DIR!"
-        exit 1
-    fi
-
-    local end_ts
-    end_ts=$(date +%s)
-    local duration=$((end_ts - start_ts))
-    local minutes=$((duration / 60))
-    local seconds=$((duration % 60))
-    log_success "repo sync completed in ${minutes}m ${seconds}s ($duration seconds)."
-
-    # 1. Run Hook 1 in ROOT_DIR (BEFORE cd to android/qssi)
-    post_sync_root_cli
-
-    # 2. Navigate to ANDROID_TOP
-    log_info "Navigating to: $ANDROID_TOP"
-    if [ ! -d "$ANDROID_TOP" ]; then
-        log_error "Target directory '$ANDROID_TOP' does not exist after repo sync!"
-        exit 1
-    fi
-    cd "$ANDROID_TOP"
-    log_info "Current working directory: $(pwd)"
-
-    # 3. Run Hook 2 in ANDROID_TOP (AFTER cd to android/qssi)
-    post_sync_cli
 }
 
 # --- Main Entry Point ---
