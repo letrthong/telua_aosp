@@ -54,6 +54,9 @@ TELUA_UNTILS_SOURCED=1
 
 # Restore executable bits on toolkit scripts inside the given repo directory.
 # Missing files are skipped so 'set -e' never aborts the update.
+# Covers the main scripts AND every src/*.sh module (telua_log, telua_git,
+# telua_untils, telua_car, telua_run, ...) so 'telua update' never leaves a
+# freshly pulled module non-executable.
 # Usage: ensure_script_permissions <repo_dir>
 ensure_script_permissions() {
     local repo_dir="$1"
@@ -65,6 +68,12 @@ ensure_script_permissions() {
     for script in build_apk.sh config_crypto.py config_overlay.py; do
         if [ -f "$repo_dir/$script" ]; then
             chmod +x "$repo_dir/$script" || log_warn "Failed to chmod +x $repo_dir/$script"
+        fi
+    done
+    # All shell modules under src/ (glob may not match on older checkouts).
+    for script in "$repo_dir"/src/*.sh; do
+        if [ -f "$script" ]; then
+            chmod +x "$script" || log_warn "Failed to chmod +x $script"
         fi
     done
 }

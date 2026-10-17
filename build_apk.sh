@@ -192,6 +192,22 @@ if [ "${TELUA_CAR_SOURCED:-}" != "1" ]; then
     fi
 fi
 
+# --- Multi-CLI pipelines (single source of truth: src/telua_run.sh) ---
+# Code behind 'telua run <group>' (show_run_short_help, show_run_help,
+# is_run_group, handle_run_command) was extracted to src/telua_run.sh; it is
+# driven by const_multi_cli.config (MULTI_GROUP_LIST, MULTI_CMD_*). Sourcing it
+# sets TELUA_RUN_SOURCED=1 and its internal guard makes double-sourcing a no-op.
+# Lookup order: script dir -> master dir (both resolved through symlinks).
+if [ "${TELUA_RUN_SOURCED:-}" != "1" ]; then
+    if [ -f "$SCRIPT_DIR/src/telua_run.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$SCRIPT_DIR/src/telua_run.sh"
+    elif [ -f "$MASTER_SCRIPT_DIR/src/telua_run.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$MASTER_SCRIPT_DIR/src/telua_run.sh"
+    fi
+fi
+
 # --- RAM Monitoring (snapshot at start/end + peak usage sampler) ---
 ENABLE_RAM_MONITOR="${ENABLE_RAM_MONITOR:-true}"
 RAM_SAMPLE_INTERVAL="${RAM_SAMPLE_INTERVAL:-2}"
@@ -798,204 +814,9 @@ handle_dump_command() {
     fi
 }
 
-# --- 1f. Multi-CLI Command Pipelines (--run / run / --multi / multi) ---
-# Short one-line-per-group listing (shown by: telua run)
-show_run_short_help() {
-    echo ""
-    echo -e "\033[1;32m  telua run <group> - Multi-CLI Pipelines\033[0m"
-    echo -e "  Pipeline Config:   \033[0;33m$MULTI_CONFIG_FILE\033[0m"
-    echo ""
-    if [ -n "${MULTI_GROUP_LIST[*]}" ] && [ "${#MULTI_GROUP_LIST[@]}" -gt 0 ]; then
-        for item in "${MULTI_GROUP_LIST[@]}"; do
-            local grp_name="" grp_desc=""
-            if [[ "$item" == *" :: "* ]]; then
-                grp_name="${item%% :: *}"
-                grp_desc="${item#* :: }"
-            else
-                grp_name="$item"
-                grp_desc="Pipeline group"
-            fi
-            grp_name="$(echo "$grp_name" | xargs)"
-            grp_desc="$(echo "$grp_desc" | xargs)"
-            printf "  \033[1;37m%-30s\033[0m %s\n" "telua run $grp_name" "$grp_desc"
-        done
-    else
-        echo -e "  \033[0;90m(No MULTI_GROUP_LIST declared in $MULTI_CONFIG_FILE_NAME or $CONFIG_FILE_NAME)\033[0m"
-    fi
-    echo ""
-    echo -e "  \033[0;90mTip: 'telua run help' (or --help / -h) shows detailed steps for each group.\033[0m"
-    echo ""
-}
-
-# Detailed listing with every step of every group (shown by: telua run help)
-show_run_help() {
-    echo ""
-    echo -e "\033[1;36m================================================================================\033[0m"
-    echo -e "\033[1;32m  telua run - Sequential Multi-CLI Pipelines & Macro Execution\033[0m"
-    echo -e "  Config File:       \033[0;33m$CONFIG_FILE\033[0m"
-    echo -e "  Pipeline Config:   \033[0;33m$MULTI_CONFIG_FILE\033[0m"
-    echo -e "\033[1;36m================================================================================\033[0m"
-    echo ""
-    echo -e "\033[1;33mAVAILABLE PIPELINE GROUPS:\033[0m"
-
-    if [ -n "${MULTI_GROUP_LIST[*]}" ] && [ "${#MULTI_GROUP_LIST[@]}" -gt 0 ]; then
-        local idx=1
-        for item in "${MULTI_GROUP_LIST[@]}"; do
-            local grp_name="" grp_desc=""
-            if [[ "$item" == *" :: "* ]]; then
-                grp_name="${item%% :: *}"
-                grp_desc="${item#* :: }"
-            else
-                grp_name="$item"
-                grp_desc="Pipeline group"
-            fi
-            grp_name="$(echo "$grp_name" | xargs)"
-            grp_desc="$(echo "$grp_desc" | xargs)"
-
-            local var_suffix
-            var_suffix=$(echo "$grp_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-            local array_name="MULTI_CMD_${var_suffix}"
-            local -a steps=()
-            if declare -p "$array_name" >/dev/null 2>&1; then
-                eval "steps=(\"\${${array_name}[@]}\")"
-            fi
-
-            echo -e "  \033[1;32m$idx.\033[0m \033[1;37mtelua run $grp_name\033[0m"
-            echo -e "     \033[0;90mDescription:\033[0m  $grp_desc"
-            if [ "${#steps[@]}" -gt 0 ]; then
-                echo -e "     \033[0;90mSteps:\033[0m        \033[0;36m(${#steps[@]} commands sequential)\033[0m"
-                local step_i=1
-                for step_cmd in "${steps[@]}"; do
-                    echo -e "       \033[1;33m[$step_i/${#steps[@]}]\033[0m \033[0;37m$step_cmd\033[0m"
-                    step_i=$((step_i + 1))
-                done
-            else
-                echo -e "     \033[0;90mSteps:\033[0m        \033[0;31m(No steps declared in $array_name)\033[0m"
-            fi
-            echo ""
-            idx=$((idx + 1))
-        done
-    else
-        echo -e "  \033[0;90m(No MULTI_GROUP_LIST declared in $MULTI_CONFIG_FILE_NAME or $CONFIG_FILE_NAME)\033[0m"
-    fi
-
-    echo -e "\033[1;36m================================================================================\033[0m"
-    echo ""
-}
-
-is_run_group() {
-    local target="$1"
-    target=$(echo "$target" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
-
-    if [ -n "${MULTI_GROUP_LIST[*]}" ]; then
-        for item in "${MULTI_GROUP_LIST[@]}"; do
-            local grp=""
-            if [[ "$item" == *" :: "* ]]; then
-                grp="${item%% :: *}"
-            else
-                grp="$item"
-            fi
-            grp="$(echo "$grp" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
-            if [ "$grp" = "$target" ]; then
-                return 0
-            fi
-        done
-    fi
-
-    local suf
-    suf=$(echo "$target" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-    local array_name="MULTI_CMD_${suf}"
-    if declare -p "$array_name" >/dev/null 2>&1; then
-        return 0
-    fi
-
-    return 1
-}
-
-handle_run_command() {
-    local group="$1"
-
-    if [ -z "$group" ]; then
-        show_run_short_help
-        return 0
-    fi
-
-    if [ "$group" = "help" ] || [ "$group" = "--help" ] || [ "$group" = "-h" ]; then
-        show_run_help
-        return 0
-    fi
-
-    local group_normalized
-    group_normalized=$(echo "$group" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
-
-    local group_label=""
-    if [ -n "${MULTI_GROUP_LIST[*]}" ]; then
-        for item in "${MULTI_GROUP_LIST[@]}"; do
-            local g_name="" g_desc=""
-            if [[ "$item" == *" :: "* ]]; then
-                g_name="${item%% :: *}"
-                g_desc="${item#* :: }"
-            else
-                g_name="$item"
-                g_desc="$item"
-            fi
-            g_name="$(echo "$g_name" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
-            if [ "$g_name" = "$group_normalized" ]; then
-                group_label="$(echo "$g_desc" | xargs)"
-                break
-            fi
-        done
-    fi
-
-    local var_suffix
-    var_suffix=$(echo "$group_normalized" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-    local array_name="MULTI_CMD_${var_suffix}"
-    local -a step_cmds=()
-    if declare -p "$array_name" >/dev/null 2>&1; then
-        eval "step_cmds=(\"\${${array_name}[@]}\")"
-    fi
-
-    if [ "${#step_cmds[@]}" -eq 0 ]; then
-        log_error "Pipeline group '$group' not found or has no steps defined!"
-        log_error "Expected array '$array_name' in $MULTI_CONFIG_FILE_NAME or $CONFIG_FILE_NAME"
-        show_run_help
-        exit 1
-    fi
-
-    local total_steps="${#step_cmds[@]}"
-    echo ""
-    log_info "============================================================"
-    log_info " Executing Multi-CLI Pipeline: '$group_normalized'"
-    [ -n "$group_label" ] && log_info " Description: $group_label"
-    log_info " Total Steps: $total_steps"
-    log_info "============================================================"
-
-    local step_idx=1
-    for cmd in "${step_cmds[@]}"; do
-        echo ""
-        echo -e "\033[1;36m[STEP $step_idx/$total_steps]\033[0m \033[1;37m$cmd\033[0m"
-        local step_start
-        step_start=$(date +%s)
-
-        if eval "$cmd"; then
-            local step_end
-            step_end=$(date +%s)
-            local step_dur=$((step_end - step_start))
-            log_success "Step $step_idx/$total_steps finished (${step_dur}s)."
-        else
-            local exit_code=$?
-            log_error "Step $step_idx failed with exit code $exit_code! Aborting pipeline."
-            exit $exit_code
-        fi
-        step_idx=$((step_idx + 1))
-    done
-
-    echo ""
-    log_success "All $total_steps steps of pipeline '$group_normalized' completed successfully."
-    echo ""
-}
-
 # --- 1g. Personal & Project Command Pipelines (--my / my / --proj / proj) ---
+# (show_run_short_help, show_run_help, is_run_group, handle_run_command
+# live in src/telua_run.sh)
 # Short one-line-per-action listing (shown by: telua my)
 show_project_short_help() {
     echo ""
