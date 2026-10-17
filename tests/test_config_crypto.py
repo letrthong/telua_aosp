@@ -12,7 +12,7 @@ import unittest
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
-CRYPTO_SCRIPT = os.path.join(REPO_ROOT, "config_crypto.py")
+CRYPTO_SCRIPT = os.path.join(REPO_ROOT, "python", "config_crypto.py")
 
 # Ensure repo root is in python path
 if REPO_ROOT not in sys.path:

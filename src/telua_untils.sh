@@ -65,7 +65,7 @@ ensure_script_permissions() {
         log_warn "ensure_script_permissions: invalid directory '$repo_dir'"
         return 0
     fi
-    for script in build_apk.sh config_crypto.py config_overlay.py; do
+    for script in build_apk.sh python/config_crypto.py python/config_overlay.py config_crypto.py config_overlay.py; do
         if [ -f "$repo_dir/$script" ]; then
             chmod +x "$repo_dir/$script" || log_warn "Failed to chmod +x $repo_dir/$script"
         fi
@@ -154,6 +154,10 @@ apply_config_overlay() {
         if [ -z "$overlay_file" ] && [ -f "$dir/$overlay_name" ]; then
             overlay_file="$dir/$overlay_name"
         fi
+        # Prefer python/ subdir (new layout), fall back to repo root (old layout).
+        if [ -z "$overlay_script" ] && [ -f "$dir/python/config_overlay.py" ]; then
+            overlay_script="$dir/python/config_overlay.py"
+        fi
         if [ -z "$overlay_script" ] && [ -f "$dir/config_overlay.py" ]; then
             overlay_script="$dir/config_overlay.py"
         fi
@@ -186,7 +190,13 @@ init_project_config() {
     local target_config="$PWD/$CONFIG_FILE_NAME"
     local template_config="$SCRIPT_DIR/$CONFIG_FILE_NAME"
     local enc_config="$SCRIPT_DIR/enc_apk.config"
-    local crypto_script="$SCRIPT_DIR/config_crypto.py"
+    # Prefer python/ subdir (new layout), fall back to repo root (old layout).
+    local crypto_script
+    if [ -f "$SCRIPT_DIR/python/config_crypto.py" ]; then
+        crypto_script="$SCRIPT_DIR/python/config_crypto.py"
+    else
+        crypto_script="$SCRIPT_DIR/config_crypto.py"
+    fi
 
     # Make sure helper scripts (config_crypto.py, config_overlay.py, ...) are executable.
     # Covers both the script dir and the master dir (they differ when run via symlink).
