@@ -176,6 +176,22 @@ if [ "${TELUA_GIT_SOURCED:-}" != "1" ]; then
     fi
 fi
 
+# --- Car control commands (single source of truth: src/telua_car.sh) ---
+# Code behind 'telua car <action>' (show_car_short_help, show_car_help,
+# is_car_action, handle_car_command) was extracted to src/telua_car.sh; it is
+# driven by const_car.config (CAR_CLI_LIST, ADB_SHELL_CAR_*). Sourcing it sets
+# TELUA_CAR_SOURCED=1 and its internal guard makes double-sourcing a no-op.
+# Lookup order: script dir -> master dir (both resolved through symlinks).
+if [ "${TELUA_CAR_SOURCED:-}" != "1" ]; then
+    if [ -f "$SCRIPT_DIR/src/telua_car.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$SCRIPT_DIR/src/telua_car.sh"
+    elif [ -f "$MASTER_SCRIPT_DIR/src/telua_car.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$MASTER_SCRIPT_DIR/src/telua_car.sh"
+    fi
+fi
+
 # --- RAM Monitoring (snapshot at start/end + peak usage sampler) ---
 ENABLE_RAM_MONITOR="${ENABLE_RAM_MONITOR:-true}"
 RAM_SAMPLE_INTERVAL="${RAM_SAMPLE_INTERVAL:-2}"
@@ -572,222 +588,9 @@ parse_arguments() {
     done
 }
 
-# --- 1d. Car Control & Custom ADB Shell Commands (--car / car) ---
-# Short one-line-per-action listing (shown by: telua car)
-show_car_short_help() {
-    echo ""
-    echo -e "\033[1;32m  telua car <action> - Car (AAOS) control via ADB Shell\033[0m"
-    echo -e "  Car Config File:   \033[0;33m$CAR_CONFIG_FILE\033[0m"
-    echo ""
-    if [ -n "${CAR_CLI_LIST[*]}" ] && [ "${#CAR_CLI_LIST[@]}" -gt 0 ]; then
-        for item in "${CAR_CLI_LIST[@]}"; do
-            local item_action="" item_desc=""
-            if [[ "$item" == *" :: "* ]]; then
-                item_action="${item%% :: *}"
-                local item_rest="${item#* :: }"
-                item_desc="${item_rest%% :: *}"
-            elif [[ "$item" == *"|"* ]]; then
-                item_action="$(echo "$item" | cut -d'|' -f1)"
-                item_desc="$(echo "$item" | cut -d'|' -f2)"
-            else
-                item_action="$item"
-                item_desc="Custom"
-            fi
-            item_action="$(echo "$item_action" | xargs)"
-            item_desc="$(echo "$item_desc" | xargs)"
-            printf "  \033[1;37m%-26s\033[0m %s\n" "telua car $item_action" "$item_desc"
-        done
-    else
-        echo -e "  \033[0;90m(CAR_CLI_LIST not declared in $CAR_CONFIG_FILE_NAME or $CONFIG_FILE_NAME)\033[0m"
-    fi
-    echo ""
-    echo -e "  \033[0;90mTip: 'telua car help' (or --help / -h) shows detailed ADB commands.\033[0m"
-    echo ""
-}
-
-# Detailed listing with ADB command per action (shown by: telua car help)
-show_car_help() {
-    echo ""
-    echo -e "\033[1;36m================================================================================\033[0m"
-    echo -e "\033[1;32m  telua car - Car (AAOS) control commands via ADB Shell\033[0m"
-    echo -e "  Config File:      \033[0;33m$CONFIG_FILE\033[0m"
-    echo -e "  Car Config File:  \033[0;33m$CAR_CONFIG_FILE\033[0m"
-    echo -e "\033[1;36m================================================================================\033[0m"
-    echo ""
-    echo -e "\033[1;33mSUPPORTED CAR CLI COMMANDS:\033[0m"
-
-    if [ -n "${CAR_CLI_LIST[*]}" ] && [ "${#CAR_CLI_LIST[@]}" -gt 0 ]; then
-        local idx=1
-        for item in "${CAR_CLI_LIST[@]}"; do
-            local item_action="" item_desc="" item_cmd=""
-            if [[ "$item" == *" :: "* ]]; then
-                item_action="${item%% :: *}"
-                local item_rest="${item#* :: }"
-                item_desc="${item_rest%% :: *}"
-                item_cmd="${item_rest#* :: }"
-            elif [[ "$item" == *"|"* ]]; then
-                item_action="$(echo "$item" | cut -d'|' -f1)"
-                item_desc="$(echo "$item" | cut -d'|' -f2)"
-                item_cmd="$(echo "$item" | cut -d'|' -f3-)"
-            else
-                item_action="$item"
-                item_desc="Custom"
-                item_cmd=""
-            fi
-            item_action="$(echo "$item_action" | xargs)"
-            item_desc="$(echo "$item_desc" | xargs)"
-            item_cmd="$(echo "$item_cmd" | xargs)"
-
-            echo -e "  \033[1;32m$idx.\033[0m \033[1;37mtelua car $item_action\033[0m"
-            echo -e "     \033[0;90mDescription:\033[0m  $item_desc"
-            echo -e "     \033[0;90mADB Command:\033[0m  \033[0;33madb shell $item_cmd\033[0m"
-            echo ""
-            idx=$((idx + 1))
-        done
-    else
-        echo -e "  \033[0;90m(CAR_CLI_LIST not declared in $CAR_CONFIG_FILE_NAME or $CONFIG_FILE_NAME)\033[0m"
-    fi
-
-    echo -e "\033[1;36m--------------------------------------------------------------------------------\033[0m"
-    echo -e "\033[1;33mADB_SHELL_CAR_* CONFIG VARIABLES ($CAR_CONFIG_FILE_NAME):\033[0m"
-    local has_dynamic_vars=0
-    for var_name in ${!ADB_SHELL_CAR_@}; do
-        echo -e "  \033[1;35m$var_name\033[0m = \"\033[0;32m${!var_name}\033[0m\""
-        has_dynamic_vars=1
-    done
-    if [ "$has_dynamic_vars" -eq 0 ]; then
-        echo -e "  \033[0;90m(No ADB_SHELL_CAR_* variables found)\033[0m"
-    fi
-
-    echo -e "\033[1;36m================================================================================\033[0m"
-    echo ""
-}
-
-is_car_action() {
-    local target="$1"
-    target=$(echo "$target" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
-
-    if [ -n "${CAR_CLI_LIST[*]}" ]; then
-        for item in "${CAR_CLI_LIST[@]}"; do
-            local act=""
-            if [[ "$item" == *" :: "* ]]; then
-                act="${item%% :: *}"
-            elif [[ "$item" == *"|"* ]]; then
-                act="$(echo "$item" | cut -d'|' -f1)"
-            fi
-            act="$(echo "$act" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
-            if [ "$act" = "$target" ]; then
-                return 0
-            fi
-        done
-    fi
-    local suf
-    suf=$(echo "$target" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-    local v="ADB_SHELL_CAR_${suf}"
-    if [ -n "${!v}" ]; then
-        return 0
-    fi
-    return 1
-}
-
-handle_car_command() {
-    local action="$1"
-
-    if [ -z "$action" ]; then
-        show_car_short_help
-        return 0
-    fi
-
-    if [ "$action" = "help" ] || [ "$action" = "--help" ] || [ "$action" = "-h" ]; then
-        show_car_help
-        return 0
-    fi
-
-    local action_normalized
-    action_normalized=$(echo "$action" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
-
-    local adb_cmd=""
-    local action_label=""
-
-    # 1. Tìm action trực tiếp trong mảng CAR_CLI_LIST (Single Source of Truth)
-    if [ -n "${CAR_CLI_LIST[*]}" ]; then
-        for item in "${CAR_CLI_LIST[@]}"; do
-            local it_action="" it_desc="" it_cmd=""
-            if [[ "$item" == *" :: "* ]]; then
-                it_action="${item%% :: *}"
-                local it_rest="${item#* :: }"
-                it_desc="${it_rest%% :: *}"
-                it_cmd="${it_rest#* :: }"
-            elif [[ "$item" == *"|"* ]]; then
-                it_action="$(echo "$item" | cut -d'|' -f1)"
-                it_desc="$(echo "$item" | cut -d'|' -f2)"
-                it_cmd="$(echo "$item" | cut -d'|' -f3-)"
-            fi
-            it_action="$(echo "$it_action" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
-            if [ "$it_action" = "$action_normalized" ]; then
-                action_label="$(echo "$it_desc" | xargs)"
-                adb_cmd="$(echo "$it_cmd" | xargs)"
-                break
-            fi
-        done
-    fi
-
-    # 2. Nếu chưa có trong CAR_CLI_LIST, kiểm tra biến động ADB_SHELL_CAR_<ACTION> hoặc ADB_SHELL_<ACTION>
-    if [ -z "$adb_cmd" ]; then
-        local var_suffix
-        var_suffix=$(echo "$action_normalized" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-        local var_car="ADB_SHELL_CAR_${var_suffix}"
-        local var_generic="ADB_SHELL_${var_suffix}"
-
-        if [ -n "${!var_car}" ]; then
-            action_label="Car ($action)"
-            adb_cmd="${!var_car}"
-        elif [ -n "${!var_generic}" ]; then
-            action_label="ADB Shell ($action)"
-            adb_cmd="${!var_generic}"
-        fi
-    fi
-
-    # 3. Nếu vẫn không tìm thấy, báo lỗi và hiển thị trợ giúp
-    if [ -z "$adb_cmd" ]; then
-        log_error "Unknown car action '$action'!"
-        log_error "Supported actions: vol-up | vol-down | vol-mute | ks | ks-stop | car-status (or configure CAR_CLI_LIST in $CAR_CONFIG_FILE_NAME)"
-        if [ "$action_normalized" = "d" ] || [ "$action_normalized" = "dump" ]; then
-            log_warn "'dump' has moved to: telua dump audio | telua dump car-service"
-        fi
-        show_car_help
-        exit 1
-    fi
-
-    if ! command -v adb >/dev/null 2>&1; then
-        log_error "'adb' command not found. Please ensure Android platform-tools is in your PATH."
-        exit 1
-    fi
-
-    # Verify device state
-    local dev_state
-    dev_state=$(adb get-state 2>/dev/null || echo "offline")
-    if [ "$dev_state" != "device" ]; then
-        log_error "No Android device connected or device is not ready (state: $dev_state)."
-        log_error "Please connect a device via USB/TCP and verify with 'adb devices'."
-        exit 1
-    fi
-
-    log_info "Executing $action_label via ADB Shell..."
-    echo -e "  \033[1;36m[ADB CMD]\033[0m adb shell $adb_cmd"
-
-    # Execute ADB shell command
-    adb shell "$adb_cmd"
-    local ret=$?
-    if [ $ret -eq 0 ]; then
-        log_success "$action_label command executed successfully."
-    else
-        log_error "Failed to execute '$action_label' command on device (exit code: $ret)."
-        exit $ret
-    fi
-}
-
 # --- 1d. Dumpsys Diagnostics Commands (--dump / dump) ---
+# (show_car_short_help, show_car_help, is_car_action, handle_car_command
+# live in src/telua_car.sh)
 # Short one-line-per-target listing (shown by: telua dump)
 show_dump_short_help() {
     echo ""
