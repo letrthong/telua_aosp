@@ -160,6 +160,22 @@ if [ "${TELUA_UNTILS_SOURCED:-}" != "1" ]; then
     fi
 fi
 
+# --- Git utilities (single source of truth: src/telua_git.sh) ---
+# Code behind 'telua --git-diff' (run_git_diff), 'telua --git-amend'
+# (run_git_amend) and 'telua --git-help' (show_git_help) was extracted to
+# src/telua_git.sh; sourcing it sets TELUA_GIT_SOURCED=1 and its internal
+# guard makes double-sourcing a no-op.
+# Lookup order: script dir -> master dir (both resolved through symlinks).
+if [ "${TELUA_GIT_SOURCED:-}" != "1" ]; then
+    if [ -f "$SCRIPT_DIR/src/telua_git.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$SCRIPT_DIR/src/telua_git.sh"
+    elif [ -f "$MASTER_SCRIPT_DIR/src/telua_git.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$MASTER_SCRIPT_DIR/src/telua_git.sh"
+    fi
+fi
+
 # --- RAM Monitoring (snapshot at start/end + peak usage sampler) ---
 ENABLE_RAM_MONITOR="${ENABLE_RAM_MONITOR:-true}"
 RAM_SAMPLE_INTERVAL="${RAM_SAMPLE_INTERVAL:-2}"
@@ -1901,54 +1917,8 @@ post_sync_cli() {
     log_success "Post-sync CLI hook completed."
 }
 
-# --- 4c. Git Diff Utility (--git-diff: show last commit, then exit) ---
-run_git_diff() {
-    if [ "$GIT_DIFF" != "true" ]; then
-        return 0
-    fi
-
-    log_info "Running in $SCRIPT_DIR: git diff HEAD^ HEAD"
-    if ! git -C "$SCRIPT_DIR" diff HEAD^ HEAD; then
-        log_error "'git diff HEAD^ HEAD' failed (is $SCRIPT_DIR a git repo with at least 2 commits?)"
-        exit 1
-    fi
-    exit 0
-}
-
-# --- 4c. Git Amend Utility (--git-amend: amend last commit, then exit) ---
-run_git_amend() {
-    if [ "$GIT_AMEND" != "true" ]; then
-        return 0
-    fi
-
-    log_info "Running in $SCRIPT_DIR: git commit --amend --no-edit"
-    if ! git -C "$SCRIPT_DIR" commit --amend --no-edit; then
-        log_error "'git commit --amend --no-edit' failed (is $SCRIPT_DIR a git repo with a commit to amend?)"
-        exit 1
-    fi
-    log_success "Last commit amended."
-    exit 0
-}
-
-# --- 4c. Git Help Utility (--git-help: frequently used Git commands) ---
-# Commands are read dynamically from const_git.config (located with build_apk.sh)
-# NOTE: run_git_update and its helpers (backup/restore_personal_configs,
-# git_pull_with_recovery, ensure_script_permissions, ensure_personal_configs)
-# live in src/telua_untils.sh.
-show_git_help() {
-    if [ -f "$GIT_CONFIG_FILE" ]; then
-        cat "$GIT_CONFIG_FILE"
-    elif [ -f "$MASTER_SCRIPT_DIR/$GIT_CONFIG_FILE_NAME" ]; then
-        cat "$MASTER_SCRIPT_DIR/$GIT_CONFIG_FILE_NAME"
-    elif [ -f "$SCRIPT_DIR/$GIT_CONFIG_FILE_NAME" ]; then
-        cat "$SCRIPT_DIR/$GIT_CONFIG_FILE_NAME"
-    else
-        log_warn "Git cheatsheet file '$GIT_CONFIG_FILE_NAME' not found!"
-    fi
-    exit 0
-}
-
 # --- 4d. Search Utilities (find_file, find_dir, find_text) ---
+# (run_git_diff, run_git_amend and show_git_help live in src/telua_git.sh)
 # Supports passing target search path as optional 2nd argument (defaults to '.')
 find_file() {
     local pattern="$1"
