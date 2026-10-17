@@ -789,12 +789,11 @@ install_to_project() {
 
 # --- Resolve build jobs: BUILD_JOBS from config, or auto-detect based on available RAM ---
 # Sets BUILD_JOBS_RESOLVED (number) and BUILD_JOBS_SOURCE ("config" | "auto")
-# Auto mode scales parallel jobs by FREE RAM (MemAvailable) to avoid OOM during builds:
-#   avail > 80 GB -> nproc/2   (plenty of RAM, go fast)
-#   avail > 40 GB -> nproc/4   (moderate, be careful)
-#   avail <= 40 GB -> nproc/8  (low RAM, be conservative)
+# Auto mode scales parallel jobs by FREE RAM (MemAvailable) to avoid OOM during
+# builds. The RAM->divisor policy (2/4/8) lives in src/telua_ram.sh
+# (get_ram_job_divisor) so all memory logic stays inside the RAM module.
 resolve_build_jobs() {
-    local nproc_count avail_gb
+    local nproc_count divisor avail_gb
     nproc_count=$(nproc 2>/dev/null || echo 8)
     if [ -n "$BUILD_JOBS" ]; then
         BUILD_JOBS_RESOLVED="$BUILD_JOBS"
@@ -802,17 +801,10 @@ resolve_build_jobs() {
         return 0
     fi
 
-    avail_gb=$(awk '/^MemAvailable:/ {printf "%d", $2/1048576}' /proc/meminfo 2>/dev/null || echo 0)
-    if [ "$avail_gb" -gt 80 ] 2>/dev/null; then
-        BUILD_JOBS_RESOLVED=$((nproc_count / 2))
-        BUILD_JOBS_SOURCE="auto (RAM ${avail_gb}GB>80 -> nproc/2)"
-    elif [ "$avail_gb" -gt 40 ] 2>/dev/null; then
-        BUILD_JOBS_RESOLVED=$((nproc_count / 4))
-        BUILD_JOBS_SOURCE="auto (RAM ${avail_gb}GB 40-80 -> nproc/4)"
-    else
-        BUILD_JOBS_RESOLVED=$((nproc_count / 8))
-        BUILD_JOBS_SOURCE="auto (RAM ${avail_gb}GB<=40 -> nproc/8)"
-    fi
+    divisor="$(get_ram_job_divisor)"
+    avail_gb="$(get_mem_available_gb)"
+    BUILD_JOBS_RESOLVED=$((nproc_count / divisor))
+    BUILD_JOBS_SOURCE="auto (RAM ${avail_gb}GB -> nproc/$divisor)"
     # NOTE: use 'if' (not '[ ] &&') so the function always returns 0 under 'set -e'
     if [ "$BUILD_JOBS_RESOLVED" -lt 1 ]; then
         BUILD_JOBS_RESOLVED=1
