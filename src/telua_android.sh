@@ -35,6 +35,23 @@
 # Usage (source, never execute):
 #   source "$(dirname "${BASH_SOURCE[0]}")/src/telua_android.sh"
 #
+# All pipeline functions are parameter-driven: explicit arguments take
+# precedence, global config variables (apk.config) are only used as defaults.
+#
+# Function signatures:
+#   resolve_android_paths [start_dir]
+#   setup_build_environment [platform]          ("android" | "qnx")
+#   build_apk [module_name] [jobs]
+#   wait_for_device [timeout_sec]               (default 180)
+#   wait_for_boot_completed [timeout_sec]       (default 300)
+#   restart_framework [timeout_sec]             (default 90)
+#   ensure_adb_remount [deploy_path]
+#   is_deploy_path_writable [deploy_path]
+#   deploy_android [apk_file] [deploy_path] [no_reboot]
+#   deploy_apk [platform] [deploy_enabled]
+#   capture_logs_android [log_file] [filter]
+#   capture_logs [platform] [deploy_enabled] [log_enabled]
+#
 # Contract with the sourcing (host) script:
 #   - The host must define, BEFORE sourcing this file:
 #       SCRIPT_DIR, CONFIG_FILE, CONFIG_FILE_NAME
@@ -59,13 +76,17 @@ fi
 TELUA_ANDROID_SOURCED=1
 
 # --- 4. Resolve Android AOSP Top Directory ---
+# Usage: resolve_android_paths [start_dir]
+#   [start_dir] optional; defaults to the directory of $CONFIG_FILE, then $SCRIPT_DIR.
+#   Sets globals: ROOT_DIR, ANDROID_TOP, SOURCE_DIR, DIR_OUT, APK_OUT.
 resolve_android_paths() {
-    # Resolve starting directory: prioritize directory of CONFIG_FILE ($PWD if found), fallback to SCRIPT_DIR
-    local current_dir
-    if [ -f "$CONFIG_FILE" ]; then
-        current_dir="$(cd "$(dirname "$CONFIG_FILE")" && pwd)"
-    else
-        current_dir="$SCRIPT_DIR"
+    local current_dir="${1:-}"
+    if [ -z "$current_dir" ]; then
+        if [ -f "$CONFIG_FILE" ]; then
+            current_dir="$(cd "$(dirname "$CONFIG_FILE")" && pwd)"
+        else
+            current_dir="$SCRIPT_DIR"
+        fi
     fi
     local android_dir=""
 
@@ -148,8 +169,10 @@ setup_build_environment_android() {
 # (setup_build_environment_qnx lives in src/telua_qnx.sh)
 
 # --- 5. Setup Build Environment Dispatcher ---
+# Usage: setup_build_environment [platform]
+#   [platform] optional; defaults to ${PLATFORM:-${TARGET_PLATFORM:-android}}
 setup_build_environment() {
-    local target_platform="${PLATFORM:-${TARGET_PLATFORM:-android}}"
+    local target_platform="${1:-${PLATFORM:-${TARGET_PLATFORM:-android}}}"
     case "$target_platform" in
         android)
             setup_build_environment_android
@@ -165,7 +188,13 @@ setup_build_environment() {
 }
 
 # --- 6. Compile APK Module ---
+# Usage: build_apk [module_name] [jobs]
+#   [module_name] optional; defaults to ${MODULE_NAME:-${APK_FILE_NAME%.apk}}
+#   [jobs]        optional; defaults to resolve_build_jobs (RAM-aware auto scale)
 build_apk() {
+    local module_name="${1:-${MODULE_NAME:-${APK_FILE_NAME%.apk}}}"
+    local jobs="${2:-}"
+
     log_info "Cleaning previous build output: $DIR_OUT"
     rm -rf "$DIR_OUT"
 
@@ -178,10 +207,11 @@ build_apk() {
     cd "$SOURCE_DIR"
     # 'mm' builds every module under the directory, including tests/androidTest,
     # so build only the APK module (name = APK file name without .apk).
-    local module_name="${MODULE_NAME:-${APK_FILE_NAME%.apk}}"
-    resolve_build_jobs
-    local jobs="$BUILD_JOBS_RESOLVED"
-    log_info "Compiling module '$module_name' with m -j$jobs... [BUILD_JOBS source: ${BUILD_JOBS_SOURCE}]"
+    if [ -z "$jobs" ]; then
+        resolve_build_jobs
+        jobs="$BUILD_JOBS_RESOLVED"
+    fi
+    log_info "Compiling module '$module_name' with m -j$jobs... [BUILD_JOBS source: ${BUILD_JOBS_SOURCE:-explicit}]"
     m "$module_name" -j"$jobs"
 
     if [ ! -f "$APK_OUT" ]; then
@@ -281,7 +311,11 @@ restart_framework() {
 # 2. First-time remount setup (dynamic partition / overlayfs) requires an automatic
 #    reboot and may take ~3-5 mins before the system partition becomes writable.
 # 3. Subsequent remounts will complete instantly in 1-2 seconds.
+# Usage: ensure_adb_remount [deploy_path]
+#   [deploy_path] optional; defaults to $APK_DEPLOY_PATH
 ensure_adb_remount() {
+    local deploy_path="${1:-$APK_DEPLOY_PATH}"
+
     # Verify userdebug / eng build variant first (getprop works without root),
     # so 'user' builds get a clear error instead of a failed 'adb root'.
     local build_type
@@ -322,13 +356,13 @@ ensure_adb_remount() {
         acquire_root || exit 1
         remount_output=$(adb remount 2>&1 || true)
         echo "$remount_output"
-        if is_deploy_path_writable; then
+        if is_deploy_path_writable "$deploy_path"; then
             log_success "First-time remount setup complete. Filesystem is writable."
             return 0
         fi
     fi
 
-    log_error "'$(dirname "$APK_DEPLOY_PATH")' is still read-only after 'adb remount'."
+    log_error "'$(dirname "$deploy_path")' is still read-only after 'adb remount'."
     log_error "See the remount output above (if verity is enabled: 'adb disable-verity' then reboot)."
     exit 1
 }
@@ -350,16 +384,28 @@ acquire_root() {
     return 1
 }
 
-# Return 0 if the parent directory of APK_DEPLOY_PATH can be written to.
+# Return 0 if the parent directory of the deploy path can be written to.
+# Usage: is_deploy_path_writable [deploy_path]
+#   [deploy_path] optional; defaults to $APK_DEPLOY_PATH
 is_deploy_path_writable() {
+    local deploy_path="${1:-$APK_DEPLOY_PATH}"
     local probe
-    probe="$(dirname "$APK_DEPLOY_PATH")/.build_apk_rw_test"
+    probe="$(dirname "$deploy_path")/.build_apk_rw_test"
     adb shell "touch '$probe' && rm -f '$probe'" >/dev/null 2>&1
 }
 
 
 # --- 9a. Deploy APK to Android Device (AOSP / ADB) ---
+# Usage: deploy_android [apk_file] [deploy_path] [no_reboot]
+#   [apk_file]    optional; defaults to $APK_FILE_NAME
+#   [deploy_path] optional; defaults to $APK_DEPLOY_PATH
+#   [no_reboot]   optional ("true"/"false"); defaults to ${NO_REBOOT:-false}
+#               ("true" = fast framework restart instead of full reboot)
 deploy_android() {
+    local apk_file="${1:-$APK_FILE_NAME}"
+    local deploy_path="${2:-$APK_DEPLOY_PATH}"
+    local no_reboot="${3:-${NO_REBOOT:-false}}"
+
     echo ""
     log_info "============================================"
     log_info " Starting Deployment: Android Device (ADB)"
@@ -375,13 +421,13 @@ deploy_android() {
         exit 1
     fi
 
-    ensure_adb_remount
+    ensure_adb_remount "$deploy_path"
 
-    log_info "Pushing $APK_FILE_NAME to $APK_DEPLOY_PATH/$APK_FILE_NAME"
-    adb push "$SCRIPT_DIR/$APK_FILE_NAME" "$APK_DEPLOY_PATH/$APK_FILE_NAME"
-    adb shell chmod 644 "$APK_DEPLOY_PATH/$APK_FILE_NAME"
+    log_info "Pushing $apk_file to $deploy_path/$apk_file"
+    adb push "$SCRIPT_DIR/$apk_file" "$deploy_path/$apk_file"
+    adb shell chmod 644 "$deploy_path/$apk_file"
     # Remove old oat/dex cache if present to ensure updated code runs
-    adb shell rm -rf "$APK_DEPLOY_PATH/oat" 2>/dev/null || true
+    adb shell rm -rf "$deploy_path/oat" 2>/dev/null || true
     adb shell sync
 
     if [ "$ENABLE_DEBUG_LOG" = "true" ] && [ -n "$DEBUG_LOG_TAGS" ]; then
@@ -401,7 +447,7 @@ deploy_android() {
         adb logcat -c 2>/dev/null || true
     fi
 
-    if [ "$NO_REBOOT" = "true" ]; then
+    if [ "$no_reboot" = "true" ]; then
         if ! restart_framework 90; then
             log_error "Fast restart failed. Re-run without --no-reboot for a full reboot."
             exit 1
@@ -431,11 +477,18 @@ deploy_android() {
 # (deploy_qnx lives in src/telua_qnx.sh)
 
 # --- 9. Deploy APK Dispatcher ---
+# Usage: deploy_apk [platform] [deploy_enabled]
+#   [platform]       optional; defaults to ${PLATFORM:-${TARGET_PLATFORM:-android}}
+#   [deploy_enabled] optional ("true"/"false"); overrides the per-platform default
+#                    chain (CLI_START_DEPLOY -> ENABLE_*_DEPLOY -> ENABLE_DEPLOY)
 deploy_apk() {
-    local target_platform="${PLATFORM:-${TARGET_PLATFORM:-android}}"
+    local target_platform="${1:-${PLATFORM:-${TARGET_PLATFORM:-android}}}"
+    local deploy_enabled="${2:-}"
     case "$target_platform" in
         android)
-            local deploy_enabled="${CLI_START_DEPLOY:-${ENABLE_ANDROID_DEPLOY:-${ENABLE_DEPLOY:-true}}}"
+            if [ -z "$deploy_enabled" ]; then
+                deploy_enabled="${CLI_START_DEPLOY:-${ENABLE_ANDROID_DEPLOY:-${ENABLE_DEPLOY:-true}}}"
+            fi
             if [ "$deploy_enabled" != "true" ]; then
                 log_info "Android deployment is disabled (ENABLE_ANDROID_DEPLOY='$deploy_enabled'), skipping."
                 return 0
@@ -443,7 +496,9 @@ deploy_apk() {
             deploy_android
             ;;
         qnx)
-            local deploy_enabled="${CLI_START_DEPLOY:-${ENABLE_QNX_DEPLOY:-${ENABLE_DEPLOY:-false}}}"
+            if [ -z "$deploy_enabled" ]; then
+                deploy_enabled="${CLI_START_DEPLOY:-${ENABLE_QNX_DEPLOY:-${ENABLE_DEPLOY:-false}}}"
+            fi
             if [ "$deploy_enabled" != "true" ]; then
                 log_info "QNX deployment is disabled (ENABLE_QNX_DEPLOY='$deploy_enabled'), skipping."
                 return 0
@@ -458,17 +513,21 @@ deploy_apk() {
 }
 
 # --- 10a. Android Logcat Capture ---
+# Usage: capture_logs_android [log_file] [filter]
+#   [log_file] optional; defaults to $SCRIPT_DIR/deployment_log.txt
+#   [filter]   optional regex; defaults to $LOGCAT_FILTER (empty = full logcat)
 capture_logs_android() {
-    local log_file="$SCRIPT_DIR/deployment_log.txt"
+    local log_file="${1:-$SCRIPT_DIR/deployment_log.txt}"
+    local filter="${2:-$LOGCAT_FILTER}"
 
     # Give the app/service time to start and emit logs after boot/restart.
     local settle="${LOGCAT_SETTLE_SECONDS:-10}"
     log_info "Waiting ${settle}s for the app to start before capturing logcat..."
     sleep "$settle"
 
-    if [ -n "$LOGCAT_FILTER" ]; then
-        log_info "Capturing logcat filtered by '$LOGCAT_FILTER' to $log_file"
-        adb logcat -d | grep -E "$LOGCAT_FILTER" > "$log_file" || true
+    if [ -n "$filter" ]; then
+        log_info "Capturing logcat filtered by '$filter' to $log_file"
+        adb logcat -d | grep -E "$filter" > "$log_file" || true
     else
         log_info "Capturing full logcat (no filter) to $log_file"
         adb logcat -d > "$log_file" || true
@@ -486,20 +545,33 @@ capture_logs_android() {
 # (capture_logs_qnx lives in src/telua_qnx.sh)
 
 # --- 10. Log Capture Dispatcher ---
+# Usage: capture_logs [platform] [deploy_enabled] [log_enabled]
+#   [deploy_enabled] optional; overrides CLI_START_DEPLOY -> ENABLE_*_DEPLOY chain
+#   [log_enabled]    optional; overrides ENABLE_*_LOGCAT / ENABLE_*_LOG chain
 capture_logs() {
-    local target_platform="${PLATFORM:-${TARGET_PLATFORM:-android}}"
+    local target_platform="${1:-${PLATFORM:-${TARGET_PLATFORM:-android}}}"
+    local deploy_enabled="${2:-}"
+    local log_enabled="${3:-}"
     case "$target_platform" in
         android)
-            local deploy_enabled="${CLI_START_DEPLOY:-${ENABLE_ANDROID_DEPLOY:-${ENABLE_DEPLOY:-true}}}"
-            local log_enabled="${ENABLE_ANDROID_LOGCAT:-${ENABLE_LOGCAT:-false}}"
+            if [ -z "$deploy_enabled" ]; then
+                deploy_enabled="${CLI_START_DEPLOY:-${ENABLE_ANDROID_DEPLOY:-${ENABLE_DEPLOY:-true}}}"
+            fi
+            if [ -z "$log_enabled" ]; then
+                log_enabled="${ENABLE_ANDROID_LOGCAT:-${ENABLE_LOGCAT:-false}}"
+            fi
             if [ "$deploy_enabled" != "true" ] || [ "$log_enabled" != "true" ]; then
                 return 0
             fi
             capture_logs_android
             ;;
         qnx)
-            local deploy_enabled="${CLI_START_DEPLOY:-${ENABLE_QNX_DEPLOY:-${ENABLE_DEPLOY:-false}}}"
-            local log_enabled="${ENABLE_QNX_LOG:-${ENABLE_LOGCAT:-false}}"
+            if [ -z "$deploy_enabled" ]; then
+                deploy_enabled="${CLI_START_DEPLOY:-${ENABLE_QNX_DEPLOY:-${ENABLE_DEPLOY:-false}}}"
+            fi
+            if [ -z "$log_enabled" ]; then
+                log_enabled="${ENABLE_QNX_LOG:-${ENABLE_LOGCAT:-false}}"
+            fi
             if [ "$deploy_enabled" != "true" ] || [ "$log_enabled" != "true" ]; then
                 return 0
             fi

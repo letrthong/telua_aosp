@@ -1118,13 +1118,18 @@ main() {
     # Run repo sync in ROOT_DIR, then cd to android/qssi and run post_sync_cli
     run_repo_sync "${REPO_SYNC_JOBS:-4}" "${REPO_SYNC_FLAGS:--d -c --force-sync --no-clone-bundle --tags}"
 
-    setup_build_environment
+    # Build/deploy pipeline is parameter-driven (see src/telua_android.sh):
+    #   setup_build_environment [platform]
+    #   build_apk [module_name] [jobs]
+    #   deploy_apk [platform] [deploy_enabled]
+    #   capture_logs [platform] [deploy_enabled] [log_enabled]
+    setup_build_environment "${PLATFORM:-${TARGET_PLATFORM:-android}}"
 
     run_tests
 
-    build_apk
-    deploy_apk
-    capture_logs
+    build_apk "${MODULE_NAME:-${APK_FILE_NAME%.apk}}" "$BUILD_JOBS_RESOLVED"
+    deploy_apk "${PLATFORM:-${TARGET_PLATFORM:-android}}" "${CLI_START_DEPLOY:-}"
+    capture_logs "${PLATFORM:-${TARGET_PLATFORM:-android}}" "${CLI_START_DEPLOY:-}"
 
     # RAM monitoring: snapshot at end + peak usage report
     report_ram_summary
