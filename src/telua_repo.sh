@@ -26,8 +26,35 @@
 #   - post_sync_root_cli   : hook executed in ROOT_DIR after sync
 #   - post_sync_cli        : hook executed in ANDROID_TOP after sync
 #
+# All functions are parameter-driven: explicit arguments take precedence,
+# global config variables (apk.config) are only used as defaults. This keeps
+# the module testable in isolation and reusable from other host scripts.
+#
 # Usage (source, never execute):
 #   source "$(dirname "${BASH_SOURCE[0]}")/src/telua_repo.sh"
+#
+# Function signatures:
+#   run_timed_command <label> <command>
+#       Execute <command> via eval, logging duration under <label>.
+#       Returns the command's exit code (never exits the shell).
+#
+#   post_sync_root_cli [command]
+#       Hook 1: run in ROOT_DIR right after repo sync.
+#       [command] overrides $REPO_POST_SYNC_ROOT_COMMAND.
+#
+#   post_sync_cli [command]
+#       Hook 2: run in ANDROID_TOP right after repo sync.
+#       [command] overrides $REPO_POST_SYNC_BUILD_COMMAND.
+#
+#   run_repo_reset [confirm_yes]
+#       Hard reset & clean all repos ('repo forall'). Exits when done unless
+#       REPO_SYNC=true (then falls through to sync).
+#       [confirm_yes] ("true"/"false") overrides $CONFIRM_YES.
+#
+#   run_repo_sync [jobs] [flags]
+#       'repo sync' in ROOT_DIR, then hook 1 (ROOT_DIR) and hook 2 (ANDROID_TOP).
+#       [jobs]  overrides ${REPO_SYNC_JOBS:-4}
+#       [flags] overrides ${REPO_SYNC_FLAGS:--d -c --force-sync --no-clone-bundle --tags}
 #
 # Contract with the sourcing (host) script:
 #   - The host must define, BEFORE sourcing this file:
@@ -36,8 +63,7 @@
 #     (from CLI parsing) before calling run_repo_sync / run_repo_reset.
 #   - Optional config variables (read from apk.config):
 #       REPO_SYNC_JOBS, REPO_SYNC_FLAGS, REPO_POST_SYNC_ROOT_COMMAND,
-#       POST_SYNC_ROOT_COMMAND, REPO_POST_SYNC_BUILD_COMMAND,
-#       POST_SYNC_BUILD_COMMAND
+#       REPO_POST_SYNC_BUILD_COMMAND
 #   - The host must provide the logging helpers (log_info/log_success/
 #     log_warn/log_error), e.g. by sourcing src/telua_log.sh first.
 #   - Functions here only define behavior; they have no CLI entry point and
@@ -51,25 +77,48 @@ if [ "${TELUA_REPO_SOURCED:-}" = "1" ]; then
 fi
 TELUA_REPO_SOURCED=1
 
+# --- Shared helper: run a command via eval with duration logging ---
+# Usage: run_timed_command <label> <command>
+# Returns the command's exit code (caller decides whether to abort).
+run_timed_command() {
+    local label="$1"
+    local cmd="$2"
+
+    log_info "Executing $label command:"
+    log_info ">> $cmd"
+
+    local start_ts end_ts duration minutes seconds
+    start_ts=$(date +%s)
+    if ! eval "$cmd"; then
+        log_error "$label command failed: $cmd"
+        return 1
+    fi
+    end_ts=$(date +%s)
+    duration=$((end_ts - start_ts))
+    minutes=$((duration / 60))
+    seconds=$((duration % 60))
+    log_success "$label command completed in ${minutes}m ${seconds}s."
+    return 0
+}
+
 # --- 4b. Post-Sync CLI Hook 1: ROOT_DIR (BEFORE entering android/qssi) ---
-# Customize this function to run CLI commands at ROOT_DIR right after repo sync finishes.
-# (e.g. BSP scripts, vendor setup, git status across repos)
+# Customize this hook to run CLI commands at ROOT_DIR right after repo sync
+# finishes (e.g. BSP scripts, vendor setup, git status across repos).
+# Usage: post_sync_root_cli [command]
+#   [command] optional; defaults to $REPO_POST_SYNC_ROOT_COMMAND
 post_sync_root_cli() {
+    local root_cmd="${1:-$REPO_POST_SYNC_ROOT_COMMAND}"
+
     log_info "============================================================"
     log_info " Running Post-Sync Hook 1: ROOT_DIR (Before android/qssi)"
     log_info " Current Directory: $(pwd)"
     log_info "============================================================"
 
-    local root_cmd="${REPO_POST_SYNC_ROOT_COMMAND:-$POST_SYNC_ROOT_COMMAND}"
     if [ -n "$root_cmd" ]; then
-        log_info "Executing root command from config: $root_cmd"
-        local r_start
-        r_start=$(date +%s)
-        eval "$root_cmd"
-        local r_end
-        r_end=$(date +%s)
-        local r_dur=$((r_end - r_start))
-        log_success "Root command completed in $((r_dur / 60))m $((r_dur % 60))s."
+        if ! run_timed_command "root" "$root_cmd"; then
+            log_error "Post-sync ROOT_DIR hook failed."
+            exit 1
+        fi
     else
         log_info "No REPO_POST_SYNC_ROOT_COMMAND set in $CONFIG_FILE_NAME."
         log_info "Add custom root commands directly in post_sync_root_cli() or config."
@@ -82,52 +131,44 @@ post_sync_root_cli() {
 }
 
 # --- 4c. Post-Sync CLI Hook 2: ANDROID_TOP (AFTER entering android/qssi) ---
-# Customize this function to run CLI commands after entering $ROOT_DIR/android/qssi ($ANDROID_TOP).
-# (e.g. full project rebuild, lunch, target compile)
+# Customize this hook to run CLI commands after entering
+# $ROOT_DIR/android/qssi ($ANDROID_TOP), e.g. full project rebuild, lunch.
+# Usage: post_sync_cli [command]
+#   [command] optional; defaults to $REPO_POST_SYNC_BUILD_COMMAND
 post_sync_cli() {
+    local build_cmd="${1:-$REPO_POST_SYNC_BUILD_COMMAND}"
+
     log_info "============================================"
     log_info " Running Post-Sync Custom CLI Hook"
     log_info " Current Directory: $(pwd)"
     log_info "============================================"
 
-    # --------------------------------------------------------------------------
-    # 1. FULL PROJECT REBUILD (CẬP NHẬT CLI TẠI ĐÂY)
-    # Nếu đã cấu hình REPO_POST_SYNC_BUILD_COMMAND trong apk.config thì tự động chạy:
-    # --------------------------------------------------------------------------
-    local build_cmd="${REPO_POST_SYNC_BUILD_COMMAND:-$POST_SYNC_BUILD_COMMAND}"
     if [ -n "$build_cmd" ]; then
-        log_info "Executing full project rebuild command from config:"
-        log_info ">> $build_cmd"
-        local b_start
-        b_start=$(date +%s)
-        eval "$build_cmd"
-        local b_end
-        b_end=$(date +%s)
-        local b_dur=$((b_end - b_start))
-        log_success "Full project rebuild completed in $((b_dur / 60))m $((b_dur % 60))s."
+        # FULL PROJECT REBUILD: REPO_POST_SYNC_BUILD_COMMAND in apk.config
+        # Example: "source build/envsetup.sh && lunch ... && m -j$(nproc)"
+        if ! run_timed_command "full project rebuild" "$build_cmd"; then
+            log_error "Post-sync CLI hook failed."
+            exit 1
+        fi
     else
         log_info "No REPO_POST_SYNC_BUILD_COMMAND set in $CONFIG_FILE_NAME."
         log_info "You can configure REPO_POST_SYNC_BUILD_COMMAND in $CONFIG_FILE_NAME"
         log_info "or insert your custom build commands directly below in this function."
+        # CUSTOM POST-SYNC CLI COMMANDS (THÊM LỆNH TÙY CHỌN TẠI ĐÂY):
+        #   source build/envsetup.sh
+        #   lunch ${CONFIG_TARGET_PRODUCT}-${CONFIG_TARGET_BUILD_VARIANT}
+        #   m -j$(nproc)
+        #   git status -s
     fi
-
-    # --------------------------------------------------------------------------
-    # 2. CUSTOM POST-SYNC CLI COMMANDS (THÊM LỆNH TÙY CHỌN TẠI ĐÂY):
-    # Ví dụ khi cần cập nhật sau này:
-    #   source build/envsetup.sh
-    #   lunch ${CONFIG_TARGET_PRODUCT}-${CONFIG_TARGET_BUILD_VARIANT}
-    #   m -j$(nproc)
-    #   git status -s
-    # --------------------------------------------------------------------------
 
     log_success "Post-sync CLI hook completed."
 }
 
 # --- 4c. Repo Reset Utility (--repo-reset: reset only, then exit) ---
+# Usage: run_repo_reset [confirm_yes]
+#   [confirm_yes] optional ("true"/"false"); defaults to $CONFIRM_YES
 run_repo_reset() {
-    if [ "$REPO_RESET" != "true" ]; then
-        return 0
-    fi
+    local confirm_yes="${1:-$CONFIRM_YES}"
 
     if ! command -v repo >/dev/null 2>&1; then
         log_error "'repo' binary not found in PATH! Please ensure Google repo is installed and accessible."
@@ -149,7 +190,7 @@ run_repo_reset() {
     log_warn " across ALL sub-repositories will be PERMANENTLY DESTROYED!"
     log_warn "============================================================"
 
-    if [ "$CONFIRM_YES" != "true" ]; then
+    if [ "$confirm_yes" != "true" ]; then
         local user_confirm=""
         read -r -p "Are you sure you want to proceed with hard reset? [y/N]: " user_confirm
         case "$user_confirm" in
@@ -179,7 +220,13 @@ run_repo_reset() {
 }
 
 # --- 4d. Repo Sync Utility ---
+# Usage: run_repo_sync [jobs] [flags]
+#   [jobs]  optional; defaults to ${REPO_SYNC_JOBS:-4}
+#   [flags] optional; defaults to ${REPO_SYNC_FLAGS:--d -c --force-sync --no-clone-bundle --tags}
 run_repo_sync() {
+    local jobs="${1:-${REPO_SYNC_JOBS:-4}}"
+    local sync_flags="${2:-${REPO_SYNC_FLAGS:--d -c --force-sync --no-clone-bundle --tags}}"
+
     if [ "$REPO_SYNC" != "true" ]; then
         return 0
     fi
@@ -205,8 +252,6 @@ run_repo_sync() {
         log_warn "No '.repo' directory found in ROOT_DIR ($ROOT_DIR). Attempting repo sync anyway..."
     fi
 
-    local jobs="${REPO_SYNC_JOBS:-4}"
-    local sync_flags="${REPO_SYNC_FLAGS:--d -c --force-sync --no-clone-bundle --tags}"
     local start_ts
     start_ts=$(date +%s)
     local start_str

@@ -842,8 +842,8 @@ show_info_general() {
     echo "  AOSP Top Rel:     ${AOSP_TOP_REL_PATH:-Auto-detect (android/qssi or android)}"
     echo "  AOSP Top:         ${ANDROID_TOP:-Not found (no 'android' dir above $SCRIPT_DIR)}"
     echo "  Repo Sync Jobs:   ${REPO_SYNC_JOBS:-4}"
-    echo "  Repo Post Root:   ${REPO_POST_SYNC_ROOT_COMMAND:-${POST_SYNC_ROOT_COMMAND:-None}}"
-    echo "  Repo Post Top:    ${REPO_POST_SYNC_BUILD_COMMAND:-${POST_SYNC_BUILD_COMMAND:-None}}"
+    echo "  Repo Post Root:   ${REPO_POST_SYNC_ROOT_COMMAND:-None}"
+    echo "  Repo Post Top:    ${REPO_POST_SYNC_BUILD_COMMAND:-None}"
     if [ -n "$SOFTLINK_TARGET_PATH" ]; then
         if [ -d "$SOFTLINK_TARGET_PATH" ]; then
             echo "  Softlink Target:  $SOFTLINK_TARGET_PATH [EXISTS]"
@@ -1109,10 +1109,14 @@ main() {
     # Test scripts need ANDROID_BUILD_TOP, so set up the build env before them.
     resolve_android_paths || exit 1
 
-    run_repo_reset
+    # Repo utilities are parameter-driven (see src/telua_repo.sh):
+    #   run_repo_reset [confirm_yes]  - explicit args override $CONFIRM_YES
+    #   run_repo_sync [jobs] [flags]  - explicit args override REPO_SYNC_JOBS /
+    #                                   REPO_SYNC_FLAGS from apk.config
+    run_repo_reset "$CONFIRM_YES"
 
     # Run repo sync in ROOT_DIR, then cd to android/qssi and run post_sync_cli
-    run_repo_sync
+    run_repo_sync "${REPO_SYNC_JOBS:-4}" "${REPO_SYNC_FLAGS:--d -c --force-sync --no-clone-bundle --tags}"
 
     setup_build_environment
 
