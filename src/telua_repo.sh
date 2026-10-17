@@ -167,8 +167,14 @@ post_sync_cli() {
 # --- 4c. Repo Reset Utility (--repo-reset: reset only, then exit) ---
 # Usage: run_repo_reset [confirm_yes]
 #   [confirm_yes] optional ("true"/"false"); defaults to $CONFIRM_YES
+# NOTE: only runs when REPO_RESET=true (set by --repo-reset). A plain
+# 'telua build' must NEVER reach the destructive 'repo forall' prompt.
 run_repo_reset() {
     local confirm_yes="${1:-$CONFIRM_YES}"
+
+    if [ "$REPO_RESET" != "true" ]; then
+        return 0
+    fi
 
     if ! command -v repo >/dev/null 2>&1; then
         log_error "'repo' binary not found in PATH! Please ensure Google repo is installed and accessible."
