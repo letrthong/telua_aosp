@@ -22,6 +22,7 @@
 # ------------------------------------------------------------------------------
 MY_GROUP_LIST=(
     "hello   :: Print Hello World and sleep 1s (example pipeline)"
+    "diff     :: git diff HEAD^ HEAD (show last commit changes)"
 )
 
 # ------------------------------------------------------------------------------
@@ -38,4 +39,9 @@ MY_GROUP_LIST=(
 MY_CMD_HELLO=(
     "echo \"Hello World\""
     "sleep 1"
+)
+
+# Example 2: diff (Show changes introduced by the last commit)
+MY_CMD_DIFF=(
+    "git diff HEAD^ HEAD"
 )
