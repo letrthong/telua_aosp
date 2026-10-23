@@ -392,59 +392,63 @@ print_help() {
         real_script="$(cd "$SCRIPT_DIR" && pwd)/$(basename "${BASH_SOURCE[0]}")"
     fi
 
-    cat <<EOF
-telua / build_apk.sh - AOSP & QNX Automotive Build, Deployment and Automation Tool
-Version:      v$SCRIPT_VERSION (Updated: $SCRIPT_LAST_UPDATED)
-Maintained by: letrthong@gmail.com
-Script Path:  $real_script
-
-Usage: telua [COMMAND] [OPTIONS]  (or: tel [COMMAND] [OPTIONS], $0 [COMMAND] [OPTIONS])
-
-Primary Subcommands:
-  build, b                    Build active module, push APK to device, and reboot
-  init                        Initialize $CONFIG_FILE_NAME in current directory (\$PWD)
-  install                     Install 'telua' & 'tel' aliases in ~/.bashrc & dependencies
-  info                        Display general build config, paths, and connected DUT
-  update                      Update toolkit: git pull origin main (with auto-recovery)
-  replace <old> <new> [path]  Find & replace text across files in [path] (default: '.')
-  car [action]                Control AAOS car (vol-up, vol-down, vol-mute, ks, ks-stop, car-status)
-  dump [target]               Run dumpsys diagnostics (audio, car-service, car-audio, ...)
-  clean-java [target]         Clean trailing whitespace in .java files (diff|all|<file|dir>)
-  run [group]                 Execute multi-command pipeline macro (dev-prep, audio-cycle, ...)
-  my, proj [action]           Execute personal / private pipeline macro (hello, ...)
-  git                         Display Git & Google Repo cheatsheet
-  docker                      Display Docker daemon & container cheatsheet
-  network                     Display Network & socket inspection cheatsheet
-
-Build & Deployment Options (used with 'build' or standalone):
-  --no-reboot                 Fast restart (stop && start) instead of full device reboot
-  --start-deploy true|false   Override ENABLE_DEPLOY from $CONFIG_FILE_NAME
-  --platform android|qnx      Target platform: 'android' (default) or 'qnx' (reserved)
-  --repo-sync                 Run 'repo sync' in ROOT_DIR before building module
-  --repo-reset                Hard reset all repos before sync (prompts for 'y' or use -y)
-  -y, --yes                   Bypass confirmation prompts (e.g. for --repo-reset)
-  --config <path>             Explicitly specify custom path to config file
-  --softlink [path]           Symlink this script + copy $CONFIG_FILE_NAME into [path]
-  --test-mode true|false      Run unit test suite instead of full build
-  --ram-monitor true|false    Show RAM usage at start/end and track peak RAM (default: true)
-  --find-file <pattern> [path] Search for files by pattern in [path] (default: '.')
-  --find-dir <pattern> [path]  Search for directories by pattern in [path] (default: '.')
-  --find-text <text> [path]    Search for text in files under [path] (default: '.')
-  --replace <old> <new> [path] Find & replace text across files under [path] (default: '.')
-  -h, --help, help            Display this help message and exit
-
-Configuration Info:
-  Active Config:              $CONFIG_FILE
-  Car Config (Global):        $CAR_CONFIG_FILE
-  Dump Config (Global):       $DUMP_CONFIG_FILE
-  Multi-CLI Pipelines (Global):$MULTI_CONFIG_FILE
-  Personal Pipelines (Private):$MY_CONFIG_FILE
-  Git Cheatsheet (Global):    $GIT_CONFIG_FILE
-  Docker Cheatsheet (Global): $DOCKER_CONFIG_FILE
-  Network Cheatsheet (Global):$NETWORK_CONFIG_FILE
-  Master Template:            $SCRIPT_DIR/$CONFIG_FILE_NAME
-  Encrypted Template:         $SCRIPT_DIR/enc_apk.config
-EOF
+    echo ""
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo -e "\033[1;32m  telua\033[0m / \033[1;37mbuild_apk.sh\033[0m \033[0;90m— AOSP & QNX Automotive Build & Automation Toolkit\033[0m"
+    echo -e "  \033[1;33mVersion:\033[0m       v$SCRIPT_VERSION \033[0;90m(Updated: $SCRIPT_LAST_UPDATED)\033[0m"
+    echo -e "  \033[1;33mMaintainer:\033[0m    letrthong@gmail.com"
+    echo -e "  \033[1;33mScript Path:\033[0m   \033[0;36m$real_script\033[0m"
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo ""
+    echo -e "  \033[1;37mUsage:\033[0m \033[1;32mtelua\033[0m \033[1;33m[COMMAND]\033[0m \033[0;36m[OPTIONS]\033[0m  \033[0;90m(or short alias:\033[0m \033[1;32mtel\033[0m \033[1;33m[COMMAND]\033[0m \033[0;36m[OPTIONS]\033[0m\033[0;90m)\033[0m"
+    echo ""
+    echo -e "\033[1;32mPrimary Subcommands:\033[0m"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "build, b" "Build active module, push APK to device, and reboot"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "init" "Initialize $CONFIG_FILE_NAME in current directory (\$PWD)"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "install" "Install 'telua' & 'tel' aliases in ~/.bashrc & dependencies"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "info" "Display general build config, paths, and connected DUT"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "update" "Update toolkit: git pull origin main (with auto-recovery)"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "replace <old> <new> [path]" "Find & replace text across files in [path] (default: '.')"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "car [action]" "Control AAOS car (vol-up, vol-down, vol-mute, ks, ks-stop, status)"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "dump [target]" "Run dumpsys diagnostics (audio, car-service, car-audio, ...)"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "clean-java [target]" "Clean trailing whitespace in .java files (diff|all|<file|dir>)"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "run [group]" "Execute multi-command pipeline macro (dev-prep, audio-cycle, ...)"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "my, proj [action]" "Execute personal / private pipeline macro (hello, ...)"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "git" "Display Git & Google Repo cheatsheet"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "docker" "Display Docker daemon & container cheatsheet"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "network" "Display Network & socket inspection cheatsheet"
+    echo ""
+    echo -e "\033[1;34mBuild & Deployment Options\033[0m \033[0;90m(used with 'build' or standalone):\033[0m"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "--no-reboot" "Fast restart (stop && start) instead of full device reboot"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "--start-deploy true|false" "Override ENABLE_DEPLOY from $CONFIG_FILE_NAME"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "--platform android|qnx" "Target platform: 'android' (default) or 'qnx' (reserved)"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "--repo-sync" "Run 'repo sync' in ROOT_DIR before building module"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "--repo-reset" "Hard reset all repos before sync (prompts for 'y' or use -y)"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "-y, --yes" "Bypass confirmation prompts (e.g. for --repo-reset)"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "--config <path>" "Explicitly specify custom path to config file"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "--softlink [path]" "Symlink this script + copy $CONFIG_FILE_NAME into [path]"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "--test-mode true|false" "Run unit test suite instead of full build"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "--ram-monitor true|false" "Show RAM usage at start/end and track peak RAM (default: true)"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "--find-file <pat> [path]" "Search for files by pattern in [path] (default: '.')"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "--find-dir <pat> [path]" "Search for directories by pattern in [path] (default: '.')"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "--find-text <text> [path]" "Search for text in files under [path] (default: '.')"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "--replace <old> <new> [p]" "Find & replace text across files under [path] (default: '.')"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "-h, --help, help" "Display this help message and exit"
+    echo ""
+    echo -e "\033[1;33mConfiguration & Cheatsheet Info:\033[0m"
+    printf "  \033[0;90m%-28s\033[0m \033[0;32m%s\033[0m\n" "Active Config:" "$CONFIG_FILE"
+    printf "  \033[0;90m%-28s\033[0m \033[0;33m%s\033[0m\n" "Car Config (Global):" "$CAR_CONFIG_FILE"
+    printf "  \033[0;90m%-28s\033[0m \033[0;33m%s\033[0m\n" "Dump Config (Global):" "$DUMP_CONFIG_FILE"
+    printf "  \033[0;90m%-28s\033[0m \033[0;33m%s\033[0m\n" "Multi-CLI Pipelines (Global):" "$MULTI_CONFIG_FILE"
+    printf "  \033[0;90m%-28s\033[0m \033[0;35m%s\033[0m\n" "Personal Pipelines (Private):" "$MY_CONFIG_FILE"
+    printf "  \033[0;90m%-28s\033[0m \033[0;36m%s\033[0m\n" "Git Cheatsheet (Global):" "$GIT_CONFIG_FILE"
+    printf "  \033[0;90m%-28s\033[0m \033[0;36m%s\033[0m\n" "Docker Cheatsheet (Global):" "$DOCKER_CONFIG_FILE"
+    printf "  \033[0;90m%-28s\033[0m \033[0;36m%s\033[0m\n" "Network Cheatsheet (Global):" "$NETWORK_CONFIG_FILE"
+    printf "  \033[0;90m%-28s\033[0m \033[0;37m%s\033[0m\n" "Master Template:" "$SCRIPT_DIR/$CONFIG_FILE_NAME"
+    printf "  \033[0;90m%-28s\033[0m \033[0;37m%s\033[0m\n" "Encrypted Template:" "$SCRIPT_DIR/enc_apk.config"
+    echo ""
+    echo -e "  \033[1;32mTip:\033[0m \033[0;90mRun\033[0m \033[1;36mtel b\033[0m \033[0;90mto build & deploy, or\033[0m \033[1;36mtel info\033[0m \033[0;90mto inspect environment & device.\033[0m"
+    echo ""
 }
 
 parse_early_arguments() {
@@ -878,32 +882,36 @@ show_info_general() {
     resolve_build_jobs
     local target_platform="${PLATFORM:-${TARGET_PLATFORM:-android}}"
 
+    echo ""
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo -e "\033[1;32m  TELUA TOOLKIT ENVIRONMENT & DEVICE INFORMATION\033[0m"
+    echo -e "\033[1;36m================================================================================\033[0m"
     echo -e "\n\033[1;36m=== 1. GENERAL BUILD CONFIGURATION ===\033[0m"
-    echo "  Script Version:   v$SCRIPT_VERSION (Updated: $SCRIPT_LAST_UPDATED)"
-    echo "  Config File:      $CONFIG_FILE"
-    echo "  Car Config:       $CAR_CONFIG_FILE"
-    echo "  Project:          ${ACTIVE_PROJECT:-default}"
-    echo "  Target Platform:  $target_platform"
-    echo "  Target Lunch:     ${CONFIG_TARGET_PRODUCT}-${CONFIG_TARGET_BUILD_VARIANT}"
-    echo "  Module Build Jobs:-j$BUILD_JOBS_RESOLVED (m $module_name) [${BUILD_JOBS_SOURCE}]"
-    echo "  RAM Monitor:      ${ENABLE_RAM_MONITOR:-true} (sample interval: ${RAM_SAMPLE_INTERVAL:-2}s)"
-    echo "  Module Name:      $module_name"
-    echo "  Source Path:      $SOURCE_CODE_RELATIVE_PATH"
-    echo "  APK Output:       $APK_OUTPUT_RELATIVE_PATH/$APK_FILE_NAME"
-    echo "  Root Dir:         ${ROOT_DIR:-Not found}"
-    echo "  AOSP Top Rel:     ${AOSP_TOP_REL_PATH:-Auto-detect (android/qssi or android)}"
-    echo "  AOSP Top:         ${ANDROID_TOP:-Not found (no 'android' dir above $SCRIPT_DIR)}"
-    echo "  Repo Sync Jobs:   ${REPO_SYNC_JOBS:-4}"
-    echo "  Repo Post Root:   ${REPO_POST_SYNC_ROOT_COMMAND:-None}"
-    echo "  Repo Post Top:    ${REPO_POST_SYNC_BUILD_COMMAND:-None}"
+    printf "  \033[1;37m%-20s\033[0m \033[1;33mv%s\033[0m \033[0;90m(Updated: %s)\033[0m\n" "Script Version:" "$SCRIPT_VERSION" "$SCRIPT_LAST_UPDATED"
+    printf "  \033[1;37m%-20s\033[0m \033[0;32m%s\033[0m\n" "Config File:" "$CONFIG_FILE"
+    printf "  \033[1;37m%-20s\033[0m \033[0;33m%s\033[0m\n" "Car Config:" "$CAR_CONFIG_FILE"
+    printf "  \033[1;37m%-20s\033[0m \033[1;35m%s\033[0m\n" "Project:" "${ACTIVE_PROJECT:-default}"
+    printf "  \033[1;37m%-20s\033[0m \033[1;36m%s\033[0m\n" "Target Platform:" "$target_platform"
+    printf "  \033[1;37m%-20s\033[0m \033[1;33m%s-%s\033[0m\n" "Target Lunch:" "$CONFIG_TARGET_PRODUCT" "$CONFIG_TARGET_BUILD_VARIANT"
+    printf "  \033[1;37m%-20s\033[0m \033[0;36m-j%s\033[0m \033[0;90m(m %s) [%s]\033[0m\n" "Module Build Jobs:" "$BUILD_JOBS_RESOLVED" "$module_name" "$BUILD_JOBS_SOURCE"
+    printf "  \033[1;37m%-20s\033[0m \033[0;32m%s\033[0m \033[0;90m(sample interval: %ss)\033[0m\n" "RAM Monitor:" "${ENABLE_RAM_MONITOR:-true}" "${RAM_SAMPLE_INTERVAL:-2}"
+    printf "  \033[1;37m%-20s\033[0m \033[1;32m%s\033[0m\n" "Module Name:" "$module_name"
+    printf "  \033[1;37m%-20s\033[0m \033[0;37m%s\033[0m\n" "Source Path:" "$SOURCE_CODE_RELATIVE_PATH"
+    printf "  \033[1;37m%-20s\033[0m \033[0;32m%s/%s\033[0m\n" "APK Output:" "$APK_OUTPUT_RELATIVE_PATH" "$APK_FILE_NAME"
+    printf "  \033[1;37m%-20s\033[0m \033[0;36m%s\033[0m\n" "Root Dir:" "${ROOT_DIR:-Not found}"
+    printf "  \033[1;37m%-20s\033[0m \033[0;90m%s\033[0m\n" "AOSP Top Rel:" "${AOSP_TOP_REL_PATH:-Auto-detect (android/qssi or android)}"
+    printf "  \033[1;37m%-20s\033[0m \033[0;36m%s\033[0m\n" "AOSP Top:" "${ANDROID_TOP:-Not found (no 'android' dir above $SCRIPT_DIR)}"
+    printf "  \033[1;37m%-20s\033[0m \033[0;33m%s\033[0m\n" "Repo Sync Jobs:" "${REPO_SYNC_JOBS:-4}"
+    printf "  \033[1;37m%-20s\033[0m \033[0;90m%s\033[0m\n" "Repo Post Root:" "${REPO_POST_SYNC_ROOT_COMMAND:-None}"
+    printf "  \033[1;37m%-20s\033[0m \033[0;90m%s\033[0m\n" "Repo Post Top:" "${REPO_POST_SYNC_BUILD_COMMAND:-None}"
     if [ -n "$SOFTLINK_TARGET_PATH" ]; then
         if [ -d "$SOFTLINK_TARGET_PATH" ]; then
-            echo "  Softlink Target:  $SOFTLINK_TARGET_PATH [EXISTS]"
+            printf "  \033[1;37m%-20s\033[0m \033[0;36m%s\033[0m \033[1;32m[EXISTS]\033[0m\n" "Softlink Target:" "$SOFTLINK_TARGET_PATH"
         else
-            echo "  Softlink Target:  $SOFTLINK_TARGET_PATH [NOT FOUND - will auto-create if parent exists]"
+            printf "  \033[1;37m%-20s\033[0m \033[0;33m%s\033[0m \033[1;31m[NOT FOUND - will auto-create]\033[0m\n" "Softlink Target:" "$SOFTLINK_TARGET_PATH"
         fi
     else
-        echo "  Softlink Target:  Not configured (provide path via CLI)"
+        printf "  \033[1;37m%-20s\033[0m \033[0;90mNot configured (provide path via CLI)\033[0m\n" "Softlink Target:"
     fi
 }
 
@@ -912,23 +920,27 @@ show_info_android() {
     local logcat_enabled="${ENABLE_ANDROID_LOGCAT:-${ENABLE_LOGCAT:-false}}"
 
     echo -e "\n\033[1;32m=== 2. ANDROID TARGET INFO (ADB) ===\033[0m"
-    echo "  Platform:         android"
-    echo "  Deploy Enabled:   $deploy_enabled"
-    echo "  Deploy Path:      $APK_DEPLOY_PATH"
-    echo "  Logcat Enabled:   $logcat_enabled"
-    echo "  Logcat Filter:    ${LOGCAT_FILTER:-None (full)}"
-    echo "  Debug Tags:       ${DEBUG_LOG_TAGS:-None} (Enabled: ${ENABLE_DEBUG_LOG:-false})"
+    printf "  \033[1;37m%-20s\033[0m \033[1;36m%s\033[0m\n" "Platform:" "android"
+    printf "  \033[1;37m%-20s\033[0m \033[1;32m%s\033[0m\n" "Deploy Enabled:" "$deploy_enabled"
+    printf "  \033[1;37m%-20s\033[0m \033[0;32m%s\033[0m\n" "Deploy Path:" "$APK_DEPLOY_PATH"
+    printf "  \033[1;37m%-20s\033[0m \033[0;33m%s\033[0m\n" "Logcat Enabled:" "$logcat_enabled"
+    printf "  \033[1;37m%-20s\033[0m \033[0;37m%s\033[0m\n" "Logcat Filter:" "${LOGCAT_FILTER:-None (full)}"
+    printf "  \033[1;37m%-20s\033[0m \033[0;35m%s\033[0m \033[0;90m(Enabled: %s)\033[0m\n" "Debug Tags:" "${DEBUG_LOG_TAGS:-None}" "${ENABLE_DEBUG_LOG:-false}"
     if command -v adb >/dev/null 2>&1; then
         local dev_state build_type internal_id vendor_build_type
         dev_state=$(adb get-state 2>/dev/null || echo "offline")
         build_type=$(adb shell getprop ro.build.type 2>/dev/null | tr -d '\r')
         internal_id=$(adb shell getprop ro.build.internal.id 2>/dev/null | tr -d '\r')
         vendor_build_type=$(adb shell getprop ro.vendor.build.type 2>/dev/null | tr -d '\r')
-        echo "  ADB Device State: $dev_state (Build: ${build_type:-unknown})"
-        echo "  Internal ID:      ${internal_id:-unknown}"
-        echo "  Vendor Build:     ${vendor_build_type:-unknown}"
+        if [ "$dev_state" = "device" ]; then
+            printf "  \033[1;37m%-20s\033[0m \033[1;32m%s (ONLINE)\033[0m \033[0;90m(Build: %s)\033[0m\n" "ADB Device State:" "$dev_state" "${build_type:-unknown}"
+        else
+            printf "  \033[1;37m%-20s\033[0m \033[1;31m%s (OFFLINE)\033[0m\n" "ADB Device State:" "$dev_state"
+        fi
+        printf "  \033[1;37m%-20s\033[0m \033[0;33m%s\033[0m\n" "Internal ID:" "${internal_id:-unknown}"
+        printf "  \033[1;37m%-20s\033[0m \033[0;33m%s\033[0m\n" "Vendor Build:" "${vendor_build_type:-unknown}"
     else
-        echo "  ADB Binary:       Not installed / not in PATH"
+        printf "  \033[1;37m%-20s\033[0m \033[1;31mNot installed / not in PATH\033[0m\n" "ADB Binary:"
     fi
 }
 
@@ -937,21 +949,21 @@ show_info_qnx() {
     local log_enabled="${ENABLE_QNX_LOG:-${ENABLE_LOGCAT:-false}}"
 
     echo -e "\n\033[1;33m=== 2. QNX TARGET INFO (Hypervisor / Guest VM) ===\033[0m"
-    echo "  Platform:         qnx"
-    echo "  Deploy Enabled:   $deploy_enabled"
-    echo "  Deploy Path:      ${QNX_TARGET_DIR:-${QNX_DEPLOY_PATH:-${APK_DEPLOY_PATH:-N/A}}}"
-    echo "  Target Host/IP:   ${QNX_HOST_IP:-${QNX_HOST:-Not configured (e.g. 192.168.1.100)}}"
-    echo "  SSH/SCP Port:     ${QNX_SSH_PORT:-22}"
-    echo "  Log Capture:      $log_enabled (slog2info)"
-    echo "  Status:           Placeholder - QNX deployment & diagnostics will be supplemented here"
-    echo "  Note:             Android ADB properties are skipped on QNX platform."
+    printf "  \033[1;37m%-20s\033[0m \033[1;36m%s\033[0m\n" "Platform:" "qnx"
+    printf "  \033[1;37m%-20s\033[0m \033[1;32m%s\033[0m\n" "Deploy Enabled:" "$deploy_enabled"
+    printf "  \033[1;37m%-20s\033[0m \033[0;32m%s\033[0m\n" "Deploy Path:" "${QNX_TARGET_DIR:-${QNX_DEPLOY_PATH:-${APK_DEPLOY_PATH:-N/A}}}"
+    printf "  \033[1;37m%-20s\033[0m \033[0;33m%s\033[0m\n" "Target Host/IP:" "${QNX_HOST_IP:-${QNX_HOST:-Not configured (e.g. 192.168.1.100)}}"
+    printf "  \033[1;37m%-20s\033[0m \033[0;36m%s\033[0m\n" "SSH/SCP Port:" "${QNX_SSH_PORT:-22}"
+    printf "  \033[1;37m%-20s\033[0m \033[0;33m%s (slog2info)\033[0m\n" "Log Capture:" "$log_enabled"
+    printf "  \033[1;37m%-20s\033[0m \033[0;90m%s\033[0m\n" "Status:" "Placeholder - QNX deployment & diagnostics will be supplemented here"
+    printf "  \033[1;37m%-20s\033[0m \033[0;90m%s\033[0m\n" "Note:" "Android ADB properties are skipped on QNX platform."
 }
 
 # --- 1c. System RAM Info (--info) ---
 show_info_ram() {
     echo -e "\n\033[1;35m=== 3. SYSTEM RAM INFO ===\033[0m"
     if [ ! -r /proc/meminfo ]; then
-        echo "  RAM Info:         Not available (/proc/meminfo not readable)"
+        echo -e "  \033[0;90mRAM Info: Not available (/proc/meminfo not readable)\033[0m"
         return 0
     fi
 
@@ -968,18 +980,25 @@ show_info_ram() {
     local used_pct=0
     [ "$total_kb" -gt 0 ] 2>/dev/null && used_pct=$((used_kb * 100 / total_kb))
 
-    echo "  RAM Total:        $(awk -v t="$total_kb" 'BEGIN {printf "%.2f GB (%d MB)", t/1048576, t/1024}')"
-    echo "  RAM Used:         $(awk -v u="$used_kb" 'BEGIN {printf "%.2f GB (%d MB)", u/1048576, u/1024}')  [${used_pct}%]"
-    echo "  RAM Available:    $(awk -v a="$avail_kb" 'BEGIN {printf "%.2f GB (%d MB)", a/1048576, a/1024}')  (free: $(awk -v f="$free_kb" 'BEGIN {printf "%.2f GB", f/1048576}'))"
-    echo "  Buffers/Cached:   $(awk -v b="$buffers_kb" -v c="$cached_kb" 'BEGIN {printf "%.2f GB / %.2f GB", b/1048576, c/1048576}')"
-    if [ "${swap_total_kb:-0}" -gt 0 ] 2>/dev/null; then
-        echo "  Swap Total:       $(awk -v s="$swap_total_kb" 'BEGIN {printf "%.2f GB", s/1048576}')"
-        echo "  Swap Used:        $(awk -v st="$swap_total_kb" -v sf="$swap_free_kb" 'BEGIN {printf "%.2f GB", (st-sf)/1048576}')"
-    else
-        echo "  Swap:             Not enabled"
+    local ram_color="\033[1;32m"
+    if [ "$used_pct" -gt 85 ]; then
+        ram_color="\033[1;31m"
+    elif [ "$used_pct" -gt 70 ]; then
+        ram_color="\033[1;33m"
     fi
-    echo "  CPU Cores:        $(nproc 2>/dev/null || echo unknown)"
-    echo "  RAM Monitor:      ${ENABLE_RAM_MONITOR:-true} (peak sampler interval: ${RAM_SAMPLE_INTERVAL:-2}s)"
+
+    printf "  \033[1;37m%-20s\033[0m \033[0;36m%s\033[0m\n" "RAM Total:" "$(awk -v t="$total_kb" 'BEGIN {printf "%.2f GB (%d MB)", t/1048576, t/1024}')"
+    printf "  \033[1;37m%-20s\033[0m ${ram_color}%s [%d%%]\033[0m\n" "RAM Used:" "$(awk -v u="$used_kb" 'BEGIN {printf "%.2f GB (%d MB)", u/1048576, u/1024}')" "$used_pct"
+    printf "  \033[1;37m%-20s\033[0m \033[1;32m%s\033[0m \033[0;90m(free: %s)\033[0m\n" "RAM Available:" "$(awk -v a="$avail_kb" 'BEGIN {printf "%.2f GB (%d MB)", a/1048576, a/1024}')" "$(awk -v f="$free_kb" 'BEGIN {printf "%.2f GB", f/1048576}')"
+    printf "  \033[1;37m%-20s\033[0m \033[0;37m%s\033[0m\n" "Buffers/Cached:" "$(awk -v b="$buffers_kb" -v c="$cached_kb" 'BEGIN {printf "%.2f GB / %.2f GB", b/1048576, c/1048576}')"
+    if [ "${swap_total_kb:-0}" -gt 0 ] 2>/dev/null; then
+        printf "  \033[1;37m%-20s\033[0m \033[0;36m%s\033[0m\n" "Swap Total:" "$(awk -v s="$swap_total_kb" 'BEGIN {printf "%.2f GB", s/1048576}')"
+        printf "  \033[1;37m%-20s\033[0m \033[0;33m%s\033[0m\n" "Swap Used:" "$(awk -v st="$swap_total_kb" -v sf="$swap_free_kb" 'BEGIN {printf "%.2f GB", (st-sf)/1048576}')"
+    else
+        printf "  \033[1;37m%-20s\033[0m \033[0;90mNot enabled\033[0m\n" "Swap:"
+    fi
+    printf "  \033[1;37m%-20s\033[0m \033[1;33m%s cores\033[0m\n" "CPU Cores:" "$(nproc 2>/dev/null || echo unknown)"
+    printf "  \033[1;37m%-20s\033[0m \033[0;32m%s\033[0m \033[0;90m(peak sampler: %ss)\033[0m\n" "RAM Monitor:" "${ENABLE_RAM_MONITOR:-true}" "${RAM_SAMPLE_INTERVAL:-2}"
 }
 
 show_info() {
@@ -1004,7 +1023,8 @@ show_info() {
 
     show_info_ram
 
-    echo -e "\033[1;36m====================================================\033[0m\n"
+    echo ""
+    echo -e "\033[1;36m================================================================================\033[0m\n"
     exit 0
 }
 
