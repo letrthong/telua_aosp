@@ -400,7 +400,7 @@ print_help() {
     echo -e "  \033[1;33mScript Path:\033[0m   \033[0;36m$real_script\033[0m"
     echo -e "\033[1;36m================================================================================\033[0m"
     echo ""
-    echo -e "  \033[1;37mUsage:\033[0m \033[1;32mtelua\033[0m \033[1;33m[COMMAND]\033[0m \033[0;36m[OPTIONS]\033[0m  \033[0;90m(or short alias:\033[0m \033[1;32mtel\033[0m \033[1;33m[COMMAND]\033[0m \033[0;36m[OPTIONS]\033[0m\033[0;90m)\033[0m"
+    echo -e "  \033[1;37mUsage: build_apk.sh\033[0m / \033[1;32mtelua\033[0m \033[1;33m[COMMAND]\033[0m \033[0;36m[OPTIONS]\033[0m  \033[0;90m(or short alias:\033[0m \033[1;32mtel\033[0m \033[1;33m[COMMAND]\033[0m \033[0;36m[OPTIONS]\033[0m\033[0;90m)\033[0m"
     echo ""
     echo -e "\033[1;32mPrimary Subcommands:\033[0m"
     printf "  \033[1;37m%-28s\033[0m %s\n" "build, b" "Build active module, push APK to device, and reboot"
@@ -792,10 +792,23 @@ install_bashrc_alias() {
         fi
     done
 
+    # Register Tab auto-completion in ~/.bashrc
+    local comp_script
+    comp_script="$(dirname "$real_script")/src/telua_completion.sh"
+    if [ -f "$comp_script" ]; then
+        local comp_entry="[ -f \"$comp_script\" ] && source \"$comp_script\""
+        if ! grep -F -q "$comp_script" "$bashrc_file"; then
+            echo "$comp_entry" >> "$bashrc_file"
+            log_success "Registered Tab Auto-completion in $bashrc_file:"
+            echo -e "  \033[1;36m$comp_entry\033[0m"
+        fi
+    fi
+
     echo ""
     log_success "Installation complete! To start using 'telua' or 'tel':"
     echo -e "  \033[1;33mOption 1:\033[0m Open a new terminal tab/window (recommended)"
     echo -e "  \033[1;33mOption 2:\033[0m Or reload in this session: \033[1;36msource ~/.bashrc\033[0m"
+    echo -e "  \033[1;32mTab completion:\033[0m Type \033[1;36mtel <Tab><Tab>\033[0m or \033[1;36mtelua car <Tab><Tab>\033[0m to see suggestions!"
     echo ""
 }
 
