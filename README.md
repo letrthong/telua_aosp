@@ -55,7 +55,7 @@ Make the scripts executable and install the global `telua` alias into your `~/.b
 # 1. Grant execution permissions
 chmod +x build_apk.sh config_crypto.py config_overlay.py
 
-# 2. Install 'telua' & 'tel' commands into ~/.bashrc
+# 2. Install 'telua' & 'tel' commands and Tab Auto-completion into ~/.bashrc
 ./build_apk.sh --install
 
 # 3. Open a new terminal tab (recommended), or reload current session:
@@ -63,6 +63,7 @@ source ~/.bashrc
 ```
 
 Now you can invoke `telua` (or short alias `tel`) anywhere in your terminal!
+- **Tab Auto-completion**: Type `tel ` or `telua ` then press <kbd>Tab</kbd> twice to see available subcommands and options (`build`, `car`, `dump`, `run`, `replace`, etc.). Subcommands like `car` and `dump` also auto-complete their respective actions (e.g. `tel car ks<Tab>`).
 - Run `telua` with no arguments to display the interactive help menu.
 
 ### Step 2: Build & Deployment
@@ -174,7 +175,7 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `--no-reboot` | Fast runtime restart (`stop && start`, ~10–15s) instead of full device reboot |
 | `--config <path>` | Explicitly specifies path to `apk.config` to load |
 | `--init`, `init` | Initializes `apk.config` in current directory (`$PWD`), auto-creates missing personal configs from `*.example`, enforces script permissions, and merges `apk_overlays.config` via `config_overlay.py` |
-| `--install`, `install` | Adds or updates alias `telua` in `~/.bashrc` pointing to `build_apk.sh`, and sources `~/.bashrc` |
+| `--install`, `install` | Adds or updates aliases `telua` & `tel` and registers Tab Auto-completion (`src/telua_completion.sh`) in `~/.bashrc` |
 | `-v`, `--version`, `version` | Displays script version, release update date, and exits |
 | `--info`, `info` | Displays general build configuration followed by platform-specific target info (Android / QNX), then exits |
 | `--platform android\|qnx` | Target deployment platform: `android` (default, active) or `qnx` (reserved, currently skips deployment) |

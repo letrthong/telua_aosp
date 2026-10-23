@@ -45,7 +45,7 @@ assert_success "Version output contains version tag" grep -q "build_apk.sh v" <<
 # Test 3: Help display
 log_test "Testing help option (-h / --help)..."
 out_help=$("$MAIN_SCRIPT" -h 2>&1 || true)
-assert_success "Help output contains usage instructions" grep -q "Usage: telua" <<< "$out_help"
+assert_success "Help output contains usage instructions" grep -E -q "Usage:.*telua" <<< "$out_help"
 assert_success "Help lists build subcommand" grep -q "build, b" <<< "$out_help"
 assert_success "Help lists init subcommand" grep -q "init" <<< "$out_help"
 
@@ -93,7 +93,7 @@ TMP_CLEAN_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_clean_test.XXXXXX")
 printf 'package com.example;\npublic class Foo { \n    int bar = 1;\t\n}\n' > "$TMP_CLEAN_DIR/Foo.java"
 out_clean_all=$(cd "$TMP_CLEAN_DIR" && "$MAIN_SCRIPT" clean-java all 2>&1 || true)
 assert_success "Clean-java all cleans .java files recursively" grep -q "Foo.java" <<< "$out_clean_all"
-assert_success "Clean-java removed trailing whitespace" bash -c '! grep -qP "[ \t]+$" "$1"' bash "$TMP_CLEAN_DIR/Foo.java"
+assert_success "Clean-java removed trailing whitespace" bash -c '! grep -q -E "[[:blank:]]+$" "$1"' bash "$TMP_CLEAN_DIR/Foo.java"
 rm -rf "$TMP_CLEAN_DIR"
 
 # Test 5: Safe personal config backup and restore logic
@@ -144,15 +144,17 @@ assert_success "Backup and restore preserves personal configs" [ $? -eq 0 ]
 # Cleanup
 rm -rf "$TMP_TEST_DIR"
 
-# Test 6: Alias installation into mock bashrc
-log_test "Testing alias installation (telua & tel)..."
+# Test 6: Alias & completion installation into mock bashrc
+log_test "Testing alias & completion installation (telua & tel)..."
 TMP_HOME=$(mktemp -d "${TMPDIR:-/tmp}/telua_home_test.XXXXXX")
 (
     export HOME="$TMP_HOME"
     out_inst=$("$MAIN_SCRIPT" install 2>&1 || true)
-    grep -q "alias telua=" "$TMP_HOME/.bashrc" && grep -q "alias tel=" "$TMP_HOME/.bashrc"
+    grep -q "alias telua=" "$TMP_HOME/.bashrc" && \
+    grep -q "alias tel=" "$TMP_HOME/.bashrc" && \
+    grep -q "telua_completion.sh" "$TMP_HOME/.bashrc"
 )
-assert_success "Install adds both telua and tel aliases" [ $? -eq 0 ]
+assert_success "Install adds aliases and tab completion" [ $? -eq 0 ]
 rm -rf "$TMP_HOME"
 
 echo "============================================================"
