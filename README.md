@@ -195,6 +195,7 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `--find-file <pattern> [path]` | Searches for files by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-dir <pattern> [path]` | Searches for directories by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-text <text> [path]` | Greps for text string in files under `[path]` (defaults to `.` if omitted) |
+| `replace <old> <new> [path]` | Finds & replaces text across files under `[path]` (defaults to `.` if omitted; alias: `--replace`) |
 | `--test-mode true|false` | Runs unit test suite instead of compiling the APK |
 
 #### Usage Examples:
@@ -225,6 +226,8 @@ telua network                         # View Network & Port cheatsheet
 ./build_apk.sh --find-file "*.bp" packages/apps/Car # Find Android.bp files in specific path
 ./build_apk.sh --find-dir "Oem*" .    # Find directories matching pattern
 ./build_apk.sh --find-text "DEBUG_TAG" src/ # Grep text string inside files
+telua replace "curent_Text" "new_text" . # Replace text across directory (or: --replace)
+telua replace "old_str" "new_str" src/app.c # Replace text in specific file
 ./build_apk.sh --git-diff             # View diff of the last commit
 ./build_apk.sh --git-amend            # Amend staged changes to the last commit
 ./build_apk.sh --start-deploy false   # Compile APK only, do not push to device
@@ -332,15 +335,19 @@ Các lệnh ADB điều khiển âm lượng và ứng dụng test âm thanh (Ki
 
 | Variable | Default | Description |
 |---|---|---|
-| `ADB_SHELL_AUDIO_UP` | `"dumpsys car_service inject-key 24"` | Command executed for `vol-up` (AAOS CarInputService inject key 24) |
-| `ADB_SHELL_AUDIO_DOWN` | `"dumpsys car_service inject-key 25"` | Command executed for `vol-down` (AAOS CarInputService inject key 25) |
-| `ADB_SHELL_AUDIO_MUTE` | `"dumpsys car_service inject-key 164"` | Command executed for `vol-mute` (AAOS CarInputService inject key 164) |
-| `ADB_SHELL_AUDIO_KS_START` | `"am start com.google.android.car.kitchensink/.KitchenSinkActivity"` | Launch KitchenSink test app |
-| `ADB_SHELL_AUDIO_KS_STOP` | `"am force-stop com.google.android.car.kitchensink"` | Force-stop KitchenSink test app |
-| `AUDIO_CLI_LIST` | Mảng 5 lệnh CLI (`vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`) | Danh sách lệnh hiển thị cho người dùng khi chạy `telua car` hoặc `telua audio` |
+| `ADB_SHELL_CAR_UP` | `"dumpsys car_service inject-key 24"` | Command executed for `vol-up` (AAOS CarInputService inject key 24) |
+| `ADB_SHELL_CAR_DOWN` | `"dumpsys car_service inject-key 25"` | Command executed for `vol-down` (AAOS CarInputService inject key 25) |
+| `ADB_SHELL_CAR_MUTE` | `"dumpsys car_service inject-key 164"` | Command executed for `vol-mute` (AAOS CarInputService inject key 164) |
+| `ADB_SHELL_CAR_KS_START` | `"am start com.google.android.car.kitchensink/.KitchenSinkActivity"` | Launch KitchenSink test app |
+| `ADB_SHELL_CAR_KS_STOP` | `"am force-stop com.google.android.car.kitchensink"` | Force-stop KitchenSink test app |
+| `ADB_SHELL_CAR_STATUS` | `"dumpsys car_service --list"` | List all services registered in CarService |
+| `CAR_CLI_LIST` | Mảng lệnh CLI (`vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`, `status`) | Danh sách lệnh hiển thị cho người dùng khi chạy `telua car` hoặc `telua audio` |
+
+> **An toàn kết nối thiết bị (`device offline`):**
+> Trước khi thực thi bất kỳ lệnh ADB nào (như `telua car ks`), hệ thống tự động kiểm tra trạng thái thiết bị (`check_car_device_connected` trong `src/telua_car.sh`). Nếu thiết bị chưa kết nối hoặc ở trạng thái offline/unauthorized, lệnh sẽ dừng ngay lập tức và thông báo lỗi rõ ràng: `[ERROR] device offline: No Android device connected.` (hoặc `Connected Android device is not ready`).
 
 > **Ghi chú về tách biệt cấu hình:**
-> - `config/const_car.config` giữ các giá trị mặc định dùng chung cho mọi dự án.
+> - `config/const_car.config` là file cấu hình thuần túy (pure declarative config), không chứa logic code, giữ các giá trị mặc định dùng chung cho mọi dự án.
 > - Nếu một dự án cụ thể cần tùy biến riêng câu lệnh âm thanh, bạn có thể khai báo đè (override) trực tiếp các biến này trong file `apk.config` hoặc `apk_overlays.config`.
 
 ---

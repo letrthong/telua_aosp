@@ -59,6 +59,7 @@ When the user asks you to perform a task, map their intent to the corresponding 
 | **Sync Source Code via Repo** | `telua --repo-sync` | Runs `repo sync` + executes post-sync hook |
 | **Sync with Clean Reset** | `telua --repo-sync --repo-reset -y` | Hard resets dirty repos before sync (AI must pass `-y`) |
 | **Run Unit Tests** | `telua --test-mode true` | Runs project test script configured in `apk.config` |
+| **Find & Replace Text Across Files** | `telua replace <old> <new> [path]` | Fast literal string replacement across directory or single file |
 | **Install Global CLI Alias** | `./build_apk.sh --install` | Adds `alias telua=...` into `~/.bashrc` & installs python reqs |
 | **Update Toolkit to Latest Main** | `telua update` | Pulls latest main commit with auto-recovery |
 
@@ -66,7 +67,7 @@ When the user asks you to perform a task, map their intent to the corresponding 
 
 ## 4. Android Automotive (AAOS) Car & Diagnostics
  
-All commands execute directly on the target device via ADB shell:
+All commands execute directly on the target device via ADB shell (auto-checks device connectivity; immediately halts with `[ERROR] device offline: ...` if device is disconnected or offline):
 
 ### 4.1 AAOS Car & Audio Control (`telua car <action>` / `telua audio <action>`)
 ```bash
@@ -74,8 +75,9 @@ telua car                 # View interactive car & audio command list (alias: te
 telua car vol-up          # Increase volume (AAOS CarInputService inject-key 24)
 telua car vol-down        # Decrease volume (AAOS CarInputService inject-key 25)
 telua car vol-mute        # Mute volume (AAOS CarInputService inject-key 164)
-telua car ks              # Launch KitchenSink test application
+telua car ks              # Launch KitchenSink test application (device-offline verified)
 telua car ks-stop         # Force-stop KitchenSink test application
+telua car status          # List all registered CarService services (dumpsys car_service --list)
 ```
 
 ### 4.2 Dumpsys Diagnostics (`telua dump <target>`)
@@ -118,13 +120,14 @@ telua network             # Display Linux open ports, ss, netstat & lsof command
 
 ---
 
-## 7. Fast Search Utilities
+## 7. Fast Search & Replace Utilities
 
-AI agents should use these built-in helpers when investigating codebases:
+AI agents should use these built-in helpers when investigating or refactoring codebases:
 ```bash
 ./build_apk.sh --find-file "<pattern>" [path]   # Find files matching pattern (e.g. "*.bp")
 ./build_apk.sh --find-dir "<pattern>" [path]    # Find directories matching pattern
 ./build_apk.sh --find-text "<text>" [path]      # Grep text string inside files
+telua replace "<old_text>" "<new_text>" [path]  # Fast literal text replacement across files/dir
 ./build_apk.sh --git-diff                       # Show diff of the last git commit
 ./build_apk.sh --git-amend                      # Amend staged changes to the last commit
 ```
