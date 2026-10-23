@@ -23,8 +23,8 @@
 set -e
 
 # --- Constants & Global Defaults ---
-SCRIPT_VERSION="2.10.0"
-SCRIPT_LAST_UPDATED="2026-10-15"
+SCRIPT_VERSION="2.11.0"
+SCRIPT_LAST_UPDATED="2026-10-23"
 CONFIG_FILE_NAME="apk.config"
 CAR_CONFIG_FILE_NAME="const_car.config"
 DUMP_CONFIG_FILE_NAME="const_dumpsys.config"
@@ -338,6 +338,24 @@ if [ "${TELUA_QNX_SOURCED:-}" != "1" ]; then
     fi
 fi
 
+# --- Java source hygiene (single source of truth: src/telua_clean.sh) ---
+# Code behind 'telua clean-java [target]' (show_clean_short_help,
+# show_clean_help, is_clean_action, handle_clean_command) was extracted to
+# src/telua_clean.sh; it drives the python helper python/clean_java.py
+# (strip trailing whitespace on Git-modified or all .java files). Sourcing it
+# sets TELUA_CLEAN_SOURCED=1 and its internal guard makes double-sourcing a
+# no-op.
+# Lookup order: script dir -> master dir (both resolved through symlinks).
+if [ "${TELUA_CLEAN_SOURCED:-}" != "1" ]; then
+    if [ -f "$SCRIPT_DIR/src/telua_clean.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$SCRIPT_DIR/src/telua_clean.sh"
+    elif [ -f "$MASTER_SCRIPT_DIR/src/telua_clean.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$MASTER_SCRIPT_DIR/src/telua_clean.sh"
+    fi
+fi
+
 # --- RAM Monitoring (single source of truth: src/telua_ram.sh) ---
 # Code behind the RAM monitor (get_mem_summary, get_mem_used_mb,
 # log_ram_snapshot, start_ram_sampler, stop_ram_sampler, report_ram_summary)
@@ -389,6 +407,7 @@ Primary Subcommands:
   update                      Update toolkit: git pull origin main (with auto-recovery)
   car [action]                Control AAOS car (vol-up, vol-down, vol-mute, ks, ks-stop, car-status)
   dump [target]               Run dumpsys diagnostics (audio, car-service, car-audio, ...)
+  clean-java [target]         Clean trailing whitespace in .java files (diff|all|<file|dir>)
   run [group]                 Execute multi-command pipeline macro (dev-prep, audio-cycle, ...)
   my, proj [action]           Execute personal / private pipeline macro (hello, ...)
   git                         Display Git & Google Repo cheatsheet
@@ -622,6 +641,17 @@ parse_arguments() {
                 handle_dump_command "$DUMP_ACTION"
                 exit 0
                 ;;
+            --clean-java|clean-java|cleanjava)
+                if [ -n "$2" ] && [[ "$2" != --* ]]; then
+                    CLEAN_ACTION="$2"
+                    shift 2
+                else
+                    CLEAN_ACTION=""
+                    shift 1
+                fi
+                handle_clean_command "$CLEAN_ACTION"
+                exit 0
+                ;;
             --run|run|--multi|multi)
                 if [ -n "$2" ] && [[ "$2" != --* ]]; then
                     RUN_GROUP="$2"
@@ -669,6 +699,10 @@ parse_arguments() {
                 fi
                 if is_dump_action "$stripped_arg"; then
                     handle_dump_command "$stripped_arg"
+                    exit 0
+                fi
+                if is_clean_action "$stripped_arg"; then
+                    handle_clean_command "$stripped_arg"
                     exit 0
                 fi
                 if is_project_action "$stripped_arg"; then
