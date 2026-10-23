@@ -92,6 +92,24 @@ telua dump battery        # Dump battery charging status
 telua dump activity       # Dump foreground Activity & window stack
 ```
 
+### 4.3 Java Code Hygiene (`telua clean-java`)
+AI agents refactoring Java code should use this command to sanitize whitespace before committing:
+```bash
+telua clean-java          # Default: Cleans only Git modified/added .java files
+telua clean-java all      # Recursively cleans all .java files across workspace
+telua clean-java <path>   # Cleans a specific .java file or target directory
+```
+
+### 4.4 Tab Auto-completion Engine (`src/telua_completion.sh`)
+Supports both `telua` and short alias `tel` on Bash & Zsh:
+```bash
+./build_apk.sh --install  # Automatically installs both aliases & completion into ~/.bashrc
+tel <Tab><Tab>            # Subcommands: build, car, dump, clean-java, run, replace...
+tel car <Tab><Tab>        # Car actions: vol-up, vol-down, vol-mute, ks, ks-stop, status
+tel dump <Tab><Tab>       # Dumpsys targets: audio, car-service, car-audio, media, battery...
+tel run <Tab><Tab>        # Pipelines: audio-cycle, dev-prep, remount-reboot...
+```
+
 ---
 
 ## 5. Sequential Macro Pipelines (`telua run <group>`)

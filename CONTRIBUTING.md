@@ -118,7 +118,11 @@ To maintain high code quality across the codebase, please adhere to these rules:
    ```
 4. **Implement Your Changes:** Make your modifications in the relevant file.
 5. **Test Your Changes on a Real Linux/ADB Host:**
-   - Verify script execution:
+   - Run the automated shell test suite:
+     ```bash
+     bash tests/test_build_apk.sh
+     ```
+   - Verify script execution & interactive menus:
      ```bash
      ./build_apk.sh --info
      ./build_apk.sh --help
@@ -127,6 +131,10 @@ To maintain high code quality across the codebase, please adhere to these rules:
      ```bash
      ./build_apk.sh run
      ./build_apk.sh run <your_group>
+     ```
+   - Verify Tab Auto-completion syntax:
+     ```bash
+     bash -n src/telua_completion.sh
      ```
 6. **Commit with Conventional Commit Messages:**
    Use clear, conventional commit messages:
