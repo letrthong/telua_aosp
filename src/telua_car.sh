@@ -27,10 +27,11 @@
 #   - ADB_SHELL_<ACTION>        : generic fallback ADB shell command variables
 #
 # Functions:
-#   - show_car_short_help : one-line-per-action listing (telua car)
-#   - show_car_help       : detailed listing with ADB commands (telua car help)
-#   - is_car_action       : predicate used by parse_arguments dispatch
-#   - handle_car_command  : resolve + execute the ADB shell command
+#   - show_car_short_help        : one-line-per-action listing (telua car)
+#   - show_car_help              : detailed listing with ADB commands (telua car help)
+#   - is_car_action              : predicate used by parse_arguments dispatch
+#   - check_car_device_connected : verify target device is connected & online
+#   - handle_car_command         : resolve + execute the ADB shell command
 #
 # Usage (source, never execute):
 #   source "$(dirname "${BASH_SOURCE[0]}")/src/telua_car.sh"
