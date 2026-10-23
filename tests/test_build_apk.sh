@@ -54,6 +54,20 @@ log_test "Testing search utilities (--find-file)..."
 out_find=$("$MAIN_SCRIPT" --find-file "config_crypto.py" "$REPO_ROOT" 2>&1 || true)
 assert_success "Find file locates config_crypto.py" grep -q "config_crypto.py" <<< "$out_find"
 
+# Test 4b: Clean-java utilities
+log_test "Testing clean-java utilities (telua clean-java)..."
+out_clean=$("$MAIN_SCRIPT" clean-java help 2>&1 || true)
+assert_success "Clean-java help lists python/clean_java.py" grep -q "clean_java.py" <<< "$out_clean"
+assert_success "Clean-java help lists diff mode" grep -q "clean-java diff" <<< "$out_clean"
+assert_success "Clean-java help lists all mode" grep -q "clean-java all" <<< "$out_clean"
+
+TMP_CLEAN_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_clean_test.XXXXXX")
+printf 'package com.example;\npublic class Foo { \n    int bar = 1;\t\n}\n' > "$TMP_CLEAN_DIR/Foo.java"
+out_clean_all=$(cd "$TMP_CLEAN_DIR" && "$MAIN_SCRIPT" clean-java all 2>&1 || true)
+assert_success "Clean-java all cleans .java files recursively" grep -q "Foo.java" <<< "$out_clean_all"
+assert_success "Clean-java removed trailing whitespace" bash -c '! grep -qP "[ \t]+$" "$1"' bash "$TMP_CLEAN_DIR/Foo.java"
+rm -rf "$TMP_CLEAN_DIR"
+
 # Test 5: Safe personal config backup and restore logic
 log_test "Testing personal config backup and restore isolation..."
 TMP_TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_sh_test.XXXXXX")
