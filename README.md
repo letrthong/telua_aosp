@@ -204,7 +204,7 @@ telua                                 # View interactive help menu & available s
 telua build                           # Build active module, push APK, and reboot device
 telua build --no-reboot               # Fast deploy after editing Java/Kotlin code (~5-10s)
 telua b                               # Short alias for 'telua build'
-./build_apk.sh --install              # Install/update 'telua' alias in ~/.bashrc
+./build_apk.sh --install              # Install/update 'telua' & 'tel' aliases in ~/.bashrc
 telua init                            # Initialize workspace & apply apk_overlays.config
 telua info                            # Inspect environment and device state
 telua update                          # Update toolkit: pulls origin/main & preserves personal configs

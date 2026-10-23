@@ -144,6 +144,17 @@ assert_success "Backup and restore preserves personal configs" [ $? -eq 0 ]
 # Cleanup
 rm -rf "$TMP_TEST_DIR"
 
+# Test 6: Alias installation into mock bashrc
+log_test "Testing alias installation (telua & tel)..."
+TMP_HOME=$(mktemp -d "${TMPDIR:-/tmp}/telua_home_test.XXXXXX")
+(
+    export HOME="$TMP_HOME"
+    out_inst=$("$MAIN_SCRIPT" install 2>&1 || true)
+    grep -q "alias telua=" "$TMP_HOME/.bashrc" && grep -q "alias tel=" "$TMP_HOME/.bashrc"
+)
+assert_success "Install adds both telua and tel aliases" [ $? -eq 0 ]
+rm -rf "$TMP_HOME"
+
 echo "============================================================"
 echo -e "Results: \033[1;32m$PASSED passed\033[0m, \033[1;31m$FAILED failed\033[0m"
 echo "============================================================"

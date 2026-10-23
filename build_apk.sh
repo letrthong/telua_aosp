@@ -398,12 +398,12 @@ Version:      v$SCRIPT_VERSION (Updated: $SCRIPT_LAST_UPDATED)
 Maintained by: letrthong@gmail.com
 Script Path:  $real_script
 
-Usage: telua [COMMAND] [OPTIONS]  (or: $0 [COMMAND] [OPTIONS])
+Usage: telua [COMMAND] [OPTIONS]  (or: tel [COMMAND] [OPTIONS], $0 [COMMAND] [OPTIONS])
 
 Primary Subcommands:
   build, b                    Build active module, push APK to device, and reboot
   init                        Initialize $CONFIG_FILE_NAME in current directory (\$PWD)
-  install                     Install 'telua' alias in ~/.bashrc & dependencies
+  install                     Install 'telua' & 'tel' aliases in ~/.bashrc & dependencies
   info                        Display general build config, paths, and connected DUT
   update                      Update toolkit: git pull origin main (with auto-recovery)
   replace <old> <new> [path]  Find & replace text across files in [path] (default: '.')
@@ -761,25 +761,32 @@ install_bashrc_alias() {
         touch "$bashrc_file"
     fi
 
-    local alias_entry="alias telua='$real_script'"
+    local aliases=("telua" "tel")
+    local added_header=0
 
-    if grep -E -q '^[[:space:]]*alias[[:space:]]+telua=' "$bashrc_file"; then
-        # Update existing alias in ~/.bashrc
-        if sed --version 2>/dev/null | grep -q GNU; then
-            sed -i "s#^[[:space:]]*alias[[:space:]]\+telua=.*#$alias_entry#g" "$bashrc_file"
+    for a in "${aliases[@]}"; do
+        local a_entry="alias $a='$real_script'"
+        if grep -E -q "^[[:space:]]*alias[[:space:]]+${a}=" "$bashrc_file"; then
+            # Update existing alias in ~/.bashrc
+            if sed --version 2>/dev/null | grep -q GNU; then
+                sed -i "s#^[[:space:]]*alias[[:space:]]\+${a}=.*#$a_entry#g" "$bashrc_file"
+            else
+                sed -i '' "s#^[[:space:]]*alias[[:space:]]\{1,\}${a}=.*#$a_entry#g" "$bashrc_file" 2>/dev/null || sed -i "s#^[[:space:]]*alias[[:space:]]\+${a}=.*#$a_entry#g" "$bashrc_file"
+            fi
+            log_success "Updated alias '$a' in $bashrc_file:"
+            echo -e "  \033[1;36m$a_entry\033[0m"
         else
-            sed -i '' "s#^[[:space:]]*alias[[:space:]]\{1,\}telua=.*#$alias_entry#g" "$bashrc_file" 2>/dev/null || sed -i "s#^[[:space:]]*alias[[:space:]]\+telua=.*#$alias_entry#g" "$bashrc_file"
+            # Append alias to ~/.bashrc
+            if [ "$added_header" -eq 0 ] && ! grep -q "# Telua build automation aliases" "$bashrc_file"; then
+                echo "" >> "$bashrc_file"
+                echo "# Telua build automation aliases (telua & tel)" >> "$bashrc_file"
+                added_header=1
+            fi
+            echo "$a_entry" >> "$bashrc_file"
+            log_success "Added alias '$a' to $bashrc_file:"
+            echo -e "  \033[1;36m$a_entry\033[0m"
         fi
-        log_success "Updated existing alias in $bashrc_file:"
-        echo -e "  \033[1;36m$alias_entry\033[0m"
-    else
-        # Append alias to ~/.bashrc
-        echo "" >> "$bashrc_file"
-        echo "# Telua build automation alias" >> "$bashrc_file"
-        echo "$alias_entry" >> "$bashrc_file"
-        log_success "Added alias to $bashrc_file:"
-        echo -e "  \033[1;36m$alias_entry\033[0m"
-    fi
+    done
 
     # Source ~/.bashrc for the current shell environment
     if [ -f "$bashrc_file" ]; then
@@ -787,7 +794,7 @@ install_bashrc_alias() {
         source "$bashrc_file" 2>/dev/null || true
     fi
 
-    log_info "Configuration reloaded. To use the 'telua' alias in your current terminal session immediately, run:"
+    log_info "Configuration reloaded. To use 'telua' or 'tel' alias in your current terminal session immediately, run:"
     log_info "  source ~/.bashrc"
 }
 
