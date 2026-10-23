@@ -788,14 +788,11 @@ install_bashrc_alias() {
         fi
     done
 
-    # Source ~/.bashrc for the current shell environment
-    if [ -f "$bashrc_file" ]; then
-        # shellcheck disable=SC1090
-        source "$bashrc_file" 2>/dev/null || true
-    fi
-
-    log_info "Configuration reloaded. To use 'telua' or 'tel' alias in your current terminal session immediately, run:"
-    log_info "  source ~/.bashrc"
+    echo ""
+    log_success "Installation complete! To start using 'telua' or 'tel':"
+    echo -e "  \033[1;33mOption 1:\033[0m Open a new terminal tab/window (recommended)"
+    echo -e "  \033[1;33mOption 2:\033[0m Or reload in this session: \033[1;36msource ~/.bashrc\033[0m"
+    echo ""
 }
 
 # --- 1c. Install into a project directory (--softlink <path>) ---
