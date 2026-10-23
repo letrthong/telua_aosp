@@ -77,6 +77,11 @@ assert_success "Replace rejects missing new_text argument" grep -q "Missing argu
 
 rm -rf "$TMP_REP_DIR"
 
+# Test 4d: Car ks device check
+log_test "Testing car command device offline check (telua car ks)..."
+out_car_ks=$("$MAIN_SCRIPT" car ks 2>&1 || true)
+assert_success "Car ks reports device offline when disconnected" grep -qi "device offline" <<< "$out_car_ks"
+
 # Test 4b: Clean-java utilities
 log_test "Testing clean-java utilities (telua clean-java)..."
 out_clean=$("$MAIN_SCRIPT" clean-java help 2>&1 || true)

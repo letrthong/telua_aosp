@@ -240,17 +240,35 @@ handle_car_command() {
         exit 1
     fi
 
+# Check if Android device is connected and online before running car ADB commands.
+# Reports "device offline" if device is not connected or in offline/unauthorized state.
+check_car_device_connected() {
     if ! command -v adb >/dev/null 2>&1; then
-        log_error "'adb' command not found. Please ensure Android platform-tools is in your PATH."
-        exit 1
+        log_error "device offline: 'adb' command not found. Please ensure Android platform-tools is in PATH."
+        return 1
     fi
 
-    # Verify device state
     local dev_state
     dev_state=$(adb get-state 2>/dev/null || echo "offline")
-    if [ "$dev_state" != "device" ]; then
-        log_error "No Android device connected or device is not ready (state: $dev_state)."
+    local online_devices
+    online_devices=$(adb devices 2>/dev/null | grep -v "List of devices attached" | grep -w "device" || true)
+
+    if [ "$dev_state" != "device" ] && [ -z "$online_devices" ]; then
+        local raw_devices
+        raw_devices=$(adb devices 2>/dev/null | grep -v "List of devices attached" | grep -v "^$" || true)
+        if [ -n "$raw_devices" ]; then
+            log_error "device offline: Connected Android device is not ready (state: $dev_state)."
+        else
+            log_error "device offline: No Android device connected."
+        fi
         log_error "Please connect a device via USB/TCP and verify with 'adb devices'."
+        return 1
+    fi
+    return 0
+}
+
+    # Verify device state before executing
+    if ! check_car_device_connected; then
         exit 1
     fi
 
