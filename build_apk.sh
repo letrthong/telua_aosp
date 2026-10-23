@@ -208,9 +208,10 @@ if [ "${TELUA_NETWORK_SOURCED:-}" != "1" ]; then
     fi
 fi
 
-# --- Search utilities (single source of truth: src/telua_find.sh) ---
-# Code behind 'telua --find-file' (find_file), 'telua --find-dir' (find_dir)
-# and 'telua --find-text' (find_text) was extracted to src/telua_find.sh.
+# --- Search and replace utilities (single source of truth: src/telua_find.sh) ---
+# Code behind 'telua --find-file' (find_file), 'telua --find-dir' (find_dir),
+# 'telua --find-text' (find_text), and 'telua replace' (replace_text) was
+# extracted to src/telua_find.sh.
 # Sourcing it sets TELUA_FIND_SOURCED=1 and its internal guard makes
 # double-sourcing a no-op.
 # Lookup order: script dir -> master dir (both resolved through symlinks).
@@ -405,6 +406,7 @@ Primary Subcommands:
   install                     Install 'telua' alias in ~/.bashrc & dependencies
   info                        Display general build config, paths, and connected DUT
   update                      Update toolkit: git pull origin main (with auto-recovery)
+  replace <old> <new> [path]  Find & replace text across files in [path] (default: '.')
   car [action]                Control AAOS car (vol-up, vol-down, vol-mute, ks, ks-stop, car-status)
   dump [target]               Run dumpsys diagnostics (audio, car-service, car-audio, ...)
   clean-java [target]         Clean trailing whitespace in .java files (diff|all|<file|dir>)
@@ -428,6 +430,7 @@ Build & Deployment Options (used with 'build' or standalone):
   --find-file <pattern> [path] Search for files by pattern in [path] (default: '.')
   --find-dir <pattern> [path]  Search for directories by pattern in [path] (default: '.')
   --find-text <text> [path]    Search for text in files under [path] (default: '.')
+  --replace <old> <new> [path] Find & replace text across files under [path] (default: '.')
   -h, --help, help            Display this help message and exit
 
 Configuration Info:
@@ -598,6 +601,25 @@ parse_arguments() {
                 ACTION_CMD="find_text"
                 SEARCH_PATTERN="$2"
                 shift 2
+                if [ -n "$1" ] && [[ "$1" != --* ]]; then
+                    SEARCH_TARGET_PATH="$1"
+                    shift 1
+                fi
+                ;;
+            --replace|replace|--replace-text|replace_text)
+                if [ "$2" = "-h" ] || [ "$2" = "--help" ] || [ "$2" = "help" ]; then
+                    echo "Usage: $0 replace <current_text> <new_text> [path]"
+                    echo "Find & replace text across files under [path] (default: '.')"
+                    exit 0
+                fi
+                if [ -z "$2" ] || [ -z "$3" ] || [[ "$2" == --* ]] || [[ "$3" == --* ]]; then
+                    log_error "Missing arguments for replace! Usage: $0 replace <current_text> <new_text> [path]"
+                    exit 1
+                fi
+                ACTION_CMD="replace_text"
+                SEARCH_PATTERN="$2"
+                REPLACE_PATTERN="$3"
+                shift 3
                 if [ -n "$1" ] && [[ "$1" != --* ]]; then
                     SEARCH_TARGET_PATH="$1"
                     shift 1
@@ -1130,7 +1152,11 @@ main() {
     fi
 
     if [ -n "$ACTION_CMD" ]; then
-        "$ACTION_CMD" "$SEARCH_PATTERN" "${SEARCH_TARGET_PATH:-.}"
+        if [ "$ACTION_CMD" = "replace_text" ]; then
+            replace_text "$SEARCH_PATTERN" "$REPLACE_PATTERN" "${SEARCH_TARGET_PATH:-.}"
+        else
+            "$ACTION_CMD" "$SEARCH_PATTERN" "${SEARCH_TARGET_PATH:-.}"
+        fi
         exit 0
     fi
 

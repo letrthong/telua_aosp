@@ -54,6 +54,29 @@ log_test "Testing search utilities (--find-file)..."
 out_find=$("$MAIN_SCRIPT" --find-file "config_crypto.py" "$REPO_ROOT" 2>&1 || true)
 assert_success "Find file locates config_crypto.py" grep -q "config_crypto.py" <<< "$out_find"
 
+# Test 4c: Replace utilities
+log_test "Testing replace utilities (telua replace)..."
+TMP_REP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_replace_test.XXXXXX")
+echo "Hello UNIQUE_FIND_ME_AAA world" > "$TMP_REP_DIR/test1.txt"
+echo "Another UNIQUE_FIND_ME_AAA occurrence" > "$TMP_REP_DIR/test2.txt"
+
+# Test replace across folder
+out_rep=$("$MAIN_SCRIPT" replace "UNIQUE_FIND_ME_AAA" "UNIQUE_REPLACED_BBB" "$TMP_REP_DIR" 2>&1 || true)
+assert_success "Replace completes successfully" grep -q "Replacement complete" <<< "$out_rep"
+assert_success "Test1 file content replaced" grep -q "Hello UNIQUE_REPLACED_BBB world" "$TMP_REP_DIR/test1.txt"
+assert_success "Test2 file content replaced" grep -q "Another UNIQUE_REPLACED_BBB occurrence" "$TMP_REP_DIR/test2.txt"
+
+# Test replace on single file with --replace
+echo "Single UNIQUE_SINGLE_AAA file" > "$TMP_REP_DIR/single.txt"
+out_single=$("$MAIN_SCRIPT" --replace "UNIQUE_SINGLE_AAA" "UNIQUE_SINGLE_BBB" "$TMP_REP_DIR/single.txt" 2>&1 || true)
+assert_success "Single file replace succeeded" grep -q "Single UNIQUE_SINGLE_BBB file" "$TMP_REP_DIR/single.txt"
+
+# Test missing argument validation
+out_missing=$("$MAIN_SCRIPT" replace "only_one" 2>&1 || true)
+assert_success "Replace rejects missing new_text argument" grep -q "Missing arguments for replace" <<< "$out_missing"
+
+rm -rf "$TMP_REP_DIR"
+
 # Test 4b: Clean-java utilities
 log_test "Testing clean-java utilities (telua clean-java)..."
 out_clean=$("$MAIN_SCRIPT" clean-java help 2>&1 || true)
