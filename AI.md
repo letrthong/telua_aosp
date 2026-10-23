@@ -60,6 +60,7 @@ When the user asks you to perform a task, map their intent to the corresponding 
 | **Sync with Clean Reset** | `telua --repo-sync --repo-reset -y` | Hard resets dirty repos before sync (AI must pass `-y`) |
 | **Run Unit Tests** | `telua --test-mode true` | Runs project test script configured in `apk.config` |
 | **Find & Replace Text Across Files** | `telua replace <old> <new> [path]` | Fast literal string replacement across directory or single file |
+| **Clean Java Trailing Whitespace** | `telua clean-java [diff\|all\|path]` | Strips trailing whitespace & enforces LF on Java source files |
 | **Install Global CLI Alias & Completion** | `./build_apk.sh --install` | Adds `alias telua=...`, `alias tel=...`, and Tab Auto-completion into `~/.bashrc` |
 | **Update Toolkit to Latest Main** | `telua update` | Pulls latest main commit with auto-recovery |
 

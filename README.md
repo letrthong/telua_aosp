@@ -197,6 +197,7 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `--dump`, `dump [target]` | Runs dumpsys diagnostics via ADB shell (`audio`, `car-service`, `car-audio`, `media`, `battery`, `activity`) using commands from `config/const_dumpsys.config` |
 | `--run`, `run [group]` | Executes multi-command sequential pipeline group from `config/const_multi_cli.config` (alias: `telua multi [group]`) |
 | `my [action]`, `proj [action]` | Executes personal private pipeline macro from `config/const_my_cli.config` (`telua my hello`) |
+| `clean-java [target]` | Cleans trailing whitespace in `.java` source files (`diff` \| `all` \| `<file|dir>`; alias: `--clean-java`) |
 | `--find-file <pattern> [path]` | Searches for files by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-dir <pattern> [path]` | Searches for directories by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-text <text> [path]` | Greps for text string in files under `[path]` (defaults to `.` if omitted) |
@@ -209,10 +210,13 @@ telua                                 # View interactive help menu & available s
 telua build                           # Build active module, push APK, and reboot device
 telua build --no-reboot               # Fast deploy after editing Java/Kotlin code (~5-10s)
 telua b                               # Short alias for 'telua build'
-./build_apk.sh --install              # Install/update 'telua' & 'tel' aliases in ~/.bashrc
+./build_apk.sh --install              # Install/update 'telua' & 'tel' aliases + Tab completion in ~/.bashrc
 telua init                            # Initialize workspace & apply apk_overlays.config
 telua info                            # Inspect environment and device state
 telua update                          # Update toolkit: pulls origin/main & preserves personal configs
+telua clean-java                      # Clean trailing whitespace in Git-modified .java files
+telua clean-java all                  # Clean trailing whitespace in ALL .java files in workspace
+telua clean-java packages/apps/Car/   # Clean trailing whitespace under a specific folder
 telua car vol-up                      # Increase volume (AAOS inject-key 24) (or: telua audio vol-up)
 telua car vol-down                    # Decrease volume (AAOS inject-key 25)
 telua car vol-mute                    # Mute volume (AAOS inject-key 164)
@@ -402,6 +406,20 @@ Các quy trình chạy tuần tự riêng tư của cá nhân Developer được
 
 ---
 
+### 5.3f Java Source Hygiene (`telua clean-java` / `src/telua_clean.sh`)
+
+Công cụ chuẩn hóa mã nguồn Java tự động (`python/clean_java.py` điều khiển qua wrapper `src/telua_clean.sh`), giúp loại bỏ khoảng trắng thừa ở cuối dòng (trailing whitespaces) và chuẩn hóa ký tự xuống dòng UNIX (LF):
+
+```bash
+telua clean-java            # Quét và dọn dẹp các file .java đang sửa đổi trong Git (Git diff mode - mặc định)
+telua clean-java diff       # Tương đương lệnh trên
+telua clean-java all        # Quét và dọn dẹp TOÀN BỘ file .java trong toàn bộ workspace
+telua clean-java <path>     # Dọn dẹp một file .java cụ thể hoặc toàn bộ file trong thư mục <path>
+telua clean-java help       # Hiển thị hướng dẫn chi tiết
+```
+
+---
+
 ### 5.4 Unit Tests
 
 | Variable | Description |
@@ -505,6 +523,31 @@ telua update
   3. **Tự phục hồi xung đột (Self-Healing / Auto-Recovery):** Nếu phát hiện merge conflict hoặc tree bị dirty, kịch bản tự kích hoạt `git fetch origin main` và `git reset --hard origin/main`.
   4. Sau khi cập nhật xong, các file cá nhân được **tự động phục hồi nguyên vẹn** từ bản sao lưu tạm, đảm bảo không bao giờ bị mất cấu hình riêng khi update.
   5. Tự động kiểm tra và khôi phục quyền thực thi (`chmod +x`) cho tất cả các script trong bộ công cụ.
+
+---
+
+### 5.7 Bash & Zsh Tab Auto-completion Engine (`src/telua_completion.sh`)
+
+Bộ gợi ý phím Tab hai lần (<kbd>Tab</kbd><kbd>Tab</kbd>) giúp lập trình viên thao tác cực nhanh mà không cần nhớ cú pháp:
+
+```bash
+# Cài đặt tự động vào ~/.bashrc:
+telua install
+
+# Sau đó mở tab terminal mới hoặc:
+source ~/.bashrc
+```
+
+**Tính năng nổi bật:**
+- **Nhận diện cả 2 alias:** Hoạt động bình đẳng khi gõ `telua ` hoặc `tel `.
+- **Gợi ý cấp 1 (Subcommands & Options):** Gõ `tel <Tab><Tab>` hiển thị danh sách toàn bộ lệnh chính (`build`, `car`, `dump`, `clean-java`, `run`, `replace`, `info`, `init`, `--platform`, `--ram-monitor`, ...).
+- **Gợi ý ngữ cảnh chuyên sâu (Context-aware):**
+  - `tel car <Tab><Tab>`: Đọc động từ `const_car.config` và gợi ý `vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`, `status`.
+  - `tel dump <Tab><Tab>`: Đọc động từ `const_dumpsys.config` và gợi ý `audio`, `car-service`, `car-audio`, `media`, `battery`, `activity`.
+  - `tel run <Tab><Tab>`: Đọc động từ `const_multi_cli.config` và gợi ý `audio-cycle`, `dev-prep`, `remount-reboot`, `audio-dump`, `unittest`.
+  - `tel clean-java <Tab><Tab>`: Gợi ý `diff`, `all`, `help`.
+  - `tel --platform <Tab><Tab>`: Gợi ý `android`, `qnx`.
+  - `tel --start-deploy <Tab><Tab>`: Gợi ý `true`, `false`.
 
 ---
 
