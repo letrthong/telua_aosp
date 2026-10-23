@@ -19,6 +19,8 @@ An automated developer workflow script for building and deploying privileged sys
 | `config/const_git.config` | Frequently used Git & Google Repo commands cheatsheet (`telua git`) |
 | `config/const_docker.config` | Frequently used Docker daemon, container & image commands cheatsheet (`telua docker`) |
 | `config/const_network.config` | Frequently used Network, Port & ADB over Wi-Fi commands cheatsheet (`telua network`) |
+| `src/telua_clean.sh` | Java source code hygiene & trailing whitespace cleaner (`telua clean-java`) |
+| `src/telua_completion.sh` | Bash and Zsh Tab Auto-completion engine (`tel <Tab><Tab>`) |
 | `config_crypto.py` | Encrypt / decrypt `apk.config` with a password (PBKDF2 + Fernet) |
 | `requirements.txt` | Python package dependencies for `config_crypto.py` (`cryptography`) |
 
