@@ -55,12 +55,14 @@ Make the scripts executable and install the global `telua` alias into your `~/.b
 # 1. Grant execution permissions
 chmod +x build_apk.sh config_crypto.py config_overlay.py
 
-# 2. Install 'telua' command into ~/.bashrc
+# 2. Install 'telua' & 'tel' commands into ~/.bashrc
 ./build_apk.sh --install
+
+# 3. Open a new terminal tab (recommended), or reload current session:
 source ~/.bashrc
 ```
 
-Now you can invoke `telua` anywhere in your terminal!
+Now you can invoke `telua` (or short alias `tel`) anywhere in your terminal!
 - Run `telua` with no arguments to display the interactive help menu.
 
 ### Step 2: Build & Deployment
