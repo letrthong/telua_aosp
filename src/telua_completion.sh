@@ -54,7 +54,7 @@ _telua_completions() {
     # Context-aware completion based on the previous word
     case "$prev" in
         sec|security)
-            local sec_actions="status perm enforce avc privapp appops keystore policy root unroot remount disable-verity help"
+            local sec_actions="host status perm enforce avc privapp appops keystore policy root unroot remount disable-verity help"
             local config_dir
             config_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../config" 2>/dev/null && pwd)"
             if [ -f "$config_dir/const_security.config" ]; then

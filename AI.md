@@ -97,7 +97,8 @@ telua dump activity       # Dump foreground Activity & window stack
 ### 4.3 Security & SELinux Diagnostics (`telua sec <action>` / `telua security <action>`)
 ```bash
 telua sec                 # View interactive security command list (alias: telua security)
-telua sec status          # Inspect SELinux mode, build type, secure & verity props
+telua sec host            # Audit Linux host security, OS, limits, /tmp & developer hygiene
+telua sec status          # Inspect target device SELinux mode, build type, secure & verity props
 telua sec perm            # Set SELinux to Permissive mode (setenforce 0)
 telua sec enforce         # Set SELinux to Enforcing mode (setenforce 1)
 telua sec avc             # Dump SELinux AVC audit denials from logcat & dmesg

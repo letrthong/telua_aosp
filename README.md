@@ -573,7 +573,8 @@ telua sec help                        # Hiển thị chi tiết từng action k�
 
 | Action | Chức năng | Câu lệnh thực thi |
 |---|---|---|
-| `status` | Kiểm tra tổng thể trạng thái bảo mật | `getenforce`, `ro.build.type`, `ro.debuggable`, `ro.secure`, `partition.system.verified` |
+| `host` | Kiểm tra an ninh môi trường máy host Linux (OS, LSM, ulimit, /tmp, keys) | Kiểm tra trực tiếp trên Linux host (không cần cắm thiết bị) |
+| `status` | Kiểm tra tổng thể trạng thái bảo mật thiết bị | `getenforce`, `ro.build.type`, `ro.debuggable`, `ro.secure`, `partition.system.verified` |
 | `perm` | Chuyển SELinux sang Permissive để debug | `adb shell setenforce 0` |
 | `enforce` | Chuyển SELinux về Enforcing | `adb shell setenforce 1` |
 | `avc` | Soi nhanh log vi phạm chính sách SELinux | Lọc `avc:` từ `logcat -d -b all` và `dmesg` |
