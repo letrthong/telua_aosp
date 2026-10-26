@@ -122,11 +122,15 @@ show_security_help() {
             local var_suffix
             var_suffix=$(echo "$item_action" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
             local sec_array_name="SEC_CMD_${var_suffix}"
+            local adb_sec_array_name="ADB_SEC_${var_suffix}"
             local is_array=0
             local -a array_steps=()
 
             if declare -p "$sec_array_name" 2>/dev/null | grep -q 'declare -a'; then
                 eval "array_steps=(\"\${${sec_array_name}[@]}\")"
+                is_array=1
+            elif declare -p "$adb_sec_array_name" 2>/dev/null | grep -q 'declare -a'; then
+                eval "array_steps=(\"\${${adb_sec_array_name}[@]}\")"
                 is_array=1
             elif [ -n "$item_cmd" ] && declare -p "$item_cmd" 2>/dev/null | grep -q 'declare -a'; then
                 eval "array_steps=(\"\${${item_cmd}[@]}\")"
@@ -449,13 +453,17 @@ handle_security_command() {
     local is_array=0
     local -a step_cmds=()
 
-    # 1. Check if defined as a multi-command array: SEC_CMD_<ACTION>
+    # 1. Check if defined as a multi-command array: SEC_CMD_<ACTION> or ADB_SEC_<ACTION>
     local var_suffix
     var_suffix=$(echo "$action_normalized" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
     local sec_array_name="SEC_CMD_${var_suffix}"
+    local adb_sec_array_name="ADB_SEC_${var_suffix}"
 
     if declare -p "$sec_array_name" 2>/dev/null | grep -q 'declare -a'; then
         eval "step_cmds=(\"\${${sec_array_name}[@]}\")"
+        is_array=1
+    elif declare -p "$adb_sec_array_name" 2>/dev/null | grep -q 'declare -a'; then
+        eval "step_cmds=(\"\${${adb_sec_array_name}[@]}\")"
         is_array=1
     fi
 
