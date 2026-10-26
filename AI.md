@@ -35,6 +35,7 @@ When assisting a developer, **ALWAYS prefer using `telua` (or `./build_apk.sh`) 
 ├── config/                   # Declarative global constant cheatsheets & commands
 │   ├── const_car.config      # AAOS car & audio key injection & test harness
 │   ├── const_dumpsys.config  # System diagnostics & AAOS dumpsys targets
+│   ├── const_security.config # Security, SELinux & permission diagnostics
 │   ├── const_multi_cli.config# Multi-command sequential pipelines / macros
 │   ├── const_my_cli.config.example # Personal pipeline template (telua my <action>)
 │   ├── const_docker.config   # Docker & systemd service cheatsheet
@@ -61,6 +62,7 @@ When the user asks you to perform a task, map their intent to the corresponding 
 | **Run Unit Tests** | `telua --test-mode true` | Runs project test script configured in `apk.config` |
 | **Find & Replace Text Across Files** | `telua replace <old> <new> [path]` | Fast literal string replacement across directory or single file |
 | **Clean Java Trailing Whitespace** | `telua clean-java [diff\|all\|path]` | Strips trailing whitespace & enforces LF on Java source files |
+| **Security & SELinux Diagnostics** | `telua sec [action]` | Controls SELinux (status, perm, enforce), dumps AVC denials & privapp |
 | **Install Global CLI Alias & Completion** | `./build_apk.sh --install` | Adds `alias telua=...`, `alias tel=...`, and Tab Auto-completion into `~/.bashrc` |
 | **Update Toolkit to Latest Main** | `telua update` | Pulls latest main commit with auto-recovery |
 
@@ -92,7 +94,23 @@ telua dump battery        # Dump battery charging status
 telua dump activity       # Dump foreground Activity & window stack
 ```
 
-### 4.3 Java Code Hygiene (`telua clean-java`)
+### 4.3 Security & SELinux Diagnostics (`telua sec <action>` / `telua security <action>`)
+```bash
+telua sec                 # View interactive security command list (alias: telua security)
+telua sec status          # Inspect SELinux mode, build type, secure & verity props
+telua sec perm            # Set SELinux to Permissive mode (setenforce 0)
+telua sec enforce         # Set SELinux to Enforcing mode (setenforce 1)
+telua sec avc             # Dump SELinux AVC audit denials from logcat & dmesg
+telua sec privapp         # Dump priv-app permissions & whitelist violations
+telua sec appops          # Query AppOps restrictions and granted operations
+telua sec keystore        # Dump Android Keystore service status
+telua sec policy          # Dump DevicePolicyManager (DPM) state
+telua sec root            # Restart adbd daemon with root privileges
+telua sec remount         # Remount system partition as read-write
+telua sec disable-verity  # Disable dm-verity partition verification
+```
+
+### 4.4 Java Code Hygiene (`telua clean-java`)
 AI agents refactoring Java code should use this command to sanitize whitespace before committing:
 ```bash
 telua clean-java          # Default: Cleans only Git modified/added .java files
@@ -100,7 +118,7 @@ telua clean-java all      # Recursively cleans all .java files across workspace
 telua clean-java <path>   # Cleans a specific .java file or target directory
 ```
 
-### 4.4 Tab Auto-completion Engine (`src/telua_completion.sh`)
+### 4.5 Tab Auto-completion Engine (`src/telua_completion.sh`)
 Supports both `telua` and short alias `tel` on Bash & Zsh:
 ```bash
 ./build_apk.sh --install  # Automatically installs both aliases & completion into ~/.bashrc

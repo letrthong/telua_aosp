@@ -12,7 +12,7 @@ Whether you are fixing a bug, adding a new Automotive command, expanding a cheat
 
 When contributing to this toolkit, please keep our core design principles in mind:
 
-1. **Zero Cognitive Load:** "Make it simple to use, even if the underlying task is complex." Users should not need to memorize lengthy shell parameters—typing the root command (`telua`, `telua run`, `telua audio`, `telua dump`) should always display an interactive, self-explanatory cheatsheet.
+1. **Zero Cognitive Load:** "Make it simple to use, even if the underlying task is complex." Users should not need to memorize lengthy shell parameters—typing the root command (`telua`, `telua run`, `telua car`, `telua dump`, `telua sec`) should always display an interactive, self-explanatory cheatsheet.
 2. **Defensive & Enterprise-Safe:** This tool is used in corporate and shared server environments. Never introduce automated destructive actions (such as git resets or container prunings) without an explicit, interactive confirmation prompt (`[y/N]`) and an optional `-y` bypass flag.
 3. **Modular Separation of Concerns:**
    - Script orchestration logic belongs in `build_apk.sh`.
@@ -26,10 +26,11 @@ When contributing to this toolkit, please keep our core design principles in min
 
 There are many ways you can help improve `telua`:
 
-### A. Add New Automotive Commands (`config/const_audio.config` / `config/const_dumpsys.config`)
+### A. Add New Automotive & Security Commands (`config/const_car.config`, `config/const_dumpsys.config`, `config/const_security.config`)
 If you work with Android Automotive OS (AAOS) and have useful ADB shell shortcuts:
-- Add volume controls, CarInputService inject keys, or audio focus tests to `config/const_audio.config`.
+- Add volume controls, CarInputService inject keys, or audio focus tests to `config/const_car.config`.
 - Add new diagnostic targets (e.g., VHAL, CarPropertyService, SensorService) to `config/const_dumpsys.config` via `DUMP_CLI_LIST`.
+- Add new SELinux, permissions, or security diagnostic targets to `config/const_security.config` via `SECURITY_CLI_LIST`.
 
 ### B. Add Multi-Command Pipelines (`config/const_multi_cli.config`)
 Have a sequence of commands you run frequently together (e.g., restarting Bluetooth, clearing app cache and relaunching, or probing audio zones)?

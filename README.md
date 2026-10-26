@@ -13,12 +13,14 @@ An automated developer workflow script for building and deploying privileged sys
 | `config_overlay.py` | Smart overlay merge engine (merges `apk_overlays.config` onto `apk.config`) |
 | `config/const_car.config` | Global AAOS Car & Audio ADB key injection commands configuration |
 | `config/const_dumpsys.config` | Global Dumpsys & AAOS diagnostics commands configuration |
+| `config/const_security.config` | Global Security, SELinux & permissions diagnostics configuration (`telua sec`) |
 | `config/const_multi_cli.config` | Global Multi-command sequential pipelines & macros with fail-fast safety |
 | `config/const_my_cli.config.example` | Template for personal private pipelines & macros (`telua my <action>`) |
 | `config/const_my_cli.config` | Personal private pipelines & macros (untracked in Git, preserved across updates) |
 | `config/const_git.config` | Frequently used Git & Google Repo commands cheatsheet (`telua git`) |
 | `config/const_docker.config` | Frequently used Docker daemon, container & image commands cheatsheet (`telua docker`) |
 | `config/const_network.config` | Frequently used Network, Port & ADB over Wi-Fi commands cheatsheet (`telua network`) |
+| `src/telua_security.sh` | Security & SELinux diagnostics commands module (`telua sec <action>`) |
 | `src/telua_clean.sh` | Java source code hygiene & trailing whitespace cleaner (`telua clean-java`) |
 | `src/telua_completion.sh` | Bash and Zsh Tab Auto-completion engine (`tel <Tab><Tab>`) |
 | `config_crypto.py` | Encrypt / decrypt `apk.config` with a password (PBKDF2 + Fernet) |
@@ -195,6 +197,7 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `--network-help`, `network` | Displays cheatsheet of commonly used Network & Port commands and exits |
 | `car [action]`, `audio [action]` | Controls car/audio via ADB shell (`vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`, `car-status`) using commands from `config/const_car.config` |
 | `--dump`, `dump [target]` | Runs dumpsys diagnostics via ADB shell (`audio`, `car-service`, `car-audio`, `media`, `battery`, `activity`) using commands from `config/const_dumpsys.config` |
+| `sec [action]`, `security [action]` | Controls SELinux and runs security diagnostics (`status`, `perm`, `enforce`, `avc`, `privapp`, `appops`, `keystore`, `policy`, `root`, `unroot`, `remount`, `disable-verity`) using `config/const_security.config` |
 | `--run`, `run [group]` | Executes multi-command sequential pipeline group from `config/const_multi_cli.config` (alias: `telua multi [group]`) |
 | `my [action]`, `proj [action]` | Executes personal private pipeline macro from `config/const_my_cli.config` (`telua my hello`) |
 | `clean-java [target]` | Cleans trailing whitespace in `.java` source files (`diff` \| `all` \| `<file|dir>`; alias: `--clean-java`) |
@@ -225,6 +228,13 @@ telua car ks-stop                     # Force stop KitchenSink test app
 telua dump audio                      # Dump audio service status (or: telua --dump audio)
 telua dump car-service                # Dump AAOS CarService state
 telua dump car-audio                  # Dump AAOS CarAudioService
+telua sec                             # View security & SELinux command cheatsheet (or: telua security)
+telua sec status                      # Check SELinux mode, build type, secure/debuggable props
+telua sec perm                        # Set SELinux to Permissive mode (setenforce 0)
+telua sec enforce                     # Set SELinux to Enforcing mode (setenforce 1)
+telua sec avc                         # Dump SELinux AVC audit denials from logcat & dmesg
+telua sec privapp                     # Dump priv-app permissions & whitelist violations
+telua sec root                        # Restart adbd daemon with root privileges
 telua run                             # View all pipeline macro groups and steps (or: telua multi)
 telua run audio-cycle                 # Run KitchenSink restart & volume test pipeline
 telua run dev-prep                    # Run device prep pipeline (root, remount, debug tags)
@@ -544,10 +554,39 @@ source ~/.bashrc
 - **Gợi ý ngữ cảnh chuyên sâu (Context-aware):**
   - `tel car <Tab><Tab>`: Đọc động từ `const_car.config` và gợi ý `vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`, `status`.
   - `tel dump <Tab><Tab>`: Đọc động từ `const_dumpsys.config` và gợi ý `audio`, `car-service`, `car-audio`, `media`, `battery`, `activity`.
+  - `tel sec <Tab><Tab>`: Đọc động từ `const_security.config` và gợi ý `status`, `perm`, `enforce`, `avc`, `privapp`, `appops`, `keystore`, `policy`, `root`, `unroot`, `remount`, `disable-verity`.
   - `tel run <Tab><Tab>`: Đọc động từ `const_multi_cli.config` và gợi ý `audio-cycle`, `dev-prep`, `remount-reboot`, `audio-dump`, `unittest`.
   - `tel clean-java <Tab><Tab>`: Gợi ý `diff`, `all`, `help`.
   - `tel --platform <Tab><Tab>`: Gợi ý `android`, `qnx`.
   - `tel --start-deploy <Tab><Tab>`: Gợi ý `true`, `false`.
+
+---
+
+### 5.8 Security, SELinux & Diagnostics Control (`telua sec` / `telua security`)
+
+Chẩn đoán và kiểm soát bảo mật hệ thống Android / AAOS qua module `src/telua_security.sh` và cấu hình khai báo `config/const_security.config`:
+
+```bash
+telua sec                             # Hiển thị bảng tra cứu nhanh các lệnh bảo mật
+telua sec help                        # Hiển thị chi tiết từng action kèm câu lệnh ADB thực thi
+```
+
+| Action | Chức năng | Câu lệnh thực thi |
+|---|---|---|
+| `status` | Kiểm tra tổng thể trạng thái bảo mật | `getenforce`, `ro.build.type`, `ro.debuggable`, `ro.secure`, `partition.system.verified` |
+| `perm` | Chuyển SELinux sang Permissive để debug | `adb shell setenforce 0` |
+| `enforce` | Chuyển SELinux về Enforcing | `adb shell setenforce 1` |
+| `avc` | Soi nhanh log vi phạm chính sách SELinux | Lọc `avc:` từ `logcat -d -b all` và `dmesg` |
+| `privapp` | Dump phân quyền Privileged App & whitelist | `dumpsys package --privapp-permissions` / `cmd package dump-privapp-permissions` |
+| `appops` | Truy vấn các hạn chế và quyền AppOps | `cmd appops query-op --user 0` / `dumpsys appops` |
+| `keystore` | Trích xuất trạng thái Android Keystore | `dumpsys keystore` |
+| `policy` | Trích xuất trạng thái DevicePolicyManager | `dumpsys device_policy` |
+| `root` | Khởi động lại adbd với quyền root | `adb root` |
+| `unroot` | Trả adbd về chế độ không root | `adb unroot` |
+| `remount` | Remount các phân vùng hệ thống sang RW | `adb remount` |
+| `disable-verity` | Tắt cơ chế kiểm tra phân vùng dm-verity | `adb disable-verity` |
+
+> **Ghi chú an toàn:** Tương tự `telua car`, toàn bộ các lệnh `telua sec` đều tự động kiểm tra trạng thái thiết bị online trước khi chạy, dừng ngay với cảnh báo `[ERROR] device offline: ...` nếu thiết bị bị ngắt kết nối.
 
 ---
 

@@ -28,6 +28,7 @@ SCRIPT_LAST_UPDATED="2026-10-23"
 CONFIG_FILE_NAME="apk.config"
 CAR_CONFIG_FILE_NAME="const_car.config"
 DUMP_CONFIG_FILE_NAME="const_dumpsys.config"
+SECURITY_CONFIG_FILE_NAME="const_security.config"
 MULTI_CONFIG_FILE_NAME="const_multi_cli.config"
 MY_CONFIG_FILE_NAME="const_my_cli.config"
 PROJECT_CONFIG_FILE_NAME="const_project_cli.config"
@@ -119,6 +120,7 @@ find_const_config_file() {
 
 CAR_CONFIG_FILE="$(find_const_config_file "$CAR_CONFIG_FILE_NAME")"
 DUMP_CONFIG_FILE="$(find_const_config_file "$DUMP_CONFIG_FILE_NAME")"
+SECURITY_CONFIG_FILE="$(find_const_config_file "$SECURITY_CONFIG_FILE_NAME")"
 GIT_CONFIG_FILE="$(find_const_config_file "$GIT_CONFIG_FILE_NAME")"
 DOCKER_CONFIG_FILE="$(find_const_config_file "$DOCKER_CONFIG_FILE_NAME")"
 NETWORK_CONFIG_FILE="$(find_const_config_file "$NETWORK_CONFIG_FILE_NAME")"
@@ -306,6 +308,23 @@ if [ "${TELUA_DUMP_SOURCED:-}" != "1" ]; then
     fi
 fi
 
+# --- Security diagnostics & SELinux control (single source of truth: src/telua_security.sh) ---
+# Code behind 'telua sec <action>' / 'telua security <action>'
+# (show_security_short_help, show_security_help, is_security_action,
+# handle_security_command) was extracted to src/telua_security.sh; it is
+# driven by const_security.config (SECURITY_CLI_LIST, ADB_SHELL_SEC_*). Sourcing it
+# sets TELUA_SECURITY_SOURCED=1 and its internal guard makes double-sourcing a no-op.
+# Lookup order: script dir -> master dir (both resolved through symlinks).
+if [ "${TELUA_SECURITY_SOURCED:-}" != "1" ]; then
+    if [ -f "$SCRIPT_DIR/src/telua_security.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$SCRIPT_DIR/src/telua_security.sh"
+    elif [ -f "$MASTER_SCRIPT_DIR/src/telua_security.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$MASTER_SCRIPT_DIR/src/telua_security.sh"
+    fi
+fi
+
 # --- Android/QNX build & deploy pipeline (single source of truth: src/telua_android.sh) ---
 # Code behind the build/deploy/device/log flow (resolve_android_paths,
 # setup_build_environment*, build_apk, wait_for_device*, restart_framework,
@@ -411,6 +430,7 @@ print_help() {
     printf "  \033[1;37m%-28s\033[0m %s\n" "replace <old> <new> [path]" "Find & replace text across files in [path] (default: '.')"
     printf "  \033[1;37m%-28s\033[0m %s\n" "car [action]" "Control AAOS car (vol-up, vol-down, vol-mute, ks, ks-stop, status)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "dump [target]" "Run dumpsys diagnostics (audio, car-service, car-audio, ...)"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "sec, security [action]" "Security & SELinux diagnostics (status, perm, enforce, avc, ...)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "clean-java [target]" "Clean trailing whitespace in .java files (diff|all|<file|dir>)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "run [group]" "Execute multi-command pipeline macro (dev-prep, audio-cycle, ...)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "my, proj [action]" "Execute personal / private pipeline macro (hello, ...)"
@@ -436,9 +456,9 @@ print_help() {
     printf "  \033[1;36m%-28s\033[0m %s\n" "-h, --help, help" "Display this help message and exit"
     echo ""
     echo -e "\033[1;33mConfiguration & Cheatsheet Info:\033[0m"
-    printf "  \033[0;90m%-28s\033[0m \033[0;32m%s\033[0m\n" "Active Config:" "$CONFIG_FILE"
     printf "  \033[0;90m%-28s\033[0m \033[0;33m%s\033[0m\n" "Car Config (Global):" "$CAR_CONFIG_FILE"
     printf "  \033[0;90m%-28s\033[0m \033[0;33m%s\033[0m\n" "Dump Config (Global):" "$DUMP_CONFIG_FILE"
+    printf "  \033[0;90m%-28s\033[0m \033[0;33m%s\033[0m\n" "Security Config (Global):" "$SECURITY_CONFIG_FILE"
     printf "  \033[0;90m%-28s\033[0m \033[0;33m%s\033[0m\n" "Multi-CLI Pipelines (Global):" "$MULTI_CONFIG_FILE"
     printf "  \033[0;90m%-28s\033[0m \033[0;35m%s\033[0m\n" "Personal Pipelines (Private):" "$MY_CONFIG_FILE"
     printf "  \033[0;90m%-28s\033[0m \033[0;36m%s\033[0m\n" "Git Cheatsheet (Global):" "$GIT_CONFIG_FILE"
@@ -667,6 +687,17 @@ parse_arguments() {
                 handle_dump_command "$DUMP_ACTION"
                 exit 0
                 ;;
+            --sec|sec|--security|security)
+                if [ -n "$2" ] && [[ "$2" != --* ]]; then
+                    SEC_ACTION="$2"
+                    shift 2
+                else
+                    SEC_ACTION=""
+                    shift 1
+                fi
+                handle_security_command "$SEC_ACTION"
+                exit 0
+                ;;
             --clean-java|clean-java|cleanjava)
                 if [ -n "$2" ] && [[ "$2" != --* ]]; then
                     CLEAN_ACTION="$2"
@@ -725,6 +756,10 @@ parse_arguments() {
                 fi
                 if is_dump_action "$stripped_arg"; then
                     handle_dump_command "$stripped_arg"
+                    exit 0
+                fi
+                if is_security_action "$stripped_arg"; then
+                    handle_security_command "$stripped_arg"
                     exit 0
                 fi
                 if is_clean_action "$stripped_arg"; then
@@ -903,6 +938,7 @@ show_info_general() {
     printf "  \033[1;37m%-20s\033[0m \033[1;33mv%s\033[0m \033[0;90m(Updated: %s)\033[0m\n" "Script Version:" "$SCRIPT_VERSION" "$SCRIPT_LAST_UPDATED"
     printf "  \033[1;37m%-20s\033[0m \033[0;32m%s\033[0m\n" "Config File:" "$CONFIG_FILE"
     printf "  \033[1;37m%-20s\033[0m \033[0;33m%s\033[0m\n" "Car Config:" "$CAR_CONFIG_FILE"
+    printf "  \033[1;37m%-20s\033[0m \033[0;33m%s\033[0m\n" "Security Config:" "$SECURITY_CONFIG_FILE"
     printf "  \033[1;37m%-20s\033[0m \033[1;35m%s\033[0m\n" "Project:" "${ACTIVE_PROJECT:-default}"
     printf "  \033[1;37m%-20s\033[0m \033[1;36m%s\033[0m\n" "Target Platform:" "$target_platform"
     printf "  \033[1;37m%-20s\033[0m \033[1;33m%s-%s\033[0m\n" "Target Lunch:" "$CONFIG_TARGET_PRODUCT" "$CONFIG_TARGET_BUILD_VARIANT"
@@ -1059,6 +1095,15 @@ load_and_validate_config() {
         source "$MASTER_SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME"
     elif [ -f "$SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME" ]; then
         source "$SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME"
+    fi
+
+    # 1e. Nạp cấu hình Security chung (nằm cùng thư mục với build_apk.sh)
+    if [ -f "$SECURITY_CONFIG_FILE" ]; then
+        source "$SECURITY_CONFIG_FILE"
+    elif [ -f "$MASTER_SCRIPT_DIR/$SECURITY_CONFIG_FILE_NAME" ]; then
+        source "$MASTER_SCRIPT_DIR/$SECURITY_CONFIG_FILE_NAME"
+    elif [ -f "$SCRIPT_DIR/$SECURITY_CONFIG_FILE_NAME" ]; then
+        source "$SCRIPT_DIR/$SECURITY_CONFIG_FILE_NAME"
     fi
 
     # 1c. Nạp cấu hình Multi-CLI Pipelines chung (nằm cùng thư mục với build_apk.sh)

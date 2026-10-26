@@ -48,11 +48,25 @@ _telua_completions() {
     fi
 
     # 1. Primary subcommands and global options
-    local subcommands="build init install info update replace car dump clean-java run multi my proj git docker network help version"
+    local subcommands="build init install info update replace car dump sec security clean-java run multi my proj git docker network help version"
     local options="--no-reboot --start-deploy --platform --repo-sync --repo-reset -y --yes --config --softlink --test-mode --ram-monitor --find-file --find-dir --find-text --replace -h --help -v --version"
 
     # Context-aware completion based on the previous word
     case "$prev" in
+        sec|security)
+            local sec_actions="status perm enforce avc privapp appops keystore policy root unroot remount disable-verity help"
+            local config_dir
+            config_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../config" 2>/dev/null && pwd)"
+            if [ -f "$config_dir/const_security.config" ]; then
+                local dynamic_sec
+                dynamic_sec=$(grep -E '^[[:space:]]*"[^:]+::' "$config_dir/const_security.config" 2>/dev/null | sed -E 's/^[[:space:]]*"([^[:space:]]+).*/\1/' | tr '\n' ' ')
+                if [ -n "$dynamic_sec" ]; then
+                    sec_actions="$dynamic_sec help"
+                fi
+            fi
+            COMPREPLY=($(compgen -W "$sec_actions" -- "$cur"))
+            return 0
+            ;;
         car)
             local car_actions="vol-up vol-down vol-mute ks ks-stop status help"
             # Try to read dynamic actions from const_car.config if present
