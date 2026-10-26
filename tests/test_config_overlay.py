@@ -14,9 +14,10 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 OVERLAY_SCRIPT = os.path.join(REPO_ROOT, "python", "config_overlay.py")
 
-# Ensure repo root is in python path
-if REPO_ROOT not in sys.path:
-    sys.path.insert(0, REPO_ROOT)
+# Ensure repo root and python/ subdir are in python path
+for p in (REPO_ROOT, os.path.join(REPO_ROOT, "python")):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 import config_overlay
 

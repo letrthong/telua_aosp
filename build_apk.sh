@@ -142,21 +142,21 @@ if [ "${TELUA_LOG_SOURCED:-}" != "1" ]; then
     fi
 fi
 
-# --- Init & Update utilities (single source of truth: src/telua_untils.sh) ---
+# --- Init & Update utilities (single source of truth: src/telua_utils.sh) ---
 # Code behind 'telua init' (init_project_config, apply_config_overlay,
 # install_python_requirements, ensure_script_permissions, ensure_personal_configs)
 # and 'telua update' (run_git_update, git_pull_with_recovery,
 # backup_personal_configs, restore_personal_configs) was extracted to
-# src/telua_untils.sh; sourcing it sets TELUA_UNTILS_SOURCED=1 and its internal
+# src/telua_utils.sh; sourcing it sets TELUA_UTILS_SOURCED=1 and its internal
 # guard makes double-sourcing a no-op.
 # Lookup order: script dir -> master dir (both resolved through symlinks).
-if [ "${TELUA_UNTILS_SOURCED:-}" != "1" ]; then
-    if [ -f "$SCRIPT_DIR/src/telua_untils.sh" ]; then
+if [ "${TELUA_UTILS_SOURCED:-}" != "1" ]; then
+    if [ -f "$SCRIPT_DIR/src/telua_utils.sh" ]; then
         # shellcheck disable=SC1091
-        source "$SCRIPT_DIR/src/telua_untils.sh"
-    elif [ -f "$MASTER_SCRIPT_DIR/src/telua_untils.sh" ]; then
+        source "$SCRIPT_DIR/src/telua_utils.sh"
+    elif [ -f "$MASTER_SCRIPT_DIR/src/telua_utils.sh" ]; then
         # shellcheck disable=SC1091
-        source "$MASTER_SCRIPT_DIR/src/telua_untils.sh"
+        source "$MASTER_SCRIPT_DIR/src/telua_utils.sh"
     fi
 fi
 
@@ -745,7 +745,7 @@ parse_arguments() {
 
 
 # --- 1a. Install Alias into ~/.bashrc (--install) ---
-# (install_python_requirements used here lives in src/telua_untils.sh)
+# (install_python_requirements used here lives in src/telua_utils.sh)
 install_bashrc_alias() {
     # Check and install python dependencies if missing
     install_python_requirements
@@ -813,7 +813,7 @@ install_bashrc_alias() {
 }
 
 # --- 1c. Install into a project directory (--softlink <path>) ---
-# (apply_config_overlay and init_project_config live in src/telua_untils.sh)
+# (apply_config_overlay and init_project_config live in src/telua_utils.sh)
 # Symlinks this script (fixes to the original reach every project) and copies
 # apk.config (each project keeps its own settings). Existing files are overwritten.
 # NOTE: the script finds apk.config and the 'android' root relative to the

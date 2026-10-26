@@ -111,10 +111,10 @@ echo "EXAMPLE_OVERLAY=1" > "$TMP_TEST_DIR/apk_overlays.config.example"
     # Source minimal helpers from main script
     eval "$(grep '^PERSONAL_CONFIG_FILES=' "$MAIN_SCRIPT")"
     
-    # Extract functions (init/update helpers now live in src/telua_untils.sh)
-    UNTILS_SCRIPT="$REPO_ROOT/src/telua_untils.sh"
+    # Extract functions (init/update helpers now live in src/telua_utils.sh)
+    UTILS_SCRIPT="$REPO_ROOT/src/telua_utils.sh"
     extract_func() {
-        awk -v f="$1" '$0 ~ "^"f"\\(\\) \\{" {p=1} p {print} p && /^}/ {exit}' "$UNTILS_SCRIPT"
+        awk -v f="$1" '$0 ~ "^"f"\\(\\) \\{" {p=1} p {print} p && /^}/ {exit}' "$UTILS_SCRIPT"
     }
     
     eval "$(extract_func backup_personal_configs)"

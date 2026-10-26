@@ -19,7 +19,7 @@
 # limitations under the License.
 # ==============================================================================
 #
-# telua_untils.sh - Init & Update utilities for the Telua toolkit.
+# telua_utils.sh - Init & Update utilities for the Telua toolkit.
 # Single source of truth for the code behind 'telua init' and 'telua update',
 # previously inlined in build_apk.sh:
 #   - 'telua init'  : init_project_config (+ apply_config_overlay,
@@ -29,7 +29,7 @@
 #                     backup_personal_configs, restore_personal_configs)
 #
 # Usage (source, never execute):
-#   source "$(dirname "${BASH_SOURCE[0]}")/src/telua_untils.sh"
+#   source "$(dirname "${BASH_SOURCE[0]}")/src/telua_utils.sh"
 #
 # Contract with the sourcing (host) script:
 #   - The host must define, BEFORE sourcing this file:
@@ -39,14 +39,14 @@
 #     log_warn/log_error), e.g. by sourcing src/telua_log.sh first.
 #   - Functions here only define behavior; they have no CLI entry point and
 #     no side effects at source time, so sourcing is always safe.
-#   - Guarded by TELUA_UNTILS_SOURCED so double-sourcing is a no-op and never
+#   - Guarded by TELUA_UTILS_SOURCED so double-sourcing is a no-op and never
 #     redefines an already-loaded copy.
 
 # Guard: skip re-definition when already sourced (idempotent).
-if [ "${TELUA_UNTILS_SOURCED:-}" = "1" ]; then
+if [ "${TELUA_UTILS_SOURCED:-}" = "1" ]; then
     return 0 2>/dev/null || true
 fi
-TELUA_UNTILS_SOURCED=1
+TELUA_UTILS_SOURCED=1
 
 # ==============================================================================
 # Shared low-level helpers (used by both 'init' and 'update' flows)
@@ -56,7 +56,7 @@ TELUA_UNTILS_SOURCED=1
 # Missing files are skipped so 'set -e' never aborts the update.
 # Covers the main scripts, EVERY python helper under python/ (config_crypto,
 # config_overlay, apply_apk_overlays, ...) and every src/*.sh module
-# (telua_log, telua_git, telua_untils, telua_car, telua_run, ...) so
+# (telua_log, telua_git, telua_utils, telua_car, telua_run, ...) so
 # 'telua init' / 'telua update' never leave a freshly pulled file
 # non-executable.
 # Usage: ensure_script_permissions <repo_dir>
@@ -195,15 +195,16 @@ apply_config_overlay() {
 # Creates $PWD/apk.config from the encrypted template (enc_apk.config, password
 # prompt) or the plain template, then applies the personal overlay.
 init_project_config() {
+    local base_toolkit_dir="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}"
     local target_config="$PWD/$CONFIG_FILE_NAME"
-    local template_config="$SCRIPT_DIR/$CONFIG_FILE_NAME"
-    local enc_config="$SCRIPT_DIR/enc_apk.config"
+    local template_config="$base_toolkit_dir/$CONFIG_FILE_NAME"
+    local enc_config="$base_toolkit_dir/enc_apk.config"
     # Prefer python/ subdir (new layout), fall back to repo root (old layout).
     local crypto_script
-    if [ -f "$SCRIPT_DIR/python/config_crypto.py" ]; then
-        crypto_script="$SCRIPT_DIR/python/config_crypto.py"
+    if [ -f "$base_toolkit_dir/python/config_crypto.py" ]; then
+        crypto_script="$base_toolkit_dir/python/config_crypto.py"
     else
-        crypto_script="$SCRIPT_DIR/config_crypto.py"
+        crypto_script="$base_toolkit_dir/config_crypto.py"
     fi
 
     # Make sure helper scripts (config_crypto.py, config_overlay.py, ...) are executable.
@@ -355,12 +356,13 @@ git_pull_with_recovery() {
 
 # --- 4c. Git Update Utility (--update / update: git pull origin main with auto reset hard) ---
 run_git_update() {
-    local target_repo="$SCRIPT_DIR"
-    if [ -L "${BASH_SOURCE[0]}" ]; then
+    local target_repo="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}"
+    if [ -z "$target_repo" ] || [ ! -d "$target_repo/.git" ]; then
         local real_file
         real_file="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "")"
         if [ -n "$real_file" ] && [ -f "$real_file" ]; then
-            target_repo="$(cd "$(dirname "$real_file")" && pwd)"
+            # BASH_SOURCE is in src/, repo root is parent directory
+            target_repo="$(cd "$(dirname "$real_file")/.." && pwd)"
         fi
     fi
 

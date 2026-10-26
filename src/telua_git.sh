@@ -34,7 +34,7 @@ DEFAULT_GIT_BRANCH="main"
 #   - 'telua --git-amend' : run_git_amend (amend last commit, then exit)
 #   - 'telua --git-help'  : show_git_help (print const_git.config cheatsheet)
 # NOTE: 'telua update' (run_git_update + backup/restore_personal_configs +
-# git_pull_with_recovery) lives in src/telua_untils.sh because it also serves
+# git_pull_with_recovery) lives in src/telua_utils.sh because it also serves
 # the init flow (shared ensure_* helpers).
 #
 # Usage (source, never execute):
