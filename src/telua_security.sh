@@ -159,6 +159,29 @@ show_security_help() {
     echo ""
 }
 
+# Print one aligned audit row: "    <label> ....... <value>"
+# Color codes: g=green, y=yellow, r=red, d=dim, (empty)=default
+_sec_audit_row() {
+    local label="$1" value="$2" color="${3:-}"
+    local width=24
+    local pad=$((width - ${#label}))
+    [ "$pad" -lt 2 ] && pad=2
+    local dots
+    dots=$(printf '%*s' "$pad" '' | tr ' ' '.')
+    case "$color" in
+        g) printf "    %s \033[0;90m%s\033[0m \033[0;32m%s\033[0m\n" "$label" "$dots" "$value" ;;
+        y) printf "    %s \033[0;90m%s\033[0m \033[1;33m%s\033[0m\n" "$label" "$dots" "$value" ;;
+        r) printf "    %s \033[0;90m%s\033[0m \033[1;31m%s\033[0m\n" "$label" "$dots" "$value" ;;
+        d) printf "    %s \033[0;90m%s\033[0m \033[0;90m%s\033[0m\n" "$label" "$dots" "$value" ;;
+        *) printf "    %s \033[0;90m%s\033[0m %s\n" "$label" "$dots" "$value" ;;
+    esac
+}
+
+# Print a section title inside the host audit report
+_sec_audit_section() {
+    echo -e "\n  \033[1;33m$1\033[0m"
+}
+
 # --- Host Linux Security Environment Check (telua sec host / sec env) ---
 check_host_linux_security() {
     echo ""
@@ -167,162 +190,150 @@ check_host_linux_security() {
     echo -e "  Host: \033[1;33m$(hostname 2>/dev/null || echo "localhost")\033[0m | Date: \033[0;37m$(date 2>/dev/null || echo "N/A")\033[0m"
     echo -e "\033[1;36m================================================================================\033[0m"
 
-    # --- 1. Operating System & Kernel ---
-    echo -e "\n\033[1;33m[1/7] OS & Kernel Information:\033[0m"
+    # --- Operating System & Kernel ---
+    _sec_audit_section "OS & Kernel"
     local os_desc="Unknown Linux"
     if [ -f /etc/os-release ]; then
         os_desc=$(grep -E '^PRETTY_NAME=' /etc/os-release | cut -d'=' -f2 | tr -d '"')
     elif command -v lsb_release >/dev/null 2>&1; then
         os_desc=$(lsb_release -ds 2>/dev/null)
     fi
-    printf "  %-24s \033[1;37m%s\033[0m\n" "Operating System:" "$os_desc"
-    printf "  %-24s \033[0;36m%s\033[0m\n" "Kernel Version:" "$(uname -srm 2>/dev/null || uname -a)"
+    _sec_audit_row "Operating System" "$os_desc"
+    _sec_audit_row "Kernel Version" "$(uname -srm 2>/dev/null || uname -a)"
     if [ -f /proc/version ]; then
         local gcc_ver
         gcc_ver=$(grep -oE 'gcc version [^ )]+' /proc/version | head -n1)
-        [ -n "$gcc_ver" ] && printf "  %-24s \033[0;90m%s\033[0m\n" "Kernel Toolchain:" "$gcc_ver"
+        [ -n "$gcc_ver" ] && _sec_audit_row "Kernel Toolchain" "$gcc_ver" d
     fi
 
-    # --- 2. Linux Security Modules (LSM) ---
-    echo -e "\n\033[1;33m[2/7] Linux Security Modules (LSM):\033[0m"
+    # --- Security Modules (LSM) ---
+    _sec_audit_section "Security Modules (LSM)"
     local lsm_found=0
-    # AppArmor
     if command -v aa-status >/dev/null 2>&1; then
         if aa-status --enabled 2>/dev/null; then
             local aa_profiles
             aa_profiles=$(aa-status 2>/dev/null | grep -E 'profiles are in enforce mode' | head -n1 | xargs || echo "active")
-            echo -e "  \033[1;32m[PASS]\033[0m AppArmor is \033[1;32mENABLED\033[0m ($aa_profiles)"
+            _sec_audit_row "AppArmor" "enabled (${aa_profiles:-active})" g
             lsm_found=1
         fi
     elif [ -d /sys/kernel/security/apparmor ]; then
-        echo -e "  \033[1;32m[PASS]\033[0m AppArmor is \033[1;32mLOADED\033[0m (/sys/kernel/security/apparmor)"
+        _sec_audit_row "AppArmor" "loaded (/sys/kernel/security/apparmor)" g
         lsm_found=1
     fi
 
-    # Host SELinux
     if command -v getenforce >/dev/null 2>&1; then
         local host_se
         host_se=$(getenforce 2>/dev/null || echo "Disabled")
-        if [ "$host_se" = "Enforcing" ]; then
-            echo -e "  \033[1;32m[PASS]\033[0m Host SELinux is \033[1;32mEnforcing\033[0m"
-            lsm_found=1
-        elif [ "$host_se" = "Permissive" ]; then
-            echo -e "  \033[1;33m[WARN]\033[0m Host SELinux is \033[1;33mPermissive\033[0m"
-            lsm_found=1
-        fi
+        case "$host_se" in
+            Enforcing)  _sec_audit_row "Host SELinux" "Enforcing" g ;;
+            Permissive) _sec_audit_row "Host SELinux" "Permissive" y ;;
+            *)          _sec_audit_row "Host SELinux" "$host_se" d ;;
+        esac
+        lsm_found=1
     fi
     if [ "$lsm_found" -eq 0 ]; then
-        echo -e "  \033[0;90m[INFO] No active AppArmor / Host SELinux enforcing profile detected.\033[0m"
+        _sec_audit_row "AppArmor / SELinux" "no active module detected" d
     fi
 
-    # --- 3. User Identity & Privilege Separation ---
-    echo -e "\n\033[1;33m[3/7] User Identity & Privileges:\033[0m"
+    # --- User Identity & Privileges ---
+    _sec_audit_section "User & Privileges"
     local cur_uid
     cur_uid=$(id -u 2>/dev/null || echo "1000")
     local cur_user
     cur_user=$(id -un 2>/dev/null || echo "user")
     if [ "$cur_uid" -eq 0 ]; then
-        echo -e "  \033[1;31m[WARN]\033[0m Running as \033[1;31mroot\033[0m (UID 0). AOSP builds should be run as regular unprivileged user!"
+        _sec_audit_row "Current User" "root (UID 0) — run AOSP builds as a regular user!" r
     else
-        echo -e "  \033[1;32m[PASS]\033[0m Current User: \033[1;37m$cur_user\033[0m (UID: $cur_uid, GID: $(id -g 2>/dev/null))"
+        _sec_audit_row "Current User" "$cur_user (UID: $cur_uid, GID: $(id -g 2>/dev/null))"
     fi
     local groups_str
     groups_str=$(id -Gn 2>/dev/null || groups 2>/dev/null || echo "")
     groups_str=$(echo "$groups_str" | tr '\r\n' ' ' | xargs)
-    printf "  %-24s \033[0;90m%s\033[0m\n" "User Groups:" "$groups_str"
+    _sec_audit_row "User Groups" "$groups_str" d
     if echo "$groups_str" | grep -qwE '(sudo|wheel|admin)'; then
-        echo -e "  \033[1;32m[PASS]\033[0m User has administrative (sudo/wheel) membership."
+        _sec_audit_row "Admin Membership" "sudo/wheel group present" g
     else
-        echo -e "  \033[0;90m[INFO] User is not in standard sudo/wheel group.\033[0m"
+        _sec_audit_row "Admin Membership" "not in standard sudo/wheel group" d
     fi
 
-    # --- 4. System Limits (ulimit) for AOSP Build ---
-    echo -e "\n\033[1;33m[4/7] System Resource Limits (ulimit):\033[0m"
+    # --- System Resource Limits (ulimit) for AOSP Build ---
+    _sec_audit_section "Resource Limits (ulimit)"
     local nofile_limit
     nofile_limit=$(ulimit -n 2>/dev/null || echo "1024")
     if [ "$nofile_limit" = "unlimited" ] || [ "$nofile_limit" -ge 4096 ]; then
-        echo -e "  \033[1;32m[PASS]\033[0m Max open files (ulimit -n): \033[1;32m$nofile_limit\033[0m (>= 4096, optimal for AOSP Ninja/Soong)"
+        _sec_audit_row "Max open files" "$nofile_limit (optimal for AOSP Ninja/Soong)" g
     elif [ "$nofile_limit" -ge 2048 ]; then
-        echo -e "  \033[1;33m[WARN]\033[0m Max open files (ulimit -n): \033[1;33m$nofile_limit\033[0m (Recommend >= 4096 in /etc/security/limits.conf)"
+        _sec_audit_row "Max open files" "$nofile_limit (recommend >= 4096 via limits.conf)" y
     else
-        echo -e "  \033[1;31m[FAIL]\033[0m Max open files (ulimit -n): \033[1;31m$nofile_limit\033[0m (< 2048, may cause build failures!)"
+        _sec_audit_row "Max open files" "$nofile_limit (too low, may break builds!)" r
     fi
-    local maxproc_limit
-    maxproc_limit=$(ulimit -u 2>/dev/null || echo "unlimited")
-    printf "  %-24s \033[1;37m%s\033[0m\n" "Max user processes:" "$maxproc_limit"
-    local stack_limit
-    stack_limit=$(ulimit -s 2>/dev/null || echo "unlimited")
-    printf "  %-24s \033[1;37m%s\033[0m\n" "Stack size limit:" "$stack_limit"
+    _sec_audit_row "Max user processes" "$(ulimit -u 2>/dev/null || echo "unlimited")"
+    _sec_audit_row "Stack size" "$(ulimit -s 2>/dev/null || echo "unlimited")"
 
-    # --- 5. Filesystem & Temporary Directory Security ---
-    echo -e "\n\033[1;33m[5/7] Filesystem & /tmp Mount Security:\033[0m"
+    # --- Filesystem & Temporary Directory ---
+    _sec_audit_section "Filesystem & /tmp"
     local tmp_mount
     tmp_mount=$(mount 2>/dev/null | grep -E '[[:space:]]/tmp[[:space:]]' || true)
     if [ -n "$tmp_mount" ]; then
         if echo "$tmp_mount" | grep -qw "noexec"; then
-            echo -e "  \033[1;31m[WARN]\033[0m /tmp is mounted with \033[1;31mnoexec\033[0m! Some build scripts executing in /tmp will fail."
+            _sec_audit_row "/tmp mount" "noexec set — build scripts in /tmp will fail!" r
         else
-            echo -e "  \033[1;32m[PASS]\033[0m /tmp mount allows executable binaries (no 'noexec' flag detected)."
+            _sec_audit_row "/tmp mount" "isolated mount, executables allowed" g
         fi
     else
-        echo -e "  \033[1;32m[PASS]\033[0m /tmp is part of root filesystem (no restrictive isolated mount detected)."
+        _sec_audit_row "/tmp mount" "part of root filesystem (no restrictions)" g
     fi
-
-    # Available disk space on workspace
     local ws_disk
     ws_disk=$(df -h . 2>/dev/null | tail -n1 | awk '{print $4 " available (" $5 " used on " $1 ")"}')
-    if [ -n "$ws_disk" ]; then
-        printf "  %-24s \033[1;32m%s\033[0m\n" "Workspace Disk Space:" "$ws_disk"
-    fi
+    [ -n "$ws_disk" ] && _sec_audit_row "Workspace disk" "$ws_disk"
 
-    # --- 6. Network & Firewall Status ---
-    echo -e "\n\033[1;33m[6/7] Network & Firewall Security:\033[0m"
+    # --- Network & Firewall ---
+    _sec_audit_section "Network & Firewall"
     if command -v ufw >/dev/null 2>&1; then
         local ufw_status
         ufw_status=$(sudo -n ufw status 2>/dev/null || echo "unprivileged")
         if echo "$ufw_status" | grep -qi "active"; then
-            echo -e "  \033[1;32m[PASS]\033[0m UFW Firewall is \033[1;32mACTIVE\033[0m."
+            _sec_audit_row "UFW Firewall" "active" g
         elif [ "$ufw_status" = "unprivileged" ]; then
-            echo -e "  \033[0;90m[INFO] UFW installed (sudo needed to read status).\033[0m"
+            _sec_audit_row "UFW Firewall" "installed (sudo needed to read status)" d
         else
-            echo -e "  \033[1;33m[WARN]\033[0m UFW Firewall is \033[1;33mINACTIVE\033[0m."
+            _sec_audit_row "UFW Firewall" "inactive" y
         fi
+    else
+        _sec_audit_row "UFW Firewall" "not installed" d
     fi
-
     local open_ports_count=0
     if command -v ss >/dev/null 2>&1; then
         open_ports_count=$(ss -tulpn 2>/dev/null | grep -E '^tcp|^udp' | wc -l || echo 0)
     elif command -v netstat >/dev/null 2>&1; then
         open_ports_count=$(netstat -tulpn 2>/dev/null | grep -E '^tcp|^udp' | wc -l || echo 0)
     fi
-    printf "  %-24s \033[0;36m%s listening socket(s)\033[0m\n" "Local Network Sockets:" "$open_ports_count"
+    _sec_audit_row "Listening sockets" "$open_ports_count"
 
-    # --- 7. Developer Security & Key Hygiene ---
-    echo -e "\n\033[1;33m[7/7] Developer Security Hygiene:\033[0m"
+    # --- Developer Security & Key Hygiene ---
+    _sec_audit_section "Developer Hygiene"
     local git_name git_email
     git_name=$(git config --get user.name 2>/dev/null || echo "")
     git_email=$(git config --get user.email 2>/dev/null || echo "")
     if [ -n "$git_name" ] && [ -n "$git_email" ]; then
-        echo -e "  \033[1;32m[PASS]\033[0m Git Identity Configured: \033[1;37m$git_name <$git_email>\033[0m"
+        _sec_audit_row "Git identity" "$git_name <$git_email>" g
     else
-        echo -e "  \033[1;33m[WARN]\033[0m Git user.name or user.email is NOT set globally!"
+        _sec_audit_row "Git identity" "user.name / user.email not set globally!" y
     fi
 
-    # SSH Directory Permissions
     local ssh_dir="$HOME/.ssh"
     if [ -d "$ssh_dir" ]; then
         local ssh_perm
         ssh_perm=$(stat -c "%a" "$ssh_dir" 2>/dev/null || stat -f "%Op" "$ssh_dir" 2>/dev/null || echo "")
         if [ -n "$ssh_perm" ] && [[ "$ssh_perm" =~ 700$ ]]; then
-            echo -e "  \033[1;32m[PASS]\033[0m ~/.ssh permissions: \033[1;32m$ssh_perm\033[0m (secure owner-only 0700)"
+            _sec_audit_row "~/.ssh permissions" "$ssh_perm (secure owner-only)" g
         elif [ -n "$ssh_perm" ]; then
-            echo -e "  \033[1;33m[WARN]\033[0m ~/.ssh permissions are \033[1;33m$ssh_perm\033[0m (Recommend: chmod 700 ~/.ssh)"
+            _sec_audit_row "~/.ssh permissions" "$ssh_perm (recommend chmod 700)" y
         fi
     else
-        echo -e "  \033[0;90m[INFO] No ~/.ssh directory found.\033[0m"
+        _sec_audit_row "~/.ssh" "no directory found" d
     fi
 
-    # Python & Cryptography module
     local py_cmd=""
     for candidate in python3 python py; do
         if command -v "$candidate" >/dev/null 2>&1; then
@@ -336,16 +347,16 @@ check_host_linux_security() {
         local py_version
         py_version=$("$py_cmd" --version 2>&1)
         if "$py_cmd" -c "import cryptography" >/dev/null 2>&1; then
-            echo -e "  \033[1;32m[PASS]\033[0m $py_version with \033[1;32mcryptography\033[0m installed."
+            _sec_audit_row "Python" "$py_version + cryptography module" g
         else
-            echo -e "  \033[1;33m[WARN]\033[0m $py_version found, but 'cryptography' is missing (run: telua init to install)."
+            _sec_audit_row "Python" "$py_version (cryptography missing — run: telua init)" y
         fi
     else
-        echo -e "  \033[1;31m[FAIL]\033[0m Python 3 not found in PATH!"
+        _sec_audit_row "Python" "python3 not found in PATH!" r
     fi
 
     echo -e "\n\033[1;36m================================================================================\033[0m"
-    log_success "Host Linux Security & Environment check completed."
+    log_success "Host Linux security & environment audit completed."
     echo ""
     return 0
 }
