@@ -396,9 +396,10 @@ is_security_action() {
     local suf
     suf=$(echo "$target" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
     local v_arr="SEC_CMD_${suf}"
+    local v_host_arr="ADB_SEC_${suf}"
     local v="ADB_SHELL_SEC_${suf}"
     local v_host="ADB_SEC_${suf}"
-    if declare -p "$v_arr" >/dev/null 2>&1 || [ -n "${!v}" ] || [ -n "${!v_host}" ]; then
+    if declare -p "$v_arr" >/dev/null 2>&1 || declare -p "$v_host_arr" >/dev/null 2>&1 || [ -n "${!v}" ] || [ -n "${!v_host}" ]; then
         return 0
     fi
     return 1
