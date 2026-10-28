@@ -390,8 +390,7 @@ docs_cmd_build() {
 
     local sphinx_cmd
     sphinx_cmd="$(_docs_get_sphinx_build_cmd "$py_cmd")"
-    if [ -z "$sphinx_cmd" ]; then
-        log_warn "'sphinx-build' command not found. Triggering automatic installation..."
+    if [ -z "$sphinx_cmd" ] || ! "$py_cmd" -c "import sphinxcontrib.mermaid" >/dev/null 2>&1; then
         _docs_ensure_sphinx_build "$target_dir"
         sphinx_cmd="$(_docs_get_sphinx_build_cmd "$py_cmd")"
     fi
