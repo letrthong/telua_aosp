@@ -167,14 +167,15 @@ TMP_DOCS_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_docs_test.XXXXXX")
     echo "$help_out" | grep -q "serve \[port\]" && \
     # Init into temp directory
     "$MAIN_SCRIPT" docs init "$TMP_DOCS_DIR" >/dev/null 2>&1 && \
-    [ -f "$TMP_DOCS_DIR/conf.py" ] && \
+    [ -f "$TMP_DOCS_DIR/index.rst" ] && \
     [ -f "$TMP_DOCS_DIR/metadata.json" ] && \
-    [ -f "$TMP_DOCS_DIR/requirements.txt" ] && \
+    [ ! -f "$TMP_DOCS_DIR/requirements.txt" ] && \
+    [ ! -f "$TMP_DOCS_DIR/conf.py" ] && \
     [ ! -f "$TMP_DOCS_DIR/check_sections.py" ] && \
     # Check documentation validity
     "$MAIN_SCRIPT" docs check "$TMP_DOCS_DIR" >/dev/null 2>&1
 )
-assert_success "Documentation module initializes template and validates" [ $? -eq 0 ]
+assert_success "Documentation module initializes clean template and validates" [ $? -eq 0 ]
 rm -rf "$TMP_DOCS_DIR"
 
 echo "============================================================"

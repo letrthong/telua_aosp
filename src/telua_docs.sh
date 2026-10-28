@@ -70,25 +70,25 @@ resolve_docs_dir() {
     fi
 
     # Check if current working directory is a docs root
-    if [ -f "./conf.py" ] && [ -f "./metadata.json" ]; then
+    if [ -f "./metadata.json" ] || [ -f "./index.rst" ] || [ -f "./conf.py" ]; then
         echo "."
         return 0
     fi
 
     # Check ./docs
-    if [ -d "./docs" ] && ([ -f "./docs/conf.py" ] || [ -f "./docs/metadata.json" ]); then
+    if [ -d "./docs" ] && ([ -f "./docs/metadata.json" ] || [ -f "./docs/index.rst" ] || [ -f "./docs/conf.py" ]); then
         echo "./docs"
         return 0
     fi
 
     # Check ./sphinx/template
-    if [ -d "./sphinx/template" ] && ([ -f "./sphinx/template/conf.py" ] || [ -f "./sphinx/template/metadata.json" ]); then
+    if [ -d "./sphinx/template" ] && ([ -f "./sphinx/template/metadata.json" ] || [ -f "./sphinx/template/index.rst" ]); then
         echo "./sphinx/template"
         return 0
     fi
 
     # Check ./sphinx
-    if [ -d "./sphinx" ] && ([ -f "./sphinx/conf.py" ] || [ -f "./sphinx/metadata.json" ]); then
+    if [ -d "./sphinx" ] && ([ -f "./sphinx/metadata.json" ] || [ -f "./sphinx/conf.py" ]); then
         echo "./sphinx"
         return 0
     fi
@@ -98,10 +98,15 @@ resolve_docs_dir() {
     return 0
 }
 
-# Helper: locate python command
+# Helper: locate python command (bypasses WindowsApps stubs, safe under set -e)
 _docs_get_python_cmd() {
-    for py in python3 python py; do
-        if command -v "$py" >/dev/null 2>&1; then
+    for py in python py python3; do
+        local path_to_py
+        path_to_py="$(command -v "$py" 2>/dev/null || true)"
+        if [ -n "$path_to_py" ]; then
+            if [[ "$path_to_py" == *"WindowsApps"* ]]; then
+                continue
+            fi
             if "$py" --version >/dev/null 2>&1; then
                 echo "$py"
                 return 0
@@ -109,7 +114,7 @@ _docs_get_python_cmd() {
         fi
     done
     echo ""
-    return 1
+    return 0
 }
 
 # Helper: locate doc toolchain script (checks target directory first, then central scripts/)
@@ -146,7 +151,7 @@ _docs_open_browser() {
     ) &
 }
 
-# Helper: detect sphinx build command (command line or python -m module)
+# Helper: detect sphinx build command (command line or python -m module, safe under set -e)
 _docs_get_sphinx_build_cmd() {
     local py_cmd="${1:-}"
     [ -z "$py_cmd" ] && py_cmd="$(_docs_get_python_cmd)"
@@ -162,7 +167,7 @@ _docs_get_sphinx_build_cmd() {
     fi
 
     echo ""
-    return 1
+    return 0
 }
 
 # Helper: ensure sphinx-build is installed, auto-install via pip if missing
@@ -183,14 +188,14 @@ _docs_ensure_sphinx_build() {
         return 0
     fi
 
-    # Locate requirements.txt
+    # Locate requirements.txt from central toolkit first (fallback to target directory)
     local req_file=""
-    if [ -f "$target_dir/requirements.txt" ]; then
+    if [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/requirements.txt" ]; then
+        req_file="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/requirements.txt"
+    elif [ -f "$target_dir/requirements.txt" ]; then
         req_file="$target_dir/requirements.txt"
     elif [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template/requirements.txt" ]; then
         req_file="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template/requirements.txt"
-    elif [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/requirements.txt" ]; then
-        req_file="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/requirements.txt"
     fi
 
     if [ -z "$req_file" ]; then
@@ -246,8 +251,8 @@ docs_cmd_init() {
 
     # Check if target docs project already exists
     if [ -d "$target_dir" ]; then
-        if [ -f "$target_dir/conf.py" ] || [ -f "$target_dir/metadata.json" ]; then
-            log_warn "Documentation project already exists in '$target_dir' (found conf.py or metadata.json)."
+        if [ -f "$target_dir/metadata.json" ] || [ -f "$target_dir/index.rst" ] || [ -f "$target_dir/conf.py" ]; then
+            log_warn "Documentation project already exists in '$target_dir' (found metadata.json, index.rst or conf.py)."
             log_warn "Skipping initialization. Existing documentation files were NOT modified."
             echo ""
             # Still verify Sphinx availability
@@ -269,22 +274,23 @@ docs_cmd_init() {
     log_info "Initializing documentation project in '$target_dir' from template..."
     mkdir -p "$target_dir"
 
-    # Copy template files excluding _build, scripts, and internal files
+    # Copy template content files only:
+    # Exclude: *.py scripts, requirements.txt, ReadMe, build artifacts and internal toolchain files
     local copied_count=0
     for item in "$template_dir"/*; do
         local basename
         basename="$(basename "$item")"
-        if [ "$basename" != "_build" ] && [ "$basename" != ".git" ] && [ "$basename" != "scripts" ] && [ "$basename" != "template" ] && [ "$basename" != "gen_sphinx.sh" ]; then
-            cp -r "$item" "$target_dir/"
-            copied_count=$((copied_count + 1))
-        fi
+        case "$basename" in
+            *.py|requirements.txt|ReadMe*|README*|github.md|_build|.git|scripts|template|gen_sphinx.sh)
+                # Skip python files, requirements.txt, ReadMe and internal files
+                continue
+                ;;
+            *)
+                cp -r "$item" "$target_dir/"
+                copied_count=$((copied_count + 1))
+                ;;
+        esac
     done
-
-    # Ensure requirements.txt is copied if missing
-    if [ ! -f "$target_dir/requirements.txt" ] && [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/requirements.txt" ]; then
-        cp "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/requirements.txt" "$target_dir/requirements.txt"
-        copied_count=$((copied_count + 1))
-    fi
 
     log_success "Created documentation template in '$target_dir' ($copied_count items copied)."
 
@@ -351,8 +357,8 @@ docs_cmd_build() {
     local target_dir
     target_dir="$(resolve_docs_dir "${1:-}")"
 
-    if [ ! -f "$target_dir/conf.py" ] || [ ! -f "$target_dir/metadata.json" ]; then
-        log_error "No documentation project found in '$target_dir' (missing conf.py or metadata.json)."
+    if [ ! -f "$target_dir/metadata.json" ] && [ ! -f "$target_dir/index.rst" ]; then
+        log_error "No documentation project found in '$target_dir' (missing metadata.json or index.rst)."
         log_error "Run 'telua docs init' to initialize a documentation project."
         return 1
     fi
@@ -374,8 +380,18 @@ docs_cmd_build() {
 
     if [ -z "$sphinx_cmd" ]; then
         log_error "Sphinx build tool is still unavailable!"
-        log_error "Please install Sphinx dependencies manually: pip install -r $target_dir/requirements.txt"
+        log_error "Please install Sphinx dependencies manually: pip install -r ${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/requirements.txt"
         return 1
+    fi
+
+    # Resolve conf.py: use local if customized by user, else fallback to central template conf.py
+    local conf_arg=""
+    if [ -f "$target_dir/conf.py" ]; then
+        conf_arg="-c $target_dir"
+    elif [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template/conf.py" ]; then
+        conf_arg="-c ${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template"
+    elif [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/conf.py" ]; then
+        conf_arg="-c ${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx"
     fi
 
     log_info "============================================================"
@@ -418,7 +434,7 @@ docs_cmd_build() {
     # 4. Compile Sphinx HTML
     log_info "Step 4/4: Compiling Sphinx HTML using '$sphinx_cmd'..."
     local out_html="$target_dir/_build/html"
-    if ! $sphinx_cmd -b html "$target_dir" "$out_html"; then
+    if ! $sphinx_cmd -b html $conf_arg "$target_dir" "$out_html"; then
         log_error "Sphinx build failed!"
         return 1
     fi
