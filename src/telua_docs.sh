@@ -275,14 +275,20 @@ docs_cmd_init() {
     mkdir -p "$target_dir"
 
     # Copy template content files only:
-    # Exclude: *.py scripts, requirements.txt, ReadMe, build artifacts and internal toolchain files
+    # Explicitly include conf.py (for custom project name, author, theme)
+    # Exclude: other *.py scripts, requirements.txt, ReadMe, build artifacts and internal files
     local copied_count=0
     for item in "$template_dir"/*; do
         local basename
         basename="$(basename "$item")"
         case "$basename" in
+            conf.py)
+                # Keep project configuration so user can customize title, author, and theme
+                cp -r "$item" "$target_dir/"
+                copied_count=$((copied_count + 1))
+                ;;
             *.py|requirements.txt|ReadMe*|README*|github.md|_build|.git|scripts|template|gen_sphinx.sh)
-                # Skip python files, requirements.txt, ReadMe and internal files
+                # Skip toolchain python scripts, requirements.txt, ReadMe and internal files
                 continue
                 ;;
             *)
@@ -299,9 +305,10 @@ docs_cmd_init() {
 
     echo ""
     echo -e "  \033[1;32mNext steps:\033[0m"
-    echo -e "    1. Edit metadata        : \033[1;37m$target_dir/metadata.json\033[0m"
-    echo -e "    2. Build HTML           : \033[1;33mtelua docs build\033[0m"
-    echo -e "    3. Open HTML preview    : \033[1;33mtelua docs start\033[0m  (default port 8080)"
+    echo -e "    1. Project config       : \033[1;37m$target_dir/conf.py\033[0m (project name, author, theme)"
+    echo -e "    2. Edit metadata        : \033[1;37m$target_dir/metadata.json\033[0m"
+    echo -e "    3. Build HTML           : \033[1;33mtelua docs build\033[0m"
+    echo -e "    4. Open HTML preview    : \033[1;33mtelua docs start\033[0m  (default port 8080)"
     echo ""
     return 0
 }
