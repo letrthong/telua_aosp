@@ -48,6 +48,7 @@ show_docs_help() {
     echo -e "\033[1;33mAVAILABLE ACTIONS:\033[0m"
     printf "  \033[1;36m%-18s\033[0m %s\n" "start [port]" "Build (if needed), launch HTTP server & open browser (default: 8080)"
     printf "  \033[1;36m%-18s\033[0m %s\n" "serve [port]" "Alias for 'start' to run local HTTP preview server"
+    printf "  \033[1;36m%-18s\033[0m %s\n" "sync [dir]" "Pre-check formatting & auto-sync folders/sections into metadata.json"
     printf "  \033[1;36m%-18s\033[0m %s\n" "build" "Validate, merge modular sections & compile Sphinx HTML"
     printf "  \033[1;36m%-18s\033[0m %s\n" "check" "Verify section file paths and image links"
     printf "  \033[1;36m%-18s\033[0m %s\n" "clean" "Clean build artifacts (_build directory)"
@@ -183,8 +184,14 @@ _docs_ensure_sphinx_build() {
 
     local sphinx_cmd
     sphinx_cmd="$(_docs_get_sphinx_build_cmd "$py_cmd")"
-    if [ -n "$sphinx_cmd" ]; then
-        log_info "Sphinx build tool ready: $sphinx_cmd"
+
+    local missing_mermaid=0
+    if [ -n "$py_cmd" ] && ! "$py_cmd" -c "import sphinxcontrib.mermaid" >/dev/null 2>&1; then
+        missing_mermaid=1
+    fi
+
+    if [ -n "$sphinx_cmd" ] && [ "$missing_mermaid" -eq 0 ]; then
+        log_info "Sphinx build tool ready: $sphinx_cmd (diagram extensions verified)"
         return 0
     fi
 
@@ -204,7 +211,11 @@ _docs_ensure_sphinx_build() {
     fi
 
     echo ""
-    log_warn "Sphinx build tool ('sphinx-build') is not detected."
+    if [ -z "$sphinx_cmd" ]; then
+        log_warn "Sphinx build tool ('sphinx-build') is not detected."
+    else
+        log_warn "Sphinx diagram extension ('sphinxcontrib.mermaid') is missing."
+    fi
     log_info "Auto-installing Sphinx and required extensions via pip..."
     log_info "Running: $py_cmd -m pip install -r $req_file"
     echo ""
@@ -510,14 +521,59 @@ docs_cmd_start() {
     "$py_cmd" -m http.server "$port" --directory "$html_dir"
 }
 
+# Action: sync / metadata (pre-validates format & synchronizes folders into metadata.json)
+docs_cmd_sync() {
+    local target_dir
+    target_dir="$(resolve_docs_dir "${1:-}")"
+
+    local py_cmd
+    py_cmd="$(_docs_get_python_cmd)"
+    if [ -z "$py_cmd" ]; then
+        log_error "Python 3 is required to synchronize documentation metadata."
+        return 1
+    fi
+
+    local sync_script
+    sync_script="$(_docs_find_script "sync_metadata.py" "$target_dir")"
+    if [ -z "$sync_script" ]; then
+        log_error "'sync_metadata.py' engine not found!"
+        return 1
+    fi
+
+    log_info "Pre-checking formatting and synchronizing documentation structure for '$target_dir'..."
+    if ! "$py_cmd" "$sync_script" "$target_dir"; then
+        log_error "Documentation synchronization failed due to formatting errors!"
+        return 1
+    fi
+
+    return 0
+}
+
+# Helper: ensure all sphinx python scripts and shell utilities have execute permissions
+_docs_ensure_script_permissions() {
+    local base_dir="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}"
+    local f
+    for f in "$base_dir"/sphinx/*.sh "$base_dir"/sphinx/scripts/*.py; do
+        if [ -f "$f" ] && [ ! -x "$f" ]; then
+            chmod +x "$f" 2>/dev/null || true
+        fi
+    done
+}
+
 # Main command handler for 'telua docs <action>'
 handle_docs_command() {
     local action="${1:-}"
     shift 2>/dev/null || true
 
+    # Proactively ensure all docs scripts (.py and .sh) have execution permissions
+    _docs_ensure_script_permissions
+
     case "$action" in
         init)
             docs_cmd_init "$@"
+            ;;
+        sync|metadata)
+            docs_cmd_sync "$@"
             ;;
         build)
             docs_cmd_build "$@"

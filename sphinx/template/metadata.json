@@ -47,6 +47,12 @@
                 "title": "Section 2 of Chapter 3",
                 "description": "Content for section 2 of chapter 3.",
                 "updateCreated": "2026-04-13"
+            },
+            {
+                "filePath": "chapter3/chapter3_section3.rst",
+                "title": "Section 3 of Chapter 3: System Architecture Diagrams",
+                "description": "Class and sequence diagrams for system architecture using Mermaid.",
+                "updateCreated": "2026-10-28"
             }
         ]
     }

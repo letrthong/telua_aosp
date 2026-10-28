@@ -84,6 +84,12 @@ ensure_script_permissions() {
             chmod +x "$script" || log_warn "Failed to chmod +x $script"
         fi
     done
+    # All sphinx doc-as-code scripts and shell utilities
+    for script in "$repo_dir"/sphinx/*.sh "$repo_dir"/sphinx/scripts/*.py; do
+        if [ -f "$script" ]; then
+            chmod +x "$script" 2>/dev/null || log_warn "Failed to chmod +x $script"
+        fi
+    done
 }
 
 # Create missing personal configs from their tracked '<file>.example' templates.

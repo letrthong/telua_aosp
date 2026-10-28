@@ -174,9 +174,20 @@ TMP_DOCS_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_docs_test.XXXXXX")
     [ ! -f "$TMP_DOCS_DIR/check_sections.py" ] && \
     [ ! -f "$TMP_DOCS_DIR/merge_docs.py" ] && \
     # Check documentation validity
-    "$MAIN_SCRIPT" docs check "$TMP_DOCS_DIR" >/dev/null 2>&1
+    "$MAIN_SCRIPT" docs check "$TMP_DOCS_DIR" >/dev/null 2>&1 && \
+    # Add new section to chapter1
+    printf "New Section\n-----------\nBody content\n" > "$TMP_DOCS_DIR/chapter1/chapter1_section3.rst" && \
+    # Test auto-sync
+    "$MAIN_SCRIPT" docs sync "$TMP_DOCS_DIR" >/dev/null 2>&1 && \
+    grep -q "chapter1_section3.rst" "$TMP_DOCS_DIR/metadata.json" && \
+    grep -q "must update" "$TMP_DOCS_DIR/metadata.json" && \
+    # Test format error detection (illegal spaces in filename)
+    touch "$TMP_DOCS_DIR/chapter1/bad filename space.rst" && \
+    ! "$MAIN_SCRIPT" docs sync "$TMP_DOCS_DIR" >/dev/null 2>&1 && \
+    rm -f "$TMP_DOCS_DIR/chapter1/bad filename space.rst" && \
+    "$MAIN_SCRIPT" docs sync "$TMP_DOCS_DIR" >/dev/null 2>&1
 )
-assert_success "Documentation module initializes clean template and validates" [ $? -eq 0 ]
+assert_success "Documentation module initializes, validates format and auto-syncs metadata" [ $? -eq 0 ]
 rm -rf "$TMP_DOCS_DIR"
 
 echo "============================================================"

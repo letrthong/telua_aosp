@@ -603,19 +603,28 @@ telua docs init
 # 2. Kiểm tra tính toàn vẹn đường dẫn section và liên kết ảnh:
 telua docs check
 
-# 3. Tự động merge các section và biên dịch HTML tĩnh:
+# 3. Tự động kiểm tra format & đồng bộ file/folder mới vào metadata.json:
+telua docs sync           # Tự động trích xuất Title, tạo chapter wrapper & điền 'must update'
+
+# 4. Tự động merge các section và biên dịch HTML tĩnh:
 telua docs build
 
-# 4. Khởi chạy HTTP server và TỰ ĐỘNG MỞ trình duyệt xem tài liệu (mặc định port 8080):
+# 5. Khởi chạy HTTP server và TỰ ĐỘNG MỞ trình duyệt xem tài liệu (mặc định port 8080):
 telua docs start          # Tự động build (nếu chưa có) & mở browser tại http://localhost:8080
 telua docs start 8080     # Tùy chỉnh port nếu cần
 telua docs serve          # Alias cho lệnh start
 
-# 5. Dọn dẹp thư mục build:
+# 6. Dọn dẹp thư mục build:
 telua docs clean
 ```
 
-* **Kiến trúc tách bạch (Clean Template Architecture)**: Các file nội dung (`conf.py`, `metadata.json`, `index.rst`, `asset/`, `chapter1/2/3/`) được lưu trong `sphinx/template/`, còn công cụ xử lý (`check_sections.py`, `merge_docs.py`, `check_docs.py`) được cô lập trong `sphinx/scripts/`. Khi chạy `telua docs init`, người dùng có thư mục tài liệu tinh gọn và sạch sẽ, không bị lẫn các script Python nội bộ.
+* **Tự động đồng bộ & Kiểm tra Format (`telua docs sync`)**: Khi bạn tạo thêm folder chapter hoặc file `.rst` mới, lệnh `telua docs sync` sẽ:
+  * **Kiểm tra chuẩn Format**: Phát hiện file rỗng, tên file chứa khoảng trắng, underline heading không hợp lệ trước khi sync.
+  * **Bảo toàn dữ liệu cũ**: Giữ nguyên 100% các tiêu đề, mô tả và tác giả đã viết trước đó.
+  * **Trích xuất Heading thông minh**: Tự động đọc Heading 1 của file `.rst` để điền trường `title`.
+  * **Điền `"must update"` tự động**: Bất kỳ trường nào còn thiếu (`author`, `description`) sẽ được đánh dấu `"must update"` để bạn dễ dàng tìm và bổ sung.
+  * **Tự sinh file Chapter**: Tự tạo file `<chapter>.rst` với 2 marker gộp tài liệu nếu bạn mới chỉ tạo folder.
+* **Kiến trúc tách bạch (Clean Template Architecture)**: Các file nội dung (`conf.py`, `metadata.json`, `index.rst`, `asset/`, `chapter1/2/3/`) được lưu trong `sphinx/template/`, còn công cụ xử lý (`sync_metadata.py`, `check_sections.py`, `merge_docs.py`, `check_docs.py`) được cô lập trong `sphinx/scripts/`. Khi chạy `telua docs init`, người dùng có thư mục tài liệu tinh gọn và sạch sẽ, không bị lẫn các script Python nội bộ.
 * **Tự động mở trình duyệt**: Lệnh `telua docs start` tự động phát hiện hệ điều hành (Windows, Linux, macOS) để mở ngay trang HTML trên trình duyệt mặc định. Nếu tài liệu chưa được biên dịch, nó sẽ tự động kích hoạt `build` trước.
 * **Khởi tạo Idempotent an toàn**: Khi chạy `telua docs init`, nếu thư mục `docs/` đã tồn tại và chứa file cấu hình (`conf.py` hoặc `metadata.json`), toolkit sẽ tự động bỏ qua và cảnh báo, đảm bảo không bao giờ làm mất tài liệu hiện có của bạn.
 * **Tự động nhận diện (Context-Aware Auto-Discovery)**: Tự động phát hiện thư mục tài liệu tại `./docs`, `./sphinx/template`, `./sphinx` hoặc ngay tại thư mục hiện tại `.`.
