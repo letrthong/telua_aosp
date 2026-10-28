@@ -157,6 +157,26 @@ TMP_HOME=$(mktemp -d "${TMPDIR:-/tmp}/telua_home_test.XXXXXX")
 assert_success "Install adds aliases and tab completion" [ $? -eq 0 ]
 rm -rf "$TMP_HOME"
 
+# Test 7: Documentation module (telua docs help, init, check)
+log_test "Testing documentation module (telua docs help, init, check)..."
+TMP_DOCS_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_docs_test.XXXXXX")
+(
+    # Check help output contains start and serve
+    help_out=$("$MAIN_SCRIPT" docs help 2>&1)
+    echo "$help_out" | grep -q "start \[port\]" && \
+    echo "$help_out" | grep -q "serve \[port\]" && \
+    # Init into temp directory
+    "$MAIN_SCRIPT" docs init "$TMP_DOCS_DIR" >/dev/null 2>&1 && \
+    [ -f "$TMP_DOCS_DIR/conf.py" ] && \
+    [ -f "$TMP_DOCS_DIR/metadata.json" ] && \
+    [ -f "$TMP_DOCS_DIR/requirements.txt" ] && \
+    [ ! -f "$TMP_DOCS_DIR/check_sections.py" ] && \
+    # Check documentation validity
+    "$MAIN_SCRIPT" docs check "$TMP_DOCS_DIR" >/dev/null 2>&1
+)
+assert_success "Documentation module initializes template and validates" [ $? -eq 0 ]
+rm -rf "$TMP_DOCS_DIR"
+
 echo "============================================================"
 echo -e "Results: \033[1;32m$PASSED passed\033[0m, \033[1;31m$FAILED failed\033[0m"
 echo "============================================================"
@@ -165,3 +185,4 @@ if [ "$FAILED" -gt 0 ]; then
     exit 1
 fi
 exit 0
+
