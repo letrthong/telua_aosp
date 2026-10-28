@@ -48,11 +48,16 @@ _telua_completions() {
     fi
 
     # 1. Primary subcommands and global options
-    local subcommands="build init install info update replace car dump sec security clean-java run multi my proj git docker network help version"
+    local subcommands="build init install info update replace car dump sec security clean-java docs doc run multi my proj git docker network help version"
     local options="--no-reboot --start-deploy --platform --repo-sync --repo-reset -y --yes --config --softlink --test-mode --ram-monitor --find-file --find-dir --find-text --replace -h --help -v --version"
 
     # Context-aware completion based on the previous word
     case "$prev" in
+        docs|doc)
+            local docs_actions="init build clean serve check help"
+            COMPREPLY=($(compgen -W "$docs_actions" -- "$cur"))
+            return 0
+            ;;
         sec|security)
             local sec_actions="host status perm enforce avc privapp appops keystore policy root unroot remount disable-verity help"
             local config_dir

@@ -10,6 +10,7 @@ myst-parser==3.0.1
 
 # HTML theme
 sphinx-rtd-theme==2.0.0
+furo==2024.8.6
 
 # Diagram support
 sphinxcontrib-plantuml==0.30

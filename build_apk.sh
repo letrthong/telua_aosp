@@ -325,6 +325,22 @@ if [ "${TELUA_SECURITY_SOURCED:-}" != "1" ]; then
     fi
 fi
 
+# --- Documentation utilities (single source of truth: src/telua_docs.sh) ---
+# Code behind 'telua docs <action>' / 'telua doc <action>' (show_docs_help,
+# docs_cmd_init, docs_cmd_build, docs_cmd_clean, docs_cmd_serve, docs_cmd_check,
+# handle_docs_command) lives in src/telua_docs.sh. Sourcing it sets
+# TELUA_DOCS_SOURCED=1 and its internal guard makes double-sourcing a no-op.
+# Lookup order: script dir -> master dir (both resolved through symlinks).
+if [ "${TELUA_DOCS_SOURCED:-}" != "1" ]; then
+    if [ -f "$SCRIPT_DIR/src/telua_docs.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$SCRIPT_DIR/src/telua_docs.sh"
+    elif [ -f "$MASTER_SCRIPT_DIR/src/telua_docs.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$MASTER_SCRIPT_DIR/src/telua_docs.sh"
+    fi
+fi
+
 # --- Android/QNX build & deploy pipeline (single source of truth: src/telua_android.sh) ---
 # Code behind the build/deploy/device/log flow (resolve_android_paths,
 # setup_build_environment*, build_apk, wait_for_device*, restart_framework,
@@ -432,6 +448,7 @@ print_help() {
     printf "  \033[1;37m%-28s\033[0m %s\n" "dump [target]" "Run dumpsys diagnostics (audio, car-service, car-audio, ...)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "sec, security [action]" "Security & SELinux diagnostics (status, perm, enforce, avc, ...)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "clean-java [target]" "Clean trailing whitespace in .java files (diff|all|<file|dir>)"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "docs, doc [action]" "Sphinx Doc-as-Code manager (init, build, clean, serve, check)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "run [group]" "Execute multi-command pipeline macro (dev-prep, audio-cycle, ...)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "my, proj [action]" "Execute personal / private pipeline macro (hello, ...)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "git" "Display Git & Google Repo cheatsheet"
@@ -696,6 +713,11 @@ parse_arguments() {
                     shift 1
                 fi
                 handle_security_command "$SEC_ACTION"
+                exit 0
+                ;;
+            --docs|docs|--doc|doc)
+                shift 1
+                handle_docs_command "$@"
                 exit 0
                 ;;
             --clean-java|clean-java|cleanjava)
