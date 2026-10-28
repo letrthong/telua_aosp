@@ -146,6 +146,93 @@ _docs_open_browser() {
     ) &
 }
 
+# Helper: detect sphinx build command (command line or python -m module)
+_docs_get_sphinx_build_cmd() {
+    local py_cmd="${1:-}"
+    [ -z "$py_cmd" ] && py_cmd="$(_docs_get_python_cmd)"
+
+    if command -v sphinx-build >/dev/null 2>&1; then
+        echo "sphinx-build"
+        return 0
+    fi
+
+    if [ -n "$py_cmd" ] && "$py_cmd" -m sphinx.cmd.build --version >/dev/null 2>&1; then
+        echo "$py_cmd -m sphinx.cmd.build"
+        return 0
+    fi
+
+    echo ""
+    return 1
+}
+
+# Helper: ensure sphinx-build is installed, auto-install via pip if missing
+_docs_ensure_sphinx_build() {
+    local target_dir="${1:-docs}"
+    local py_cmd
+    py_cmd="$(_docs_get_python_cmd)"
+
+    if [ -z "$py_cmd" ]; then
+        log_warn "Python 3 is required to check or install Sphinx dependencies."
+        return 1
+    fi
+
+    local sphinx_cmd
+    sphinx_cmd="$(_docs_get_sphinx_build_cmd "$py_cmd")"
+    if [ -n "$sphinx_cmd" ]; then
+        log_info "Sphinx build tool ready: $sphinx_cmd"
+        return 0
+    fi
+
+    # Locate requirements.txt
+    local req_file=""
+    if [ -f "$target_dir/requirements.txt" ]; then
+        req_file="$target_dir/requirements.txt"
+    elif [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template/requirements.txt" ]; then
+        req_file="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template/requirements.txt"
+    elif [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/requirements.txt" ]; then
+        req_file="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/requirements.txt"
+    fi
+
+    if [ -z "$req_file" ]; then
+        log_warn "No requirements.txt found to install Sphinx dependencies."
+        return 1
+    fi
+
+    echo ""
+    log_warn "Sphinx build tool ('sphinx-build') is not detected."
+    log_info "Auto-installing Sphinx and required extensions via pip..."
+    log_info "Running: $py_cmd -m pip install -r $req_file"
+    echo ""
+
+    local install_ok=0
+    if "$py_cmd" -m pip install -r "$req_file"; then
+        install_ok=1
+    else
+        log_warn "Standard pip install returned non-zero. Retrying with --user..."
+        if "$py_cmd" -m pip install --user -r "$req_file"; then
+            install_ok=1
+        fi
+    fi
+
+    # Re-verify
+    sphinx_cmd="$(_docs_get_sphinx_build_cmd "$py_cmd")"
+    if [ -n "$sphinx_cmd" ]; then
+        echo ""
+        log_success "Sphinx dependencies installed successfully! Build command: $sphinx_cmd"
+        return 0
+    elif [ "$install_ok" -eq 1 ]; then
+        echo ""
+        log_success "Sphinx packages installed into Python environment."
+        log_warn "Note: If 'sphinx-build' is not in PATH, '$py_cmd -m sphinx.cmd.build' will be used."
+        return 0
+    else
+        echo ""
+        log_error "Automatic installation of Sphinx dependencies failed."
+        log_error "Please run manually: $py_cmd -m pip install -r $req_file"
+        return 1
+    fi
+}
+
 # Action: init
 docs_cmd_init() {
     local target_dir="${1:-docs}"
@@ -162,6 +249,9 @@ docs_cmd_init() {
         if [ -f "$target_dir/conf.py" ] || [ -f "$target_dir/metadata.json" ]; then
             log_warn "Documentation project already exists in '$target_dir' (found conf.py or metadata.json)."
             log_warn "Skipping initialization. Existing documentation files were NOT modified."
+            echo ""
+            # Still verify Sphinx availability
+            _docs_ensure_sphinx_build "$target_dir"
             echo ""
             echo -e "  To rebuild docs, run:   \033[1;33mtelua docs build\033[0m"
             echo -e "  To start preview, run:  \033[1;33mtelua docs start\033[0m"
@@ -197,12 +287,15 @@ docs_cmd_init() {
     fi
 
     log_success "Created documentation template in '$target_dir' ($copied_count items copied)."
+
+    # Automatically check and install Sphinx dependencies if missing
+    _docs_ensure_sphinx_build "$target_dir"
+
     echo ""
     echo -e "  \033[1;32mNext steps:\033[0m"
-    echo -e "    1. Install requirements : \033[1;37mpip install -r $target_dir/requirements.txt\033[0m"
-    echo -e "    2. Edit metadata        : \033[1;37m$target_dir/metadata.json\033[0m"
-    echo -e "    3. Build HTML           : \033[1;33mtelua docs build\033[0m"
-    echo -e "    4. Open HTML preview    : \033[1;33mtelua docs start\033[0m  (default port 8080)"
+    echo -e "    1. Edit metadata        : \033[1;37m$target_dir/metadata.json\033[0m"
+    echo -e "    2. Build HTML           : \033[1;33mtelua docs build\033[0m"
+    echo -e "    3. Open HTML preview    : \033[1;33mtelua docs start\033[0m  (default port 8080)"
     echo ""
     return 0
 }
@@ -271,9 +364,17 @@ docs_cmd_build() {
         return 1
     fi
 
-    if ! command -v sphinx-build >/dev/null 2>&1; then
-        log_error "'sphinx-build' command not found in PATH!"
-        log_error "Please install Sphinx dependencies: pip install -r $target_dir/requirements.txt"
+    local sphinx_cmd
+    sphinx_cmd="$(_docs_get_sphinx_build_cmd "$py_cmd")"
+    if [ -z "$sphinx_cmd" ]; then
+        log_warn "'sphinx-build' command not found. Triggering automatic installation..."
+        _docs_ensure_sphinx_build "$target_dir"
+        sphinx_cmd="$(_docs_get_sphinx_build_cmd "$py_cmd")"
+    fi
+
+    if [ -z "$sphinx_cmd" ]; then
+        log_error "Sphinx build tool is still unavailable!"
+        log_error "Please install Sphinx dependencies manually: pip install -r $target_dir/requirements.txt"
         return 1
     fi
 
@@ -315,9 +416,9 @@ docs_cmd_build() {
     fi
 
     # 4. Compile Sphinx HTML
-    log_info "Step 4/4: Compiling Sphinx HTML..."
+    log_info "Step 4/4: Compiling Sphinx HTML using '$sphinx_cmd'..."
     local out_html="$target_dir/_build/html"
-    if ! sphinx-build -b html "$target_dir" "$out_html"; then
+    if ! $sphinx_cmd -b html "$target_dir" "$out_html"; then
         log_error "Sphinx build failed!"
         return 1
     fi
