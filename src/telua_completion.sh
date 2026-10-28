@@ -54,7 +54,7 @@ _telua_completions() {
     # Context-aware completion based on the previous word
     case "$prev" in
         docs|doc)
-            local docs_actions="init build clean serve check help"
+            local docs_actions="start serve build check clean init help"
             COMPREPLY=($(compgen -W "$docs_actions" -- "$cur"))
             return 0
             ;;
