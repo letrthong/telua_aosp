@@ -198,6 +198,7 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `car [action]`, `audio [action]` | Controls car/audio via ADB shell (`vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`, `car-status`) using commands from `config/const_car.config` |
 | `--dump`, `dump [target]` | Runs dumpsys diagnostics via ADB shell (`audio`, `car-service`, `car-audio`, `media`, `battery`, `activity`) using commands from `config/const_dumpsys.config` |
 | `sec [action]`, `security [action]` | Controls SELinux and runs security diagnostics (`status`, `perm`, `enforce`, `avc`, `privapp`, `appops`, `keystore`, `policy`, `root`, `unroot`, `remount`, `disable-verity`) using `config/const_security.config` |
+| `docs [action]`, `doc [action]` | Sphinx Doc-as-Code manager (`init`, `build`, `clean`, `serve`, `check`) using template in `sphinx/` |
 | `--run`, `run [group]` | Executes multi-command sequential pipeline group from `config/const_multi_cli.config` (alias: `telua multi [group]`) |
 | `my [action]`, `proj [action]` | Executes personal private pipeline macro from `config/const_my_cli.config` (`telua my hello`) |
 | `clean-java [target]` | Cleans trailing whitespace in `.java` source files (`diff` \| `all` \| `<file|dir>`; alias: `--clean-java`) |
@@ -588,6 +589,32 @@ telua sec help                        # Hiển thị chi tiết từng action k�
 | `disable-verity` | Tắt cơ chế kiểm tra phân vùng dm-verity | `adb disable-verity` |
 
 > **Ghi chú an toàn:** Tương tự `telua car`, toàn bộ các lệnh `telua sec` đều tự động kiểm tra trạng thái thiết bị online trước khi chạy, dừng ngay với cảnh báo `[ERROR] device offline: ...` nếu thiết bị bị ngắt kết nối.
+
+---
+
+### 5.9 Quản lý tài liệu Sphinx Doc-as-Code (`telua docs` / `doc`)
+
+Hệ thống quản lý tài liệu dạng mã nguồn chuẩn quốc tế theo mô hình mô-đun (Modular Documentation) sử dụng **Sphinx** và theme **Furo**, tự động hóa toàn diện từ khởi tạo template, kiểm tra tính toàn vẹn (broken images/paths), tổng hợp (merge) đến xuất bản HTML:
+
+```bash
+# 1. Khởi tạo tài liệu trong thư mục ./docs (an toàn: KHÔNG ghi đè nếu đã tồn tại):
+telua docs init
+
+# 2. Kiểm tra tính toàn vẹn đường dẫn section và liên kết ảnh:
+telua docs check
+
+# 3. Tự động merge các section và biên dịch HTML tĩnh:
+telua docs build
+
+# 4. Chạy web server local xem trước tài liệu tại http://localhost:8080:
+telua docs serve
+
+# 5. Dọn dẹp thư mục build:
+telua docs clean
+```
+
+* **Khởi tạo Idempotent an toàn**: Khi chạy `telua docs init`, nếu thư mục `docs/` đã tồn tại và chứa file cấu hình (`conf.py` hoặc `metadata.json`), toolkit sẽ tự động bỏ qua và cảnh báo, đảm bảo không bao giờ làm mất tài liệu hiện có của bạn.
+* **Tự động nhận diện (Context-Aware Auto-Discovery)**: Tự động phát hiện thư mục tài liệu tại `./docs`, `./sphinx` hoặc ngay tại thư mục hiện tại `.`.
 
 ---
 

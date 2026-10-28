@@ -32,6 +32,7 @@ When assisting a developer, **ALWAYS prefer using `telua` (or `./build_apk.sh`) 
 ├── config_overlay.py         # Smart overlay merger (merges apk_overlays.config)
 ├── config_crypto.py          # Configuration encryption/decryption (Fernet AES)
 ├── requirements.txt          # Python dependencies (cryptography)
+├── sphinx/                   # Sphinx Doc-as-Code modular template & build scripts
 ├── config/                   # Declarative global constant cheatsheets & commands
 │   ├── const_car.config      # AAOS car & audio key injection & test harness
 │   ├── const_dumpsys.config  # System diagnostics & AAOS dumpsys targets
@@ -62,6 +63,7 @@ When the user asks you to perform a task, map their intent to the corresponding 
 | **Run Unit Tests** | `telua --test-mode true` | Runs project test script configured in `apk.config` |
 | **Find & Replace Text Across Files** | `telua replace <old> <new> [path]` | Fast literal string replacement across directory or single file |
 | **Clean Java Trailing Whitespace** | `telua clean-java [diff\|all\|path]` | Strips trailing whitespace & enforces LF on Java source files |
+| **Sphinx Doc-as-Code Manager** | `telua docs [init\|build\|clean\|serve\|check]` | Initializes template, validates images/sections & builds HTML |
 | **Security & SELinux Diagnostics** | `telua sec [action]` | Controls SELinux (status, perm, enforce), dumps AVC denials & privapp |
 | **Install Global CLI Alias & Completion** | `./build_apk.sh --install` | Adds `alias telua=...`, `alias tel=...`, and Tab Auto-completion into `~/.bashrc` |
 | **Update Toolkit to Latest Main** | `telua update` | Pulls latest main commit with auto-recovery |
@@ -123,10 +125,20 @@ telua clean-java <path>   # Cleans a specific .java file or target directory
 Supports both `telua` and short alias `tel` on Bash & Zsh:
 ```bash
 ./build_apk.sh --install  # Automatically installs both aliases & completion into ~/.bashrc
-tel <Tab><Tab>            # Subcommands: build, car, dump, clean-java, run, replace...
+tel <Tab><Tab>            # Subcommands: build, car, dump, clean-java, docs, run, replace...
 tel car <Tab><Tab>        # Car actions: vol-up, vol-down, vol-mute, ks, ks-stop, status
 tel dump <Tab><Tab>       # Dumpsys targets: audio, car-service, car-audio, media, battery...
+tel docs <Tab><Tab>       # Docs actions: init, build, clean, serve, check
 tel run <Tab><Tab>        # Pipelines: audio-cycle, dev-prep, remount-reboot...
+```
+
+### 4.6 Sphinx Doc-as-Code Manager (`telua docs <action>` / `telua doc`)
+```bash
+telua docs init           # Initialize documentation project from template into ./docs (idempotent)
+telua docs check          # Validate section file paths & image directives
+telua docs build          # Merge sections & compile HTML into _build/html
+telua docs serve [8080]   # Start local preview HTTP server
+telua docs clean          # Remove _build directory
 ```
 
 ---
