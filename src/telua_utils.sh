@@ -408,3 +408,147 @@ run_git_update() {
     exit 1
 }
 
+# ==============================================================================
+# Shared CLI Specification & ADB Utilities
+# ==============================================================================
+
+# Parse a CLI specification item ("action :: description :: command" or legacy "action|description|command")
+# Usage:
+#   parse_cli_item "$item" action_var desc_var [cmd_var]
+# Example:
+#   parse_cli_item "ks :: Kill Server :: am kill-all" act desc cmd
+#   parse_cli_item "net-up :: Bring up eth0" act desc
+parse_cli_item() {
+    local __pci_raw="$1"
+    local __pci_out_action="$2"
+    local __pci_out_desc="$3"
+    local __pci_out_cmd="${4:-}"
+
+    local __pci_act="" __pci_desc="" __pci_cmd=""
+    if [[ "$__pci_raw" == *" :: "* ]]; then
+        __pci_act="${__pci_raw%% :: *}"
+        local __pci_rest="${__pci_raw#* :: }"
+        if [[ "$__pci_rest" == *" :: "* ]]; then
+            __pci_desc="${__pci_rest%% :: *}"
+            __pci_cmd="${__pci_rest#* :: }"
+        else
+            __pci_desc="$__pci_rest"
+            __pci_cmd=""
+        fi
+    elif [[ "$__pci_raw" == *"|"* ]]; then
+        __pci_act="$(echo "$__pci_raw" | cut -d'|' -f1)"
+        __pci_desc="$(echo "$__pci_raw" | cut -d'|' -f2)"
+        __pci_cmd="$(echo "$__pci_raw" | cut -d'|' -f3-)"
+    else
+        __pci_act="$__pci_raw"
+        __pci_desc="$__pci_raw"
+        __pci_cmd=""
+    fi
+
+    # Trim leading/trailing whitespace
+    __pci_act="$(echo "$__pci_act" | xargs)"
+    __pci_desc="$(echo "$__pci_desc" | xargs)"
+    [ -n "$__pci_cmd" ] && __pci_cmd="$(echo "$__pci_cmd" | xargs)"
+
+    printf -v "$__pci_out_action" '%s' "$__pci_act"
+    printf -v "$__pci_out_desc" '%s' "$__pci_desc"
+    [ -n "$__pci_out_cmd" ] && printf -v "$__pci_out_cmd" '%s' "$__pci_cmd"
+    return 0
+}
+
+# Verify Android device is connected and online before executing ADB commands.
+# If multiple devices are detected and ANDROID_SERIAL is not set, prints an informative warning.
+# Returns 0 if device is ready, 1 on error/offline.
+check_adb_device_online() {
+    if ! command -v adb >/dev/null 2>&1; then
+        log_error "device offline: 'adb' command not found. Please ensure Android platform-tools is in PATH."
+        return 1
+    fi
+
+    local dev_state
+    dev_state=$(adb get-state 2>/dev/null || echo "offline")
+    local online_devices
+    online_devices=$(adb devices 2>/dev/null | grep -v "List of devices attached" | grep -w "device" || true)
+
+    if [ "$dev_state" != "device" ] && [ -z "$online_devices" ]; then
+        local raw_devices
+        raw_devices=$(adb devices 2>/dev/null | grep -v "List of devices attached" | grep -v "^$" || true)
+        if [ -n "$raw_devices" ]; then
+            log_error "device offline: Connected Android device is not ready (state: $dev_state)."
+        else
+            log_error "device offline: No Android device connected."
+        fi
+        log_error "Please connect a device via USB/TCP and verify with 'adb devices'."
+        return 1
+    fi
+
+    # Multiple devices awareness: warn user if multiple devices exist and ANDROID_SERIAL is unset
+    if [ -z "${ANDROID_SERIAL:-}" ]; then
+        local dev_count
+        dev_count=$(echo "$online_devices" | grep -c . || true)
+        if [ "$dev_count" -gt 1 ]; then
+            log_warn "Multiple Android devices connected ($dev_count devices). Consider setting: export ANDROID_SERIAL=<device_serial>"
+        fi
+    fi
+
+    return 0
+}
+
+# Execute a sequential multi-command pipeline array with step-by-step progress, timing & fail-fast safety.
+# Usage:
+#   execute_command_pipeline "Pipeline Name" "Description" "${step_cmds[@]}"
+execute_command_pipeline() {
+    local pipeline_name="$1"
+    local pipeline_desc="$2"
+    shift 2
+    local -a steps=("$@")
+
+    local total_steps="${#steps[@]}"
+    if [ "$total_steps" -eq 0 ]; then
+        log_error "Pipeline '$pipeline_name' has no steps defined to execute!"
+        return 1
+    fi
+
+    echo ""
+    log_info "============================================================"
+    log_info " Executing Pipeline: '$pipeline_name'"
+    [ -n "$pipeline_desc" ] && log_info " Description: $pipeline_desc"
+    log_info " Total Steps: $total_steps"
+    log_info "============================================================"
+
+    local step_idx=1
+    for cmd in "${steps[@]}"; do
+        echo ""
+        echo -e "\033[1;36m[STEP $step_idx/$total_steps]\033[0m \033[1;37m$cmd\033[0m"
+        local step_start
+        step_start=$(date +%s)
+
+        local ret=0
+        if [[ "$cmd" =~ ^(adb|sudo|echo|sleep)[[:space:]] ]] || [[ "$cmd" =~ ^adb ]]; then
+            eval "$cmd"
+            ret=$?
+        else
+            adb shell "$cmd" 2>/dev/null || eval "$cmd"
+            ret=$?
+        fi
+
+        if [ $ret -eq 0 ]; then
+            local step_end
+            step_end=$(date +%s)
+            local step_dur=$((step_end - step_start))
+            log_success "Step $step_idx/$total_steps finished (${step_dur}s)."
+        else
+            local exit_code=$ret
+            log_error "Step $step_idx failed with exit code $exit_code! Aborting pipeline."
+            exit $exit_code
+        fi
+        step_idx=$((step_idx + 1))
+    done
+
+    echo ""
+    log_success "All $total_steps steps of pipeline '$pipeline_name' completed successfully."
+    echo ""
+    return 0
+}
+
+

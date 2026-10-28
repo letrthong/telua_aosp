@@ -19,27 +19,27 @@
 # limitations under the License.
 # ==============================================================================
 #
-# telua_my.sh - Personal & Private Command Pipelines for the Telua toolkit.
+# telua_my.sh - Personal & Workspace-Specific CLI commands for the Telua toolkit.
 # Single source of truth for the code behind 'telua my <action>' (alias
-# 'telua proj <action>'), driven by const_my_cli.config (MY_CONFIG_FILE):
+# 'telua proj <action>' / 'telua project <action>'), driven by
+# const_my_cli.config (MY_CONFIG_FILE):
 #   - MY_GROUP_LIST array      : "action :: description" entries
-#   - MY_CMD_<ACTION> arrays   : sequential shell commands per action
-#   (PROJECT_GROUP_LIST / PROJECT_CMD_* from apk.config are accepted as a
-#   fallback when MY_GROUP_LIST / MY_CMD_* are not declared.)
+#   - MY_CMD_<ACTION>          : per-action sequential command arrays
+#   - (legacy PROJECT_GROUP_LIST / PROJECT_CMD_* also supported for backwards compat)
 #
 # Functions:
 #   - show_project_short_help : one-line-per-action listing (telua my)
-#   - show_project_help       : detailed listing with every step (telua my help)
+#   - show_project_help       : detailed listing with all steps (telua my help)
 #   - is_project_action       : predicate used by parse_arguments dispatch
-#   - handle_project_command  : execute the action's steps sequentially,
-#                               abort on first failing step
+#   - handle_my_command       : resolve + sequentially execute personal action commands
 #
 # Usage (source, never execute):
 #   source "$(dirname "${BASH_SOURCE[0]}")/src/telua_my.sh"
 #
 # Contract with the sourcing (host) script:
 #   - The host must define, BEFORE sourcing this file:
-#       MY_CONFIG_FILE, MY_CONFIG_FILE_NAME, CONFIG_FILE, CONFIG_FILE_NAME
+#       MY_CONFIG_FILE, MY_CONFIG_FILE_NAME, CONFIG_FILE, CONFIG_FILE_NAME,
+#       ACTIVE_PROJECT
 #   - The host must have sourced const_my_cli.config (or the project config
 #     that declares MY_GROUP_LIST / MY_CMD_*) before calling these functions.
 #   - The host must provide the logging helpers (log_info/log_success/
@@ -55,7 +55,7 @@ if [ "${TELUA_MY_SOURCED:-}" = "1" ]; then
 fi
 TELUA_MY_SOURCED=1
 
-# --- 1g. Personal & Project Command Pipelines (--my / my / --proj / proj) ---
+# --- 1g. Personal & Workspace-Specific CLI Commands (--my / my / --proj / proj) ---
 # Short one-line-per-action listing (shown by: telua my)
 show_project_short_help() {
     echo ""
@@ -73,15 +73,7 @@ show_project_short_help() {
     if [ "${#grp_list[@]}" -gt 0 ]; then
         for item in "${grp_list[@]}"; do
             local grp_name="" grp_desc=""
-            if [[ "$item" == *" :: "* ]]; then
-                grp_name="${item%% :: *}"
-                grp_desc="${item#* :: }"
-            else
-                grp_name="$item"
-                grp_desc="Personal action"
-            fi
-            grp_name="$(echo "$grp_name" | xargs)"
-            grp_desc="$(echo "$grp_desc" | xargs)"
+            parse_cli_item "$item" grp_name grp_desc
             printf "  \033[1;37m%-30s\033[0m %s\n" "telua my $grp_name" "$grp_desc"
         done
     else
@@ -115,15 +107,7 @@ show_project_help() {
         local idx=1
         for item in "${grp_list[@]}"; do
             local grp_name="" grp_desc=""
-            if [[ "$item" == *" :: "* ]]; then
-                grp_name="${item%% :: *}"
-                grp_desc="${item#* :: }"
-            else
-                grp_name="$item"
-                grp_desc="Personal action"
-            fi
-            grp_name="$(echo "$grp_name" | xargs)"
-            grp_desc="$(echo "$grp_desc" | xargs)"
+            parse_cli_item "$item" grp_name grp_desc
 
             local var_suffix
             var_suffix=$(echo "$grp_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
@@ -170,13 +154,9 @@ is_project_action() {
 
     if [ "${#grp_list[@]}" -gt 0 ]; then
         for item in "${grp_list[@]}"; do
-            local grp=""
-            if [[ "$item" == *" :: "* ]]; then
-                grp="${item%% :: *}"
-            else
-                grp="$item"
-            fi
-            grp="$(echo "$grp" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
+            local grp="" grp_desc=""
+            parse_cli_item "$item" grp grp_desc
+            grp=$(echo "$grp" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
             if [ "$grp" = "$target" ]; then
                 return 0
             fi
@@ -192,7 +172,7 @@ is_project_action() {
     return 1
 }
 
-handle_project_command() {
+handle_my_command() {
     local action="$1"
 
     if [ -z "$action" ]; then
@@ -219,16 +199,11 @@ handle_project_command() {
     if [ "${#grp_list[@]}" -gt 0 ]; then
         for item in "${grp_list[@]}"; do
             local g_name="" g_desc=""
-            if [[ "$item" == *" :: "* ]]; then
-                g_name="${item%% :: *}"
-                g_desc="${item#* :: }"
-            else
-                g_name="$item"
-                g_desc="$item"
-            fi
-            g_name="$(echo "$g_name" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
-            if [ "$g_name" = "$action_normalized" ]; then
-                action_label="$(echo "$g_desc" | xargs)"
+            parse_cli_item "$item" g_name g_desc
+            local g_name_norm
+            g_name_norm=$(echo "$g_name" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+            if [ "$g_name_norm" = "$action_normalized" ]; then
+                action_label="$g_desc"
                 break
             fi
         done
@@ -250,35 +225,5 @@ handle_project_command() {
         exit 1
     fi
 
-    local total_steps="${#step_cmds[@]}"
-    echo ""
-    log_info "============================================================"
-    log_info " Executing Personal Pipeline: '$action_normalized'"
-    [ -n "$action_label" ] && log_info " Description: $action_label"
-    log_info " Total Steps: $total_steps"
-    log_info "============================================================"
-
-    local step_idx=1
-    for cmd in "${step_cmds[@]}"; do
-        echo ""
-        echo -e "\033[1;36m[STEP $step_idx/$total_steps]\033[0m \033[1;37m$cmd\033[0m"
-        local step_start
-        step_start=$(date +%s)
-
-        if eval "$cmd"; then
-            local step_end
-            step_end=$(date +%s)
-            local step_dur=$((step_end - step_start))
-            log_success "Step $step_idx/$total_steps finished (${step_dur}s)."
-        else
-            local exit_code=$?
-            log_error "Step $step_idx failed with exit code $exit_code! Aborting pipeline."
-            exit $exit_code
-        fi
-        step_idx=$((step_idx + 1))
-    done
-
-    echo ""
-    log_success "All $total_steps steps of personal action '$action_normalized' completed successfully."
-    echo ""
+    execute_command_pipeline "$action_normalized" "$action_label" "${step_cmds[@]}"
 }

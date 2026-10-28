@@ -26,10 +26,11 @@
 #   - ADB_SHELL_DUMP_<ACTION> : per-target dumpsys command variables
 #
 # Functions:
-#   - show_dump_short_help : one-line-per-target listing (telua dump)
-#   - show_dump_help       : detailed listing with ADB commands (telua dump help)
-#   - is_dump_action       : predicate used by parse_arguments dispatch
-#   - handle_dump_command  : resolve + execute the dumpsys ADB shell command
+#   - show_dump_short_help      : one-line-per-target listing (telua dump)
+#   - show_dump_help            : detailed listing with ADB commands (telua dump help)
+#   - check_dump_device_connected : verify device is connected and online
+#   - is_dump_action            : predicate used by parse_arguments dispatch
+#   - handle_dump_command       : resolve + execute the dumpsys ADB shell command
 #
 # Usage (source, never execute):
 #   source "$(dirname "${BASH_SOURCE[0]}")/src/telua_dump.sh"
@@ -63,19 +64,7 @@ show_dump_short_help() {
     if [ -n "${DUMP_CLI_LIST[*]}" ] && [ "${#DUMP_CLI_LIST[@]}" -gt 0 ]; then
         for item in "${DUMP_CLI_LIST[@]}"; do
             local item_action="" item_desc=""
-            if [[ "$item" == *" :: "* ]]; then
-                item_action="${item%% :: *}"
-                local item_rest="${item#* :: }"
-                item_desc="${item_rest%% :: *}"
-            elif [[ "$item" == *"|"* ]]; then
-                item_action="$(echo "$item" | cut -d'|' -f1)"
-                item_desc="$(echo "$item" | cut -d'|' -f2)"
-            else
-                item_action="$item"
-                item_desc="Custom"
-            fi
-            item_action="$(echo "$item_action" | xargs)"
-            item_desc="$(echo "$item_desc" | xargs)"
+            parse_cli_item "$item" item_action item_desc
             printf "  \033[1;37m%-26s\033[0m %s\n" "telua dump $item_action" "$item_desc"
         done
     else
@@ -101,23 +90,7 @@ show_dump_help() {
         local idx=1
         for item in "${DUMP_CLI_LIST[@]}"; do
             local item_action="" item_desc="" item_cmd=""
-            if [[ "$item" == *" :: "* ]]; then
-                item_action="${item%% :: *}"
-                local item_rest="${item#* :: }"
-                item_desc="${item_rest%% :: *}"
-                item_cmd="${item_rest#* :: }"
-            elif [[ "$item" == *"|"* ]]; then
-                item_action="$(echo "$item" | cut -d'|' -f1)"
-                item_desc="$(echo "$item" | cut -d'|' -f2)"
-                item_cmd="$(echo "$item" | cut -d'|' -f3-)"
-            else
-                item_action="$item"
-                item_desc="Custom"
-                item_cmd=""
-            fi
-            item_action="$(echo "$item_action" | xargs)"
-            item_desc="$(echo "$item_desc" | xargs)"
-            item_cmd="$(echo "$item_cmd" | xargs)"
+            parse_cli_item "$item" item_action item_desc item_cmd
 
             echo -e "  \033[1;32m$idx.\033[0m \033[1;37mtelua dump $item_action\033[0m"
             echo -e "     \033[0;90mDescription:\033[0m  $item_desc"
@@ -144,19 +117,20 @@ show_dump_help() {
     echo ""
 }
 
+# Verify device is connected & ready before running dump commands.
+check_dump_device_connected() {
+    check_adb_device_online
+}
+
 is_dump_action() {
     local target="$1"
     target=$(echo "$target" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
 
     if [ -n "${DUMP_CLI_LIST[*]}" ]; then
         for item in "${DUMP_CLI_LIST[@]}"; do
-            local act=""
-            if [[ "$item" == *" :: "* ]]; then
-                act="${item%% :: *}"
-            elif [[ "$item" == *"|"* ]]; then
-                act="$(echo "$item" | cut -d'|' -f1)"
-            fi
-            act="$(echo "$act" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
+            local act="" act_desc=""
+            parse_cli_item "$item" act act_desc
+            act=$(echo "$act" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
             if [ "$act" = "$target" ]; then
                 return 0
             fi
@@ -194,20 +168,12 @@ handle_dump_command() {
     if [ -n "${DUMP_CLI_LIST[*]}" ]; then
         for item in "${DUMP_CLI_LIST[@]}"; do
             local it_action="" it_desc="" it_cmd=""
-            if [[ "$item" == *" :: "* ]]; then
-                it_action="${item%% :: *}"
-                local it_rest="${item#* :: }"
-                it_desc="${it_rest%% :: *}"
-                it_cmd="${it_rest#* :: }"
-            elif [[ "$item" == *"|"* ]]; then
-                it_action="$(echo "$item" | cut -d'|' -f1)"
-                it_desc="$(echo "$item" | cut -d'|' -f2)"
-                it_cmd="$(echo "$item" | cut -d'|' -f3-)"
-            fi
-            it_action="$(echo "$it_action" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
-            if [ "$it_action" = "$action_normalized" ]; then
-                action_label="$(echo "$it_desc" | xargs)"
-                adb_cmd="$(echo "$it_cmd" | xargs)"
+            parse_cli_item "$item" it_action it_desc it_cmd
+            local it_action_norm
+            it_action_norm=$(echo "$it_action" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+            if [ "$it_action_norm" = "$action_normalized" ]; then
+                action_label="$it_desc"
+                adb_cmd="$it_cmd"
                 break
             fi
         done
@@ -233,17 +199,8 @@ handle_dump_command() {
         exit 1
     fi
 
-    if ! command -v adb >/dev/null 2>&1; then
-        log_error "'adb' command not found. Please ensure Android platform-tools is in your PATH."
-        exit 1
-    fi
-
-    # Verify device state
-    local dev_state
-    dev_state=$(adb get-state 2>/dev/null || echo "offline")
-    if [ "$dev_state" != "device" ]; then
-        log_error "No Android device connected or device is not ready (state: $dev_state)."
-        log_error "Please connect a device via USB/TCP and verify with 'adb devices'."
+    # Verify device state before executing
+    if ! check_dump_device_connected; then
         exit 1
     fi
 

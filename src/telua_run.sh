@@ -19,18 +19,17 @@
 # limitations under the License.
 # ==============================================================================
 #
-# telua_run.sh - Multi-CLI Command Pipelines for the Telua toolkit.
-# Single source of truth for the code behind 'telua run <group>', driven by
-# const_multi_cli.config (MULTI_CONFIG_FILE):
+# telua_run.sh - Sequential Multi-CLI pipeline runner for the Telua toolkit.
+# Single source of truth for the code behind 'telua run <group>' (alias
+# 'telua multi <group>'), driven by const_multi_cli.config (MULTI_CONFIG_FILE):
 #   - MULTI_GROUP_LIST array : "group :: description" entries
-#   - MULTI_CMD_<GROUP> arrays : sequential shell commands per group
+#   - MULTI_CMD_<GROUP>      : per-group sequential command arrays
 #
 # Functions:
 #   - show_run_short_help : one-line-per-group listing (telua run)
-#   - show_run_help       : detailed listing with every step (telua run help)
+#   - show_run_help       : detailed listing with all steps (telua run help)
 #   - is_run_group        : predicate used by parse_arguments dispatch
-#   - handle_run_command  : execute the group's steps sequentially, abort on
-#                           first failing step
+#   - handle_run_command  : resolve + sequentially execute the group commands
 #
 # Usage (source, never execute):
 #   source "$(dirname "${BASH_SOURCE[0]}")/src/telua_run.sh"
@@ -64,15 +63,7 @@ show_run_short_help() {
     if [ -n "${MULTI_GROUP_LIST[*]}" ] && [ "${#MULTI_GROUP_LIST[@]}" -gt 0 ]; then
         for item in "${MULTI_GROUP_LIST[@]}"; do
             local grp_name="" grp_desc=""
-            if [[ "$item" == *" :: "* ]]; then
-                grp_name="${item%% :: *}"
-                grp_desc="${item#* :: }"
-            else
-                grp_name="$item"
-                grp_desc="Pipeline group"
-            fi
-            grp_name="$(echo "$grp_name" | xargs)"
-            grp_desc="$(echo "$grp_desc" | xargs)"
+            parse_cli_item "$item" grp_name grp_desc
             printf "  \033[1;37m%-30s\033[0m %s\n" "telua run $grp_name" "$grp_desc"
         done
     else
@@ -98,15 +89,7 @@ show_run_help() {
         local idx=1
         for item in "${MULTI_GROUP_LIST[@]}"; do
             local grp_name="" grp_desc=""
-            if [[ "$item" == *" :: "* ]]; then
-                grp_name="${item%% :: *}"
-                grp_desc="${item#* :: }"
-            else
-                grp_name="$item"
-                grp_desc="Pipeline group"
-            fi
-            grp_name="$(echo "$grp_name" | xargs)"
-            grp_desc="$(echo "$grp_desc" | xargs)"
+            parse_cli_item "$item" grp_name grp_desc
 
             local var_suffix
             var_suffix=$(echo "$grp_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
@@ -145,13 +128,9 @@ is_run_group() {
 
     if [ -n "${MULTI_GROUP_LIST[*]}" ]; then
         for item in "${MULTI_GROUP_LIST[@]}"; do
-            local grp=""
-            if [[ "$item" == *" :: "* ]]; then
-                grp="${item%% :: *}"
-            else
-                grp="$item"
-            fi
-            grp="$(echo "$grp" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
+            local grp="" grp_desc=""
+            parse_cli_item "$item" grp grp_desc
+            grp=$(echo "$grp" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
             if [ "$grp" = "$target" ]; then
                 return 0
             fi
@@ -188,16 +167,11 @@ handle_run_command() {
     if [ -n "${MULTI_GROUP_LIST[*]}" ]; then
         for item in "${MULTI_GROUP_LIST[@]}"; do
             local g_name="" g_desc=""
-            if [[ "$item" == *" :: "* ]]; then
-                g_name="${item%% :: *}"
-                g_desc="${item#* :: }"
-            else
-                g_name="$item"
-                g_desc="$item"
-            fi
-            g_name="$(echo "$g_name" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
-            if [ "$g_name" = "$group_normalized" ]; then
-                group_label="$(echo "$g_desc" | xargs)"
+            parse_cli_item "$item" g_name g_desc
+            local g_name_norm
+            g_name_norm=$(echo "$g_name" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+            if [ "$g_name_norm" = "$group_normalized" ]; then
+                group_label="$g_desc"
                 break
             fi
         done
@@ -218,35 +192,5 @@ handle_run_command() {
         exit 1
     fi
 
-    local total_steps="${#step_cmds[@]}"
-    echo ""
-    log_info "============================================================"
-    log_info " Executing Multi-CLI Pipeline: '$group_normalized'"
-    [ -n "$group_label" ] && log_info " Description: $group_label"
-    log_info " Total Steps: $total_steps"
-    log_info "============================================================"
-
-    local step_idx=1
-    for cmd in "${step_cmds[@]}"; do
-        echo ""
-        echo -e "\033[1;36m[STEP $step_idx/$total_steps]\033[0m \033[1;37m$cmd\033[0m"
-        local step_start
-        step_start=$(date +%s)
-
-        if eval "$cmd"; then
-            local step_end
-            step_end=$(date +%s)
-            local step_dur=$((step_end - step_start))
-            log_success "Step $step_idx/$total_steps finished (${step_dur}s)."
-        else
-            local exit_code=$?
-            log_error "Step $step_idx failed with exit code $exit_code! Aborting pipeline."
-            exit $exit_code
-        fi
-        step_idx=$((step_idx + 1))
-    done
-
-    echo ""
-    log_success "All $total_steps steps of pipeline '$group_normalized' completed successfully."
-    echo ""
+    execute_command_pipeline "$group_normalized" "$group_label" "${step_cmds[@]}"
 }

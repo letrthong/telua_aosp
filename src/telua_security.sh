@@ -65,19 +65,7 @@ show_security_short_help() {
     if [ -n "${SECURITY_CLI_LIST[*]}" ] && [ "${#SECURITY_CLI_LIST[@]}" -gt 0 ]; then
         for item in "${SECURITY_CLI_LIST[@]}"; do
             local item_action="" item_desc=""
-            if [[ "$item" == *" :: "* ]]; then
-                item_action="${item%% :: *}"
-                local item_rest="${item#* :: }"
-                item_desc="${item_rest%% :: *}"
-            elif [[ "$item" == *"|"* ]]; then
-                item_action="$(echo "$item" | cut -d'|' -f1)"
-                item_desc="$(echo "$item" | cut -d'|' -f2)"
-            else
-                item_action="$item"
-                item_desc=""
-            fi
-            item_action="$(echo "$item_action" | xargs)"
-            item_desc="$(echo "$item_desc" | xargs)"
+            parse_cli_item "$item" item_action item_desc
             printf "    \033[1;36m%-16s\033[0m %s\n" "$item_action" "$item_desc"
         done
     else
@@ -101,23 +89,7 @@ show_security_help() {
     if [ -n "${SECURITY_CLI_LIST[*]}" ] && [ "${#SECURITY_CLI_LIST[@]}" -gt 0 ]; then
         for item in "${SECURITY_CLI_LIST[@]}"; do
             local item_action="" item_desc="" item_cmd=""
-            if [[ "$item" == *" :: "* ]]; then
-                item_action="${item%% :: *}"
-                local item_rest="${item#* :: }"
-                item_desc="${item_rest%% :: *}"
-                item_cmd="${item_rest#* :: }"
-            elif [[ "$item" == *"|"* ]]; then
-                item_action="$(echo "$item" | cut -d'|' -f1)"
-                item_desc="$(echo "$item" | cut -d'|' -f2)"
-                item_cmd="$(echo "$item" | cut -d'|' -f3-)"
-            else
-                item_action="$item"
-                item_desc=""
-                item_cmd=""
-            fi
-            item_action="$(echo "$item_action" | xargs)"
-            item_desc="$(echo "$item_desc" | xargs)"
-            item_cmd="$(echo "$item_cmd" | xargs)"
+            parse_cli_item "$item" item_action item_desc item_cmd
 
             local var_suffix
             var_suffix=$(echo "$item_action" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
@@ -380,13 +352,9 @@ is_security_action() {
 
     if [ -n "${SECURITY_CLI_LIST[*]}" ]; then
         for item in "${SECURITY_CLI_LIST[@]}"; do
-            local act=""
-            if [[ "$item" == *" :: "* ]]; then
-                act="${item%% :: *}"
-            elif [[ "$item" == *"|"* ]]; then
-                act="$(echo "$item" | cut -d'|' -f1)"
-            fi
-            act="$(echo "$act" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
+            local act="" act_desc=""
+            parse_cli_item "$item" act act_desc
+            act=$(echo "$act" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
             if [ "$act" = "$target" ]; then
                 return 0
             fi
@@ -407,28 +375,7 @@ is_security_action() {
 
 # Verify Android device is connected and online before executing security commands
 check_security_device_connected() {
-    if ! command -v adb >/dev/null 2>&1; then
-        log_error "device offline: 'adb' command not found. Please ensure Android platform-tools is in PATH."
-        return 1
-    fi
-
-    local dev_state
-    dev_state=$(adb get-state 2>/dev/null || echo "offline")
-    local online_devices
-    online_devices=$(adb devices 2>/dev/null | grep -v "List of devices attached" | grep -w "device" || true)
-
-    if [ "$dev_state" != "device" ] && [ -z "$online_devices" ]; then
-        local raw_devices
-        raw_devices=$(adb devices 2>/dev/null | grep -v "List of devices attached" | grep -v "^$" || true)
-        if [ -n "$raw_devices" ]; then
-            log_error "device offline: Connected Android device is not ready (state: $dev_state)."
-        else
-            log_error "device offline: No Android device connected."
-        fi
-        log_error "Please connect a device via USB/TCP and verify with 'adb devices'."
-        return 1
-    fi
-    return 0
+    check_adb_device_online
 }
 
 # Dispatch & execute the security command
@@ -483,20 +430,11 @@ handle_security_command() {
     if [ -n "${SECURITY_CLI_LIST[*]}" ]; then
         for item in "${SECURITY_CLI_LIST[@]}"; do
             local it_action="" it_desc="" it_cmd=""
-            if [[ "$item" == *" :: "* ]]; then
-                it_action="${item%% :: *}"
-                local it_rest="${item#* :: }"
-                it_desc="${it_rest%% :: *}"
-                it_cmd="${it_rest#* :: }"
-            elif [[ "$item" == *"|"* ]]; then
-                it_action="$(echo "$item" | cut -d'|' -f1)"
-                it_desc="$(echo "$item" | cut -d'|' -f2)"
-                it_cmd="$(echo "$item" | cut -d'|' -f3-)"
-            fi
-            it_action="$(echo "$it_action" | xargs | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
-            if [ "$it_action" = "$action_normalized" ]; then
-                action_label="$(echo "$it_desc" | xargs)"
-                it_cmd="$(echo "$it_cmd" | xargs)"
+            parse_cli_item "$item" it_action it_desc it_cmd
+            local it_action_norm
+            it_action_norm=$(echo "$it_action" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+            if [ "$it_action_norm" = "$action_normalized" ]; then
+                action_label="$it_desc"
                 if [ -n "$it_cmd" ] && declare -p "$it_cmd" 2>/dev/null | grep -q 'declare -a'; then
                     eval "step_cmds=(\"\${${it_cmd}[@]}\")"
                     is_array=1
@@ -537,46 +475,7 @@ handle_security_command() {
 
     # Case A: Execute multi-command sequential pipeline array
     if [ "$is_array" -eq 1 ] && [ "${#step_cmds[@]}" -gt 0 ]; then
-        local total_steps="${#step_cmds[@]}"
-        echo ""
-        log_info "============================================================"
-        log_info " Executing Security Pipeline: '$action_normalized'"
-        [ -n "$action_label" ] && log_info " Description: $action_label"
-        log_info " Total Steps: $total_steps"
-        log_info "============================================================"
-
-        local step_idx=1
-        for cmd in "${step_cmds[@]}"; do
-            echo ""
-            echo -e "\033[1;36m[STEP $step_idx/$total_steps]\033[0m \033[1;37m$cmd\033[0m"
-            local step_start
-            step_start=$(date +%s)
-
-            local ret=0
-            if [[ "$cmd" =~ ^(adb|sudo|echo|sleep)[[:space:]] ]] || [[ "$cmd" =~ ^adb ]]; then
-                eval "$cmd"
-                ret=$?
-            else
-                adb shell "$cmd"
-                ret=$?
-            fi
-
-            if [ $ret -eq 0 ]; then
-                local step_end
-                step_end=$(date +%s)
-                local step_dur=$((step_end - step_start))
-                log_success "Step $step_idx/$total_steps finished (${step_dur}s)."
-            else
-                local exit_code=$ret
-                log_error "Step $step_idx failed with exit code $exit_code! Aborting security pipeline."
-                exit $exit_code
-            fi
-            step_idx=$((step_idx + 1))
-        done
-
-        echo ""
-        log_success "All $total_steps steps of security pipeline '$action_normalized' completed successfully."
-        echo ""
+        execute_command_pipeline "$action_normalized" "$action_label" "${step_cmds[@]}"
         exit 0
     fi
 
