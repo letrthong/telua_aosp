@@ -128,7 +128,7 @@ Supports both `telua` and short alias `tel` on Bash & Zsh:
 tel <Tab><Tab>            # Subcommands: build, car, dump, clean-java, docs, run, replace...
 tel car <Tab><Tab>        # Car actions: vol-up, vol-down, vol-mute, ks, ks-stop, status
 tel dump <Tab><Tab>       # Dumpsys targets: audio, car-service, car-audio, media, battery...
-tel docs <Tab><Tab>       # Docs actions: init, build, clean, serve, check
+tel docs <Tab><Tab>       # Docs actions: start, serve, build, check, clean, init
 tel run <Tab><Tab>        # Pipelines: audio-cycle, dev-prep, remount-reboot...
 ```
 
@@ -137,7 +137,8 @@ tel run <Tab><Tab>        # Pipelines: audio-cycle, dev-prep, remount-reboot...
 telua docs init           # Initialize documentation project from template into ./docs (idempotent)
 telua docs check          # Validate section file paths & image directives
 telua docs build          # Merge sections & compile HTML into _build/html
-telua docs serve [8080]   # Start local preview HTTP server
+telua docs start [8080]   # Auto-build (if needed), open default browser & start HTTP server
+telua docs serve [8080]   # Alias for 'start'
 telua docs clean          # Remove _build directory
 ```
 

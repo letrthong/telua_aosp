@@ -594,7 +594,7 @@ telua sec help                        # Hiển thị chi tiết từng action k�
 
 ### 5.9 Quản lý tài liệu Sphinx Doc-as-Code (`telua docs` / `doc`)
 
-Hệ thống quản lý tài liệu dạng mã nguồn chuẩn quốc tế theo mô hình mô-đun (Modular Documentation) sử dụng **Sphinx** và theme **Furo**, tự động hóa toàn diện từ khởi tạo template, kiểm tra tính toàn vẹn (broken images/paths), tổng hợp (merge) đến xuất bản HTML:
+Hệ thống quản lý tài liệu dạng mã nguồn chuẩn quốc tế theo mô hình mô-đun (Modular Documentation) sử dụng **Sphinx** và theme **Furo**, tự động hóa toàn diện từ khởi tạo template, kiểm tra tính toàn vẹn (broken images/paths), tổng hợp (merge) đến mở xem trước trực tiếp trên trình duyệt:
 
 ```bash
 # 1. Khởi tạo tài liệu trong thư mục ./docs (an toàn: KHÔNG ghi đè nếu đã tồn tại):
@@ -606,15 +606,19 @@ telua docs check
 # 3. Tự động merge các section và biên dịch HTML tĩnh:
 telua docs build
 
-# 4. Chạy web server local xem trước tài liệu tại http://localhost:8080:
-telua docs serve
+# 4. Khởi chạy HTTP server và TỰ ĐỘNG MỞ trình duyệt xem tài liệu (mặc định port 8080):
+telua docs start          # Tự động build (nếu chưa có) & mở browser tại http://localhost:8080
+telua docs start 8080     # Tùy chỉnh port nếu cần
+telua docs serve          # Alias cho lệnh start
 
 # 5. Dọn dẹp thư mục build:
 telua docs clean
 ```
 
+* **Kiến trúc tách bạch (Clean Template Architecture)**: Các file nội dung (`conf.py`, `metadata.json`, `index.rst`, `asset/`, `chapter1/2/3/`) được lưu trong `sphinx/template/`, còn công cụ xử lý (`check_sections.py`, `merge_docs.py`, `check_docs.py`) được cô lập trong `sphinx/scripts/`. Khi chạy `telua docs init`, người dùng có thư mục tài liệu tinh gọn và sạch sẽ, không bị lẫn các script Python nội bộ.
+* **Tự động mở trình duyệt**: Lệnh `telua docs start` tự động phát hiện hệ điều hành (Windows, Linux, macOS) để mở ngay trang HTML trên trình duyệt mặc định. Nếu tài liệu chưa được biên dịch, nó sẽ tự động kích hoạt `build` trước.
 * **Khởi tạo Idempotent an toàn**: Khi chạy `telua docs init`, nếu thư mục `docs/` đã tồn tại và chứa file cấu hình (`conf.py` hoặc `metadata.json`), toolkit sẽ tự động bỏ qua và cảnh báo, đảm bảo không bao giờ làm mất tài liệu hiện có của bạn.
-* **Tự động nhận diện (Context-Aware Auto-Discovery)**: Tự động phát hiện thư mục tài liệu tại `./docs`, `./sphinx` hoặc ngay tại thư mục hiện tại `.`.
+* **Tự động nhận diện (Context-Aware Auto-Discovery)**: Tự động phát hiện thư mục tài liệu tại `./docs`, `./sphinx/template`, `./sphinx` hoặc ngay tại thư mục hiện tại `.`.
 
 ---
 
