@@ -1,0 +1,53 @@
+[
+    {
+        "chapter": "chapter1.rst",
+        "author": "Team A",
+        "updateCreated": "2026-04-13",
+        "dataList": [
+            {
+                "filePath": "chapter1/chapter1_section1.rst",
+                "title": "Installation",
+                "description": "How to install the software.",
+                "updateCreated": "2026-04-13"
+            },
+            {
+                "filePath": "chapter1/chapter1_section2.rst",
+                "title": "Configuration",
+                "description": "Basic configuration steps.",
+                "updateCreated": "2026-04-13"
+            }
+        ]
+    },
+    {
+        "chapter": "chapter2.rst",
+        "author": "Team B",
+        "updateCreated": "2026-04-13",
+        "dataList": [
+            {
+                "filePath": "chapter2/chapter2_section1.rst",
+                "title": "Section 1 of Chapter 2",
+                "description": "Content for section 1 of chapter 2.",
+                "updateCreated": "2026-04-13"
+            }
+        ]
+    },
+    {
+        "chapter": "chapter3.rst",
+        "author": "Team A",
+        "updateCreated": "2026-04-13",
+        "dataList": [
+            {
+                "filePath": "chapter3/chapter3_section1.rst",
+                "title": "Section 1 of Chapter 3",
+                "description": "Content for section 1 of chapter 3.",
+                "updateCreated": "2026-04-13"
+            },
+            {
+                "filePath": "chapter3/chapter3_section2.rst",
+                "title": "Section 2 of Chapter 3",
+                "description": "Content for section 2 of chapter 3.",
+                "updateCreated": "2026-04-13"
+            }
+        ]
+    }
+]

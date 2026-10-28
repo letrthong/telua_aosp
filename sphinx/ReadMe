@@ -1,0 +1,40 @@
+# Installation guide for required Sphinx packages on Linux
+
+pip install sphinx
+pip install furo
+
+# If you use other Sphinx extensions, add the corresponding pip install command here
+
+---
+
+# Project scripts and configuration
+
+# Why use separate scripts for check and merge?
+# ---------------------------------------------
+# Keeping check and merge logic in separate scripts makes the project easier to maintain, debug, and extend.
+# - You can add new checks or change the merge logic independently.
+# - If a check fails, the build stops early, saving time and avoiding broken documentation.
+# - This modular approach is best practice for teamwork and CI/CD pipelines.
+# - Each script has a single responsibility, making it easier to test and understand.
+
+- **merge_docs.py**: Reads metadata.json and automatically merges content from section files into the main chapter .rst files (between special markers). Run this script before building the documentation to ensure chapters are up to date.
+
+- **metadata.json**: Defines the structure of chapters and their sections. Example:
+
+  [
+    {
+      "chapter": "chapter1.rst",
+      "dataList": [
+        { "filePath": "chapter1/chapter1_section1.rst" },
+        { "filePath": "chapter1/chapter1_section2.rst" }
+      ]
+    },
+    ...
+  ]
+
+- **check_docs.py**: Checks all main chapter .rst files (as listed in metadata.json) for image directives (.. image:: ...) and verifies that the referenced image files exist. If any image is missing, the script will print an error and exit with a non-zero code (useful for CI or build scripts).
+
+Run the scripts in this order before building Sphinx HTML:
+1. python merge_docs.py
+2. python check_docs.py
+3. sphinx-build -b html . _build/html
