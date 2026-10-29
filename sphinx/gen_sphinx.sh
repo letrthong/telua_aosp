@@ -16,7 +16,7 @@
 # limitations under the License.
 # ==============================================================================
 
-TARGET_DIR="${1:-template}"
+TARGET_DIR="${1:-templates/basic}"
 SCRIPT_DIR="$(dirname "$0")/scripts"
 
 echo "Target documentation directory: $TARGET_DIR"
@@ -41,16 +41,22 @@ for item in "$TARGET_DIR"/*; do
   fi
 done
 
-# If staging lacks conf.py, fallback to template conf.py
+# If staging lacks conf.py, fallback to basic template conf.py
 if [ ! -f "$STAGING_DIR/conf.py" ]; then
-  if [ -f "$(dirname "$0")/template/conf.py" ]; then
+  if [ -f "$(dirname "$0")/templates/basic/conf.py" ]; then
+    cp "$(dirname "$0")/templates/basic/conf.py" "$STAGING_DIR/conf.py"
+  elif [ -f "$(dirname "$0")/template/conf.py" ]; then
     cp "$(dirname "$0")/template/conf.py" "$STAGING_DIR/conf.py"
   fi
 fi
 
 # Ensure custom static directory (_static) is copied into staging
-if [ ! -d "$STAGING_DIR/_static" ] && [ -d "$(dirname "$0")/template/_static" ]; then
-  cp -r "$(dirname "$0")/template/_static" "$STAGING_DIR/"
+if [ ! -d "$STAGING_DIR/_static" ]; then
+  if [ -d "$(dirname "$0")/templates/basic/_static" ]; then
+    cp -r "$(dirname "$0")/templates/basic/_static" "$STAGING_DIR/"
+  elif [ -d "$(dirname "$0")/template/_static" ]; then
+    cp -r "$(dirname "$0")/template/_static" "$STAGING_DIR/"
+  fi
 fi
 
 echo "Merging docs from metadata.json into staging directory..."

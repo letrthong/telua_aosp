@@ -535,16 +535,22 @@ docs_cmd_build() {
 
     # If staging lacks conf.py, fallback to central template conf.py
     if [ ! -f "$staging_dir/conf.py" ]; then
-        if [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template/conf.py" ]; then
-            cp "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template/conf.py" "$staging_dir/conf.py"
+        if [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/basic/conf.py" ]; then
+            cp "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/basic/conf.py" "$staging_dir/conf.py"
+        elif [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/architecture/conf.py" ]; then
+            cp "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/architecture/conf.py" "$staging_dir/conf.py"
         elif [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/conf.py" ]; then
             cp "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/conf.py" "$staging_dir/conf.py"
         fi
     fi
 
     # Ensure custom static directory (_static) is copied into staging
-    if [ ! -d "$staging_dir/_static" ] && [ -d "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template/_static" ]; then
-        cp -r "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template/_static" "$staging_dir/"
+    if [ ! -d "$staging_dir/_static" ]; then
+        if [ -d "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/basic/_static" ]; then
+            cp -r "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/basic/_static" "$staging_dir/"
+        elif [ -d "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/architecture/_static" ]; then
+            cp -r "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/architecture/_static" "$staging_dir/"
+        fi
     fi
 
     # 1. Check sections (on staging_dir)
