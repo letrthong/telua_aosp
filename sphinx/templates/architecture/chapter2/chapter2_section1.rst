@@ -64,9 +64,12 @@ Dưới đây là sơ đồ tương tác ca sử dụng giữa các tác nhân v
 1. **Điều kiện tiên quyết (Preconditions)**: Hệ thống âm thanh đã khởi động thành công, các Audio Zone đã được định danh.
 2. **Kích hoạt (Trigger)**: Một ứng dụng (ví dụ Media Player hoặc Navigation) gửi yêu cầu ``requestAudioFocus()``.
 3. **Luồng sự kiện chính (Main Flow)**:
+
    - Framework kiểm tra quyền ưu tiên của ứng dụng yêu cầu so với các luồng âm thanh hiện tại.
    - Nếu luồng yêu cầu có độ ưu tiên cao hơn (ví dụ Navigation Alert > Nhạc nền):
-     - Framework ra lệnh cho ứng dụng nhạc nền giảm âm lượng (Ducking) hoặc tạm dừng (Pause).
-     - Gửi tín hiệu thông báo cấp quyền phát ``AUDIOFOCUS_REQUEST_GRANTED`` cho Navigation.
-     - Cấu hình lại ma trận mixer ở tầng HAL DSP.
+
+     * Framework ra lệnh cho ứng dụng nhạc nền giảm âm lượng (Ducking) hoặc tạm dừng (Pause).
+     * Gửi tín hiệu thông báo cấp quyền phát ``AUDIOFOCUS_REQUEST_GRANTED`` cho Navigation.
+     * Cấu hình lại ma trận mixer ở tầng HAL DSP.
+
 4. **Hậu điều kiện (Postconditions)**: Ứng dụng Navigation phát thông điệp rõ ràng tới loa của người lái, ứng dụng nhạc nền tiếp tục phát bình thường sau khi thông điệp kết thúc.

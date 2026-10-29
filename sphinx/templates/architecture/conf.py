@@ -17,7 +17,7 @@ for ext in ['sphinxcontrib.mermaid', 'sphinx_copybutton']:
 import os
 
 source_suffix = '.rst'
-exclude_patterns = ['_build']
+exclude_patterns = ['_build', 'chapter*/*', '*/*_section*']
 html_theme = 'furo'
 source_encoding = 'utf-8-sig'
 

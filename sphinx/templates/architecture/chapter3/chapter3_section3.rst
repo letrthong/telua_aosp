@@ -52,7 +52,7 @@ Sơ Đồ Dòng Dữ Liệu Âm Thanh (Audio Data Flow Diagram)
 
 Dưới đây là định nghĩa giao diện AIDL chuẩn mẫu được sử dụng giữa CarAudioService và HAL:
 
-.. code-block:: aidl
+.. code-block:: java
 
    package android.hardware.automotive.audiocontrol;
 

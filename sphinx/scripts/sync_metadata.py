@@ -31,6 +31,13 @@ import os
 import re
 import sys
 
+if sys.platform == 'win32' and sys.stdout.encoding != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 IGNORED_DIRS = {
     "_build", ".git", "asset", "assets", "static", "_static",
     "templates", "_templates", "scripts", "template", "__pycache__"

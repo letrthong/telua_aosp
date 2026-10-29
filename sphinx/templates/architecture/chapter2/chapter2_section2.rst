@@ -1,5 +1,5 @@
 2.2 Đặc Tả Yêu Cầu Chức Năng & Phi Chức Năng (Functional & Non-Functional Requirements)
-----------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------
 
 Phần này cung cấp ma trận chi tiết các yêu cầu chức năng (Functional Requirements - FR) và phi chức năng (Non-Functional Requirements - NFR) làm căn cứ kiểm định hệ thống.
 
