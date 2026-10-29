@@ -227,3 +227,11 @@ handle_my_command() {
 
     execute_command_pipeline "$action_normalized" "$action_label" "${step_cmds[@]}"
 }
+
+# Backwards-compatibility alias: build_apk.sh dispatches 'telua my <action>'
+# / 'telua proj <action>' through handle_project_command(), while this module
+# implements the behavior as handle_my_command(). Keep both names pointing at
+# the same implementation so either call site works.
+handle_project_command() {
+    handle_my_command "$@"
+}
