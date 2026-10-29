@@ -41,12 +41,10 @@ References & Official Google AOSP Documentation
 ------------------------------------------------
 This architecture specification is based on public open-source standards published by Google under the Apache 2.0 license:
 
-- **AOSP Automotive Audio Overview**: `Google AOSP Automotive Audio <https://source.android.com/docs/automotive/audio>`_
-- **AOSP AudioControl HAL AIDL Interface**: `AudioControl HAL Specification <https://source.android.com/docs/automotive/audio/audio-control-hal>`_
-- **AOSP Multi-Zone Audio Routing & Volume Groups**: `Multi-Zone Audio Documentation <https://source.android.com/docs/automotive/audio/multi-zone-audio>`_
+- **Google AOSP Automotive Audio Architecture**: `AOSP Automotive Audio Overview <https://source.android.com/docs/automotive/audio>`_
 - **Android Developer Audio Focus Guidelines**: `Managing Audio Focus API <https://developer.android.com/guide/topics/media-apps/audio-focus>`_
-- **AOSP Automotive Testing & Compliance**: `Audio Compliance & VTS <https://source.android.com/docs/automotive/audio/audio-compliance>`_
-- **AOSP Build System & Environment Setup**: `Building Android AOSP <https://source.android.com/docs/setup/build/building>`_
+- **Google AOSP Car Service & HAL Repository**: `AOSP Car Audio Service Source <https://android.googlesource.com/platform/packages/services/Car/>`_
+- **Google AOSP Build System & Environment Setup**: `Building Android AOSP <https://source.android.com/docs/setup/build/building>`_
 
 
 .. toctree::
