@@ -77,4 +77,4 @@ To achieve release readiness, code changes must satisfy the strict thresholds de
      - Flag as performance regression and reject commit.
 
 .. note::
-   **Official Reference**: For official Android Automotive audio compliance suites, VTS targets, and CTS verification rules, see `Google AOSP: Audio Compliance & Testing <https://source.android.com/docs/automotive/audio/audio-compliance>`_.
+   **Official Reference**: For official Android Automotive audio compliance suites, VTS targets, and CTS verification rules, see `Google AOSP Automotive Audio <https://source.android.com/docs/automotive/audio>`_ and `Google AOSP Vendor Test Suite (VTS) <https://source.android.com/docs/compatibility/vts>`_.
