@@ -1,77 +1,77 @@
-6.3 Kiểm Thử Tự Động & Tiêu Chuẩn Chất Lượng (Automated Test Pipeline & Quality Gates)
+6.3 Automated Test Pipeline & Quality Gates
 ------------------------------------------------------------------------------------------
 
-Phần này mô tả hệ thống kiểm thử tự động hóa tích hợp trong đường ống CI/CD (**Automated Test Pipeline**) và các tiêu chuẩn kiểm soát chất lượng phần mềm (**Quality Gates**).
+This section describes automated CI/CD testing workflows (**Automated Test Pipeline**) and software release criteria (**Quality Gates**).
 
-Quy Trình Kiểm Thử Tự Động Trong CI/CD Pipeline
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Continuous Integration (CI) Automated Testing Flow
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Mọi Pull Request (PR) gửi lên hệ thống quản lý mã nguồn (GitLab / GitHub) đều kích hoạt chuỗi kiểm tra tự động trước khi được phép merge vào nhánh chính:
+Every incoming Pull Request (PR) triggers automated quality pipelines before merge authorization:
 
 .. mermaid::
 
    graph LR
-       PR["Pull Request Mới"] --> Static["1. Static Analysis<br/>(Clang-Tidy / SonarQube)"]
+       PR["New Pull Request"] --> Static["1. Static Analysis<br/>(Clang-Tidy / SonarQube)"]
        Static --> Unit["2. Run Unit Tests<br/>(atest / GTest)"]
        Unit --> Coverage["3. Coverage Check<br/>(JaCoCo / LCOV)"]
        Coverage --> VTS["4. Automated VTS / CTS<br/>(Android Cuttlefish AVD)"]
        VTS --> Gate{"Quality Gate Passed?"}
-       Gate -- Yes --> Approve["Cho Phép Merge"]
-       Gate -- No --> Reject["Chặn Merge & Báo Lỗi"]
+       Gate -- Yes --> Approve["Approve & Merge"]
+       Gate -- No --> Reject["Block PR & Report Failure"]
 
        classDef success fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
        classDef fail fill:#ffebee,stroke:#c62828,stroke-width:2px;
        class Approve success;
        class Reject fail;
 
-Bộ Công Cụ Kiểm Thử Tự Động Của Android (AOSP Test Suites)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Android AOSP Automated Test Tooling
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-1. **Kiểm thử tự động bằng lệnh `atest`**:
+1. **Automated Unit Testing with `atest`**:
    
    .. code-block:: bash
 
-      # Chạy kiểm thử đơn vị tự động cho CarAudioService
+      # Execute automated unit test suite for CarAudioService
       atest CarAudioServiceUnitTest
 
-      # Chạy kiểm thử kèm đo độ phủ dòng code (Code Coverage)
+      # Run unit tests and compute line-by-line code coverage
       atest CarAudioServiceUnitTest --collect-tests-only --coverage
 
-2. **Kiểm thử tương thích phần cứng Vendor (VTS - Vendor Test Suite)**:
+2. **Vendor Interface Compliance Testing (VTS - Vendor Test Suite)**:
    
    .. code-block:: bash
 
-      # Kiểm tra tuân thủ giao tiếp chuẩn của AudioControl HAL AIDL
+      # Verify HAL interface contract conformance
       atest VtsHalAudioControlTargetTest
 
-3. **Kiểm tra rò rỉ bộ nhớ với AddressSanitizer (ASan)**:
+3. **Memory Safety Validation with AddressSanitizer (ASan)**:
    
    .. code-block:: bash
 
-      # Biên dịch Native C++ với cờ kiểm tra tràn bộ nhớ
+      # Compile Native C++ services with memory sanitizer enabled
       SANITYZE_TARGET=address m android.hardware.automotive.audiocontrol-service
 
-Chỉ Số Độ Phủ & Tiêu Chuẩn Kiểm Soát Chất Lượng (Quality Gates)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Quality Gates & Release Metrics Matrix
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Để được gắn nhãn sẵn sàng xuất bản (Release-Ready), toàn bộ mã nguồn phải vượt qua các ngưỡng chất lượng cam kết sau:
+To achieve release readiness, code changes must satisfy the strict thresholds defined in the quality gate matrix:
 
-.. list-table:: **Bảng Tiêu Chuẩn Kiểm Soát Chất Lượng (Quality Gates Matrix)**
+.. list-table:: **Quality Gate Acceptance Criteria**
    :widths: 25 35 40
    :header-rows: 1
 
-   * - Chỉ Số Chất Lượng (KPI)
-     - Ngưỡng Yêu Cầu (Threshold)
-     - Biện Pháp Xử Lý Khi Vi Phạm
-   * - **Độ Phủ Dòng Code (Line Coverage)**
-     - Tối thiểu **>= 80%** toàn bộ module; **>= 95%** cho module phân xử Audio Focus
-     - Chặn Pull Request tự động trên CI/CD runner.
-   * - **Lỗ Hổng Bảo Mật (Vulnerabilities)**
-     - **0** lỗi mức Critical hoặc High (SonarQube)
-     - Yêu cầu lập trình viên vá lỗi bảo mật trước khi review lại.
-   * - **Rò Rỉ Bộ Nhớ (Memory Leaks)**
-     - **0 byte** leak sau 24 giờ chạy kiểm thử tải căng thẳng (Stress Test)
-     - Phân tích dump heap qua Android Studio Profiler để giải phóng con trỏ.
-   * - **Độ Trễ Phản Hồi (Performance SLA)**
-     - 100% các lệnh chuyển kênh âm thanh thực hiện trong **< 30ms**
-     - Đánh dấu Regression và rollback commit gây suy giảm hiệu năng.
+   * - Quality KPI
+     - Acceptance Threshold
+     - Action Upon Threshold Violation
+   * - **Code Line Coverage**
+     - Minimum **>= 80%** module-wide; **>= 95%** for core focus arbitration logic
+     - Automatically block Pull Request merge in CI runner.
+   * - **Security Vulnerabilities**
+     - **0** Critical or High severity issues (SonarQube)
+     - Engineer must patch vulnerability before requesting re-review.
+   * - **Memory Leaks**
+     - **0 bytes** leaked after a continuous 24-hour stress test
+     - Analyze heap allocation dump via Android Studio Profiler.
+   * - **Routing Latency**
+     - 100% of audio focus transitions complete in **< 30ms**
+     - Flag as performance regression and reject commit.

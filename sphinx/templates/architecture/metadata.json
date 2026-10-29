@@ -6,14 +6,14 @@
         "dataList": [
             {
                 "filePath": "chapter1/chapter1_section1.rst",
-                "title": "1.1 Bối Cảnh Nghiệp Vụ & Mục Tiêu Dự Án",
-                "description": "Bối cảnh kinh doanh, bài toán đặt ra, mục tiêu thiết kế và các bên liên quan.",
+                "title": "1.1 Project Context & Business Objectives",
+                "description": "Business context, problem statement, strategic architecture goals, and key stakeholders.",
                 "updateCreated": "2026-10-29"
             },
             {
                 "filePath": "chapter1/chapter1_section2.rst",
-                "title": "1.2 Phạm Vi & Thuộc Tính Chất Lượng",
-                "description": "Phân định phạm vi In-Scope / Out-of-Scope, nguyên tắc kiến trúc và các chỉ số chất lượng SLA/SLO.",
+                "title": "1.2 Scope & Architectural Quality Attributes",
+                "description": "In-Scope vs. Out-of-Scope boundaries, core architectural principles, and quality SLAs/SLOs.",
                 "updateCreated": "2026-10-29"
             }
         ]
@@ -25,14 +25,14 @@
         "dataList": [
             {
                 "filePath": "chapter2/chapter2_section1.rst",
-                "title": "2.1 Tác Nhân & Sơ Đồ Ca Sử Dụng",
-                "description": "Danh sách tác nhân (Actors), sơ đồ Use Case Mermaid và đặc tả kịch bản chính.",
+                "title": "2.1 Actors & Use Case Modeling",
+                "description": "System actors identification, Mermaid use case interaction diagram, and core scenario specifications.",
                 "updateCreated": "2026-10-29"
             },
             {
                 "filePath": "chapter2/chapter2_section2.rst",
-                "title": "2.2 Đặc Tả Yêu Cầu Chức Năng & Phi Chức Năng",
-                "description": "Ma trận yêu cầu chức năng (FR) theo mức ưu tiên và yêu cầu phi chức năng (NFR).",
+                "title": "2.2 Functional & Non-Functional Requirements",
+                "description": "Prioritized functional requirements matrix (P0-P2) and non-functional requirements (NFRs).",
                 "updateCreated": "2026-10-29"
             }
         ]
@@ -44,20 +44,20 @@
         "dataList": [
             {
                 "filePath": "chapter3/chapter3_section1.rst",
-                "title": "3.1 Kiến Trúc Hệ Thống Tổng Thể (System Architecture)",
-                "description": "Sơ đồ kiến trúc 4 tầng phân tách C4, ranh giới subsystem và bảng phân tích công nghệ.",
+                "title": "3.1 System Architecture",
+                "description": "Four-layer C4 system architecture model, subsystem boundaries, and technology stack breakdown.",
                 "updateCreated": "2026-10-29"
             },
             {
                 "filePath": "chapter3/chapter3_section2.rst",
-                "title": "3.2 Luồng Tương Tác Giữa Các Thành Phần (Component Interactions)",
-                "description": "Sơ đồ tuần tự (Sequence Diagram) luồng phân xử quyền phát âm thanh thời gian thực.",
+                "title": "3.2 Component Interactions & Sequence Flows",
+                "description": "Real-time sequence flow diagram for audio focus arbitration and dynamic audio ducking.",
                 "updateCreated": "2026-10-29"
             },
             {
                 "filePath": "chapter3/chapter3_section3.rst",
-                "title": "3.3 Giao Thức Giao Tiếp & Luồng Dữ Liệu (Communication Protocols & Data Flow)",
-                "description": "Cơ chế IPC Binder / Stable AIDL, FastMixer ring buffer và sơ đồ dòng dữ liệu âm thanh.",
+                "title": "3.3 Communication Protocols & Data Flow",
+                "description": "Binder IPC / Stable AIDL contracts, FastMixer zero-copy streaming, and audio data flow diagram.",
                 "updateCreated": "2026-10-29"
             }
         ]
@@ -69,20 +69,20 @@
         "dataList": [
             {
                 "filePath": "chapter4/chapter4_section1.rst",
-                "title": "4.1 Thiết Kế Lớp Đối Tượng (Class Modeling & Object Design)",
-                "description": "Sơ đồ lớp kiến trúc (Class Diagram) với các thuộc tính, phương thức và Design Patterns.",
+                "title": "4.1 Class Modeling & Object Design",
+                "description": "Architectural class diagram with attributes, methods, relationships, and applied design patterns.",
                 "updateCreated": "2026-10-29"
             },
             {
                 "filePath": "chapter4/chapter4_section2.rst",
-                "title": "4.2 Máy Trạng Thái & Vòng Đời Hoạt Động (State Machine & Lifecycle Transitions)",
-                "description": "Máy trạng thái hữu hạn (FSM) biểu diễn vòng đời AudioFocusRequest và ma trận chuyển trạng thái.",
+                "title": "4.2 State Machine & Lifecycle Transitions",
+                "description": "Finite state machine (FSM) state diagram and transition matrix for AudioFocusRequest lifecycles.",
                 "updateCreated": "2026-10-29"
             },
             {
                 "filePath": "chapter4/chapter4_section3.rst",
-                "title": "4.3 Cấu Trúc Dữ Liệu & Data Schema (Data Models & Configuration)",
-                "description": "Sơ đồ thực thể ER Diagram, cấu trúc XML schema và từ điển dữ liệu cấu hình.",
+                "title": "4.3 Data Models & Configuration Schemas",
+                "description": "Entity-Relationship (ER) diagram, sample XML configuration schema, and data dictionary.",
                 "updateCreated": "2026-10-29"
             }
         ]
@@ -94,20 +94,20 @@
         "dataList": [
             {
                 "filePath": "chapter5/chapter5_section1.rst",
-                "title": "5.1 Quy Trình Đóng Gói & Tích Hợp Liên Tục (Build System & CI/CD Pipeline)",
-                "description": "Quy trình CI/CD tự động, lệnh biên dịch AOSP / Docs-as-Code và kiểm thử tự động.",
+                "title": "5.1 Build System & CI/CD Pipeline",
+                "description": "Automated CI/CD pipeline workflow, Sphinx Docs-as-Code build commands, and AOSP build steps.",
                 "updateCreated": "2026-10-29"
             },
             {
                 "filePath": "chapter5/chapter5_section2.rst",
-                "title": "5.2 Mô Hình & Hạ Tầng Triển Khai (Deployment Topology & Environments)",
-                "description": "Sơ đồ hạ tầng Dev / Staging / Production, cơ chế nâng cấp không gián đoạn A/B OTA.",
+                "title": "5.2 Deployment Topology & Environments",
+                "description": "Dev/Staging/Production topology diagram, test rig environments, and A/B seamless OTA updates.",
                 "updateCreated": "2026-10-29"
             },
             {
                 "filePath": "chapter5/chapter5_section3.rst",
-                "title": "5.3 Vận Hành, Giám Sát & Xử Lý Sự Cố (Observability & Runbook)",
-                "description": "Công cụ chẩn đoán dumpsys, tracing Perfetto và ma trận xử lý sự cố tiêu chuẩn.",
+                "title": "5.3 Observability & Troubleshooting Runbook",
+                "description": "Dumpsys and Perfetto diagnostic commands, and comprehensive error remediation runbook matrix.",
                 "updateCreated": "2026-10-29"
             }
         ]
@@ -119,20 +119,20 @@
         "dataList": [
             {
                 "filePath": "chapter6/chapter6_section1.rst",
-                "title": "6.1 Chiến Lược Kiểm Thử & Mô Hình Kim Tự Tháp",
-                "description": "Mô hình kim tự tháp kiểm thử phần mềm, phân loại cấp độ test và nguyên tắc test độc lập.",
+                "title": "6.1 Testing Strategy & Test Pyramid",
+                "description": "Software testing pyramid model, test level objectives, and isolation principles.",
                 "updateCreated": "2026-10-29"
             },
             {
                 "filePath": "chapter6/chapter6_section2.rst",
-                "title": "6.2 Kiểm Thử Đơn Vị & Kỹ Thuật Mocking",
-                "description": "Hướng dẫn viết Unit Test với JUnit 5/Mockito cho Java và Google Test/GMock cho C++, kỹ thuật fault injection.",
+                "title": "6.2 Unit Testing & Mocking Frameworks",
+                "description": "Unit testing guide with JUnit 5/Mockito for Java and Google Test/GMock for C++, plus fault injection.",
                 "updateCreated": "2026-10-29"
             },
             {
                 "filePath": "chapter6/chapter6_section3.rst",
-                "title": "6.3 Kiểm Thử Tự Động & Tiêu Chuẩn Chất Lượng",
-                "description": "Đường ống kiểm thử tự động CI/CD, bộ công cụ atest/VTS của Android và bảng tiêu chuẩn Quality Gates (Coverage >= 80%).",
+                "title": "6.3 Automated Test Pipeline & Quality Gates",
+                "description": "Automated CI/CD test pipeline, Android atest and VTS test suites, and quality gates matrix.",
                 "updateCreated": "2026-10-29"
             }
         ]
