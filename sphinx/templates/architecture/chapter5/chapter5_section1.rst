@@ -1,12 +1,12 @@
-5.1 Quy Trình Đóng Gói & Tích Hợp Liên Tục (Build System & CI/CD Pipeline)
-----------------------------------------------------------------------------------
+5.1 Build System & CI/CD Pipeline
+------------------------------------------------------------------------------------------
 
-Phần này mô tả công cụ biên dịch (**Build System**), quy trình kiểm thử tự động hóa và đường ống phân phối liên tục (**CI/CD Pipeline**).
+This section describes build system configurations (**Build System**), automated testing workflows, and continuous delivery pipelines (**CI/CD Pipeline**).
 
-Sơ Đồ Đường Ống CI/CD (CI/CD Pipeline Workflow)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+CI/CD Pipeline Workflow Diagram
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Toàn bộ mã nguồn và tài liệu kiến trúc được tích hợp tự động qua hệ thống Git server và runner theo sơ đồ sau:
+All software commits and architecture documentation are built automatically via the continuous integration pipeline:
 
 .. mermaid::
 
@@ -21,38 +21,38 @@ Toàn bộ mã nguồn và tài liệu kiến trúc được tích hợp tự đ
        classDef success fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
        class Commit,Deploy success;
 
-Các Lệnh Biên Dịch Tiêu Chuẩn (Build Commands)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Standard Build Commands
+~~~~~~~~~~~~~~~~~~~~~~~
 
-1. **Biên Dịch Tài Liệu Sphinx Docs-as-Code (Telua Docs Pipeline)**:
+1. **Building Sphinx Documentation (Telua Docs Pipeline)**:
 
    .. code-block:: bash
 
-      # Khởi tạo dự án theo mẫu kiến trúc chuẩn
+      # Initialize documentation project using standard architecture template
       telua docs init -t architecture
 
-      # Biên dịch tài liệu HTML thông qua staging an toàn (giữ sạch git workspace)
+      # Compile HTML documentation through safe isolated staging (clean git status)
       telua docs build
 
-      # Khởi chạy preview server cục bộ tại http://localhost:8080
+      # Launch local preview server at http://localhost:8080
       telua docs start 8080
 
-2. **Biên Dịch Subsystem Native C++ / Android Service**:
+2. **Compiling Android AOSP & Native HAL Services**:
 
    .. code-block:: bash
 
-      # Thiết lập môi trường Android AOSP
+      # Initialize Android build environment
       source build/envsetup.sh
       lunch aosp_car_x86_64-userdebug
 
-      # Biên dịch module CarAudioService và AudioControl AIDL HAL
+      # Build CarAudioService and AudioControl AIDL HAL module
       m android.hardware.automotive.audiocontrol-service
       m CarAudioService
 
-3. **Chạy Bộ Kiểm Thử Đơn Vị Tự Động (Unit Testing)**:
+3. **Running Automated Test Suites**:
 
    .. code-block:: bash
 
-      # Chạy kiểm thử tự động với atest
+      # Execute automated unit test suites with atest
       atest CarAudioServiceUnitTest
       atest VtsHalAudioControlTargetTest

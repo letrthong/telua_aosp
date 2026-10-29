@@ -1,26 +1,26 @@
-3.2 Luồng Tương Tác Giữa Các Thành Phần (Component Interactions)
-----------------------------------------------------------------------------------
+3.2 Component Interactions & Sequence Flows
+------------------------------------------------------------------------------------------
 
-Phần này mô tả chi tiết các luồng tương tác thời gian thực (**Sequence Flows**) giữa ứng dụng, framework và phần cứng khi thực hiện phát âm thanh và phân xử quyền phát.
+This section details the real-time execution sequences (**Sequence Flows**) between applications, framework services, and hardware layers during audio playback and focus arbitration.
 
-Sơ Đồ Tuần Tự: Luồng Yêu Cầu Quyền Phát (Audio Focus Request Flow)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Sequence Diagram: Audio Focus Request Flow
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Khi người dùng bật nhạc hoặc có cảnh báo dẫn đường từ ứng dụng bản đồ, hệ thống thực hiện phân xử theo sơ đồ tuần tự dưới đây:
+When a navigation app issues turn-by-turn guidance while media is currently playing, the system coordinates audio ducking through the sequence below:
 
 .. mermaid::
 
    sequenceDiagram
        autonumber
-       actor Driver as Người Lái Xe
+       actor Driver as Vehicle Driver
        participant NavApp as Navigation App
-       participant MediaApp as Media Player (Nhạc)
+       participant MediaApp as Media Player App
        participant CarAudio as CarAudioService
        participant FocusMgr as AudioFocusManager
        participant AudioHAL as Audio Control HAL (DSP)
 
-       Note over Driver, MediaApp: Trạng thái ban đầu: MediaApp đang phát nhạc ở Zone 0 (Primary)
-       Driver->>NavApp: Nhập điểm đến & bắt đầu dẫn đường
+       Note over Driver, MediaApp: Initial State: MediaApp is playing music in Zone 0 (Primary)
+       Driver->>NavApp: Enter destination & start navigation
        activate NavApp
        
        NavApp->>CarAudio: requestAudioFocus(USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
@@ -28,7 +28,7 @@ Khi người dùng bật nhạc hoặc có cảnh báo dẫn đường từ ứn
 
        CarAudio->>FocusMgr: evaluateFocusChange(USAGE_MEDIA vs USAGE_NAV)
        activate FocusMgr
-       FocusMgr-->>CarAudio: DUCK_LOWER_PRIORITY (Hạ âm lượng nhạc)
+       FocusMgr-->>CarAudio: DUCK_LOWER_PRIORITY (Attenuate media volume)
        deactivate FocusMgr
 
        CarAudio->>AudioHAL: setVolumeGroupGain(GROUP_MEDIA, -15dB)
@@ -40,10 +40,10 @@ Khi người dùng bật nhạc hoặc có cảnh báo dẫn đường từ ứn
        CarAudio-->>NavApp: AUDIOFOCUS_REQUEST_GRANTED
        deactivate CarAudio
 
-       NavApp->>AudioHAL: streamAudio("Rẽ phải sau 100 mét")
-       AudioHAL-->>Driver: Phát giọng nói dẫn đường to rõ, nhạc nền êm dịu
+       NavApp->>AudioHAL: streamAudio("Turn right in 100 meters")
+       AudioHAL-->>Driver: Broadcast crisp voice guidance, media volume ducked
 
-       Note over NavApp, AudioHAL: Sau khi đọc xong câu hướng dẫn
+       Note over NavApp, AudioHAL: Once navigation prompt finishes
        NavApp->>CarAudio: abandonAudioFocus()
        activate CarAudio
        deactivate NavApp
@@ -51,4 +51,4 @@ Khi người dùng bật nhạc hoặc có cảnh báo dẫn đường từ ứn
        CarAudio->>AudioHAL: setVolumeGroupGain(GROUP_MEDIA, 0dB)
        CarAudio-->>MediaApp: onAudioFocusChange(AUDIOFOCUS_GAIN)
        deactivate CarAudio
-       Note over MediaApp, Driver: Âm lượng nhạc tự động trở lại mức ban đầu
+       Note over MediaApp, Driver: Media volume restores smoothly to original gain

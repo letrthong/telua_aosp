@@ -1,44 +1,44 @@
-1.1 Bối Cảnh Nghiệp Vụ & Mục Tiêu Dự Án (Project Context & Business Objectives)
-----------------------------------------------------------------------------------
+1.1 Project Context & Business Objectives
+------------------------------------------------------------------------------------------
 
-Phần này đặc tả bối cảnh kinh doanh, bài toán cần giải quyết và các mục tiêu chiến lược của hệ thống kiến trúc phần mềm.
+This section specifies the business context, problem statement, and strategic objectives of the software architecture system.
 
-Bối Cảnh & Bài Toán Đặt Ra (Problem Statement)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Problem Statement & Background
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Trong các hệ thống nhúng thông minh và nền tảng ô tô kết nối (**Connected Vehicles / AAOS**), yêu cầu về khả năng mở rộng, độ trễ cực thấp và tính độc lập module ngày càng trở nên cấp thiết:
+In modern smart embedded platforms and connected automotive ecosystems (**Connected Vehicles / Android Automotive OS**), demands for high modularity, ultra-low latency, and component decoupling are paramount:
 
-- **Độ phức tạp tăng cao**: Hệ thống tích hợp nhiều subsystem (Audio, Telematics, Sensor, Power HAL, UI Service) cần cơ chế điều phối tập trung.
-- **Yêu cầu an toàn & thời gian thực**: Xử lý tín hiệu khẩn cấp (cảnh báo ADAS, chuông báo động, cuộc gọi eCall) phải ưu tiên tuyệt đối so với các tác vụ giải trí đa phương tiện (Media Player).
-- **Tính bảo trì dài hạn**: Kiến trúc phải tuân thủ chuẩn mở (Open Architecture), cho phép thay thế hoặc nâng cấp phần cứng/HAL mà không ảnh hưởng tới tầng ứng dụng.
+- **Escalating System Complexity**: Modern vehicles integrate numerous distinct subsystems (Audio Management, Telematics, Sensor Networks, Power HAL, UI Services) that require unified arbitration.
+- **Safety-Critical & Real-Time Constraints**: Safety-critical acoustic signals (ADAS warnings, emergency chimes, collision alerts, eCall) must have absolute, deterministic priority over non-critical entertainment streams (Media Player).
+- **Long-Term Maintainability**: The architecture must adhere to open standards, enabling tier-1 vendors and OEMs to upgrade DSP firmware or audio hardware without requiring redesigns of the application framework.
 
-Mục Tiêu Chiến Lược Của Hệ Thống (Architecture Goals)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Strategic Architecture Goals
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. list-table:: **Mục Tiêu Thiết Kế Hệ Thống**
+.. list-table:: **Strategic System Architecture Goals**
    :widths: 25 35 40
    :header-rows: 1
 
-   * - Mục Tiêu
-     - Chỉ Số Đo Lường (Metrics)
-     - Giá Trị Cam Kết
-   * - **Độ Trễ Thấp (Low Latency)**
-     - Audio routing & focus latency
-     - < 50ms từ lúc phát sự kiện đến DSP output.
-   * - **Tính Sẵn Sàng (High Availability)**
-     - System uptime & crash recovery
-     - 99.99% uptime, tự động phục hồi trong < 200ms khi crash.
-   * - **Độc Lập Nền Tảng (Portability)**
-     - HAL / Driver abstraction layer
-     - Đổi chipset/DSP không cần viết lại Car Framework Service.
-   * - **Tài Liệu Hóa Tự Động (Doc-as-Code)**
-     - Sphinx + Mermaid + Git isolation
-     - 100% tài liệu được build CI/CD không làm dơ git workspace.
+   * - Strategic Goal
+     - Measurement Metric
+     - Target SLA / Commitment
+   * - **Low Latency**
+     - Audio routing & focus switching latency
+     - < 50ms from trigger event to DSP output.
+   * - **High Availability**
+     - Service uptime & crash recovery time
+     - 99.99% uptime, automated crash recovery in < 200ms.
+   * - **Hardware Portability**
+     - HAL / Driver abstraction decoupling
+     - Zero changes required to Car Framework Services upon hardware DSP replacement.
+   * - **Automated Docs-as-Code**
+     - Sphinx + Mermaid + Isolated Staging Pipeline
+     - 100% of documentation generated via CI/CD without polluting source repository trees.
 
-Đối Tượng & Vai Trò Các Bên Liên Quan (Key Stakeholders)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Key Stakeholders & Target Roles
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-1. **System Architects**: Định hình ranh giới module, phê duyệt giao diện IPC và luồng dữ liệu liên service.
-2. **Framework & HAL Engineers**: Hiện thực hóa các interface AIDL, Service logic và driver tương thích.
-3. **QA & Validation Team**: Kiểm thử tự động hóa theo ma trận Use Cases và các kịch bản kiểm thử ngoại lệ.
-4. **DevOps & Release Team**: Quản lý pipeline CI/CD, đóng gói image và quy trình cập nhật OTA.
+1. **System Architects**: Define subsystem boundaries, approve IPC interface contracts, and govern cross-service communication.
+2. **Framework & HAL Engineers**: Implement stable AIDL contracts, manage core service logic, and write hardware abstraction drivers.
+3. **QA & Validation Teams**: Automate regression test suites against Use Case matrices and fault-injection edge cases.
+4. **DevOps & Release Engineers**: Manage continuous integration (CI) pipelines, package firmware payloads, and oversee Over-The-Air (OTA) rollouts.

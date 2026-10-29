@@ -1,4 +1,4 @@
-Chương 1: Tổng Quan Hệ Thống (System Overview)
+Chapter 1: System Overview
 ========================================================================================
 
 .. @created_docs_from_metadata.json start

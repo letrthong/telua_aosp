@@ -1,10 +1,10 @@
-4.1 Thiết Kế Lớp Đối Tượng (Class Modeling & Object Design)
-----------------------------------------------------------------------------------
+4.1 Class Modeling & Object Design
+------------------------------------------------------------------------------------------
 
-Phần này đặc tả thiết kế hướng đối tượng chi tiết (**Class Modeling**) của hệ thống điều khiển âm thanh bao gồm các thực thể cốt lõi, quan hệ kế thừa, quan hệ kết tập và các mẫu thiết kế (Design Patterns) áp dụng.
+This section specifies the object-oriented design model (**Class Modeling**) of the core audio subsystem, detailing key class relationships, interfaces, and applied design patterns.
 
-Sơ Đồ Lớp Kiến Trúc (Architectural Class Diagram)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Architectural Class Diagram
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. mermaid::
 
@@ -59,22 +59,22 @@ Sơ Đồ Lớp Kiến Trúc (Architectural Class Diagram)
        CarAudioZone *-- CarVolumeGroup : Contains Volume Groups
        CarAudioService ..|> IAudioControlHAL : Controls Hardware via HAL
 
-Các Mẫu Thiết Kế Áp Dụng (Design Patterns)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Applied Design Patterns
+~~~~~~~~~~~~~~~~~~~~~~~
 
-.. list-table:: **Mẫu Thiết Kế Được Ứng Dụng Trong Hệ Thống**
+.. list-table:: **Design Patterns Applied in Subsystem Architecture**
    :widths: 20 25 55
    :header-rows: 1
 
-   * - Mẫu Thiết Kế
-     - Lớp Áp Dụng
-     - Mục Đích & Lợi Ích Kỹ Thuật
+   * - Design Pattern
+     - Primary Class
+     - Architectural Purpose & Engineering Benefit
    * - **Facade Pattern**
      - ``CarAudioManager``
-     - Đơn giản hóa toàn bộ sự phức tạp của hệ thống âm thanh ô tô thành một giao diện lập trình đơn giản cho các nhà phát triển ứng dụng bên trên.
+     - Shields application developers from the internal complexity of Android Automotive routing policies behind a clean, intuitive client API.
    * - **Strategy Pattern**
      - ``AudioRoutingPolicy``
-     - Cho phép hoán đổi linh hoạt chiến lược định tuyến âm thanh (ví dụ: Chế độ hội họp Conference, Chế độ xem phim Cinema, Chế độ cá nhân Driver-only).
+     - Enables dynamic runtime switching of audio distribution strategies (e.g., Driver-Centric Mode, Rear-Seat Entertainment Mode, Conference Mode).
    * - **Observer Pattern**
      - ``CarVolumeCallback``
-     - Phát thông báo cập nhật bất đồng bộ cho các thành phần giao diện (UI) khi người dùng vặn núm âm lượng vật lý trên xe hơi.
+     - Emits asynchronous volume change notifications to user interfaces whenever steering wheel controls or physical rotary dials are turned.

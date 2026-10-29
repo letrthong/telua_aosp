@@ -23,17 +23,17 @@
         modal.innerHTML = 
             '<div class="mermaid-modal-content">' +
             '  <div class="mermaid-modal-header">' +
-            '    <span class="mermaid-modal-title">🔍 Sơ Đồ Kiến Trúc (Fullscreen Viewer)</span>' +
+            '    <span class="mermaid-modal-title">🔍 Architecture Diagram (Fullscreen Viewer)</span>' +
             '    <div class="mermaid-modal-controls">' +
-            '      <button class="mermaid-ctrl-btn" id="mermaid-btn-zoom-out" title="Thu nhỏ (−)">−</button>' +
+            '      <button class="mermaid-ctrl-btn" id="mermaid-btn-zoom-out" title="Zoom Out (−)">−</button>' +
             '      <span class="mermaid-scale-display" id="mermaid-scale-val">100%</span>' +
-            '      <button class="mermaid-ctrl-btn" id="mermaid-btn-zoom-in" title="Phóng to (+)">+</button>' +
-            '      <button class="mermaid-ctrl-btn" id="mermaid-btn-reset" title="Vừa khung hình">Fit / Reset</button>' +
-            '      <button class="mermaid-ctrl-btn mermaid-download-btn" id="mermaid-btn-download" title="Tải ảnh vector SVG">📥 Tải SVG</button>' +
-            '      <button class="mermaid-ctrl-btn mermaid-close-btn" id="mermaid-btn-close" title="Đóng cửa sổ (Esc)">✕ Đóng</button>' +
+            '      <button class="mermaid-ctrl-btn" id="mermaid-btn-zoom-in" title="Zoom In (+)">+</button>' +
+            '      <button class="mermaid-ctrl-btn" id="mermaid-btn-reset" title="Fit to Screen">Fit / Reset</button>' +
+            '      <button class="mermaid-ctrl-btn mermaid-download-btn" id="mermaid-btn-download" title="Download Vector SVG">📥 SVG</button>' +
+            '      <button class="mermaid-ctrl-btn mermaid-close-btn" id="mermaid-btn-close" title="Close Window (Esc)">✕ Close</button>' +
             '    </div>' +
             '  </div>' +
-            '  <div id="mermaid-modal-viewport" title="Nhấp vào vùng trống hoặc nhấn Esc để đóng">' +
+            '  <div id="mermaid-modal-viewport" title="Click outside or press Esc to close">' +
             '    <div id="mermaid-modal-body"></div>' +
             '  </div>' +
             '</div>';
@@ -268,7 +268,7 @@
             zoomBtn.className = 'mermaid-btn mermaid-btn-zoom';
             zoomBtn.type = 'button';
             zoomBtn.innerHTML = '🔍 Zoom';
-            zoomBtn.title = 'Phóng to sơ đồ toàn màn hình';
+            zoomBtn.title = 'Enlarge diagram fullscreen';
             zoomBtn.addEventListener('click', function(e) {
                 e.stopPropagation();
                 openModalWithSvg(svg);
@@ -279,7 +279,7 @@
             dlBtn.className = 'mermaid-btn mermaid-btn-download';
             dlBtn.type = 'button';
             dlBtn.innerHTML = '📥 SVG';
-            dlBtn.title = 'Tải ảnh vector SVG siêu nét';
+            dlBtn.title = 'Download high-res vector SVG';
             dlBtn.addEventListener('click', function(e) {
                 e.stopPropagation();
                 downloadSvg(svg, 'diagram_' + (idx + 1));

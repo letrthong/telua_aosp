@@ -1,4 +1,4 @@
-Chương 2: Yêu Cầu & Ca Sử Dụng (Requirements & Use Cases)
+Chapter 2: Requirements & Use Cases
 ========================================================================================
 
 .. @created_docs_from_metadata.json start

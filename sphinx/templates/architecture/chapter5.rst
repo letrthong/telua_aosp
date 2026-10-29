@@ -1,4 +1,4 @@
-Chương 5: Đóng Gói, Build & Triển Khai (Build & Deployment)
+Chapter 5: Build & Deployment
 ========================================================================================
 
 .. @created_docs_from_metadata.json start

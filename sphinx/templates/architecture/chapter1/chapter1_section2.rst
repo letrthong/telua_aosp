@@ -1,49 +1,49 @@
-1.2 Phạm Vi & Thuộc Tính Chất Lượng (Scope & Architecture Principles)
-----------------------------------------------------------------------------------
+1.2 Scope & Architectural Quality Attributes
+------------------------------------------------------------------------------------------
 
-Phần này phân định rõ ranh giới trách nhiệm của hệ thống (In-Scope vs. Out-of-Scope) cùng các nguyên tắc kiến trúc cốt lõi chi phối mọi quyết định kỹ thuật.
+This section clearly defines the operational boundaries of the system (In-Scope vs. Out-of-Scope) and establishes the core architectural principles governing design decisions.
 
-Phân Định Phạm Vi Dự Án (System Boundary & Scope)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+System Boundary & Scope Matrix
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. list-table:: **Phân Định Phạm Vi Dự Án (Scope Matrix)**
-   :widths: 20 40 40
+.. list-table:: **Project Scope Matrix**
+   :widths: 22 39 39
    :header-rows: 1
 
-   * - Hạng Mục
-     - Trong Phạm Vi (In-Scope)
-     - Ngoài Phạm Vi (Out-of-Scope)
+   * - Domain
+     - In-Scope Capabilities
+     - Out-of-Scope Responsibilities
    * - **Audio Management**
-     - Quản lý định tuyến đa vùng (Multi-zone routing), phân xử Audio Focus, quản lý âm lượng nhóm (Volume Groups).
-     - Thuật toán giải mã codec độc quyền của bên thứ 3 (phụ trách bởi DSP Firmware).
-   * - **Giao Tiếp IPC**
-     - Định nghĩa AIDL interfaces, IPC serialization, xử lý timeout và thread pooling.
-     - Triển khai lớp vật lý của bus CAN/Ethernet trên ô tô.
-   * - **Bảo Mật & Phân Quyền**
-     - Áp dụng SELinux policies, kiểm tra quyền Android Permission (``android.car.permission.CAR_CONTROL_AUDIO_VOLUME``).
-     - Quản lý chứng chỉ số PKI gốc của phương tiện (Hardware Security Module HSM cấp hệ thống).
+     - Multi-zone routing, Audio Focus arbitration engine, volume group policies, dynamic ducking.
+     - Proprietary third-party audio codec DSP algorithms (delegated to DSP firmware).
+   * - **IPC Communication**
+     - AIDL interface definitions, parcel serialization, thread pool management, death recipient handlers.
+     - Physical transceivers and electrical routing of CAN/Ethernet automotive bus networks.
+   * - **Security & Access Control**
+     - SELinux policy enforcement, Android permissions (``android.car.permission.CAR_CONTROL_AUDIO_VOLUME``).
+     - System-wide hardware root of trust (HSM / Hardware Security Module key generation).
 
-Nguyên Tắc Kiến Trúc Cốt Lõi (Architectural Principles)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Core Architectural Principles
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. list-table:: **Nguyên Tắc Thiết Kế Cốt Lõi**
+.. list-table:: **Core Architectural Design Principles**
    :widths: 25 75
    :header-rows: 1
 
-   * - Nguyên Tắc
-     - Ý Nghĩa & Hướng Dẫn Thực Thi
-   * - **Loose Coupling (Kết Hợp Lỏng)**
-     - Các subsystem chỉ giao tiếp qua contract rõ ràng (AIDL / Interface). Không truy cập trực tiếp biến toàn cục hoặc memory nội bộ của nhau.
-   * - **Single Responsibility (Đơn Trách Nhiệm)**
-     - Mỗi service chịu trách nhiệm duy nhất: ``CarAudioService`` quản lý chính sách âm thanh, trong khi ``AudioControlHAL`` thuần túy điều khiển phần cứng.
+   * - Principle
+     - Architectural Guidance & Implementation Rules
+   * - **Loose Coupling**
+     - Subsystems interact strictly through explicit contracts (Stable AIDL / Interfaces). Direct memory access or global variables between services are prohibited.
+   * - **Single Responsibility**
+     - Distinct separation of concerns: ``CarAudioService`` is dedicated purely to policy management, whereas ``AudioControlHAL`` is solely responsible for hardware registers.
    * - **Fail-Safe & Graceful Degradation**
-     - Khi một service phụ crash, hệ thống tự động fallback về cấu hình an toàn mặc định thay vì làm sập toàn bộ hệ điều hành.
+     - Should an auxiliary service crash, the system automatically falls back to safe default presets rather than causing an operating system kernel panic.
    * - **Observability by Design**
-     - Tích hợp sẵn logs có cấu trúc, Perfetto tracing và dumpsys diagnostics ngay từ dòng code đầu tiên.
+     - Structured logging, Perfetto instrumentation markers, and dumpsys diagnostics are embedded from the initial prototype.
 
-Chỉ Số Chất Lượng Phi Chức Năng (Quality Attributes & SLAs)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Non-Functional Quality Attributes & SLAs
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- **Hiệu Năng (Performance)**: CPU footprint của background service không vượt quá 3% core tổng thể trong điều kiện tải cao.
-- **Tiêu Thụ Bộ Nhớ (Memory Footprint)**: Giới hạn heap memory tĩnh < 40MB.
-- **Bảo Mật (Security)**: Toàn bộ IPC calls phải được xác thực danh tính caller PID/UID và phân quyền chi tiết.
+- **Performance**: Background daemon CPU consumption must remain < 3% of total core utilization under standard operational loads.
+- **Memory Footprint**: Static resident memory consumption is strictly capped at < 40MB heap footprint.
+- **Security**: 100% of incoming IPC requests must validate caller UID/PID identity and verify granted Android platform permissions.

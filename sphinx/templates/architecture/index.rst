@@ -1,45 +1,45 @@
-Tài Liệu Thiết Kế Kiến Trúc Hệ Thống (Software Architecture Design)
-=====================================================================
+Software Architecture & System Design Document
+===============================================
 
-Chào mừng đến với tài liệu đặc tả kiến trúc phần mềm chuẩn công nghiệp (**Software Architecture & System Design Document**).
+Welcome to the **Software Architecture & System Design Specification Document**.
 
-Tài liệu được cấu trúc theo phương pháp luận thiết kế hệ thống tiêu chuẩn quốc tế, phân chia rõ ràng các cấp độ từ tổng quan nghiệp vụ đến chi tiết kỹ thuật, quy trình vận hành và kiểm thử chất lượng:
+This document is structured following international software architecture engineering methodologies (ISO/IEC/IEEE 42010), clearly partitioned from business context to low-level implementation details, operations, and quality engineering:
 
-.. list-table:: **Khung Kiến Trúc Phần Mềm (Software Architecture Framework)**
-   :widths: 20 40 40
+.. list-table:: **Software Architecture Framework**
+   :widths: 18 37 45
    :header-rows: 1
 
-   * - Phần
-     - Tên Chương
-     - Mục Tiêu & Trọng Tâm Kỹ Thuật
-   * - **Chương 1**
-     - **Tổng Quan Hệ Thống (System Overview)**
-     - Bối cảnh nghiệp vụ, mục tiêu dự án, phạm vi (Scope/Non-Scope) và thuộc tính chất lượng (SLA/SLO).
-   * - **Chương 2**
-     - **Yêu Cầu & Ca Sử Dụng (Requirements & Use Cases)**
-     - Danh sách tác nhân (Actors), sơ đồ Use Case, ma trận yêu cầu chức năng (FR) và phi chức năng (NFR).
-   * - **Chương 3**
-     - **Thiết Kế Mức Cao (High-Level Design - HLD)**
-     - Kiến trúc tổng thể phân tầng C4, tương tác giữa các Service/Subsystem, giao thức IPC và dòng dữ liệu.
-   * - **Chương 4**
-     - **Thiết Kế Mức Chi Tiết (Low-Level Design - LLD)**
-     - Thiết kế hướng đối tượng (Class Diagram), máy trạng thái (State Machine), cấu trúc dữ liệu và Data Schema.
-   * - **Chương 5**
-     - **Đóng Gói & Triển Khai (Build & Deployment)**
-     - Quy trình biên dịch tự động, CI/CD Pipeline, sơ đồ hạ tầng triển khai (Topology) và sổ tay vận hành (Runbook).
-   * - **Chương 6**
-     - **Đảm Bảo Chất Lượng & Kiểm Thử Tự Động (Quality & Automated Testing)**
-     - Mô hình kim tự tháp kiểm thử, kiểm thử đơn vị & mocking (JUnit/GTest), Android CTS/VTS và tiêu chuẩn Quality Gates.
+   * - Part
+     - Chapter Title
+     - Scope & Engineering Focus
+   * - **Chapter 1**
+     - **System Overview**
+     - Business context, problem statement, project scope (In-Scope / Out-of-Scope), and quality attributes (SLA/SLO).
+   * - **Chapter 2**
+     - **Requirements & Use Cases**
+     - System actors, use case diagrams, functional requirements (FR matrix), and non-functional requirements (NFR matrix).
+   * - **Chapter 3**
+     - **High-Level Design (HLD)**
+     - Layered C4 system architecture, inter-service interactions, IPC protocols, and audio data flow models.
+   * - **Chapter 4**
+     - **Low-Level Design (LLD)**
+     - Object-oriented class modeling, finite state machines (FSM), data models, and XML/JSON configuration schemas.
+   * - **Chapter 5**
+     - **Build & Deployment**
+     - Automated compilation, CI/CD pipeline workflows, deployment topology (Dev / Staging / Prod), and runbooks.
+   * - **Chapter 6**
+     - **Quality & Automated Testing**
+     - Test pyramid model, unit testing & mocking (JUnit 5 / GTest), Android CTS/VTS, and quality gate metrics.
 
-Tính Năng Tương Tác Trực Quan (Interactive Features)
------------------------------------------------------
-- **Sơ đồ Mermaid đa dạng**: Hỗ trợ trực tiếp Class Diagram, Sequence Diagram, State Diagram, Flowchart, C4 Block.
-- **Trình xem phóng to tương tác (Zoom Modal)**: Phóng to toàn màn hình, lăn chuột (mouse wheel) để zoom tự do, kéo thả (pan/drag) linh hoạt.
-- **Tải ảnh Vector (SVG Export)**: Tải trực tiếp sơ đồ vector độ phân giải cao không vỡ nét để chèn vào báo cáo hoặc tài liệu thuyết trình.
+Interactive Features
+--------------------
+- **Rich Mermaid Diagrams**: Native support for Class Diagrams, Sequence Flows, State Machines, Flowcharts, and C4 Blocks.
+- **Interactive Fullscreen Zoom**: Fullscreen lightbox viewer with free mouse-wheel scaling, drag-to-pan, and convenient controls.
+- **Vector SVG Export**: Instant one-click vector `.svg` download for crystal-clear inclusion in presentations and reports.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Mục Lục Kiến Trúc Hệ Thống:
+   :caption: Architecture Table of Contents:
    :numbered:
 
    chapter1

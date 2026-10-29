@@ -1,10 +1,10 @@
-4.3 Cấu Trúc Dữ Liệu & Data Schema (Data Models & Configuration)
-----------------------------------------------------------------------------------
+4.3 Data Models & Configuration Schemas
+------------------------------------------------------------------------------------------
 
-Phần này mô tả cấu trúc dữ liệu cấu hình âm thanh (**Car Audio Configuration Schema**) dùng để khởi tạo và ánh xạ phần cứng khi hệ thống boot.
+This section describes the configuration data schema (**Car Audio Configuration Schema**) used to initialize physical buses and initialize zone routing upon system startup.
 
-Lược Đồ Cấu Trúc Thực Thể Dữ Liệu (ER Diagram)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Entity-Relationship Diagram (ERD)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. mermaid::
 
@@ -37,30 +37,30 @@ Lược Đồ Cấu Trúc Thực Thể Dữ Liệu (ER Diagram)
            int sample_rate
        }
 
-Đặc Tả File Cấu Hình Mẫu (car_audio_configuration.xml)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Sample Configuration Schema (car_audio_configuration.xml)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: xml
 
    <?xml version="1.0" encoding="utf-8"?>
    <carAudioConfiguration version="2.0">
        <zones>
-           <!-- Vùng âm thanh chính cho người lái (Primary Zone) -->
+           <!-- Primary Audio Zone for Driver -->
            <zone name="Primary Zone" isPrimary="true" id="0">
                <volumeGroups>
-                   <!-- Nhóm âm lượng 0: Media & Radio -->
+                   <!-- Volume Group 0: Media & Radio -->
                    <group id="0">
                        <context context="music"/>
                        <context context="radio"/>
                        <device address="bus00_media_out"/>
                    </group>
-                   <!-- Nhóm âm lượng 1: Dẫn đường & Cảnh báo -->
+                   <!-- Volume Group 1: Navigation Guidance & Warnings -->
                    <group id="1">
                        <context context="navigation"/>
                        <context context="voice_command"/>
                        <device address="bus01_nav_out"/>
                    </group>
-                   <!-- Nhóm âm lượng 2: Cuộc gọi điện thoại -->
+                   <!-- Volume Group 2: Telephony & Cellular Calls -->
                    <group id="2">
                        <context context="call"/>
                        <context context="call_ring"/>
@@ -71,25 +71,25 @@ Lược Đồ Cấu Trúc Thực Thể Dữ Liệu (ER Diagram)
        </zones>
    </carAudioConfiguration>
 
-Từ Điển Dữ Liệu Các Trường Cốt Lõi (Data Dictionary)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Data Dictionary
+~~~~~~~~~~~~~~~
 
-.. list-table:: **Bảng Định Nghĩa Thuộc Tính Dữ Liệu**
+.. list-table:: **Core Data Attribute Definitions**
    :widths: 20 20 60
    :header-rows: 1
 
-   * - Thuộc Tính
-     - Kiểu Dữ Liệu
-     - Giải Thích Chi Tiết
+   * - Field Name
+     - Data Type
+     - Detailed Engineering Definition
    * - ``zone_id``
      - Integer (0..3)
-     - Định danh duy nhất của vùng âm thanh trên xe (0: Driver, 1: Front Passenger, 2: Rear Left, 3: Rear Right).
+     - Unique hardware index representing an acoustic zone in the vehicle (0: Primary Driver, 1: Passenger, 2: Rear Left, 3: Rear Right).
    * - ``group_id``
      - Integer (0..7)
-     - Định danh nhóm âm lượng điều khiển chung (Media, Nav, Phone, Notification, System).
+     - Identifier of a unified volume group controlling related audio usages (Media, Nav, Phone, Notification).
    * - ``bus_address``
      - String
-     - Tên cổng bus vật lý tương ứng đăng ký trong file cấu hình ALSA/HAL (ví dụ: ``bus00_media_out``).
+     - Address identifier corresponding to ALSA hardware ports registered in vendor HAL configurations (e.g., ``bus00_media_out``).
    * - ``default_gain``
      - Integer (dB)
-     - Mức âm lượng mặc định tính bằng chỉ số index gain khi người dùng reset cài đặt gốc.
+     - Default gain level index applied upon factory reset or initial system installation.

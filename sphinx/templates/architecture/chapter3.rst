@@ -1,4 +1,4 @@
-Chương 3: Thiết Kế Mức Cao (High-Level Design - HLD)
+Chapter 3: High-Level Design (HLD)
 ========================================================================================
 
 .. @created_docs_from_metadata.json start

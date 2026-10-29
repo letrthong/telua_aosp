@@ -1,35 +1,35 @@
-2.1 Tác Nhân & Sơ Đồ Ca Sử Dụng (Actors & Use Case Diagrams)
-----------------------------------------------------------------------------------
+2.1 Actors & Use Case Modeling
+------------------------------------------------------------------------------------------
 
-Phần này phân tích các tác nhân tham gia tương tác với hệ thống (Actors) cùng sơ đồ ca sử dụng nghiệp vụ (Use Cases).
+This section analyzes the primary actors interacting with the system and illustrates the core use case interaction models.
 
-Danh Sách Tác Nhân (System Actors)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+System Actors
+~~~~~~~~~~~~~
 
-.. list-table:: **Bảng Phân Tích Tác Nhân (Actor Matrix)**
-   :widths: 20 25 55
+.. list-table:: **Actor Identification Matrix**
+   :widths: 22 25 53
    :header-rows: 1
 
-   * - Tác Nhân (Actor)
-     - Loại Tác Nhân
-     - Trách Nhiệm & Hành Vi Chính
+   * - Actor Name
+     - Actor Classification
+     - Primary Responsibilities & Interaction Behaviors
    * - **Driver / Passenger**
      - Human Actor
-     - Tương tác qua màn hình cảm ứng, vô lăng hoặc giọng nói để phát nhạc, nhận cuộc gọi, chỉnh âm lượng.
+     - Interacts via infotainment touchscreens, steering wheel buttons, or voice assistants to play media, adjust volume, and make calls.
    * - **Navigation / ADAS App**
      - Software Actor
-     - Phát cảnh báo khẩn cấp (Lane departure, Speed warning, Turn-by-turn guidance) với quyền ưu tiên cao nhất.
+     - Generates safety-critical alerts (Lane Departure, Speed Warnings, Turn-by-Turn guidance) with highest routing priority.
    * - **Vehicle Audio HAL**
      - Hardware/System Actor
-     - Tiếp nhận tín hiệu từ framework, điều khiển mixer phần cứng, DSP và các cổng vật lý của loa xe.
+     - Consumes audio stream controls from the framework, manipulates physical DAC mixers, and directs outputs to vehicle speakers.
    * - **Telematics Service**
      - System Actor
-     - Thu thập thông số vận hành và gửi log chẩn đoán từ xa lên máy chủ đám mây.
+     - Collects operational telemetry and transmits diagnostic crash reports to cloud infrastructure.
 
-Sơ Đồ Ca Sử Dụng Tổng Quát (Use Case Diagram)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+General Use Case Diagram
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-Dưới đây là sơ đồ tương tác ca sử dụng giữa các tác nhân và hệ thống điều khiển âm thanh:
+The diagram below illustrates use case interactions between external actors and the core Audio Management System:
 
 .. mermaid::
 
@@ -39,37 +39,37 @@ Dưới đây là sơ đồ tương tác ca sử dụng giữa các tác nhân v
        HAL["Audio Control HAL"]
        Cloud["Telematics Cloud"]
 
-       subgraph Audio_Management_System ["Hệ Thống Điều Khiển Âm Thanh Trung Tâm"]
-           UC1(["Phát Nhạc & Media"])
-           UC2(["Phân Xử Quyền Phát - Audio Focus"])
-           UC3(["Hạ Âm Lượng Tạm Thời - Ducking"])
-           UC4(["Điều Chỉnh Âm Lượng Nhóm - Volume Group"])
-           UC5(["Thu Thập Metrics Chẩn Đoán"])
+       subgraph Audio_Management_System ["Central Audio Management System"]
+           UC1(["Media & Radio Playback"])
+           UC2(["Arbitrate Audio Focus"])
+           UC3(["Dynamic Audio Ducking"])
+           UC4(["Manage Volume Groups"])
+           UC5(["Collect Diagnostic Metrics"])
        end
 
        User --> UC1
        User --> UC4
        ADAS --> UC2
        UC1 -.->|include| UC2
-       UC2 -.->|Trigger khi có ADAS| UC3
+       UC2 -.->|Trigger upon ADAS alert| UC3
        UC4 --> HAL
        UC3 --> HAL
        UC5 --> Cloud
 
-Đặc Tả Chi Tiết Ca Sử Dụng Chính (Use Case Specification)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Core Use Case Specification
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Ca Sử Dụng: UC-02 - Phân Xử Quyền Phát Âm Thanh (Audio Focus Arbitration)**
+**Use Case: UC-02 - Audio Focus Arbitration**
 
-1. **Điều kiện tiên quyết (Preconditions)**: Hệ thống âm thanh đã khởi động thành công, các Audio Zone đã được định danh.
-2. **Kích hoạt (Trigger)**: Một ứng dụng (ví dụ Media Player hoặc Navigation) gửi yêu cầu ``requestAudioFocus()``.
-3. **Luồng sự kiện chính (Main Flow)**:
+1. **Preconditions**: The audio subsystem is initialized, and all physical audio zones (Primary, Rear) are registered.
+2. **Trigger**: An active media or navigation application invokes ``requestAudioFocus()``.
+3. **Main Event Flow**:
 
-   - Framework kiểm tra quyền ưu tiên của ứng dụng yêu cầu so với các luồng âm thanh hiện tại.
-   - Nếu luồng yêu cầu có độ ưu tiên cao hơn (ví dụ Navigation Alert > Nhạc nền):
+   - The framework evaluates the incoming request priority against current focus owners in the target audio zone.
+   - If the requesting stream possesses higher operational priority (e.g. Navigation Alert > Background Music):
 
-     * Framework ra lệnh cho ứng dụng nhạc nền giảm âm lượng (Ducking) hoặc tạm dừng (Pause).
-     * Gửi tín hiệu thông báo cấp quyền phát ``AUDIOFOCUS_REQUEST_GRANTED`` cho Navigation.
-     * Cấu hình lại ma trận mixer ở tầng HAL DSP.
+     * The framework instructs the background media player to attenuate output volume (Ducking) or pause playback.
+     * The framework issues an ``AUDIOFOCUS_REQUEST_GRANTED`` notification callback to the Navigation application.
+     * The framework updates mixer gain matrices across the hardware DSP via Audio HAL.
 
-4. **Hậu điều kiện (Postconditions)**: Ứng dụng Navigation phát thông điệp rõ ràng tới loa của người lái, ứng dụng nhạc nền tiếp tục phát bình thường sau khi thông điệp kết thúc.
+4. **Postconditions**: The higher-priority alert is broadcast clearly to driver speakers, and background media volume seamlessly restores upon alert completion.
