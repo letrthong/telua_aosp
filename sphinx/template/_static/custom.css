@@ -4,12 +4,12 @@
 
 /* 1. Mermaid Diagram Card Container */
 .mermaid {
-    position: relative;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    position: relative !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
     background: #ffffff;
-    padding: 32px 24px 24px 24px;
+    padding: 38px 24px 24px 24px !important;
     border-radius: 12px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
     border: 1px solid #e2e8f0;
@@ -35,53 +35,58 @@
 
 /* 2. Floating Toolbar for Mermaid Diagrams (Download & Zoom) */
 .mermaid-toolbar {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    display: flex;
-    gap: 6px;
-    opacity: 0.75;
-    transition: opacity 0.2s ease;
-    z-index: 10;
-}
-
-.mermaid:hover .mermaid-toolbar {
-    opacity: 1;
+    position: absolute !important;
+    top: 8px !important;
+    right: 10px !important;
+    display: inline-flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 8px !important;
+    background: transparent !important;
+    z-index: 25 !important;
+    pointer-events: auto !important;
 }
 
 .mermaid-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: rgba(241, 245, 249, 0.95);
-    border: 1px solid #cbd5e1;
-    color: #334155;
-    font-size: 11px;
-    font-weight: 600;
-    padding: 3px 8px;
-    border-radius: 6px;
-    cursor: pointer;
-    text-decoration: none;
-    transition: all 0.15s ease;
+    position: static !important;
+    float: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 5px !important;
+    background: #f1f5f9 !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #334155 !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    padding: 4px 10px !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    text-decoration: none !important;
+    margin: 0 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+    transition: all 0.15s ease !important;
+    white-space: nowrap !important;
+    line-height: normal !important;
 }
 
 .mermaid-btn:hover {
-    background: #2563eb;
-    border-color: #1d4ed8;
-    color: #ffffff;
-    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+    background: #2563eb !important;
+    border-color: #1d4ed8 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3) !important;
 }
 
 [data-theme="dark"] .mermaid-btn {
-    background: rgba(39, 39, 47, 0.95);
-    border-color: #4b5563;
-    color: #e2e8f0;
+    background: #272733 !important;
+    border-color: #4b5563 !important;
+    color: #e2e8f0 !important;
 }
 
 [data-theme="dark"] .mermaid-btn:hover {
-    background: #3b82f6;
-    border-color: #2563eb;
-    color: #ffffff;
+    background: #3b82f6 !important;
+    border-color: #2563eb !important;
+    color: #ffffff !important;
 }
 
 /* 3. Modal / Lightbox Interactive Diagram Viewer */
@@ -160,7 +165,7 @@
     color: #334155;
     font-size: 13px;
     font-weight: 600;
-    padding: 4px 12px;
+    padding: 5px 12px;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -183,6 +188,22 @@
     color: #ffffff;
 }
 
+/* High-Visibility Red Close Button */
+.mermaid-close-btn {
+    background: #ef4444 !important;
+    border-color: #dc2626 !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    padding: 5px 16px !important;
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.35) !important;
+    margin-left: 8px !important;
+}
+
+.mermaid-close-btn:hover {
+    background: #dc2626 !important;
+    box-shadow: 0 4px 10px rgba(220, 38, 38, 0.5) !important;
+}
+
 .mermaid-scale-display {
     font-size: 12px;
     font-weight: 600;
@@ -192,22 +213,6 @@
 }
 [data-theme="dark"] .mermaid-scale-display {
     color: #94a3b8;
-}
-
-.mermaid-modal-close {
-    background: transparent;
-    border: none;
-    font-size: 26px;
-    font-weight: bold;
-    color: #94a3b8;
-    cursor: pointer;
-    padding: 0 4px;
-    margin-left: 8px;
-    line-height: 1;
-}
-
-.mermaid-modal-close:hover {
-    color: #ef4444;
 }
 
 /* Modal Viewport (Scrollable & Draggable) */
@@ -297,4 +302,3 @@ table.docutils {
     stroke: #7b1fa2 !important;
     stroke-width: 2px !important;
 }
-

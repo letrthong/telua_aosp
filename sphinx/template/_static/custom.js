@@ -4,11 +4,13 @@
  *   - Auto-attach Zoom and SVG Download buttons to ALL Mermaid diagrams (Class, Sequence, etc.)
  *   - Fullscreen Zoom Modal with interactive controls (+, -, Reset, Wheel zoom, Pan/Drag)
  *   - High-DPI Vector SVG export
+ *   - Clean UI without button overlaps and with prominent Close button
  */
 (function() {
     var currentScale = 1.0;
     var currentSvgElement = null;
     var isPanning = false;
+    var didDrag = false;
     var startX = 0, startY = 0;
     var scrollLeft = 0, scrollTop = 0;
 
@@ -21,17 +23,17 @@
         modal.innerHTML = 
             '<div class="mermaid-modal-content">' +
             '  <div class="mermaid-modal-header">' +
-            '    <span class="mermaid-modal-title">🔍 Sơ Đồ Kiến Trúc (Interactive Viewer)</span>' +
+            '    <span class="mermaid-modal-title">🔍 Sơ Đồ Kiến Trúc (Fullscreen Viewer)</span>' +
             '    <div class="mermaid-modal-controls">' +
             '      <button class="mermaid-ctrl-btn" id="mermaid-btn-zoom-out" title="Thu nhỏ (−)">−</button>' +
             '      <span class="mermaid-scale-display" id="mermaid-scale-val">100%</span>' +
             '      <button class="mermaid-ctrl-btn" id="mermaid-btn-zoom-in" title="Phóng to (+)">+</button>' +
             '      <button class="mermaid-ctrl-btn" id="mermaid-btn-reset" title="Vừa khung hình">Fit / Reset</button>' +
             '      <button class="mermaid-ctrl-btn mermaid-download-btn" id="mermaid-btn-download" title="Tải ảnh vector SVG">📥 Tải SVG</button>' +
-            '      <button class="mermaid-modal-close" id="mermaid-btn-close" title="Đóng (Esc)">&times;</button>' +
+            '      <button class="mermaid-ctrl-btn mermaid-close-btn" id="mermaid-btn-close" title="Đóng cửa sổ (Esc)">✕ Đóng</button>' +
             '    </div>' +
             '  </div>' +
-            '  <div id="mermaid-modal-viewport">' +
+            '  <div id="mermaid-modal-viewport" title="Nhấp vào vùng trống hoặc nhấn Esc để đóng">' +
             '    <div id="mermaid-modal-body"></div>' +
             '  </div>' +
             '</div>';
@@ -49,29 +51,47 @@
             currentSvgElement = null;
         }
 
-        closeBtn.addEventListener('click', closeModal);
-        modal.addEventListener('click', function(e) {
-            if (e.target === modal) closeModal();
-        });
+        // Close on Esc key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' && modal.classList.contains('active')) {
                 closeModal();
             }
         });
 
+        // Close button click
+        closeBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            closeModal();
+        });
+
+        // Close when clicking directly on modal background or empty viewport area
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) closeModal();
+        });
+
+        viewport.addEventListener('click', function(e) {
+            if (e.target === viewport && !didDrag) {
+                closeModal();
+            }
+        });
+
         // Zoom In / Out / Reset
-        zoomInBtn.addEventListener('click', function() {
+        zoomInBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
             updateScale(currentScale + 0.25);
         });
-        zoomOutBtn.addEventListener('click', function() {
+        zoomOutBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
             updateScale(Math.max(0.25, currentScale - 0.25));
         });
-        resetBtn.addEventListener('click', function() {
+        resetBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
             fitDiagramToViewport();
         });
 
         // Download SVG from inside modal
-        dlBtn.addEventListener('click', function() {
+        dlBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
             if (!currentSvgElement) return;
             downloadSvg(currentSvgElement, 'diagram_exported');
         });
@@ -87,6 +107,7 @@
         viewport.addEventListener('mousedown', function(e) {
             if (e.button !== 0) return; // Only left click
             isPanning = true;
+            didDrag = false;
             startX = e.pageX - viewport.offsetLeft;
             startY = e.pageY - viewport.offsetTop;
             scrollLeft = viewport.scrollLeft;
@@ -104,6 +125,9 @@
             var y = e.pageY - viewport.offsetTop;
             var walkX = (x - startX) * 1.5;
             var walkY = (y - startY) * 1.5;
+            if (Math.abs(walkX) > 4 || Math.abs(walkY) > 4) {
+                didDrag = true;
+            }
             viewport.scrollLeft = scrollLeft - walkX;
             viewport.scrollTop = scrollTop - walkY;
         });
@@ -203,7 +227,6 @@
 
     function downloadSvg(svg, filename) {
         var svgData = new XMLSerializer().serializeToString(svg);
-        // Ensure proper XML declaration
         if (!svgData.match(/^<\?xml/)) {
             svgData = '<?xml version="1.0" encoding="utf-8"?>\n' + svgData;
         }
@@ -221,16 +244,19 @@
     function initMermaidToolbars() {
         createModalOnce();
 
-        // Find ALL SVGs generated by Mermaid anywhere on the page
-        var svgs = document.querySelectorAll('.mermaid svg, svg[id^="mermaid-"], div[class*="mermaid"] svg');
-        if (!svgs.length) return;
+        // Select diagram containers in the page (EXCLUDING inside the modal)
+        var containers = document.querySelectorAll('.mermaid, div[class*="mermaid"]');
+        if (!containers.length) return;
 
-        svgs.forEach(function(svg, idx) {
-            var container = svg.closest('.mermaid') || svg.closest('div[class*="mermaid"]') || svg.parentElement;
-            if (!container) return;
+        containers.forEach(function(container, idx) {
+            // NEVER attach toolbar inside modal!
+            if (container.closest('#mermaid-modal')) return;
 
             // Avoid duplicate toolbar
             if (container.querySelector('.mermaid-toolbar')) return;
+
+            var svg = container.querySelector('svg');
+            if (!svg) return;
 
             container.style.position = 'relative';
 
@@ -239,10 +265,10 @@
 
             // Zoom button
             var zoomBtn = document.createElement('button');
-            zoomBtn.className = 'mermaid-btn';
+            zoomBtn.className = 'mermaid-btn mermaid-btn-zoom';
             zoomBtn.type = 'button';
             zoomBtn.innerHTML = '🔍 Zoom';
-            zoomBtn.title = 'Phóng to sơ đồ toàn màn hình (kéo thả & cuộn zoom)';
+            zoomBtn.title = 'Phóng to sơ đồ toàn màn hình';
             zoomBtn.addEventListener('click', function(e) {
                 e.stopPropagation();
                 openModalWithSvg(svg);
@@ -250,7 +276,7 @@
 
             // Download SVG button
             var dlBtn = document.createElement('button');
-            dlBtn.className = 'mermaid-btn';
+            dlBtn.className = 'mermaid-btn mermaid-btn-download';
             dlBtn.type = 'button';
             dlBtn.innerHTML = '📥 SVG';
             dlBtn.title = 'Tải ảnh vector SVG siêu nét';
