@@ -52,17 +52,17 @@ show_docs_help() {
     printf "  \033[1;36m%-22s\033[0m %s\n" "build" "Validate, merge modular sections & compile Sphinx HTML"
     printf "  \033[1;36m%-22s\033[0m %s\n" "check" "Verify section file paths and image links"
     printf "  \033[1;36m%-22s\033[0m %s\n" "clean" "Clean build artifacts (_build directory)"
-    printf "  \033[1;36m%-22s\033[0m %s\n" "init [dir] [-t type]" "Initialize docs (templates: architecture, minimal, api)"
+    printf "  \033[1;36m%-22s\033[0m %s\n" "init [dir] [-t type]" "Initialize docs (templates: basic, architecture, minimal, api)"
     printf "  \033[1;36m%-22s\033[0m %s\n" "help" "Show this help message"
     echo ""
     echo -e "\033[1;36m--------------------------------------------------------------------------------\033[0m"
-    echo -e "  \033[0;90mTemplates Root :\033[0m ${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates (architecture, minimal, api)"
+    echo -e "  \033[0;90mTemplates Root :\033[0m ${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates (basic, architecture, minimal, api)"
     echo -e "  \033[0;90mScripts Engine :\033[0m ${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/scripts"
     echo -e "\033[1;36m================================================================================\033[0m"
     echo ""
 }
 
-# Resolve active documentation directory (checks ., ./docs, ./sphinx/template, ./sphinx)
+# Resolve active documentation directory (checks ., ./docs, ./sphinx/templates/basic, ./sphinx)
 resolve_docs_dir() {
     local candidate="${1:-}"
     if [ -n "$candidate" ] && [ -d "$candidate" ]; then
@@ -82,13 +82,19 @@ resolve_docs_dir() {
         return 0
     fi
 
+    # Check ./sphinx/templates/basic
+    if [ -d "./sphinx/templates/basic" ] && ([ -f "./sphinx/templates/basic/metadata.json" ] || [ -f "./sphinx/templates/basic/index.rst" ]); then
+        echo "./sphinx/templates/basic"
+        return 0
+    fi
+
     # Check ./sphinx/templates/architecture
     if [ -d "./sphinx/templates/architecture" ] && ([ -f "./sphinx/templates/architecture/metadata.json" ] || [ -f "./sphinx/templates/architecture/index.rst" ]); then
         echo "./sphinx/templates/architecture"
         return 0
     fi
 
-    # Check ./sphinx/template
+    # Check ./sphinx/template (legacy fallback)
     if [ -d "./sphinx/template" ] && ([ -f "./sphinx/template/metadata.json" ] || [ -f "./sphinx/template/index.rst" ]); then
         echo "./sphinx/template"
         return 0
@@ -308,21 +314,26 @@ docs_cmd_init() {
         echo -e "\033[1;36m============================================================\033[0m"
         echo -e "  Target directory: \033[1;33m$target_dir\033[0m"
         echo ""
-        echo -e "  \033[1;33m[1]\033[0m \033[1;37marchitecture\033[0m  System Design, Mermaid Diagrams, AAOS flows"
-        echo -e "  \033[1;33m[2]\033[0m \033[1;37mminimal\033[0m       Clean & lightweight starter, single chapter"
-        echo -e "  \033[1;33m[3]\033[0m \033[1;37mapi\033[0m           API & SDK reference, parameter tables, status codes"
+        echo -e "  \033[1;33m[1]\033[0m \033[1;37mbasic\033[0m         Standard starter template (original chapters & assets)"
+        echo -e "  \033[1;33m[2]\033[0m \033[1;37marchitecture\033[0m  System Design, Mermaid Diagrams, AAOS flows"
+        echo -e "  \033[1;33m[3]\033[0m \033[1;37mminimal\033[0m       Clean & lightweight starter, single chapter"
+        echo -e "  \033[1;33m[4]\033[0m \033[1;37mapi\033[0m           API & SDK reference, parameter tables, status codes"
         echo ""
-        read -r -p "Select template [1-3] (default 1): " t_choice
+        read -r -p "Select template [1-4] (default 1): " t_choice
         case "$t_choice" in
-            2) chosen_template="minimal" ;;
-            3) chosen_template="api" ;;
-            *) chosen_template="architecture" ;;
+            2) chosen_template="architecture" ;;
+            3) chosen_template="minimal" ;;
+            4) chosen_template="api" ;;
+            *) chosen_template="basic" ;;
         esac
     fi
 
     # Normalize template name / aliases
-    case "$(echo "${chosen_template:-architecture}" | tr '[:upper:]' '[:lower:]')" in
-        arch|architecture|default|"")
+    case "$(echo "${chosen_template:-basic}" | tr '[:upper:]' '[:lower:]')" in
+        basic|default|"")
+            chosen_template="basic"
+            ;;
+        arch|architecture)
             chosen_template="architecture"
             ;;
         min|minimal|clean)
@@ -333,7 +344,7 @@ docs_cmd_init() {
             ;;
         *)
             log_error "Unknown documentation template '$chosen_template'!"
-            echo -e "  Available templates: \033[1;33marchitecture\033[0m (or \033[1;33march\033[0m), \033[1;33mminimal\033[0m (or \033[1;33mmin\033[0m), \033[1;33mapi\033[0m"
+            echo -e "  Available templates: \033[1;33mbasic\033[0m, \033[1;33marchitecture\033[0m (or \033[1;33march\033[0m), \033[1;33mminimal\033[0m (or \033[1;33mmin\033[0m), \033[1;33mapi\033[0m"
             return 1
             ;;
     esac
@@ -344,6 +355,8 @@ docs_cmd_init() {
 
     if [ -d "$base_templates/$chosen_template" ]; then
         template_dir="$base_templates/$chosen_template"
+    elif [ -d "$base_templates/basic" ]; then
+        template_dir="$base_templates/basic"
     elif [ -d "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template" ]; then
         template_dir="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template"
     elif [ -d "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx" ]; then
