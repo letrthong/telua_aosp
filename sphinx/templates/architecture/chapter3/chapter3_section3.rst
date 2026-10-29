@@ -75,4 +75,4 @@ The sample interface definition below illustrates the Stable AIDL contract bindi
    }
 
 .. note::
-   **Official Reference**: For the complete interface definition and HAL version history, see `Google AOSP: Audio Control HAL <https://source.android.com/docs/automotive/audio/audio-control-hal>`_.
+   **Official Reference**: For the complete interface definition and HAL version history, see `Google AOSP Automotive Audio <https://source.android.com/docs/automotive/audio>`_ and `AOSP AudioControl HAL Interface Source <https://android.googlesource.com/platform/hardware/interfaces/+/refs/heads/main/automotive/audiocontrol/>`_.
