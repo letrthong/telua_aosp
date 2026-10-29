@@ -1,0 +1,304 @@
+/* ==============================================================================
+ * Telua Docs - Custom Modern Aesthetics & Diagram Enhancements
+ * ============================================================================== */
+
+/* 1. Mermaid Diagram Card Container */
+.mermaid {
+    position: relative !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    background: #ffffff;
+    padding: 38px 24px 24px 24px !important;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+    margin: 24px 0;
+    overflow-x: auto;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.mermaid:hover {
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+    border-color: #cbd5e1;
+}
+
+/* Furo Dark Mode Support */
+[data-theme="dark"] .mermaid {
+    background: #1e1e24;
+    border-color: #2e2e38;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+[data-theme="dark"] .mermaid:hover {
+    border-color: #3f3f4e;
+}
+
+/* 2. Floating Toolbar for Mermaid Diagrams (Download & Zoom) */
+.mermaid-toolbar {
+    position: absolute !important;
+    top: 8px !important;
+    right: 10px !important;
+    display: inline-flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 8px !important;
+    background: transparent !important;
+    z-index: 25 !important;
+    pointer-events: auto !important;
+}
+
+.mermaid-btn {
+    position: static !important;
+    float: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 5px !important;
+    background: #f1f5f9 !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #334155 !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    padding: 4px 10px !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    text-decoration: none !important;
+    margin: 0 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+    transition: all 0.15s ease !important;
+    white-space: nowrap !important;
+    line-height: normal !important;
+}
+
+.mermaid-btn:hover {
+    background: #2563eb !important;
+    border-color: #1d4ed8 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3) !important;
+}
+
+[data-theme="dark"] .mermaid-btn {
+    background: #272733 !important;
+    border-color: #4b5563 !important;
+    color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .mermaid-btn:hover {
+    background: #3b82f6 !important;
+    border-color: #2563eb !important;
+    color: #ffffff !important;
+}
+
+/* 3. Modal / Lightbox Interactive Diagram Viewer */
+.mermaid-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(15, 23, 42, 0.88);
+    backdrop-filter: blur(6px);
+    z-index: 999999;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.mermaid-modal.active {
+    display: flex;
+}
+
+.mermaid-modal-content {
+    background: #ffffff;
+    border-radius: 14px;
+    width: 94vw;
+    height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    overflow: hidden;
+    position: relative;
+}
+
+[data-theme="dark"] .mermaid-modal-content {
+    background: #18181f;
+    border-color: #2e2e38;
+}
+
+/* Modal Header & Controls */
+.mermaid-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+    flex-shrink: 0;
+}
+
+[data-theme="dark"] .mermaid-modal-header {
+    background: #1e1e26;
+    border-bottom-color: #2e2e38;
+}
+
+.mermaid-modal-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: #334155;
+}
+[data-theme="dark"] .mermaid-modal-title {
+    color: #e2e8f0;
+}
+
+.mermaid-modal-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mermaid-ctrl-btn {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.mermaid-ctrl-btn:hover {
+    background: #2563eb;
+    border-color: #1d4ed8;
+    color: #ffffff;
+}
+
+[data-theme="dark"] .mermaid-ctrl-btn {
+    background: #272733;
+    border-color: #475569;
+    color: #e2e8f0;
+}
+[data-theme="dark"] .mermaid-ctrl-btn:hover {
+    background: #3b82f6;
+    border-color: #2563eb;
+    color: #ffffff;
+}
+
+/* High-Visibility Red Close Button */
+.mermaid-close-btn {
+    background: #ef4444 !important;
+    border-color: #dc2626 !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    padding: 5px 16px !important;
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.35) !important;
+    margin-left: 8px !important;
+}
+
+.mermaid-close-btn:hover {
+    background: #dc2626 !important;
+    box-shadow: 0 4px 10px rgba(220, 38, 38, 0.5) !important;
+}
+
+.mermaid-scale-display {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    min-width: 48px;
+    text-align: center;
+}
+[data-theme="dark"] .mermaid-scale-display {
+    color: #94a3b8;
+}
+
+/* Modal Viewport (Scrollable & Draggable) */
+#mermaid-modal-viewport {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    overflow: auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #f1f5f9;
+    padding: 32px;
+    cursor: grab;
+    user-select: none;
+}
+
+[data-theme="dark"] #mermaid-modal-viewport {
+    background: #121217;
+}
+
+#mermaid-modal-viewport:active {
+    cursor: grabbing;
+}
+
+#mermaid-modal-body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: auto;
+    transition: transform 0.12s ease-out;
+    transform-origin: center center;
+}
+
+#mermaid-modal-body svg {
+    max-width: none !important;
+    display: block !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 24px;
+    box-sizing: content-box;
+}
+
+[data-theme="dark"] #mermaid-modal-body svg {
+    background: #1e1e24;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+/* 4. Refined Admonitions & Tables */
+.admonition {
+    border-radius: 8px !important;
+    border-left-width: 4px !important;
+}
+
+table.docutils {
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* 5. Custom Color Accent for Architectural Class Diagrams */
+.mermaid [id*="CarAudioManager"] rect,
+.mermaid [id*="CarAudioManager"] .outer {
+    fill: #e3f2fd !important;
+    stroke: #1565c0 !important;
+    stroke-width: 2px !important;
+}
+
+.mermaid [id*="CarAudioService"] rect,
+.mermaid [id*="CarAudioService"] .outer {
+    fill: #e8f5e9 !important;
+    stroke: #2e7d32 !important;
+    stroke-width: 2px !important;
+}
+
+.mermaid [id*="CarAudioZone"] rect,
+.mermaid [id*="CarAudioZone"] .outer {
+    fill: #fff3e0 !important;
+    stroke: #e65100 !important;
+    stroke-width: 2px !important;
+}
+
+.mermaid [id*="IAudioControlHAL"] rect,
+.mermaid [id*="IAudioControlHAL"] .outer {
+    fill: #f3e5f5 !important;
+    stroke: #7b1fa2 !important;
+    stroke-width: 2px !important;
+}

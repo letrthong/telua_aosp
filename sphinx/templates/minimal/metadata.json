@@ -1,0 +1,15 @@
+[
+  {
+    "chapter": "chapter1.rst",
+    "author": "Core Team",
+    "updateCreated": "2026-10-29",
+    "dataList": [
+      {
+        "filePath": "chapter1/chapter1_section1.rst",
+        "title": "Overview & Quick Start",
+        "description": "Getting started with this project.",
+        "updateCreated": "2026-10-29"
+      }
+    ]
+  }
+]

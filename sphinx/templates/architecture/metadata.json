@@ -1,0 +1,59 @@
+[
+    {
+        "chapter": "chapter1.rst",
+        "author": "Architecture Team",
+        "updateCreated": "2026-10-29",
+        "dataList": [
+            {
+                "filePath": "chapter1/chapter1_section1.rst",
+                "title": "Installation",
+                "description": "How to install the software.",
+                "updateCreated": "2026-10-29"
+            },
+            {
+                "filePath": "chapter1/chapter1_section2.rst",
+                "title": "Configuration",
+                "description": "Basic configuration steps.",
+                "updateCreated": "2026-10-29"
+            }
+        ]
+    },
+    {
+        "chapter": "chapter2.rst",
+        "author": "Architecture Team",
+        "updateCreated": "2026-10-29",
+        "dataList": [
+            {
+                "filePath": "chapter2/chapter2_section1.rst",
+                "title": "Section 1 of Chapter 2",
+                "description": "Content for section 1 of chapter 2.",
+                "updateCreated": "2026-10-29"
+            }
+        ]
+    },
+    {
+        "chapter": "chapter3.rst",
+        "author": "Architecture Team",
+        "updateCreated": "2026-10-29",
+        "dataList": [
+            {
+                "filePath": "chapter3/chapter3_section1.rst",
+                "title": "Section 1 of Chapter 3",
+                "description": "Content for section 1 of chapter 3.",
+                "updateCreated": "2026-10-29"
+            },
+            {
+                "filePath": "chapter3/chapter3_section2.rst",
+                "title": "Section 2 of Chapter 3",
+                "description": "Content for section 2 of chapter 3.",
+                "updateCreated": "2026-10-29"
+            },
+            {
+                "filePath": "chapter3/chapter3_section3.rst",
+                "title": "Section 3 of Chapter 3: System Architecture Diagrams",
+                "description": "Class and sequence diagrams for system architecture using Mermaid.",
+                "updateCreated": "2026-10-29"
+            }
+        ]
+    }
+]

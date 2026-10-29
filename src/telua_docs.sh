@@ -46,17 +46,17 @@ show_docs_help() {
     echo -e "  Usage: \033[1;33mtelua docs <action> [options]\033[0m  (or: \033[1;33mtelua doc <action>\033[0m)"
     echo ""
     echo -e "\033[1;33mAVAILABLE ACTIONS:\033[0m"
-    printf "  \033[1;36m%-18s\033[0m %s\n" "start [port]" "Build (if needed), launch HTTP server & open browser (default: 8080)"
-    printf "  \033[1;36m%-18s\033[0m %s\n" "serve [port]" "Alias for 'start' to run local HTTP preview server"
-    printf "  \033[1;36m%-18s\033[0m %s\n" "sync [dir]" "Pre-check formatting & auto-sync folders/sections into metadata.json"
-    printf "  \033[1;36m%-18s\033[0m %s\n" "build" "Validate, merge modular sections & compile Sphinx HTML"
-    printf "  \033[1;36m%-18s\033[0m %s\n" "check" "Verify section file paths and image links"
-    printf "  \033[1;36m%-18s\033[0m %s\n" "clean" "Clean build artifacts (_build directory)"
-    printf "  \033[1;36m%-18s\033[0m %s\n" "init [dir]" "Initialize docs from template in ./docs (skips if already exists)"
-    printf "  \033[1;36m%-18s\033[0m %s\n" "help" "Show this help message"
+    printf "  \033[1;36m%-22s\033[0m %s\n" "start [port]" "Build (if needed), launch HTTP server & open browser (default: 8080)"
+    printf "  \033[1;36m%-22s\033[0m %s\n" "serve [port]" "Alias for 'start' to run local HTTP preview server"
+    printf "  \033[1;36m%-22s\033[0m %s\n" "sync [dir]" "Pre-check formatting & auto-sync folders/sections into metadata.json"
+    printf "  \033[1;36m%-22s\033[0m %s\n" "build" "Validate, merge modular sections & compile Sphinx HTML"
+    printf "  \033[1;36m%-22s\033[0m %s\n" "check" "Verify section file paths and image links"
+    printf "  \033[1;36m%-22s\033[0m %s\n" "clean" "Clean build artifacts (_build directory)"
+    printf "  \033[1;36m%-22s\033[0m %s\n" "init [dir] [-t type]" "Initialize docs (templates: architecture, minimal, api)"
+    printf "  \033[1;36m%-22s\033[0m %s\n" "help" "Show this help message"
     echo ""
     echo -e "\033[1;36m--------------------------------------------------------------------------------\033[0m"
-    echo -e "  \033[0;90mTemplate Source:\033[0m ${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template"
+    echo -e "  \033[0;90mTemplates Root :\033[0m ${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates (architecture, minimal, api)"
     echo -e "  \033[0;90mScripts Engine :\033[0m ${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/scripts"
     echo -e "\033[1;36m================================================================================\033[0m"
     echo ""
@@ -79,6 +79,12 @@ resolve_docs_dir() {
     # Check ./docs
     if [ -d "./docs" ] && ([ -f "./docs/metadata.json" ] || [ -f "./docs/index.rst" ] || [ -f "./docs/conf.py" ]); then
         echo "./docs"
+        return 0
+    fi
+
+    # Check ./sphinx/templates/architecture
+    if [ -d "./sphinx/templates/architecture" ] && ([ -f "./sphinx/templates/architecture/metadata.json" ] || [ -f "./sphinx/templates/architecture/index.rst" ]); then
+        echo "./sphinx/templates/architecture"
         return 0
     fi
 
@@ -249,13 +255,32 @@ _docs_ensure_sphinx_build() {
     fi
 }
 
-# Action: init
+# Action: init (supports --template architecture|minimal|api)
 docs_cmd_init() {
-    local target_dir="${1:-docs}"
-    local template_dir="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template"
-    if [ ! -d "$template_dir" ]; then
-        template_dir="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx"
-    fi
+    local target_dir="docs"
+    local chosen_template=""
+
+    # Parse arguments: target directory and --template / -t flags
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --template=*)
+                chosen_template="${1#*=}"
+                shift
+                ;;
+            --template|-t)
+                chosen_template="${2:-}"
+                shift 2 2>/dev/null || shift
+                ;;
+            -*)
+                log_warn "Unknown init option '$1' (ignored)."
+                shift
+                ;;
+            *)
+                target_dir="$1"
+                shift
+                ;;
+        esac
+    done
 
     # Normalize target path
     target_dir="$(echo "$target_dir" | sed 's:/*$::')"
@@ -266,7 +291,6 @@ docs_cmd_init() {
             log_warn "Documentation project already exists in '$target_dir' (found metadata.json, index.rst or conf.py)."
             log_warn "Skipping initialization. Existing documentation files were NOT modified."
             echo ""
-            # Still verify Sphinx availability
             _docs_ensure_sphinx_build "$target_dir"
             echo ""
             echo -e "  To rebuild docs, run:   \033[1;33mtelua docs build\033[0m"
@@ -276,30 +300,77 @@ docs_cmd_init() {
         fi
     fi
 
-    # Verify template directory
+    # Interactive template selection if not specified and running in interactive terminal
+    if [ -z "$chosen_template" ] && [ -t 0 ]; then
+        echo ""
+        echo -e "\033[1;36m============================================================\033[0m"
+        echo -e "\033[1;32m  TELUA DOCS INITIALIZER — SELECT TEMPLATE\033[0m"
+        echo -e "\033[1;36m============================================================\033[0m"
+        echo -e "  Target directory: \033[1;33m$target_dir\033[0m"
+        echo ""
+        echo -e "  \033[1;33m[1]\033[0m \033[1;37marchitecture\033[0m  System Design, Mermaid Diagrams, AAOS flows"
+        echo -e "  \033[1;33m[2]\033[0m \033[1;37mminimal\033[0m       Clean & lightweight starter, single chapter"
+        echo -e "  \033[1;33m[3]\033[0m \033[1;37mapi\033[0m           API & SDK reference, parameter tables, status codes"
+        echo ""
+        read -r -p "Select template [1-3] (default 1): " t_choice
+        case "$t_choice" in
+            2) chosen_template="minimal" ;;
+            3) chosen_template="api" ;;
+            *) chosen_template="architecture" ;;
+        esac
+    fi
+
+    # Normalize template name / aliases
+    case "$(echo "${chosen_template:-architecture}" | tr '[:upper:]' '[:lower:]')" in
+        arch|architecture|default|"")
+            chosen_template="architecture"
+            ;;
+        min|minimal|clean)
+            chosen_template="minimal"
+            ;;
+        api|sdk|rest)
+            chosen_template="api"
+            ;;
+        *)
+            log_error "Unknown documentation template '$chosen_template'!"
+            echo -e "  Available templates: \033[1;33marchitecture\033[0m (or \033[1;33march\033[0m), \033[1;33mminimal\033[0m (or \033[1;33mmin\033[0m), \033[1;33mapi\033[0m"
+            return 1
+            ;;
+    esac
+
+    # Locate template directory
+    local base_templates="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates"
+    local template_dir=""
+
+    if [ -d "$base_templates/$chosen_template" ]; then
+        template_dir="$base_templates/$chosen_template"
+    elif [ -d "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template" ]; then
+        template_dir="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template"
+    elif [ -d "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx" ]; then
+        template_dir="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx"
+    fi
+
+    # Verify template directory exists
     if [ ! -d "$template_dir" ]; then
-        log_error "Sphinx template directory not found at: $template_dir"
+        log_error "Template directory not found at: $template_dir"
         return 1
     fi
 
-    log_info "Initializing documentation project in '$target_dir' from template..."
+    log_info "Initializing documentation project in '$target_dir' using template [\033[1;33m$chosen_template\033[0m]..."
     mkdir -p "$target_dir"
 
     # Copy template content files only:
-    # Explicitly include conf.py (for custom project name, author, theme)
-    # Exclude: other *.py scripts, requirements.txt, ReadMe, build artifacts and internal files
     local copied_count=0
     for item in "$template_dir"/*; do
         local basename
         basename="$(basename "$item")"
         case "$basename" in
             conf.py)
-                # Keep project configuration so user can customize title, author, and theme
                 cp -r "$item" "$target_dir/"
                 copied_count=$((copied_count + 1))
                 ;;
-            *.py|requirements.txt|ReadMe*|README*|github.md|_build|.git|scripts|template|gen_sphinx.sh)
-                # Skip toolchain python scripts, requirements.txt, ReadMe and internal files
+            *.py|requirements.txt|ReadMe*|README*|github.md|_build|.git|scripts|templates|template|gen_sphinx.sh)
+                # Skip toolchain scripts, requirements.txt, ReadMe and internal files
                 continue
                 ;;
             *)
@@ -315,7 +386,18 @@ docs_cmd_init() {
         copied_count=$((copied_count + 1))
     fi
 
-    log_success "Created documentation template in '$target_dir' ($copied_count items copied)."
+    # Ensure asset directory (images) is copied (fallback to sphinx/template/asset if needed)
+    if [ ! -d "$target_dir/asset" ]; then
+        if [ -d "$template_dir/asset" ]; then
+            cp -r "$template_dir/asset" "$target_dir/" 2>/dev/null || true
+            copied_count=$((copied_count + 1))
+        elif [ -d "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template/asset" ]; then
+            cp -r "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template/asset" "$target_dir/" 2>/dev/null || true
+            copied_count=$((copied_count + 1))
+        fi
+    fi
+
+    log_success "Created documentation in '$target_dir' using '$chosen_template' template ($copied_count items copied)."
 
     # Automatically check and install Sphinx dependencies if missing
     _docs_ensure_sphinx_build "$target_dir"

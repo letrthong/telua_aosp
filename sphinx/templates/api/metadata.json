@@ -1,0 +1,28 @@
+[
+  {
+    "chapter": "chapter1.rst",
+    "author": "API Platform Team",
+    "updateCreated": "2026-10-29",
+    "dataList": [
+      {
+        "filePath": "chapter1/chapter1_section1.rst",
+        "title": "Audio & Device Management Service",
+        "description": "Endpoints and method specifications.",
+        "updateCreated": "2026-10-29"
+      }
+    ]
+  },
+  {
+    "chapter": "chapter2.rst",
+    "author": "API Platform Team",
+    "updateCreated": "2026-10-29",
+    "dataList": [
+      {
+        "filePath": "chapter2/chapter2_section1.rst",
+        "title": "Status Codes & Error Definitions",
+        "description": "Standard error codes and troubleshooting.",
+        "updateCreated": "2026-10-29"
+      }
+    ]
+  }
+]
