@@ -11,13 +11,13 @@ Mọi Pull Request (PR) gửi lên hệ thống quản lý mã nguồn (GitLab /
 .. mermaid::
 
    graph LR
-       PR([Pull Request Mới]) --> Static["1. Static Analysis<br/>(Clang-Tidy / SonarQube)"]
+       PR["Pull Request Mới"] --> Static["1. Static Analysis<br/>(Clang-Tidy / SonarQube)"]
        Static --> Unit["2. Run Unit Tests<br/>(atest / GTest)"]
        Unit --> Coverage["3. Coverage Check<br/>(JaCoCo / LCOV)"]
        Coverage --> VTS["4. Automated VTS / CTS<br/>(Android Cuttlefish AVD)"]
-       VTS --> Gate{Quality Gate Passed?}
-       Gate -- Yes --> Approve([Cho Phép Merge])
-       Gate -- No --> Reject([Chặn Merge & Báo Lỗi])
+       VTS --> Gate{"Quality Gate Passed?"}
+       Gate -- Yes --> Approve["Cho Phép Merge"]
+       Gate -- No --> Reject["Chặn Merge & Báo Lỗi"]
 
        classDef success fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
        classDef fail fill:#ffebee,stroke:#c62828,stroke-width:2px;

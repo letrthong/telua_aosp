@@ -11,12 +11,12 @@ Toàn bộ mã nguồn và tài liệu kiến trúc được tích hợp tự đ
 .. mermaid::
 
    graph LR
-       Commit([Git Commit & Push]) --> Lint[1. Lint & Format Check]
-       Lint --> Test[2. Unit & Mock Tests]
-       Test --> Build[3. AOSP Soong & C++ Build]
-       Build --> DocBuild[4. Sphinx Docs-as-Code Build]
-       DocBuild --> Artifact[5. Generate OTA Payload & HTML Docs]
-       Artifact --> Deploy([Deploy to Staging / HIL Test Rig])
+       Commit["Git Commit & Push"] --> Lint["1. Lint & Format Check"]
+       Lint --> Test["2. Unit & Mock Tests"]
+       Test --> Build["3. AOSP Soong & C++ Build"]
+       Build --> DocBuild["4. Sphinx Docs-as-Code Build"]
+       DocBuild --> Artifact["5. Generate OTA Payload & HTML Docs"]
+       Artifact --> Deploy["Deploy to Staging / HIL Test Rig"]
 
        classDef success fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
        class Commit,Deploy success;

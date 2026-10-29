@@ -23,17 +23,17 @@ Sơ Đồ Dòng Dữ Liệu Âm Thanh (Audio Data Flow Diagram)
 .. mermaid::
 
    graph LR
-       subgraph Source_Layer [Nguồn Phát Âm Thanh]
+       subgraph Source_Layer ["Nguồn Phát Âm Thanh"]
            PCM_App["App PCM Audio<br/>(48kHz / 16-bit / Stereo)"]
            Tone_Gen["Vehicle Chimes<br/>(Seatbelt, Turn Signal)"]
        end
 
-       subgraph Mixer_Layer [Tầng Trộn & Định Tuyến]
+       subgraph Mixer_Layer ["Tầng Trộn & Định Tuyến"]
            FastMixer["AudioFlinger FastMixer<br/>(Ring Buffer)"]
            ZoneRouter["CarAudio Zone Router<br/>(Zone 0 / Zone 1)"]
        end
 
-       subgraph HAL_DSP_Layer [Tầng Phần Cứng & DSP]
+       subgraph HAL_DSP_Layer ["Tầng Phần Cứng & DSP"]
            HAL_Bus["Audio HAL Bus Devices<br/>(bus00_media, bus01_nav)"]
            DSP_Engine["DSP Mixer & Crossover<br/>(Equalizer / Reverb / Gain)"]
            DAC_Amp["DAC & Power Amplifier"]
@@ -45,7 +45,7 @@ Sơ Đồ Dòng Dữ Liệu Âm Thanh (Audio Data Flow Diagram)
        ZoneRouter --> HAL_Bus
        HAL_Bus -->|TDM Stream| DSP_Engine
        DSP_Engine --> DAC_Amp
-       DAC_Amp --> Speakers([Hệ Thống Loa Trên Xe])
+       DAC_Amp --> Speakers["Hệ Thống Loa Trên Xe"]
 
 Đặc Tả Interface AIDL Cốt Lõi
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

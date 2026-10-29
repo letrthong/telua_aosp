@@ -34,24 +34,24 @@ Dưới đây là sơ đồ tương tác ca sử dụng giữa các tác nhân v
 .. mermaid::
 
    graph TD
-       User([Driver / Passenger])
-       ADAS([ADAS Safety System])
-       HAL([Audio Control HAL])
-       Cloud([Telematics Cloud])
+       User["Driver / Passenger"]
+       ADAS["ADAS Safety System"]
+       HAL["Audio Control HAL"]
+       Cloud["Telematics Cloud"]
 
-       subgraph Audio_Management_System [Hệ Thống Điều Khiển Âm Thanh Trung Tâm]
-           UC1((Phát Nhạc & Media))
-           UC2((Phân Xử Quyền Phát - Audio Focus))
-           UC3((Hạ Âm Lượng Tạm Thời - Ducking))
-           UC4((Điều Chỉnh Âm Lượng Nhóm - Volume Group))
-           UC5((Thu Thập Metrics Chẩn Đoán))
+       subgraph Audio_Management_System ["Hệ Thống Điều Khiển Âm Thanh Trung Tâm"]
+           UC1(["Phát Nhạc & Media"])
+           UC2(["Phân Xử Quyền Phát - Audio Focus"])
+           UC3(["Hạ Âm Lượng Tạm Thời - Ducking"])
+           UC4(["Điều Chỉnh Âm Lượng Nhóm - Volume Group"])
+           UC5(["Thu Thập Metrics Chẩn Đoán"])
        end
 
        User --> UC1
        User --> UC4
        ADAS --> UC2
-       UC1 ..> UC2 : <<include>>
-       UC2 ..> UC3 : <<trigger khi có ADAS>>
+       UC1 -.->|include| UC2
+       UC2 -.->|Trigger khi có ADAS| UC3
        UC4 --> HAL
        UC3 --> HAL
        UC5 --> Cloud
