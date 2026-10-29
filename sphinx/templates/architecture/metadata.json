@@ -111,5 +111,30 @@
                 "updateCreated": "2026-10-29"
             }
         ]
+    },
+    {
+        "chapter": "chapter6.rst",
+        "author": "Architecture Team",
+        "updateCreated": "2026-10-29",
+        "dataList": [
+            {
+                "filePath": "chapter6/chapter6_section1.rst",
+                "title": "6.1 Chiến Lược Kiểm Thử & Mô Hình Kim Tự Tháp",
+                "description": "Mô hình kim tự tháp kiểm thử phần mềm, phân loại cấp độ test và nguyên tắc test độc lập.",
+                "updateCreated": "2026-10-29"
+            },
+            {
+                "filePath": "chapter6/chapter6_section2.rst",
+                "title": "6.2 Kiểm Thử Đơn Vị & Kỹ Thuật Mocking",
+                "description": "Hướng dẫn viết Unit Test với JUnit 5/Mockito cho Java và Google Test/GMock cho C++, kỹ thuật fault injection.",
+                "updateCreated": "2026-10-29"
+            },
+            {
+                "filePath": "chapter6/chapter6_section3.rst",
+                "title": "6.3 Kiểm Thử Tự Động & Tiêu Chuẩn Chất Lượng",
+                "description": "Đường ống kiểm thử tự động CI/CD, bộ công cụ atest/VTS của Android và bảng tiêu chuẩn Quality Gates (Coverage >= 80%).",
+                "updateCreated": "2026-10-29"
+            }
+        ]
     }
 ]
