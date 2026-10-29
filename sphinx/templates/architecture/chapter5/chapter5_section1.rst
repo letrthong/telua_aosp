@@ -56,3 +56,6 @@ Standard Build Commands
       # Execute automated unit test suites with atest
       atest CarAudioServiceUnitTest
       atest VtsHalAudioControlTargetTest
+
+.. note::
+   **Official Reference**: For official Android build setup and Soong compilation guidance, see `Google AOSP: Building Android <https://source.android.com/docs/setup/build/building>`_.

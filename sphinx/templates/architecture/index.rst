@@ -37,6 +37,18 @@ Interactive Features
 - **Interactive Fullscreen Zoom**: Fullscreen lightbox viewer with free mouse-wheel scaling, drag-to-pan, and convenient controls.
 - **Vector SVG Export**: Instant one-click vector `.svg` download for crystal-clear inclusion in presentations and reports.
 
+References & Official Google AOSP Documentation
+------------------------------------------------
+This architecture specification is based on public open-source standards published by Google under the Apache 2.0 license:
+
+- **AOSP Automotive Audio Overview**: `Google AOSP Automotive Audio <https://source.android.com/docs/automotive/audio>`_
+- **AOSP AudioControl HAL AIDL Interface**: `AudioControl HAL Specification <https://source.android.com/docs/automotive/audio/audio-control-hal>`_
+- **AOSP Multi-Zone Audio Routing & Volume Groups**: `Multi-Zone Audio Documentation <https://source.android.com/docs/automotive/audio/multi-zone-audio>`_
+- **Android Developer Audio Focus Guidelines**: `Managing Audio Focus API <https://developer.android.com/guide/topics/media-apps/audio-focus>`_
+- **AOSP Automotive Testing & Compliance**: `Audio Compliance & VTS <https://source.android.com/docs/automotive/audio/audio-compliance>`_
+- **AOSP Build System & Environment Setup**: `Building Android AOSP <https://source.android.com/docs/setup/build/building>`_
+
+
 .. toctree::
    :maxdepth: 2
    :caption: Architecture Table of Contents:

@@ -75,3 +75,6 @@ To achieve release readiness, code changes must satisfy the strict thresholds de
    * - **Routing Latency**
      - 100% of audio focus transitions complete in **< 30ms**
      - Flag as performance regression and reject commit.
+
+.. note::
+   **Official Reference**: For official Android Automotive audio compliance suites, VTS targets, and CTS verification rules, see `Google AOSP: Audio Compliance & Testing <https://source.android.com/docs/automotive/audio/audio-compliance>`_.

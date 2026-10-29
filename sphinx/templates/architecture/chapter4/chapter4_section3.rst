@@ -93,3 +93,6 @@ Data Dictionary
    * - ``default_gain``
      - Integer (dB)
      - Default gain level index applied upon factory reset or initial system installation.
+
+.. note::
+   **Official Reference**: For the complete XML schema specification and dynamic multi-zone configuration guides, see `Google AOSP: Multi-Zone Audio Routing <https://source.android.com/docs/automotive/audio/multi-zone-audio>`_.

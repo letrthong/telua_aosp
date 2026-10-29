@@ -73,3 +73,6 @@ The sample interface definition below illustrates the Stable AIDL contract bindi
         */
        void registerAudioControlCallback(in IAudioControlCallback callback);
    }
+
+.. note::
+   **Official Reference**: For the complete interface definition and HAL version history, see `Google AOSP: Audio Control HAL <https://source.android.com/docs/automotive/audio/audio-control-hal>`_.

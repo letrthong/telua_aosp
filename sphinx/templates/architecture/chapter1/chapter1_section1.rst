@@ -42,3 +42,6 @@ Key Stakeholders & Target Roles
 2. **Framework & HAL Engineers**: Implement stable AIDL contracts, manage core service logic, and write hardware abstraction drivers.
 3. **QA & Validation Teams**: Automate regression test suites against Use Case matrices and fault-injection edge cases.
 4. **DevOps & Release Engineers**: Manage continuous integration (CI) pipelines, package firmware payloads, and oversee Over-The-Air (OTA) rollouts.
+
+.. note::
+   **Official Open-Source Reference**: This architectural model is based on public open-source guidelines provided by Google under the Apache 2.0 license. For official specifications, see `Google AOSP Automotive Audio Architecture <https://source.android.com/docs/automotive/audio>`_.

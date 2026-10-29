@@ -73,3 +73,6 @@ Core Use Case Specification
      * The framework updates mixer gain matrices across the hardware DSP via Audio HAL.
 
 4. **Postconditions**: The higher-priority alert is broadcast clearly to driver speakers, and background media volume seamlessly restores upon alert completion.
+
+.. note::
+   **Official Reference**: For official Android Audio Focus API guidelines and interaction contracts, refer to `Android Developers: Managing Audio Focus <https://developer.android.com/guide/topics/media-apps/audio-focus>`_.
