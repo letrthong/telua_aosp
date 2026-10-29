@@ -1,82 +1,75 @@
-Section 3 of Chapter 3: System Architecture Diagrams
-----------------------------------------------------
+3.3 Giao Thức Giao Tiếp & Luồng Dữ Liệu (Communication Protocols & Data Flow)
+----------------------------------------------------------------------------------
 
-Phần này minh họa cách vẽ **Class Diagram** (sơ đồ lớp) và **Sequence Diagram** (sơ đồ tuần tự) trực tiếp bên trong tài liệu Sphinx Doc-as-Code sử dụng directive ``.. mermaid::``.
+Phần này mô tả các giao thức truyền thông liên tiến trình (IPC) và mô hình dòng dữ liệu âm thanh (**Audio Data Flow**) trong hệ thống.
 
-Class Diagram: Car Audio Architecture
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Cơ Chế Giao Tiếp Liên Tiến Trình (IPC Mechanisms)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Dưới đây là sơ đồ lớp kiến trúc điều khiển âm thanh trên Android Automotive (AAOS):
+Hệ thống kết hợp ba cơ chế IPC tiêu chuẩn tùy theo yêu cầu về băng thông và độ trễ:
 
-.. mermaid::
+1. **Android Binder IPC / Stable AIDL**:
+   - Dùng để truyền lệnh điều khiển, thiết lập cấu hình và đăng ký listener giữa App và ``CarAudioService``.
+   - Độ tin cậy cao, hỗ trợ kiểm tra định danh caller UID/PID và cơ chế `linkToDeath` tự động giải phóng tài nguyên khi caller bị crash.
+2. **Shared Memory / FastMixer Ring Buffer**:
+   - Dùng để truyền dòng dữ liệu âm thanh PCM thô trực tiếp từ App xuống Audio HAL.
+   - Tránh việc sao chép bộ nhớ (Zero-copy), đảm bảo độ trễ ở mức sub-millisecond.
+3. **Hardware Bus (I2S, TDM, CAN-FD)**:
+   - Dùng để giao tiếp giữa vi xử lý chính (SoC) và chip xử lý tín hiệu DSP bên ngoài.
 
-   classDiagram
-       class CarAudioManager {
-           +int getVolumeGroupCount()
-           +int getGroupVolume(int groupId)
-           +void setGroupVolume(int groupId, int index, int flags)
-           +requestAudioFocus(AudioFocusRequest req)
-       }
-
-       class CarAudioService {
-           -List~CarAudioZone~ mZones
-           -CarVolumeGroup mVolumeGroup
-           +initialize()
-           +handleVolumeChange(int volume)
-           +routeAudioBus()
-       }
-
-       class CarAudioZone {
-           -int mZoneId
-           -String mZoneName
-           +getVolumeGroups()
-           +isMuted()
-       }
-
-       class IAudioControlHAL {
-           <<interface>>
-           +setAudioPortConfig()
-           +onVolumeChange(int bus, float gain)
-       }
-
-       CarAudioManager --> CarAudioService : Binds via IPC / AIDL
-       CarAudioService *-- CarAudioZone : Aggregates Zones
-       CarAudioService ..|> IAudioControlHAL : Controls Hardware
-
-
-Sequence Diagram: Audio Focus Request Flow
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Dưới đây là sơ đồ tuần tự biểu diễn luồng yêu cầu quyền phát âm thanh (**Audio Focus Request**) từ ứng dụng Media đến phần cứng âm thanh:
+Sơ Đồ Dòng Dữ Liệu Âm Thanh (Audio Data Flow Diagram)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. mermaid::
 
-   sequenceDiagram
-       autonumber
-       actor User
-       participant MediaApp as Media Player App
-       participant CarAudio as CarAudioService
-       participant FocusMgr as AudioFocusManager
-       participant AudioHAL as Audio HAL (DSP)
+   graph LR
+       subgraph Source_Layer [Nguồn Phát Âm Thanh]
+           PCM_App["App PCM Audio<br/>(48kHz / 16-bit / Stereo)"]
+           Tone_Gen["Vehicle Chimes<br/>(Seatbelt, Turn Signal)"]
+       end
 
-       User->>MediaApp: Tap Play Button
-       activate MediaApp
-       MediaApp->>CarAudio: requestAudioFocus(USAGE_MEDIA)
-       activate CarAudio
+       subgraph Mixer_Layer [Tầng Trộn & Định Tuyến]
+           FastMixer["AudioFlinger FastMixer<br/>(Ring Buffer)"]
+           ZoneRouter["CarAudio Zone Router<br/>(Zone 0 / Zone 1)"]
+       end
 
-       CarAudio->>FocusMgr: evaluateFocusChange(CAR_ZONE_PRIMARY)
-       activate FocusMgr
-       FocusMgr-->>CarAudio: AUDIOFOCUS_REQUEST_GRANTED
-       deactivate FocusMgr
+       subgraph HAL_DSP_Layer [Tầng Phần Cứng & DSP]
+           HAL_Bus["Audio HAL Bus Devices<br/>(bus00_media, bus01_nav)"]
+           DSP_Engine["DSP Mixer & Crossover<br/>(Equalizer / Reverb / Gain)"]
+           DAC_Amp["DAC & Power Amplifier"]
+       end
 
-       CarAudio->>AudioHAL: setAudioPortVolume(BUS_MEDIA, 0dB)
-       activate AudioHAL
-       AudioHAL-->>CarAudio: OK (DSP Ready)
-       deactivate AudioHAL
+       PCM_App --> FastMixer
+       Tone_Gen --> ZoneRouter
+       FastMixer --> ZoneRouter
+       ZoneRouter --> HAL_Bus
+       HAL_Bus -->|TDM Stream| DSP_Engine
+       DSP_Engine --> DAC_Amp
+       DAC_Amp --> Speakers([Hệ Thống Loa Trên Xe])
 
-       CarAudio-->>MediaApp: onAudioFocusChange(GAIN)
-       deactivate CarAudio
+Đặc Tả Interface AIDL Cốt Lõi
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-       MediaApp->>AudioHAL: streamAudioPCM(48kHz, 2ch)
-       AudioHAL-->>User: Output Sound via Car Speakers
-       deactivate MediaApp
+Dưới đây là định nghĩa giao diện AIDL chuẩn mẫu được sử dụng giữa CarAudioService và HAL:
+
+.. code-block:: aidl
+
+   package android.hardware.automotive.audiocontrol;
+
+   @VintfStability
+   interface IAudioControl {
+       /**
+        * Thiết lập gain cho nhóm âm lượng theo bus vật lý
+        */
+       void setVolumeGroupGain(in int zoneId, in int groupId, in int gainIndex);
+
+       /**
+        * Bật/tắt chế độ Mute cho từng vùng âm thanh riêng biệt
+        */
+       void setAudioZoneMuted(in int zoneId, in boolean muted);
+
+       /**
+        * Đăng ký callback nhận sự kiện thay đổi từ phần cứng DSP
+        */
+       void registerAudioControlCallback(in IAudioControlCallback callback);
+   }

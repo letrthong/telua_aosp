@@ -6,14 +6,14 @@
         "dataList": [
             {
                 "filePath": "chapter1/chapter1_section1.rst",
-                "title": "Installation",
-                "description": "How to install the software.",
+                "title": "1.1 Bối Cảnh Nghiệp Vụ & Mục Tiêu Dự Án",
+                "description": "Bối cảnh kinh doanh, bài toán đặt ra, mục tiêu thiết kế và các bên liên quan.",
                 "updateCreated": "2026-10-29"
             },
             {
                 "filePath": "chapter1/chapter1_section2.rst",
-                "title": "Configuration",
-                "description": "Basic configuration steps.",
+                "title": "1.2 Phạm Vi & Thuộc Tính Chất Lượng",
+                "description": "Phân định phạm vi In-Scope / Out-of-Scope, nguyên tắc kiến trúc và các chỉ số chất lượng SLA/SLO.",
                 "updateCreated": "2026-10-29"
             }
         ]
@@ -25,8 +25,14 @@
         "dataList": [
             {
                 "filePath": "chapter2/chapter2_section1.rst",
-                "title": "Section 1 of Chapter 2",
-                "description": "Content for section 1 of chapter 2.",
+                "title": "2.1 Tác Nhân & Sơ Đồ Ca Sử Dụng",
+                "description": "Danh sách tác nhân (Actors), sơ đồ Use Case Mermaid và đặc tả kịch bản chính.",
+                "updateCreated": "2026-10-29"
+            },
+            {
+                "filePath": "chapter2/chapter2_section2.rst",
+                "title": "2.2 Đặc Tả Yêu Cầu Chức Năng & Phi Chức Năng",
+                "description": "Ma trận yêu cầu chức năng (FR) theo mức ưu tiên và yêu cầu phi chức năng (NFR).",
                 "updateCreated": "2026-10-29"
             }
         ]
@@ -38,20 +44,70 @@
         "dataList": [
             {
                 "filePath": "chapter3/chapter3_section1.rst",
-                "title": "Section 1 of Chapter 3",
-                "description": "Content for section 1 of chapter 3.",
+                "title": "3.1 Kiến Trúc Hệ Thống Tổng Thể (System Architecture)",
+                "description": "Sơ đồ kiến trúc 4 tầng phân tách C4, ranh giới subsystem và bảng phân tích công nghệ.",
                 "updateCreated": "2026-10-29"
             },
             {
                 "filePath": "chapter3/chapter3_section2.rst",
-                "title": "Section 2 of Chapter 3",
-                "description": "Content for section 2 of chapter 3.",
+                "title": "3.2 Luồng Tương Tác Giữa Các Thành Phần (Component Interactions)",
+                "description": "Sơ đồ tuần tự (Sequence Diagram) luồng phân xử quyền phát âm thanh thời gian thực.",
                 "updateCreated": "2026-10-29"
             },
             {
                 "filePath": "chapter3/chapter3_section3.rst",
-                "title": "Section 3 of Chapter 3: System Architecture Diagrams",
-                "description": "Class and sequence diagrams for system architecture using Mermaid.",
+                "title": "3.3 Giao Thức Giao Tiếp & Luồng Dữ Liệu (Communication Protocols & Data Flow)",
+                "description": "Cơ chế IPC Binder / Stable AIDL, FastMixer ring buffer và sơ đồ dòng dữ liệu âm thanh.",
+                "updateCreated": "2026-10-29"
+            }
+        ]
+    },
+    {
+        "chapter": "chapter4.rst",
+        "author": "Architecture Team",
+        "updateCreated": "2026-10-29",
+        "dataList": [
+            {
+                "filePath": "chapter4/chapter4_section1.rst",
+                "title": "4.1 Thiết Kế Lớp Đối Tượng (Class Modeling & Object Design)",
+                "description": "Sơ đồ lớp kiến trúc (Class Diagram) với các thuộc tính, phương thức và Design Patterns.",
+                "updateCreated": "2026-10-29"
+            },
+            {
+                "filePath": "chapter4/chapter4_section2.rst",
+                "title": "4.2 Máy Trạng Thái & Vòng Đời Hoạt Động (State Machine & Lifecycle Transitions)",
+                "description": "Máy trạng thái hữu hạn (FSM) biểu diễn vòng đời AudioFocusRequest và ma trận chuyển trạng thái.",
+                "updateCreated": "2026-10-29"
+            },
+            {
+                "filePath": "chapter4/chapter4_section3.rst",
+                "title": "4.3 Cấu Trúc Dữ Liệu & Data Schema (Data Models & Configuration)",
+                "description": "Sơ đồ thực thể ER Diagram, cấu trúc XML schema và từ điển dữ liệu cấu hình.",
+                "updateCreated": "2026-10-29"
+            }
+        ]
+    },
+    {
+        "chapter": "chapter5.rst",
+        "author": "Architecture Team",
+        "updateCreated": "2026-10-29",
+        "dataList": [
+            {
+                "filePath": "chapter5/chapter5_section1.rst",
+                "title": "5.1 Quy Trình Đóng Gói & Tích Hợp Liên Tục (Build System & CI/CD Pipeline)",
+                "description": "Quy trình CI/CD tự động, lệnh biên dịch AOSP / Docs-as-Code và kiểm thử tự động.",
+                "updateCreated": "2026-10-29"
+            },
+            {
+                "filePath": "chapter5/chapter5_section2.rst",
+                "title": "5.2 Mô Hình & Hạ Tầng Triển Khai (Deployment Topology & Environments)",
+                "description": "Sơ đồ hạ tầng Dev / Staging / Production, cơ chế nâng cấp không gián đoạn A/B OTA.",
+                "updateCreated": "2026-10-29"
+            },
+            {
+                "filePath": "chapter5/chapter5_section3.rst",
+                "title": "5.3 Vận Hành, Giám Sát & Xử Lý Sự Cố (Observability & Runbook)",
+                "description": "Công cụ chẩn đoán dumpsys, tracing Perfetto và ma trận xử lý sự cố tiêu chuẩn.",
                 "updateCreated": "2026-10-29"
             }
         ]
