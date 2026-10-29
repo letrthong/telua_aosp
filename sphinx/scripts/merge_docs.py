@@ -4,6 +4,7 @@ import sys
 
 def main():
     base_dir = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.dirname(os.path.abspath(__file__))
+    out_dir = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else base_dir
     metadata_file = os.path.join(base_dir, 'metadata.json')
 
     if not os.path.isfile(metadata_file):
@@ -16,6 +17,7 @@ def main():
     for chapter_info in metadata:
         chapter_name = chapter_info['chapter']
         chapter_file = os.path.join(base_dir, chapter_name)
+        dest_chapter_file = os.path.join(out_dir, chapter_name)
         data_list = chapter_info.get('dataList', [])
         if not os.path.exists(chapter_file):
             print(f'Chapter file {chapter_file} not found.')
@@ -59,7 +61,9 @@ def main():
             + chapter_lines[end_idx:]
         )
 
-        with open(chapter_file, 'w', encoding='utf-8') as f:
+        # Write to destination (staging dir or in-place)
+        os.makedirs(os.path.dirname(dest_chapter_file), exist_ok=True)
+        with open(dest_chapter_file, 'w', encoding='utf-8') as f:
             f.writelines(new_chapter_lines)
 
     print('Merging completed.')

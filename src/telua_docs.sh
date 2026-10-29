@@ -415,46 +415,78 @@ docs_cmd_build() {
     log_info " Building Sphinx Documentation: '$target_dir'"
     log_info "============================================================"
 
-    # 1. Check sections
+    # Prepare isolated staging directory in _build/.staging (keeps source files 100% untouched)
+    local staging_dir="$target_dir/_build/.staging"
+    local out_html="$target_dir/_build/html"
+
+    rm -rf "$staging_dir"
+    mkdir -p "$staging_dir"
+
+    # Copy source docs into staging (exclude _build, .git)
+    local item
+    for item in "$target_dir"/*; do
+        local bname
+        bname="$(basename "$item")"
+        if [ "$bname" != "_build" ] && [ "$bname" != ".git" ]; then
+            cp -r "$item" "$staging_dir/"
+        fi
+    done
+
+    # If staging lacks conf.py, fallback to central template conf.py
+    if [ ! -f "$staging_dir/conf.py" ]; then
+        if [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template/conf.py" ]; then
+            cp "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template/conf.py" "$staging_dir/conf.py"
+        elif [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/conf.py" ]; then
+            cp "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/conf.py" "$staging_dir/conf.py"
+        fi
+    fi
+
+    # 1. Check sections (on staging_dir)
     local script_sec
-    script_sec="$(_docs_find_script "check_sections.py" "$target_dir")"
+    script_sec="$(_docs_find_script "check_sections.py" "$staging_dir")"
     if [ -n "$script_sec" ]; then
         log_info "Step 1/4: Checking chapter & section paths..."
-        if ! "$py_cmd" "$script_sec" "$target_dir"; then
+        if ! "$py_cmd" "$script_sec" "$staging_dir"; then
             log_error "Section validation failed! Build aborted."
+            rm -rf "$staging_dir"
             return 1
         fi
     fi
 
-    # 2. Merge sections into chapters
+    # 2. Merge sections into chapters (in staging_dir ONLY, source files remain untouched!)
     local script_merge
-    script_merge="$(_docs_find_script "merge_docs.py" "$target_dir")"
+    script_merge="$(_docs_find_script "merge_docs.py" "$staging_dir")"
     if [ -n "$script_merge" ]; then
-        log_info "Step 2/4: Merging section files into chapter documents..."
-        if ! "$py_cmd" "$script_merge" "$target_dir"; then
+        log_info "Step 2/4: Merging sections in staging directory (source files untouched)..."
+        if ! "$py_cmd" "$script_merge" "$staging_dir"; then
             log_error "Merge docs failed! Build aborted."
+            rm -rf "$staging_dir"
             return 1
         fi
     fi
 
     # 3. Check image references
     local script_img
-    script_img="$(_docs_find_script "check_docs.py" "$target_dir")"
+    script_img="$(_docs_find_script "check_docs.py" "$staging_dir")"
     if [ -n "$script_img" ]; then
         log_info "Step 3/4: Checking image links..."
-        if ! "$py_cmd" "$script_img" "$target_dir"; then
+        if ! "$py_cmd" "$script_img" "$staging_dir"; then
             log_error "Image validation failed! Build aborted."
+            rm -rf "$staging_dir"
             return 1
         fi
     fi
 
-    # 4. Compile Sphinx HTML
+    # 4. Compile Sphinx HTML from staging_dir
     log_info "Step 4/4: Compiling Sphinx HTML using '$sphinx_cmd'..."
-    local out_html="$target_dir/_build/html"
-    if ! $sphinx_cmd -b html $conf_arg "$target_dir" "$out_html"; then
+    if ! $sphinx_cmd -b html "$staging_dir" "$out_html"; then
         log_error "Sphinx build failed!"
+        rm -rf "$staging_dir"
         return 1
     fi
+
+    # Clean up staging directory after successful build
+    rm -rf "$staging_dir"
 
     echo ""
     log_success "Documentation build completed successfully!"
