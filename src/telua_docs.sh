@@ -399,10 +399,16 @@ docs_cmd_init() {
         copied_count=$((copied_count + 1))
     fi
 
-    # Ensure asset directory (images) is copied (fallback to sphinx/template/asset if needed)
+    # Ensure asset directory (images) is copied (fallback to sphinx/templates/basic/asset if needed)
     if [ ! -d "$target_dir/asset" ]; then
         if [ -d "$template_dir/asset" ]; then
             cp -r "$template_dir/asset" "$target_dir/" 2>/dev/null || true
+            copied_count=$((copied_count + 1))
+        elif [ -d "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/basic/asset" ]; then
+            cp -r "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/basic/asset" "$target_dir/" 2>/dev/null || true
+            copied_count=$((copied_count + 1))
+        elif [ -d "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/architecture/asset" ]; then
+            cp -r "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/architecture/asset" "$target_dir/" 2>/dev/null || true
             copied_count=$((copied_count + 1))
         elif [ -d "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template/asset" ]; then
             cp -r "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template/asset" "$target_dir/" 2>/dev/null || true
@@ -550,6 +556,19 @@ docs_cmd_build() {
             cp -r "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/basic/_static" "$staging_dir/"
         elif [ -d "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/architecture/_static" ]; then
             cp -r "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/architecture/_static" "$staging_dir/"
+        fi
+    fi
+
+    # Ensure asset directory (images) is copied into staging (auto-heal fallback if missing)
+    if [ ! -d "$staging_dir/asset" ]; then
+        if [ -d "$target_dir/asset" ]; then
+            cp -r "$target_dir/asset" "$staging_dir/"
+        elif [ -d "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/basic/asset" ]; then
+            cp -r "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/basic/asset" "$staging_dir/"
+            cp -r "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/basic/asset" "$target_dir/" 2>/dev/null || true
+        elif [ -d "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/architecture/asset" ]; then
+            cp -r "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/architecture/asset" "$staging_dir/"
+            cp -r "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/templates/architecture/asset" "$target_dir/" 2>/dev/null || true
         fi
     fi
 
