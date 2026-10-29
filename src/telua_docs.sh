@@ -309,6 +309,12 @@ docs_cmd_init() {
         esac
     done
 
+    # Ensure custom static directory (_static) is copied if not already captured
+    if [ -d "$template_dir/_static" ] && [ ! -d "$target_dir/_static" ]; then
+        cp -r "$template_dir/_static" "$target_dir/"
+        copied_count=$((copied_count + 1))
+    fi
+
     log_success "Created documentation template in '$target_dir' ($copied_count items copied)."
 
     # Automatically check and install Sphinx dependencies if missing
@@ -439,6 +445,11 @@ docs_cmd_build() {
         elif [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/conf.py" ]; then
             cp "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/conf.py" "$staging_dir/conf.py"
         fi
+    fi
+
+    # Ensure custom static directory (_static) is copied into staging
+    if [ ! -d "$staging_dir/_static" ] && [ -d "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template/_static" ]; then
+        cp -r "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/template/_static" "$staging_dir/"
     fi
 
     # 1. Check sections (on staging_dir)

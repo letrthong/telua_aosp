@@ -48,6 +48,11 @@ if [ ! -f "$STAGING_DIR/conf.py" ]; then
   fi
 fi
 
+# Ensure custom static directory (_static) is copied into staging
+if [ ! -d "$STAGING_DIR/_static" ] && [ -d "$(dirname "$0")/template/_static" ]; then
+  cp -r "$(dirname "$0")/template/_static" "$STAGING_DIR/"
+fi
+
 echo "Merging docs from metadata.json into staging directory..."
 python "$SCRIPT_DIR/merge_docs.py" "$STAGING_DIR"
 if [ $? -ne 0 ]; then
