@@ -16,8 +16,8 @@ This document is structured following international software architecture engine
      - **System Overview**
      - Business context, problem statement, project scope (In-Scope / Out-of-Scope), quality attributes (SLA/SLO), Architecture Decision Records (ADRs), and domain glossary.
    * - **Chapter 2**
-     - **Requirements & Use Cases**
-     - System actors, use case diagrams, functional/non-functional requirements (FR/NFR matrices), and ASPICE bidirectional traceability matrix (RTM).
+     - **Requirements & Use Cases (SRS)**
+     - System actors, use case diagrams, formal Functional/Non-Functional Requirements (`FR`/`NFR`), Hardware & Interface Requirements (`HWR`/`IR`), Safety & Security (`SAF`/`SEC`), and ASPICE Traceability Matrix (`RTM`).
    * - **Chapter 3**
      - **High-Level Design (HLD)**
      - Layered C4 system architecture, inter-service interactions, IPC protocols, audio data flow models, SELinux security boundaries, and ISO/SAE 21434 STRIDE threat model.

@@ -37,14 +37,20 @@
             },
             {
                 "filePath": "chapter2/chapter2_section2.rst",
-                "title": "2.2 Functional & Non-Functional Requirements",
-                "description": "Prioritized functional requirements matrix (P0-P2) and non-functional requirements (NFRs).",
-                "updateCreated": "2026-10-29"
+                "title": "2.2 Functional & Non-Functional Requirements (SRS)",
+                "description": "Requirements taxonomy diagram, prioritized Functional Requirements (FR-01..FR-08) with acceptance criteria, and Non-Functional Requirements (NFR-01..NFR-06).",
+                "updateCreated": "2026-10-31"
             },
             {
                 "filePath": "chapter2/chapter2_section3.rst",
-                "title": "2.3 Bidirectional Requirements Traceability Matrix (RTM)",
-                "description": "ASPICE SWE.2/SWE.3 end-to-end traceability mapping Use Cases, Requirements, HLD/LLD Components, and Tests.",
+                "title": "2.3 System, Hardware, Interface & Safety Requirements",
+                "description": "Hardware resource budgets (HWR), External IPC/Hardware interface requirements (IR), ISO 26262 Safety (SAF), ISO 21434 Security (SEC), and Project Treble constraints.",
+                "updateCreated": "2026-10-31"
+            },
+            {
+                "filePath": "chapter2/chapter2_section4.rst",
+                "title": "2.4 Bidirectional Requirements Traceability Matrix (RTM)",
+                "description": "ASPICE SWE.1/SWE.2/SWE.3 end-to-end traceability mapping Use Cases, FR/NFR/HWR/IR/SAF/SEC Requirements, HLD/LLD Components, and Tests.",
                 "updateCreated": "2026-10-31"
             }
         ]

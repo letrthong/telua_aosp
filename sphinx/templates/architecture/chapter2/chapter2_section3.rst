@@ -1,80 +1,103 @@
-2.3 Bidirectional Requirements Traceability Matrix (RTM)
+2.3 System, Hardware, Interface & Safety Requirements
 ------------------------------------------------------------------------------------------
 
-This section establishes the **Bidirectional Requirements Traceability Matrix (RTM)** in compliance with **Automotive SPICE (ASPICE SWE.2 & SWE.3)** and **ISO 26262**, ensuring every requirement maps forward to architectural components and verification tests, and backward to business use cases.
+This section specifies the **Hardware Resource Requirements (HWR)**, **External Interface Requirements (IR)**, **Functional Safety & Cybersecurity Requirements (SAF / SEC)**, and **Engineering Constraints (CON)** governing the target automotive platform.
 
-ASPICE Traceability Model
-~~~~~~~~~~~~~~~~~~~~~~~~~
+Hardware & Acoustic Resource Requirements (HWR)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. mermaid::
-
-   graph LR
-       UC["System Use Cases<br/>(UC-01 .. UC-05)"] <-->|Derives| FR["Functional & NFR Specs<br/>(FR-01 .. NFR-04)"]
-       FR <-->|Allocated to| ARCH["HLD / LLD Components<br/>(Chapter 3 & Chapter 4)"]
-       ARCH <-->|Verified by| TEST["Automated Test Suites<br/>(Unit / VTS / HIL)"]
-
-Bidirectional Traceability Matrix
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. list-table:: **End-to-End Requirements Traceability Matrix (RTM)**
-   :widths: 12 14 26 24 24
+.. list-table:: **Hardware & Acoustic Resource Requirements (HWR)**
+   :widths: 12 23 40 25
    :header-rows: 1
 
    * - Req ID
-     - Source Use Case
-     - Allocated HLD / LLD Component
-     - Interface / Schema Contract
-     - Verification Test Case ID
-   * - **FR-01**
-     - ``UC-01`` (Media Playback)
-     - ``CarAudioService``, ``CarAudioZone`` (Sec 3.1, 4.1)
-     - ``car_audio_configuration.xml`` (``<zone id="0..2">``)
-     - ``CarAudioZoneUnitTest#testMultiZoneRouting``
-   * - **FR-02**
-     - ``UC-04`` (Volume Groups)
-     - ``CarVolumeGroup``, ``CarAudioManager`` (Sec 4.1)
-     - ``IAudioControl.setVolumeGroupGain()``
-     - ``CarVolumeGroupUnitTest#testSetGroupVolume``
-   * - **FR-03**
-     - ``UC-02``, ``UC-03`` (Focus & Ducking)
-     - ``AudioFocusManager``, ``AudioControlHAL`` (Sec 3.2, 4.2)
-     - ``AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK``
-     - ``CarAudioServiceUnitTest#testNavAlertTriggersDucking``
-   * - **FR-04**
-     - ``UC-04`` (Persistent State)
-     - ``CarAudioSettings``, ``CarPowerPolicy`` (Sec 4.3, 4.4)
-     - ``Settings.Secure.VOLUME_GROUP_STATE``
-     - ``HIL_PowerCycleTest#testVolumePersistsAcrossSTR``
-   * - **FR-05**
-     - ``UC-05`` (Fault Diagnostics)
-     - ``AudioControlWrapper``, ``DeathRecipient`` (Sec 4.4, 5.3)
-     - ``IAudioControlCallback.onHalError()``
-     - ``VtsHalAudioControlTargetTest#FaultInjection``
-   * - **NFR-01**
-     - ``UC-02``, ``UC-03`` (< 30ms Latency)
-     - ``AudioFlinger FastMixer``, ``DSP_Engine`` (Sec 3.3)
-     - Shared Memory Ring Buffer + TDM Bus
-     - ``PerfettoLatencyBenchmark#testFocusSwitchUnder30ms``
-   * - **NFR-02**
-     - ``UC-01``..``UC-05`` (MTBF > 10k hrs)
-     - ``CarAudioService``, ``AudioControlHAL`` (Sec 6.3)
-     - AddressSanitizer (ASan) + Lock Hierarchy
-     - ``StressTest24h#testZeroMemoryLeakAndNoANR``
-   * - **NFR-03**
-     - ``UC-02`` (ISO 26262 ASIL-B)
-     - ``AudioFocusManager``, ``AudioControlHAL`` (Sec 3.2)
-     - Direct Emergency Bus Bypass (``bus_adas_chime``)
-     - ``HIL_SafetyTest#testAdasOverrideUnderCpuLoad``
-   * - **NFR-04**
-     - ``UC-04`` (Access Security)
-     - ``CarAudioService``, SELinux Domain (Sec 3.4)
-     - ``CAR_CONTROL_AUDIO_VOLUME`` + SELinux ``.te``
-     - ``CtsCarSecurityTest#testUnauthorizedVolumeRejected``
+     - Hardware Subsystem
+     - Technical Specification
+     - Target Tolerance / Limit
+   * - **HWR-01**
+     - **Audio DSP Co-Processor**
+     - Dedicated hardware DSP supporting at least 16 concurrent input buses and 12 output speaker channels with hardware parametric EQ.
+     - >= 800 MHz clock, < 2ms internal pipeline delay.
+   * - **HWR-02**
+     - **TDM / I2S Serial Link**
+     - Full-duplex Time-Division Multiplexing (TDM-16) digital audio bus between Cockpit SoC and external DSP/Amplifier.
+     - 48 kHz sample rate, 24-bit depth, clock jitter < 50 ppm.
+   * - **HWR-03**
+     - **Amplifier Hardware Mute**
+     - Dedicated GPIO hardware mute line controlled during SoC power rail sequencing to eliminate pop/click transients.
+     - Assert mute >= 20ms prior to power rail drop.
+   * - **HWR-04**
+     - **Non-Volatile Storage**
+     - Wear-leveled eMMC / UFS partition (`/data/system/car`) for persisting per-zone volume tables and user profiles.
+     - Minimum 100,000 write/erase cycles endurance.
 
-Coverage & Audit Rules
-~~~~~~~~~~~~~~~~~~~~~~
+External Interface & Protocol Requirements (IR)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-1. **Zero Orphan Requirements**: Every requirement (`FR-*`, `NFR-*`) must map to at least one concrete LLD class/interface and at least one automated verification test.
-2. **Zero Gold-Plating**: Any architectural component or public AIDL method not linked to a valid requirement in this matrix is flagged during design review.
-3. **CI Gate Verification**: Pull requests modifying `IAudioControl.aidl` or `car_audio_configuration.xml` must update the corresponding test cases referenced in the RTM.
+.. list-table:: **External Interface & Protocol Requirements (IR)**
+   :widths: 12 23 40 25
+   :header-rows: 1
 
+   * - Req ID
+     - Interface Boundary
+     - Protocol & Contract Specification
+     - Data Format / SLA
+   * - **IR-01**
+     - **App <-> CarAudioService**
+     - Android Binder IPC via ``android.car.media.ICarAudio`` (exposed through ``CarAudioManager`` SDK).
+     - Parcelable bundles, caller UID/PID verified on every call.
+   * - **IR-02**
+     - **CarAudioService <-> HAL**
+     - VINTF Stable AIDL interface ``android.hardware.automotive.audiocontrol.IAudioControl``.
+     - Asynchronous oneway callbacks + synchronous gain setters.
+   * - **IR-03**
+     - **AudioFlinger <-> Audio HAL**
+     - FastMixer POSIX shared memory ring buffer (`ashmem` / `memfd`) mapped to HAL bus ports (`bus00_media_out` .. `bus07_adas_out`).
+     - Zero-copy 48 kHz / 16-bit or 24-bit PCM frames (5ms period).
+   * - **IR-04**
+     - **Vehicle HAL (VHAL) <-> Car**
+     - Subscription to VHAL properties (`HW_ROTARY_INPUT`, `HW_KEY_INPUT`, `AP_POWER_STATE_REQ`).
+     - Event delivery latency < 15ms from CAN-FD frame arrival.
+
+Functional Safety (ISO 26262) & Cybersecurity (ISO 21434) Requirements
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. list-table:: **Safety (SAF) & Cybersecurity (SEC) Requirements Matrix**
+   :widths: 12 23 42 23
+   :header-rows: 1
+
+   * - Req ID
+     - Standard / Classification
+     - Requirement Description
+     - Verification Mechanism
+   * - **SAF-01**
+     - **ISO 26262 ASIL-B** (Freedom from Interference)
+     - A crash or hang in non-critical infotainment apps (Media, Browser) shall never block or delay ADAS acoustic warnings (`bus_adas_chime`).
+     - Fault injection & CPU starvation test on HIL rig.
+   * - **SAF-02**
+     - **ISO 26262 ASIL-B** (Plausibility Check)
+     - ``AudioControlHAL`` shall clamp all incoming gain indices to calibrated safe hardware bounds (`min_gain` .. `max_gain`) to prevent speaker blowout or hearing damage.
+     - Boundary value unit tests (`GTest`) & VTS fuzzing.
+   * - **SAF-03**
+     - **ISO 26262** (Degraded Safe Mode)
+     - If ``CarAudioService`` becomes unresponsive, the DSP shall automatically fallback to direct CAN-triggered hardware chime generation.
+     - Watchdog timeout simulation on physical ECU bench.
+   * - **SEC-01**
+     - **ISO/SAE 21434** (Least Privilege)
+     - Only processes in the `system_server` SELinux domain shall be permitted to bind to `IAudioControl` HAL (`neverallow` enforced).
+     - `sepolicy-analyze` & CTS `SELinuxHostTest`.
+   * - **SEC-02**
+     - **ISO/SAE 21434** (Permission Gate)
+     - All volume and routing mutation APIs shall enforce `CAR_CONTROL_AUDIO_VOLUME` or `CAR_CONTROL_AUDIO_SETTINGS` privileged permissions.
+     - `CtsCarTestCases` & `telua sec privapp` audit.
+   * - **SEC-03**
+     - **ISO/SAE 21434** (Config Integrity)
+     - Acoustic routing tables (`car_audio_configuration.xml`) shall reside on a `dm-verity` cryptographically signed read-only partition (`/vendor/etc`).
+     - Verified Boot attestation check (`telua sec status`).
+
+Design & Compliance Constraints (CON)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- **CON-01 (Project Treble Compliance)**: Framework code (`packages/services/Car/`) must not link against vendor-proprietary C/C++ shared libraries (`libvendor_*.so`); all communication must traverse VINTF AIDL.
+- **CON-02 (Open-Source Licensing)**: User-space HAL and framework components must strictly comply with **Apache License 2.0**; GPLv3 copyleft dependencies are prohibited in `/system` and `/vendor` binaries.
+- **CON-03 (CTS / VTS Certification)**: Any custom OEM extension must pass 100% of Google's Android Automotive CTS (`CtsCarAudioTestCases`) and VTS (`VtsHalAudioControlTargetTest`) suites without modification to AOSP public SDK signatures.
