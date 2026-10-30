@@ -37,15 +37,17 @@ Standard Build Commands
       # Launch local preview server at http://localhost:8080
       telua docs start 8080
 
-2. **Compiling Android AOSP & Native HAL Services**:
+2. **Compiling & Deploying Android AOSP Services (Telua & Soong CLI)**:
 
    .. code-block:: bash
 
-      # Initialize Android build environment
+      # Option A: Automated build, remount & fast deploy via Telua toolkit
+      telua info
+      telua build --no-reboot
+
+      # Option B: Manual AOSP environment setup & Soong compilation
       source build/envsetup.sh
       lunch aosp_car_x86_64-userdebug
-
-      # Build CarAudioService and AudioControl AIDL HAL module
       m android.hardware.automotive.audiocontrol-service
       m CarAudioService
 

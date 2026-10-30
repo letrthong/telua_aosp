@@ -49,7 +49,7 @@ Android AOSP Automated Test Tooling
    .. code-block:: bash
 
       # Compile Native C++ services with memory sanitizer enabled
-      SANITYZE_TARGET=address m android.hardware.automotive.audiocontrol-service
+      SANITIZE_TARGET=address m android.hardware.automotive.audiocontrol-service
 
 Quality Gates & Release Metrics Matrix
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

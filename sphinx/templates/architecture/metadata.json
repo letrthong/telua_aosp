@@ -15,6 +15,12 @@
                 "title": "1.2 Scope & Architectural Quality Attributes",
                 "description": "In-Scope vs. Out-of-Scope boundaries, core architectural principles, and quality SLAs/SLOs.",
                 "updateCreated": "2026-10-29"
+            },
+            {
+                "filePath": "chapter1/chapter1_section3.rst",
+                "title": "1.3 Architecture Decision Records (ADR) & Glossary",
+                "description": "Key Architecture Decision Records (ADRs) with trade-off analysis and automotive/AOSP domain glossary.",
+                "updateCreated": "2026-10-31"
             }
         ]
     },
@@ -34,6 +40,12 @@
                 "title": "2.2 Functional & Non-Functional Requirements",
                 "description": "Prioritized functional requirements matrix (P0-P2) and non-functional requirements (NFRs).",
                 "updateCreated": "2026-10-29"
+            },
+            {
+                "filePath": "chapter2/chapter2_section3.rst",
+                "title": "2.3 Bidirectional Requirements Traceability Matrix (RTM)",
+                "description": "ASPICE SWE.2/SWE.3 end-to-end traceability mapping Use Cases, Requirements, HLD/LLD Components, and Tests.",
+                "updateCreated": "2026-10-31"
             }
         ]
     },
@@ -59,6 +71,12 @@
                 "title": "3.3 Communication Protocols & Data Flow",
                 "description": "Binder IPC / Stable AIDL contracts, FastMixer zero-copy streaming, and audio data flow diagram.",
                 "updateCreated": "2026-10-29"
+            },
+            {
+                "filePath": "chapter3/chapter3_section4.rst",
+                "title": "3.4 Security Architecture, SELinux & Threat Model",
+                "description": "Defense-in-depth SELinux domains, privapp permission whitelisting, and ISO/SAE 21434 STRIDE threat matrix.",
+                "updateCreated": "2026-10-31"
             }
         ]
     },
@@ -84,6 +102,12 @@
                 "title": "4.3 Data Models & Configuration Schemas",
                 "description": "Entity-Relationship (ER) diagram, sample XML configuration schema, and data dictionary.",
                 "updateCreated": "2026-10-29"
+            },
+            {
+                "filePath": "chapter4/chapter4_section4.rst",
+                "title": "4.4 Concurrency, Lock Hierarchy & Power/Crash Recovery",
+                "description": "Lock ordering rules, Binder DeathRecipient HAL crash recovery flow, and Suspend-to-RAM (STR) power lifecycle.",
+                "updateCreated": "2026-10-31"
             }
         ]
     },

@@ -12,10 +12,16 @@ Diagnostic Tooling & Logging Instrumentation
 
      adb logcat -s CarAudioService:V CarAudioZone:D AudioControlHAL:I
 
-- **Dumpsys Car Audio Diagnostics**: Inspect live runtime configurations of all audio zones and volume groups:
+- **Dumpsys Car Audio & Security Diagnostics (Telua CLI & ADB)**: Inspect live runtime configurations of all audio zones, volume groups, and SELinux states:
 
   .. code-block:: bash
 
+     # Using Telua diagnostic shortcuts
+     telua dump car-audio
+     telua dump car-service
+     telua sec status
+
+     # Or direct ADB shell dumpsys
      adb shell dumpsys car_service --services CarAudioService
 
 - **Perfetto Performance Tracing**: Measure end-to-end latency from audio focus invocation to speaker output:

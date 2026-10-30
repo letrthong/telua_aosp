@@ -14,19 +14,19 @@ This document is structured following international software architecture engine
      - Scope & Engineering Focus
    * - **Chapter 1**
      - **System Overview**
-     - Business context, problem statement, project scope (In-Scope / Out-of-Scope), and quality attributes (SLA/SLO).
+     - Business context, problem statement, project scope (In-Scope / Out-of-Scope), quality attributes (SLA/SLO), Architecture Decision Records (ADRs), and domain glossary.
    * - **Chapter 2**
      - **Requirements & Use Cases**
-     - System actors, use case diagrams, functional requirements (FR matrix), and non-functional requirements (NFR matrix).
+     - System actors, use case diagrams, functional/non-functional requirements (FR/NFR matrices), and ASPICE bidirectional traceability matrix (RTM).
    * - **Chapter 3**
      - **High-Level Design (HLD)**
-     - Layered C4 system architecture, inter-service interactions, IPC protocols, and audio data flow models.
+     - Layered C4 system architecture, inter-service interactions, IPC protocols, audio data flow models, SELinux security boundaries, and ISO/SAE 21434 STRIDE threat model.
    * - **Chapter 4**
      - **Low-Level Design (LLD)**
-     - Object-oriented class modeling, finite state machines (FSM), data models, and XML/JSON configuration schemas.
+     - Object-oriented class modeling, finite state machines (FSM), data models, XML/JSON configuration schemas, lock hierarchy, HAL DeathRecipient recovery, and Suspend-to-RAM power lifecycle.
    * - **Chapter 5**
      - **Build & Deployment**
-     - Automated compilation, CI/CD pipeline workflows, deployment topology (Dev / Staging / Prod), and runbooks.
+     - Automated compilation, CI/CD pipeline workflows, deployment topology (Dev / Staging / Prod), and observability runbooks.
    * - **Chapter 6**
      - **Quality & Automated Testing**
      - Test pyramid model, unit testing & mocking (JUnit 5 / GTest), Android CTS/VTS, and quality gate metrics.
