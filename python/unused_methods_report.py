@@ -70,8 +70,8 @@ Options:
 Examples:
   python unused_methods_report.py
   python unused_methods_report.py --diff
-  python unused_methods_report.py FocusInteraction.java
-  python unused_methods_report.py src/com/bosch/car/oem/ --out report.txt
+  python unused_methods_report.py MyService.java
+  python unused_methods_report.py src/com/example/app/ --out report.txt
 """
 
 import bisect
