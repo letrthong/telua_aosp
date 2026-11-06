@@ -25,7 +25,7 @@ The report covers three checks:
      control-flow keyword-paren spacing (if(x) -> if (x)), runs of 2+ blank
      lines, CRLF line endings and a missing single trailing newline. This is
      a read-only preview of exactly what clean_java.py would fix when run
-     with 'telua clean-java'; the report itself never modifies files.
+     with 'clean-java'; the report itself never modifies files.
 
 The usage-search scope is the module/source tree of each target file: it
 walks up from the file to the nearest 'src' directory or project marker
@@ -549,7 +549,7 @@ def build_report(target_files):
         data = file_data[abspath]
         if data['ws']:
             # Whitespace findings are reported for ALL files (test files
-            # too): 'telua clean-java' would clean them as well.
+            # too): 'clean-java' would clean them as well.
             ws_by_file[abspath] = data['ws']
         if data['is_test']:
             # Test code: methods are invoked by the test framework (JUnit /
@@ -629,7 +629,7 @@ def build_report_lines(target_files):
 
     ws_total = sum(len(v) for v in ws_by_file.values())
     lines.append(f"[3] Whitespace violations: {ws_total} "
-                 f"(read-only preview of what 'telua clean-java' would fix)")
+                 f"(read-only preview of what 'clean-java' would fix)")
     if ws_by_file:
         for path in sorted(ws_by_file):
             lines.append(f"{rel(path)}")
