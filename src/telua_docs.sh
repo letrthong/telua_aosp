@@ -473,6 +473,17 @@ docs_cmd_check() {
         fi
     fi
 
+    # Check mermaid diagrams
+    local script_mermaid
+    script_mermaid="$(_docs_find_script "check_mermaid.py" "$target_dir")"
+    if [ -n "$script_mermaid" ]; then
+        log_info "Checking mermaid diagram syntax..."
+        if ! "$py_cmd" "$script_mermaid" "$target_dir"; then
+            log_error "Mermaid syntax validation failed!"
+            return 1
+        fi
+    fi
+
     log_success "All documentation checks passed successfully."
     return 0
 }
@@ -576,7 +587,7 @@ docs_cmd_build() {
     local script_sec
     script_sec="$(_docs_find_script "check_sections.py" "$staging_dir")"
     if [ -n "$script_sec" ]; then
-        log_info "Step 1/4: Checking chapter & section paths..."
+        log_info "Step 1/5: Checking chapter & section paths..."
         if ! "$py_cmd" "$script_sec" "$staging_dir"; then
             log_error "Section validation failed! Build aborted."
             rm -rf "$staging_dir"
@@ -588,7 +599,7 @@ docs_cmd_build() {
     local script_merge
     script_merge="$(_docs_find_script "merge_docs.py" "$staging_dir")"
     if [ -n "$script_merge" ]; then
-        log_info "Step 2/4: Merging sections in staging directory (source files untouched)..."
+        log_info "Step 2/5: Merging sections in staging directory (source files untouched)..."
         if ! "$py_cmd" "$script_merge" "$staging_dir"; then
             log_error "Merge docs failed! Build aborted."
             rm -rf "$staging_dir"
@@ -600,7 +611,7 @@ docs_cmd_build() {
     local script_img
     script_img="$(_docs_find_script "check_docs.py" "$staging_dir")"
     if [ -n "$script_img" ]; then
-        log_info "Step 3/4: Checking image links..."
+        log_info "Step 3/5: Checking image links..."
         if ! "$py_cmd" "$script_img" "$staging_dir"; then
             log_error "Image validation failed! Build aborted."
             rm -rf "$staging_dir"
@@ -608,8 +619,21 @@ docs_cmd_build() {
         fi
     fi
 
+    # 3b. Check mermaid diagram syntax (catches "Syntax error in text" early)
+    local script_mermaid
+    script_mermaid="$(_docs_find_script "check_mermaid.py" "$staging_dir")"
+    if [ -n "$script_mermaid" ]; then
+        log_info "Step 4/5: Checking mermaid diagram syntax..."
+        if ! "$py_cmd" "$script_mermaid" "$staging_dir"; then
+            log_error "Mermaid syntax validation failed! Build aborted."
+            log_error "Fix the diagrams in the SECTION files, then rebuild."
+            rm -rf "$staging_dir"
+            return 1
+        fi
+    fi
+
     # 4. Compile Sphinx HTML from staging_dir
-    log_info "Step 4/4: Compiling Sphinx HTML using '$sphinx_cmd'..."
+    log_info "Step 5/5: Compiling Sphinx HTML using '$sphinx_cmd'..."
     if ! $sphinx_cmd -b html "$staging_dir" "$out_html"; then
         log_error "Sphinx build failed!"
         rm -rf "$staging_dir"
