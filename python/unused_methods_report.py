@@ -4,9 +4,10 @@
 # Licensed under the Apache License, Version 2.0
 # ==============================================================================
 
-"""Report Java methods and parameters that are declared but never used.
+"""Report Java methods and parameters that are declared but never used,
+plus whitespace hygiene violations (read-only preview of clean_java.py).
 
-The report covers two checks:
+The report covers three checks:
 
   1. UNUSED METHODS - declared methods whose name never appears in code
      (outside their own declaration line) anywhere in the search scope.
@@ -20,6 +21,11 @@ The report covers two checks:
          void processData(int data, int /*spare*/) { ... }
      Parameters whose name is already commented out are skipped, so after
      applying the fix the report converges to a clean result.
+  3. WHITESPACE VIOLATIONS - trailing whitespace, leading tabs (indentation),
+     control-flow keyword-paren spacing (if(x) -> if (x)), runs of 2+ blank
+     lines, CRLF line endings and a missing single trailing newline. This is
+     a read-only preview of exactly what clean_java.py would fix when run
+     with 'telua clean-java'; the report itself never modifies files.
 
 The usage-search scope is the module/source tree of each target file: it
 walks up from the file to the nearest 'src' directory or project marker
@@ -33,6 +39,11 @@ Heuristics used to avoid false positives - the unused-method check SKIPS:
   - methods declared inside interfaces (they are contracts) and methods
     whose name matches any interface/abstract method found in the scope
   - Object overrides: toString/equals/hashCode/clone/finalize
+  - test code: files under test/tests/androidTest/javatests directories or
+    with JUnit/TestNG hints (@Test, @RunWith, org.junit imports). Test
+    methods are invoked by the test framework, never by name from other
+    code, so a name-based search would flag every one of them. Test files
+    still COUNT as usage sources for production methods.
 Usage detection ignores comments and string literals (code is masked) and
 accepts plain calls, qualified calls (obj.name(...)) and '::name' references.
 
@@ -72,7 +83,10 @@ from datetime import datetime
 # Reuse the masking + git helpers from the sibling whitespace cleaner so both
 # tools share one implementation of "ignore strings & comments".
 try:
-    from clean_java import _mask_non_code, get_git_modified_java_files
+    from clean_java import (_mask_non_code, get_git_modified_java_files,
+                            _expand_leading_tabs, _fix_keyword_paren_spacing,
+                            TAB_WIDTH, ENSURE_TRAILING_NEWLINE,
+                            FIX_KEYWORD_PAREN_SPACING, COLLAPSE_BLANK_LINES)
 except ImportError:  # pragma: no cover - direct copy fallback
     sys.exit("ERROR: clean_java.py must sit in the same directory as "
              "unused_methods_report.py")
@@ -252,6 +266,57 @@ def _collect_params_and_body(params, raw_text, masked_text, line_starts,
                    method_name, parsed, body))
 
 
+# ------------------------------------------------------------------------------
+# Whitespace hygiene checks (read-only preview of clean_java.py fixes)
+# ------------------------------------------------------------------------------
+def _check_whitespace(raw_lines):
+    """Detect whitespace hygiene violations in one file's raw lines.
+
+    Mirrors exactly what clean_whitespace_in_file() would fix (honouring the
+    const_clean_java.config settings imported from clean_java):
+      - CRLF line endings (cleaner converts to LF)
+      - leading tabs in indentation (expanded to TAB_WIDTH spaces)
+      - trailing whitespace on any line
+      - keyword-paren spacing (if(x) -> if (x), for(x) -> for (x), ...)
+      - runs of 2+ blank lines (collapsed to one)
+      - missing single trailing newline / trailing blank lines at EOF
+    Returns a list of (line_no, description, line_text); line_no 0 marks a
+    file-level (EOF) issue (line_text is ''). Strings and comments are never
+    misreported: the keyword check runs on masked text via
+    _fix_keyword_paren_spacing.
+    """
+    violations = []
+    in_block = False
+    prev_blank = False
+    for idx, ln in enumerate(raw_lines):
+        line_no = idx + 1
+        body = ln[:-1] if ln.endswith('\r') else ln
+        if body != ln:
+            violations.append((line_no, 'CRLF line ending', body))
+        if _expand_leading_tabs(body, TAB_WIDTH) != body:
+            violations.append((line_no, 'leading tab (indentation)', body))
+        stripped = body.rstrip()
+        if stripped != body:
+            violations.append((line_no, 'trailing whitespace', body))
+        if FIX_KEYWORD_PAREN_SPACING:
+            _, in_block, changed = _fix_keyword_paren_spacing(stripped,
+                                                              in_block)
+            if changed:
+                violations.append(
+                    (line_no,
+                     'keyword-paren spacing (if/for/switch(x) -> kw (x))',
+                     body))
+        blank = (stripped == '')
+        if COLLAPSE_BLANK_LINES and blank and prev_blank:
+            violations.append((line_no, 'blank line run (2+)', body))
+        prev_blank = blank
+    if ENSURE_TRAILING_NEWLINE and raw_lines:
+        if raw_lines[-1] != '' or (len(raw_lines) >= 2
+                                   and raw_lines[-2] == ''):
+            violations.append((0, 'missing single trailing newline', ''))
+    return violations
+
+
 def scan_java_file(file_path):
     """One-pass scan of a Java file.
 
@@ -261,6 +326,8 @@ def scan_java_file(file_path):
       params   - list of (method_line, method_name, [(param, line)...], body)
       contracts- names declared in interfaces or as abstract/native methods
       classes  - type names declared in the file (constructor detection)
+      is_test  - True when the file is test code (test dir / JUnit hints)
+      ws       - whitespace violations [(line_no, desc, line_text)]; 0 = EOF
     """
     try:
         with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
@@ -274,6 +341,12 @@ def scan_java_file(file_path):
     for ln in raw_lines:
         masked, in_block = _mask_non_code(ln, in_block)
         masked_lines.append(masked)
+
+    # Test-code detection (path components + JUnit/TestNG content hints).
+    is_test = is_test_file(file_path, masked_lines)
+
+    # Whitespace hygiene findings (read-only preview of clean_java.py fixes).
+    ws_violations = _check_whitespace(raw_lines)
 
     raw_text = '\n'.join(raw_lines)
     masked_text = '\n'.join(masked_lines)
@@ -290,6 +363,7 @@ def scan_java_file(file_path):
     interface_depth = None      # depth value while inside an interface body
     awaiting_interface_body = False
     override_pending = 0        # lines remaining where @Override still applies
+    test_pending = 0            # lines remaining where @Test/@Before applies
 
     for idx, masked in enumerate(masked_lines):
         stripped = masked.strip()
@@ -299,6 +373,8 @@ def scan_java_file(file_path):
             awaiting_interface_body = True
         if re.match(r'^\s*@Override\b', masked):
             override_pending = 3
+        if TEST_ANNOTATION_RE.match(masked):
+            test_pending = 4
 
         decl = _extract_decl(stripped)
         if decl is not None:
@@ -309,8 +385,11 @@ def scan_java_file(file_path):
                              and re.match(r'^synchronized\s*\(', stripped))
             # Parameter/body extraction runs for every method-like decl,
             # including constructors and @Override methods (unused params
-            # there still trigger lint warnings).
-            if not is_sync_block:
+            # there still trigger lint warnings). Test-framework methods
+            # (@Test/@Before/...) are skipped: the runner invokes them.
+            is_test_method = test_pending > 0
+            test_pending = 0  # annotation consumed by this declaration
+            if not is_sync_block and not is_test_method:
                 pm = re.search(re.escape(name) + r'\s*\(', masked)
                 if pm is not None:
                     _collect_params_and_body(
@@ -333,11 +412,15 @@ def scan_java_file(file_path):
                 pass
             elif is_sync_block:
                 pass  # synchronized statement, not a method declaration
+            elif is_test_method:
+                pass  # @Test/@Before/... method: invoked by the test runner
             else:
                 decls.append((idx + 1, name, _visibility(mods)))
 
         if stripped and override_pending > 0:
             override_pending -= 1
+        if stripped and test_pending > 0:
+            test_pending -= 1
 
         opens = masked.count('{')
         closes = masked.count('}')
@@ -354,6 +437,8 @@ def scan_java_file(file_path):
         'params': params,
         'contracts': contracts,
         'classes': class_names,
+        'is_test': is_test,
+        'ws': ws_violations,
     }
 
 
@@ -364,6 +449,29 @@ PROJECT_MARKERS = ('Android.bp', 'Android.mk', 'build.gradle',
                    'build.gradle.kts', 'pom.xml', 'settings.gradle')
 PRUNE_DIRS = {'.git', '.repo', 'out', 'node_modules', 'build', 'target',
               '.gradle', '.idea', '.vscode'}
+
+# Test-code detection: methods in test files or annotated with test-framework
+# annotations are invoked by the test runner (JUnit / Android instrumentation),
+# not by name from other code, so a name-based usage search would flag every
+# one of them. Test files are excluded from the report but still COUNT as
+# usage sources for production methods.
+TEST_DIR_COMPONENTS = {'test', 'tests', 'androidtest', 'javatests'}
+TEST_ANNOTATION_RE = re.compile(
+    r'^\s*@(?:Test|Before|After|BeforeClass|AfterClass|SetUp|TearDown'
+    r'|Parameterized|RepeatedTest|RunWith|UiThreadTest)\b')
+TEST_FILE_HINT_RE = re.compile(
+    r'\b(?:org\.junit|org\.testng|junit\.framework|androidx\.test)\b')
+
+
+def is_test_file(file_path, masked_lines):
+    """True when `file_path` looks like test code: it lives under a test
+    directory (test/tests/androidTest/javatests) or contains JUnit/TestNG
+    hints (imports or @Test/@RunWith-style annotations on code lines)."""
+    parts = [p.lower() for p in os.path.normpath(file_path).split(os.sep)]
+    if TEST_DIR_COMPONENTS.intersection(parts):
+        return True
+    return any(TEST_FILE_HINT_RE.search(ln) or TEST_ANNOTATION_RE.match(ln)
+               for ln in masked_lines)
 
 
 def resolve_scope_dir(file_path):
@@ -417,7 +525,8 @@ def is_method_used(name, decl_file, decl_line_idx, file_data):
 # Report
 # ------------------------------------------------------------------------------
 def build_report(target_files):
-    """Return (unused_methods, unused_params, decl_count, scope_dirs, files)."""
+    """Return (unused_methods, unused_params, decl_count, scope_dirs,
+    file_count, test_file_count, ws_by_file)."""
     scope_dirs = sorted({resolve_scope_dir(f) for f in target_files})
     scope_files = collect_java_files(scope_dirs)
 
@@ -432,10 +541,23 @@ def build_report(target_files):
     unused = []
     unused_params = []
     decl_count = 0
+    test_file_count = 0
+    ws_by_file = {}
     # Report EVERY file in the usage-search scope, not only the targets: any
     # unused method/parameter anywhere in the module is captured in the report.
     for abspath in sorted(file_data):
         data = file_data[abspath]
+        if data['ws']:
+            # Whitespace findings are reported for ALL files (test files
+            # too): 'telua clean-java' would clean them as well.
+            ws_by_file[abspath] = data['ws']
+        if data['is_test']:
+            # Test code: methods are invoked by the test framework (JUnit /
+            # Instrumentation), never by name from other code, so a name-based
+            # search would flag every test method. Skipped in the report, but
+            # the file still contributes usages for production code above.
+            test_file_count += 1
+            continue
         for line_no, name, vis in data['decls']:
             decl_count += 1
             if name in all_contracts:
@@ -450,13 +572,14 @@ def build_report(target_files):
                         (abspath, method_line, method_name, pname, pline))
     unused.sort(key=lambda u: (u[0], u[1]))
     unused_params.sort(key=lambda u: (u[0], u[1]))
-    return unused, unused_params, decl_count, scope_dirs, len(file_data)
+    return (unused, unused_params, decl_count, scope_dirs, len(file_data),
+            test_file_count, ws_by_file)
 
 
 def build_report_lines(target_files):
     """Compose the full report as a list of text lines."""
-    unused, unused_params, decl_count, scope_dirs, file_count = \
-        build_report(target_files)
+    unused, unused_params, decl_count, scope_dirs, file_count, test_file_count, \
+        ws_by_file = build_report(target_files)
     cwd = os.getcwd()
 
     def rel(path):
@@ -467,7 +590,7 @@ def build_report_lines(target_files):
 
     lines = []
     lines.append("=" * 78)
-    lines.append("Unused Java Method & Parameter Report "
+    lines.append("Unused Java Method, Parameter & Whitespace Report "
                  "(unused_methods_report.py)")
     lines.append("=" * 78)
     lines.append(f"Generated          : "
@@ -476,6 +599,8 @@ def build_report_lines(target_files):
         lines.append(f"Usage-search scope : {d}")
     lines.append(f"Scope files        : {file_count} .java file(s) "
                  f"(all scanned; targets: {len(target_files)})")
+    lines.append(f"Test files skipped : {test_file_count} .java file(s) "
+                 f"(framework-invoked test code not reported)")
     lines.append(f"Declarations parsed: {decl_count} method(s)")
     lines.append("-" * 78)
 
@@ -500,9 +625,31 @@ def build_report_lines(target_files):
             for m_line, m_name, pname, p_line in by_file[path]:
                 lines.append(f"    line {m_line:>5}: {m_name} - unused "
                              f"parameter '{pname}' (declared line {p_line})")
+    lines.append("")
+
+    ws_total = sum(len(v) for v in ws_by_file.values())
+    lines.append(f"[3] Whitespace violations: {ws_total} "
+                 f"(read-only preview of what 'telua clean-java' would fix)")
+    if ws_by_file:
+        for path in sorted(ws_by_file):
+            lines.append(f"{rel(path)}")
+            for line_no, kind, src in ws_by_file[path]:
+                if line_no == 0:
+                    lines.append(f"    file end     : {kind}")
+                else:
+                    lines.append(f"    line {line_no:>5}: {kind}")
+                    # Show the offending source line (tabs expanded, capped)
+                    # so the fix can be located without opening the file.
+                    shown = _expand_leading_tabs(src, TAB_WIDTH).rstrip()
+                    if len(shown) > 100:
+                        shown = shown[:97] + '...'
+                    lines.append(f"                 > {shown}")
+    lines.append("")
+
     lines.append("-" * 78)
     lines.append(f"Summary: {len(unused)} unused method(s), "
-                 f"{len(unused_params)} unused parameter(s). Review before "
+                 f"{len(unused_params)} unused parameter(s), "
+                 f"{ws_total} whitespace violation(s). Review before "
                  f"deleting (heuristic report, see --help).")
     lines.append("=" * 78)
     return lines

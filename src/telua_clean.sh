@@ -80,7 +80,7 @@ show_clean_short_help() {
     echo "    telua clean-java diff       Clean Git-modified or added .java files (default)"
     echo "    telua clean-java all        Clean all .java files under current workspace"
     echo "    telua clean-java <path>     Clean a specific .java file or directory"
-    echo "    telua clean-java report [t] Report unused methods & parameters (t: diff|all|<file|dir>)"
+    echo "    telua clean-java report [t] Report unused methods/params + whitespace issues (read-only)"
     echo "    telua clean-java help       Show detailed clean_java.py usage"
     echo ""
 }

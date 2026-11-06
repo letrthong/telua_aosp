@@ -123,9 +123,10 @@ telua clean-java <path>   # Cleans a specific .java file or target directory
 ```
 
 ### 4.4b Unused Method Report (`telua clean-java report`)
-Before deleting "dead" code, verify with the heuristic report (searches usages across the file's module `src/` tree, ignoring strings/comments; skips constructors, `@Override`, interface/abstract methods, `main()`, `Object` overrides):
+Before deleting "dead" code, verify with the heuristic report (searches usages across the file's module `src/` tree, ignoring strings/comments; skips constructors, `@Override`, interface/abstract methods, `main()`, `Object` overrides, and test code - files under `tests/`/`androidTest/`/`test/` or with JUnit hints like `@Test`/`org.junit` are framework-invoked and excluded from the report, while still counting as usage sources for production methods):
 ```bash
-telua clean-java report                       # Report Git-modified .java files (default)
+telua clean-java report                       # Report all .java files under the CURRENT directory (default, read-only)
+telua clean-java report diff                  # Report Git-modified .java files only
 telua clean-java report all                   # Report all .java files in workspace
 telua clean-java report <file.java>           # Report one specific file
 ```

@@ -103,6 +103,7 @@ mkdir -p "$TMP_REPORT_DIR/src/com/example"
 cat > "$TMP_REPORT_DIR/src/com/example/Dead.java" <<'EOF'
 package com.example;
 public class Dead {
+    private void entryPoint() { usedMethod(); }
     private void usedMethod() { helper(); }
     private void helper() { }
     private void deadMethod() { }
@@ -112,6 +113,37 @@ out_report=$(cd "$TMP_REPORT_DIR" && "$MAIN_SCRIPT" clean-java report src/com/ex
 assert_success "Report runs and finds unused method" grep -q "deadMethod" <<< "$out_report"
 assert_success "Report does not flag used method" bash -c '! grep -q "usedMethod  (" <<< "$1" || grep -q "No unused" <<< "$1"' bash <<< "$out_report"
 assert_success "Report does not flag helper called from usedMethod" bash -c '! grep -q "helper  (" <<< "$1"' bash <<< "$out_report"
+
+# Test 4c-1b: Whitespace violations must be reported (read-only preview)
+printf 'package com.example;\npublic class Dirty {\n    private void dirtyMethod() { \n        if(x) { }\n\n\n    }\n\tint y = 1;\n}\n' > "$TMP_REPORT_DIR/src/com/example/Dirty.java"
+out_report_ws=$(cd "$TMP_REPORT_DIR" && "$MAIN_SCRIPT" clean-java report src/com/example/Dead.java 2>&1 || true)
+assert_success "Report lists trailing whitespace" grep -q "trailing whitespace" <<< "$out_report_ws"
+assert_success "Report lists keyword-paren spacing" grep -q "keyword-paren" <<< "$out_report_ws"
+assert_success "Report lists blank line run" grep -q "blank line run" <<< "$out_report_ws"
+assert_success "Report lists leading tab" grep -q "leading tab" <<< "$out_report_ws"
+
+# Test 4c-2: JUnit test code must not be reported as unused (framework-invoked)
+cat > "$TMP_REPORT_DIR/src/com/example/DeadTest.java" <<'EOF'
+package com.example;
+import org.junit.Test;
+public class DeadTest {
+    @Test
+    public void frameworkInvokedTest() { }
+    private void plainHelper() { }
+}
+EOF
+mkdir -p "$TMP_REPORT_DIR/src/tests"
+cat > "$TMP_REPORT_DIR/src/tests/PathBasedTest.java" <<'EOF'
+package tests;
+public class PathBasedTest {
+    public void frameworkInvokedToo() { }
+}
+EOF
+out_report2=$(cd "$TMP_REPORT_DIR" && "$MAIN_SCRIPT" clean-java report src/com/example/Dead.java 2>&1 || true)
+assert_success "Report skips @Test-annotated methods" bash -c '! grep -q "frameworkInvokedTest  (" <<< "$1"' bash <<< "$out_report2"
+assert_success "Report skips JUnit test files (content)" bash -c '! grep -q "plainHelper  (" <<< "$1"' bash <<< "$out_report2"
+assert_success "Report skips test directories (path)" bash -c '! grep -q "frameworkInvokedToo  (" <<< "$1"' bash <<< "$out_report2"
+assert_success "Report still finds production dead method" grep -q "deadMethod" <<< "$out_report2"
 rm -rf "$TMP_REPORT_DIR"
 
 # Test 5: Safe personal config backup and restore logic
