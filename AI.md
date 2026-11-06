@@ -63,6 +63,7 @@ When the user asks you to perform a task, map their intent to the corresponding 
 | **Run Unit Tests** | `telua --test-mode true` | Runs project test script configured in `apk.config` |
 | **Find & Replace Text Across Files** | `telua replace <old> <new> [path]` | Fast literal string replacement across directory or single file |
 | **Clean Java Trailing Whitespace** | `telua clean-java [diff\|all\|path]` | Strips trailing whitespace & enforces LF on Java source files |
+| **Report Unused Java Methods** | `telua clean-java report [diff\|all\|path]` | Lists unused methods & parameters; saved to `unused_java_report.txt` |
 | **Sphinx Doc-as-Code Manager** | `telua docs [init\|build\|clean\|serve\|check]` | Initializes template, validates images/sections & builds HTML |
 | **Security & SELinux Diagnostics** | `telua sec [action]` | Controls SELinux (status, perm, enforce), dumps AVC denials & privapp |
 | **Install Global CLI Alias & Completion** | `./build_apk.sh --install` | Adds `alias telua=...`, `alias tel=...`, and Tab Auto-completion into `~/.bashrc` |
@@ -120,6 +121,15 @@ telua clean-java          # Default: Cleans only Git modified/added .java files
 telua clean-java all      # Recursively cleans all .java files across workspace
 telua clean-java <path>   # Cleans a specific .java file or target directory
 ```
+
+### 4.4b Unused Method Report (`telua clean-java report`)
+Before deleting "dead" code, verify with the heuristic report (searches usages across the file's module `src/` tree, ignoring strings/comments; skips constructors, `@Override`, interface/abstract methods, `main()`, `Object` overrides):
+```bash
+telua clean-java report                       # Report Git-modified .java files (default)
+telua clean-java report all                   # Report all .java files in workspace
+telua clean-java report <file.java>           # Report one specific file
+```
+The report is always saved to `./unused_java_report.txt` (override with `--out FILE` when calling the python helper directly). Section [2] lists unused parameters - fix with the `int /*paramName*/` comment-out idiom to suppress the warning.
 
 ### 4.5 Tab Auto-completion Engine (`src/telua_completion.sh`)
 Supports both `telua` and short alias `tel` on Bash & Zsh:

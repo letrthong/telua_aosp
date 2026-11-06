@@ -22,6 +22,7 @@ An automated developer workflow script for building and deploying privileged sys
 | `config/const_network.config` | Frequently used Network, Port & ADB over Wi-Fi commands cheatsheet (`telua network`) |
 | `src/telua_security.sh` | Security & SELinux diagnostics commands module (`telua sec <action>`) |
 | `src/telua_clean.sh` | Java source code hygiene & trailing whitespace cleaner (`telua clean-java`) |
+| `python/unused_methods_report.py` | Reports declared-but-unused Java methods (`telua clean-java report`) |
 | `src/telua_completion.sh` | Bash and Zsh Tab Auto-completion engine (`tel <Tab><Tab>`) |
 | `config_crypto.py` | Encrypt / decrypt `apk.config` with a password (PBKDF2 + Fernet) |
 | `requirements.txt` | Python package dependencies for `config_crypto.py` (`cryptography`) |
@@ -201,8 +202,7 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `docs [action]`, `doc [action]` | Sphinx Doc-as-Code manager (`init`, `build`, `clean`, `serve`, `check`) using template in `sphinx/` |
 | `--run`, `run [group]` | Executes multi-command sequential pipeline group from `config/const_multi_cli.config` (alias: `telua multi [group]`) |
 | `my [action]`, `proj [action]` | Executes personal private pipeline macro from `config/const_my_cli.config` (`telua my hello`) |
-| `clean-java [target]` | Cleans trailing whitespace in `.java` source files (`diff` \| `all` \| `<file|dir>`; alias: `--clean-java`) |
-| `--find-file <pattern> [path]` | Searches for files by pattern in `[path]` (defaults to `.` if omitted) |
+| `clean-java [target]` | Cleans trailing whitespace in `.java` source files (`diff` \| `all` \| `<file|dir>`; alias: `--clean-java`) || `clean-java report [t]` | Reports unused Java methods & parameters (`t`: `diff` \| `all` \| `<file\|dir>`; default: current directory; saved to `unused_java_report.txt`) || `--find-file <pattern> [path]` | Searches for files by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-dir <pattern> [path]` | Searches for directories by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-text <text> [path]` | Greps for text string in files under `[path]` (defaults to `.` if omitted) |
 | `replace <old> <new> [path]` | Finds & replaces text across files under `[path]` (defaults to `.` if omitted; alias: `--replace`) |
@@ -221,6 +221,8 @@ telua update                          # Update toolkit: pulls origin/main & pres
 telua clean-java                      # Clean trailing whitespace in Git-modified .java files
 telua clean-java all                  # Clean trailing whitespace in ALL .java files in workspace
 telua clean-java packages/apps/Car/   # Clean trailing whitespace under a specific folder
+telua clean-java report               # Report unused methods in Git-modified .java files
+telua clean-java report all           # Report unused methods across the whole workspace
 telua car vol-up                      # Increase volume (AAOS inject-key 24) (or: telua audio vol-up)
 telua car vol-down                    # Decrease volume (AAOS inject-key 25)
 telua car vol-mute                    # Mute volume (AAOS inject-key 164)
@@ -426,7 +428,21 @@ telua clean-java            # Quét và dọn dẹp các file .java đang sửa 
 telua clean-java diff       # Tương đương lệnh trên
 telua clean-java all        # Quét và dọn dẹp TOÀN BỘ file .java trong toàn bộ workspace
 telua clean-java <path>     # Dọn dẹp một file .java cụ thể hoặc toàn bộ file trong thư mục <path>
+telua clean-java report     # Báo cáo method khai báo mà không được dùng (unused methods)
+telua clean-java report <t> # Report với target: diff (mặc định) | all | <file|dir>
 telua clean-java help       # Hiển thị hướng dẫn chi tiết
+```
+
+**`telua clean-java report`** (python/unused_methods_report.py) gồm 2 phần:
+- **[1] Unused methods**: method được khai báo nhưng tên không xuất hiện lần nào trong code (đã loại bỏ string/comment), trong phạm vi module `src/` của file. Tool tự bỏ qua constructor, `@Override`, method interface/abstract, `main()` và các override của `Object` (toString/equals/hashCode).
+- **[2] Unused parameters**: parameter không được dùng trong thân method (warning `-Wunused-parameter`). Fix theo kiểu comment tên giữ lại type: `void f(int data, int /*spare*/)` — parameter đã comment sẽ bị bỏ qua ở lần chạy sau.
+
+Report luôn được lưu ra file `unused_java_report.txt` (đổi tên bằng `--out FILE` khi gọi trực tiếp python). Kết quả là heuristic — cần review trước khi xóa code:
+
+```bash
+telua clean-java report src/com/bosch/car/oem/focus/FocusInteraction.java
+#   line 602: wantsPauseInsteadOfDucking  (private)
+#   line 691: getInteractionString  (private static)
 ```
 
 ---

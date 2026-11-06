@@ -96,6 +96,24 @@ assert_success "Clean-java all cleans .java files recursively" grep -q "Foo.java
 assert_success "Clean-java removed trailing whitespace" bash -c '! grep -q -E "[[:blank:]]+$" "$1"' bash "$TMP_CLEAN_DIR/Foo.java"
 rm -rf "$TMP_CLEAN_DIR"
 
+# Test 4c: Unused-method report (telua clean-java report)
+log_test "Testing unused-method report (telua clean-java report)..."
+TMP_REPORT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_report_test.XXXXXX")
+mkdir -p "$TMP_REPORT_DIR/src/com/example"
+cat > "$TMP_REPORT_DIR/src/com/example/Dead.java" <<'EOF'
+package com.example;
+public class Dead {
+    private void usedMethod() { helper(); }
+    private void helper() { }
+    private void deadMethod() { }
+}
+EOF
+out_report=$(cd "$TMP_REPORT_DIR" && "$MAIN_SCRIPT" clean-java report src/com/example/Dead.java 2>&1 || true)
+assert_success "Report runs and finds unused method" grep -q "deadMethod" <<< "$out_report"
+assert_success "Report does not flag used method" bash -c '! grep -q "usedMethod  (" <<< "$1" || grep -q "No unused" <<< "$1"' bash <<< "$out_report"
+assert_success "Report does not flag helper called from usedMethod" bash -c '! grep -q "helper  (" <<< "$1"' bash <<< "$out_report"
+rm -rf "$TMP_REPORT_DIR"
+
 # Test 5: Safe personal config backup and restore logic
 log_test "Testing personal config backup and restore isolation..."
 TMP_TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_sh_test.XXXXXX")

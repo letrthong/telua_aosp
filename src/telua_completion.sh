@@ -116,7 +116,7 @@ _telua_completions() {
             return 0
             ;;
         clean-java)
-            local clean_options="diff all help"
+            local clean_options="diff all report help"
             COMPREPLY=($(compgen -W "$clean_options" -- "$cur"))
             return 0
             ;;

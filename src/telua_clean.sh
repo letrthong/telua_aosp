@@ -35,6 +35,7 @@ fi
 TELUA_CLEAN_SOURCED=1
 
 CLEAN_JAVA_PY_NAME="python/clean_java.py"
+UNUSED_REPORT_PY_NAME="python/unused_methods_report.py"
 
 resolve_clean_java_script() {
     local script_dir
@@ -54,6 +55,24 @@ resolve_clean_java_script() {
     return 1
 }
 
+resolve_unused_report_script() {
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    if [ -f "$script_dir/$UNUSED_REPORT_PY_NAME" ]; then
+        echo "$script_dir/$UNUSED_REPORT_PY_NAME"
+        return 0
+    fi
+    if [ -n "${MASTER_SCRIPT_DIR:-}" ] && [ -f "$MASTER_SCRIPT_DIR/$UNUSED_REPORT_PY_NAME" ]; then
+        echo "$MASTER_SCRIPT_DIR/$UNUSED_REPORT_PY_NAME"
+        return 0
+    fi
+    if [ -f "$UNUSED_REPORT_PY_NAME" ]; then
+        echo "$UNUSED_REPORT_PY_NAME"
+        return 0
+    fi
+    return 1
+}
+
 show_clean_short_help() {
     echo ""
     echo -e "\033[1;32m  telua clean-java [target] - Clean trailing whitespace in Java source files\033[0m"
@@ -61,6 +80,7 @@ show_clean_short_help() {
     echo "    telua clean-java diff       Clean Git-modified or added .java files (default)"
     echo "    telua clean-java all        Clean all .java files under current workspace"
     echo "    telua clean-java <path>     Clean a specific .java file or directory"
+    echo "    telua clean-java report [t] Report unused methods & parameters (t: diff|all|<file|dir>)"
     echo "    telua clean-java help       Show detailed clean_java.py usage"
     echo ""
 }
@@ -78,7 +98,7 @@ show_clean_help() {
 is_clean_action() {
     local action="$1"
     case "$action" in
-        diff|all|help|-h|--help) return 0 ;;
+        diff|all|report|help|-h|--help) return 0 ;;
         *.java) return 0 ;;
         *)
             if [ -d "$action" ] || [ -f "$action" ]; then
@@ -116,6 +136,27 @@ handle_clean_command() {
             ;;
         all|--all)
             "$py_cmd" "$py_script" --all
+            ;;
+        report)
+            # Unused-method report: optional sub-target (diff|all|<file|dir>).
+            # No sub-target -> scan the CURRENT directory (default).
+            local report_script report_target=""
+            report_script="$(resolve_unused_report_script)" || {
+                echo "[ERROR] Could not find $UNUSED_REPORT_PY_NAME helper script." >&2
+                return 1
+            }
+            if [ -n "$2" ]; then
+                report_target="$2"
+            fi
+            if [ -z "$report_target" ] || [ "$report_target" = "all" ] || [ "$report_target" = "--all" ]; then
+                "$py_cmd" "$report_script"
+            elif [ "$report_target" = "diff" ] || [ "$report_target" = "--diff" ]; then
+                "$py_cmd" "$report_script" --diff
+            elif [ "$report_target" = "help" ] || [ "$report_target" = "-h" ] || [ "$report_target" = "--help" ]; then
+                "$py_cmd" "$report_script" --help
+            else
+                "$py_cmd" "$report_script" "$report_target"
+            fi
             ;;
         "")
             "$py_cmd" "$py_script"
