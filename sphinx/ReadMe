@@ -34,7 +34,62 @@ pip install furo
 
 - **check_docs.py**: Checks all main chapter .rst files (as listed in metadata.json) for image directives (.. image:: ...) and verifies that the referenced image files exist. If any image is missing, the script will print an error and exit with a non-zero code (useful for CI or build scripts).
 
+- **check_mermaid.py**: Checks all mermaid blocks in chapter and section .rst files for syntax that renders as "Syntax error in text" in the browser (leading edge arrows, dangling edges). It is integrated into the build pipeline — see "Run the scripts in this order" below.
+
 Run the scripts in this order before building Sphinx HTML:
 1. python merge_docs.py
 2. python check_docs.py
-3. sphinx-build -b html . _build/html
+3. python check_mermaid.py
+4. sphinx-build -b html . _build/html
+
+Note: `tel docs build` and `tel docs check` already run check_mermaid.py
+automatically (build step 4/5, after merge + image check, before
+sphinx-build). A mermaid syntax failure aborts the build, so the error is
+caught at build time instead of showing up as a broken diagram in the
+browser.
+
+---
+
+# Mermaid diagram rules (avoid "Syntax error in text")
+
+Mermaid parses **each line as a separate statement**. An edge arrow
+(`-->`, `---`, `==>`...) that starts on its own line is a syntax error and
+the diagram renders as "Syntax error in text" in the browser (the Sphinx
+build itself still succeeds, so the error is only visible at runtime).
+
+**Wrong** — edge on its own line:
+
+.. code-block:: rst
+
+   .. mermaid::
+
+      flowchart TB
+          EVI["ContextInteractions"]
+          -->|"onContextForAdjustmentChanged(contextId)"|
+          II["InteractionsInfo"]
+
+**Correct** — keep `node --> edge-label --> node` on ONE line:
+
+.. code-block:: rst
+
+   .. mermaid::
+
+      flowchart TB
+          EVI["ContextInteractions"]
+          EVI -->|"onContextForAdjustmentChanged(contextId)"| II["InteractionsInfo"]
+
+If a line gets too long, split the **label** with `<br/>` inside the
+quotes — never split the statement across lines.
+
+Checklist before committing docs with mermaid diagrams:
+
+.. code-block:: bash
+
+   # No edge arrow may start a line inside a mermaid block:
+   grep -rn "^\s*-->" chapter*/ chapter*.rst
+   # (must return nothing)
+
+Also remember: `chapterN.rst` files are generated from
+`chapterN/chapterN_sectionM.rst` by `merge_docs.py` — fix the syntax in
+the **section files** first, then re-run the merge, otherwise the fix is
+overwritten on the next build.
