@@ -83,22 +83,22 @@ log_test "Testing car command device offline check (telua car ks)..."
 out_car_ks=$("$MAIN_SCRIPT" car ks 2>&1 || true)
 assert_success "Car ks reports device offline when disconnected" grep -qi "device offline" <<< "$out_car_ks"
 
-# Test 4b: Clean-java utilities
-log_test "Testing clean-java utilities (telua clean-java)..."
-out_clean=$("$MAIN_SCRIPT" clean-java help 2>&1 || true)
-assert_success "Clean-java help lists python/clean_java.py" grep -q "clean_java.py" <<< "$out_clean"
-assert_success "Clean-java help lists diff mode" grep -q "clean-java diff" <<< "$out_clean"
-assert_success "Clean-java help lists all mode" grep -q "clean-java all" <<< "$out_clean"
+# Test 4b: Java utilities (telua java / clean-java)
+log_test "Testing java utilities (telua java / clean-java)..."
+out_clean=$("$MAIN_SCRIPT" java help 2>&1 || true)
+assert_success "Java help lists python/clean_java.py" grep -q "clean_java.py" <<< "$out_clean"
+assert_success "Java help lists diff mode" grep -q "clean-java diff" <<< "$out_clean"
+assert_success "Java help lists all mode" grep -q "clean-java all" <<< "$out_clean"
 
 TMP_CLEAN_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_clean_test.XXXXXX")
 printf 'package com.example;\npublic class Foo { \n    int bar = 1;\t\n}\n' > "$TMP_CLEAN_DIR/Foo.java"
-out_clean_all=$(cd "$TMP_CLEAN_DIR" && "$MAIN_SCRIPT" clean-java all 2>&1 || true)
-assert_success "Clean-java all cleans .java files recursively" grep -q "Foo.java" <<< "$out_clean_all"
-assert_success "Clean-java removed trailing whitespace" bash -c '! grep -q -E "[[:blank:]]+$" "$1"' bash "$TMP_CLEAN_DIR/Foo.java"
+out_clean_all=$(cd "$TMP_CLEAN_DIR" && "$MAIN_SCRIPT" java all 2>&1 || true)
+assert_success "Java all cleans .java files recursively" grep -q "Foo.java" <<< "$out_clean_all"
+assert_success "Java removed trailing whitespace" bash -c '! grep -q -E "[[:blank:]]+$" "$1"' bash "$TMP_CLEAN_DIR/Foo.java"
 rm -rf "$TMP_CLEAN_DIR"
 
-# Test 4c: Unused-method report (telua clean-java report)
-log_test "Testing unused-method report (telua clean-java report)..."
+# Test 4c: Unused-method report (telua java report / clean-java report)
+log_test "Testing unused-method report (telua java report)..."
 TMP_REPORT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_report_test.XXXXXX")
 mkdir -p "$TMP_REPORT_DIR/src/com/example"
 cat > "$TMP_REPORT_DIR/src/com/example/Dead.java" <<'EOF'
@@ -110,7 +110,7 @@ public class Dead {
     private void deadMethod() { }
 }
 EOF
-out_report=$(cd "$TMP_REPORT_DIR" && "$MAIN_SCRIPT" clean-java report src/com/example/Dead.java 2>&1 || true)
+out_report=$(cd "$TMP_REPORT_DIR" && "$MAIN_SCRIPT" java report src/com/example/Dead.java 2>&1 || true)
 assert_success "Report runs and finds unused method" grep -q "deadMethod" <<< "$out_report"
 assert_success "Report does not flag used method" bash -c '! grep -q "usedMethod  (" <<< "$1" || grep -q "No unused" <<< "$1"' bash <<< "$out_report"
 assert_success "Report does not flag helper called from usedMethod" bash -c '! grep -q "helper  (" <<< "$1"' bash <<< "$out_report"

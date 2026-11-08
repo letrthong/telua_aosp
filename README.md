@@ -206,8 +206,8 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `docs [action]`, `doc [action]` | Sphinx Doc-as-Code manager (`init`, `build`, `clean`, `serve`, `check`) using template in `sphinx/` |
 | `--run`, `run [group]` | Executes multi-command sequential pipeline group from `config/const_multi_cli.config` (alias: `telua multi [group]`) |
 | `my [action]`, `proj [action]` | Executes personal private pipeline macro from `config/const_my_cli.config` (`telua my hello`) |
-| `clean-java [target]` | Cleans trailing whitespace in `.java` source files (`diff` \| `all` \| `<file\|dir>`; alias: `--clean-java`) |
-| `clean-java report [t]` | 4-in-1 static Java report: unused methods, unused params, whitespace & `google-java-format` violations (`t`: `diff` \| `all` \| `<file\|dir>`; saved to `unused_java_report.txt`) |
+| `java [target]` | Cleans trailing whitespace in `.java` source files (`clean` \| `diff` \| `all` \| `<file\|dir>`; alias: `clean-java`) |
+| `java report [t]` | 4-in-1 static Java report: unused methods, unused params, whitespace & `google-java-format` violations (`t`: `diff` \| `all` \| `<file\|dir>`; saved to `unused_java_report.txt`; alias: `clean-java report`) |
 | `--find-file <pattern> [path]` | Searches for files by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-dir <pattern> [path]` | Searches for directories by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-text <text> [path]` | Greps for text string in files under `[path]` (defaults to `.` if omitted) |
@@ -226,11 +226,11 @@ telua t                               # Run unit test suite (shortcut for 'telua
 telua init                            # Initialize workspace & apply apk_overlays.config
 telua info                            # Inspect environment and device state
 telua update                          # Update toolkit: pulls origin/main & preserves personal configs
-telua clean-java                      # Clean trailing whitespace in Git-modified .java files
-telua clean-java all                  # Clean trailing whitespace in ALL .java files in workspace
-telua clean-java packages/apps/Car/   # Clean trailing whitespace under a specific folder
-telua clean-java report               # Report unused methods in Git-modified .java files
-telua clean-java report all           # Report unused methods across the whole workspace
+telua java                            # Clean .java files in current directory (alias: telua clean-java)
+telua java all                        # Clean trailing whitespace in ALL .java files in workspace
+telua java packages/apps/Car/         # Clean trailing whitespace under a specific folder
+telua java report                     # 4-in-1 report: unused methods/params, whitespace & google-java-format
+telua java report all                 # Report across the whole workspace
 telua car vol-up                      # Increase volume (AAOS inject-key 24) (or: telua audio vol-up)
 telua car vol-down                    # Decrease volume (AAOS inject-key 25)
 telua car vol-mute                    # Mute volume (AAOS inject-key 164)
@@ -585,7 +585,7 @@ source ~/.bashrc
   - `tel dump <Tab><Tab>`: Đọc động từ `const_dumpsys.config` và gợi ý `audio`, `car-service`, `car-audio`, `media`, `battery`, `activity`.
   - `tel sec <Tab><Tab>`: Đọc động từ `const_security.config` và gợi ý `status`, `perm`, `enforce`, `avc`, `privapp`, `appops`, `keystore`, `policy`, `root`, `unroot`, `remount`, `disable-verity`.
   - `tel run <Tab><Tab>`: Đọc động từ `const_multi_cli.config` và gợi ý `audio-cycle`, `dev-prep`, `remount-reboot`, `audio-dump`, `unittest`.
-  - `tel clean-java <Tab><Tab>`: Gợi ý `diff`, `all`, `report`, `help`.
+  - `tel java <Tab><Tab>` / `tel clean-java <Tab><Tab>`: Gợi ý `clean`, `diff`, `all`, `report`, `help`.
   - `tel --platform <Tab><Tab>`: Gợi ý `android`, `qnx`.
   - `tel --start-deploy <Tab><Tab>`: Gợi ý `true`, `false`.
 

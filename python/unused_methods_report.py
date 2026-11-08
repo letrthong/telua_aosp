@@ -747,11 +747,79 @@ def resolve_google_java_format_cmd(repo_dir=None, auto_clone=False):
     return ('builtin', [])
 
 
+def _find_missing_brace_violations(orig_lines):
+    """Detect 'if (...)' and 'else' statements that omit '{}' braces
+    (Google Java Style Guide §4.1.1: braces are required even when the body
+    contains only a single statement)."""
+    masked_lines = []
+    in_block = False
+    for raw in orig_lines:
+        line = raw.rstrip('\r\n')
+        masked, in_block = _mask_non_code(line, in_block)
+        masked_lines.append(masked)
+
+    violations = []
+    num_lines = len(masked_lines)
+
+    def _next_non_ws_char(start_line, start_col):
+        for l_idx in range(start_line, num_lines):
+            segment = (masked_lines[l_idx][start_col:]
+                       if l_idx == start_line else masked_lines[l_idx])
+            stripped = segment.lstrip()
+            if stripped:
+                return stripped
+        return ''
+
+    for idx, masked in enumerate(masked_lines):
+        # 1. Check 'if (...)'
+        for m in re.finditer(r'\bif\s*\(', masked):
+            open_col = m.end() - 1  # position of '('
+            depth = 0
+            end_line = -1
+            end_col = -1
+            for l_idx in range(idx, num_lines):
+                s = masked_lines[l_idx]
+                c_start = open_col if l_idx == idx else 0
+                for c_idx in range(c_start, len(s)):
+                    ch = s[c_idx]
+                    if ch == '(':
+                        depth += 1
+                    elif ch == ')':
+                        depth -= 1
+                        if depth == 0:
+                            end_line = l_idx
+                            end_col = c_idx + 1
+                            break
+                if end_line != -1:
+                    break
+            if end_line != -1:
+                following = _next_non_ws_char(end_line, end_col)
+                if following and not following.startswith('{'):
+                    violations.append((
+                        idx + 1,
+                        "google-java-format style: 'if' statement must use '{}' braces",
+                        orig_lines[idx].rstrip('\r\n')))
+
+        # 2. Check 'else' (when not 'else if' and not 'else {')
+        for m in re.finditer(r'\belse\b', masked):
+            following = _next_non_ws_char(idx, m.end())
+            if (following
+                    and not following.startswith('{')
+                    and not re.match(r'^if\b', following)):
+                violations.append((
+                    idx + 1,
+                    "google-java-format style: 'else' statement must use '{}' braces",
+                    orig_lines[idx].rstrip('\r\n')))
+
+    return violations
+
+
 def _check_builtin_google_java_format_lines(orig_lines, aosp=True):
     """Built-in pure-Python Google/AOSP Java Style checker used when an
     external google-java-format binary/JAR or Java runtime is not available.
 
     Checks key Google/AOSP Java Style rules:
+      - Braces required on 'if (...)' and 'else' statements (§4.1.1)
       - K&R brace placement (no standalone '{' on a new line)
       - space before '{' on declarations and control statements ('class A{',
         'void f(){', 'if (x){')
@@ -760,7 +828,7 @@ def _check_builtin_google_java_format_lines(orig_lines, aosp=True):
       - multiple statements on a single line ('a = 1; b = 2;')
       - column limit (100 columns per Google/AOSP Java Style)
     """
-    violations = []
+    violations = list(_find_missing_brace_violations(orig_lines))
     in_block = False
     for idx, raw in enumerate(orig_lines):
         line_no = idx + 1
@@ -815,6 +883,7 @@ def _check_builtin_google_java_format_lines(orig_lines, aosp=True):
                 f"google-java-format style: line length {len(expanded)} > 100 columns",
                 line))
 
+    violations.sort(key=lambda v: v[0])
     return violations
 
 
@@ -881,7 +950,10 @@ def _check_google_java_format_file(file_path, runner, aosp=None):
             return _check_builtin_google_java_format_lines(
                 orig_lines, aosp=use_aosp)
         fmt_lines = res.stdout.splitlines()
-        return _diff_google_java_format_lines(orig_lines, fmt_lines)
+        violations = _diff_google_java_format_lines(orig_lines, fmt_lines)
+        violations.extend(_find_missing_brace_violations(orig_lines))
+        violations.sort(key=lambda v: v[0])
+        return violations
 
     # 'hook' script: run on a temporary copy so in-place (--replace) hooks
     # never touch the real source file.
@@ -904,12 +976,18 @@ def _check_google_java_format_file(file_path, runner, aosp=None):
         except OSError:
             after_text = orig_text
         if after_text != orig_text:
-            return _diff_google_java_format_lines(
+            violations = _diff_google_java_format_lines(
                 orig_lines, after_text.splitlines())
+            violations.extend(_find_missing_brace_violations(orig_lines))
+            violations.sort(key=lambda v: v[0])
+            return violations
         if res.returncode == 0 and res.stdout.strip():
-            return _diff_google_java_format_lines(
+            violations = _diff_google_java_format_lines(
                 orig_lines, res.stdout.splitlines())
-        return []
+            violations.extend(_find_missing_brace_violations(orig_lines))
+            violations.sort(key=lambda v: v[0])
+            return violations
+        return _find_missing_brace_violations(orig_lines)
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 

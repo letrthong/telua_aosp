@@ -96,13 +96,14 @@ ensure_google_java_format_pre_commit() {
 
 show_clean_short_help() {
     echo ""
-    echo -e "\033[1;32m  telua clean-java [target] - Clean trailing whitespace in Java source files\033[0m"
+    echo -e "\033[1;32m  telua java [target] (alias: clean-java) - Java source hygiene & static report\033[0m"
     echo "  Modes:"
-    echo "    telua clean-java diff       Clean Git-modified or added .java files (default)"
-    echo "    telua clean-java all        Clean all .java files under current workspace"
-    echo "    telua clean-java <path>     Clean a specific .java file or directory"
-    echo "    telua clean-java report [t] Report unused methods/params + whitespace issues (read-only)"
-    echo "    telua clean-java help       Show detailed clean_java.py usage"
+    echo "    telua java [clean]          Clean .java files in current directory (default)"
+    echo "    telua java diff             Clean Git-modified or added .java files (clean-java diff)"
+    echo "    telua java all              Clean all .java files under current workspace (clean-java all)"
+    echo "    telua java <path>           Clean a specific .java file or directory"
+    echo "    telua java report [t]       Report unused methods/params, whitespace & google-java-format"
+    echo "    telua java help             Show detailed clean_java.py usage"
     echo ""
 }
 
@@ -119,7 +120,7 @@ show_clean_help() {
 is_clean_action() {
     local action="$1"
     case "$action" in
-        diff|all|report|help|-h|--help) return 0 ;;
+        clean|diff|all|report|help|-h|--help) return 0 ;;
         *.java) return 0 ;;
         *)
             if [ -d "$action" ] || [ -f "$action" ]; then
@@ -132,6 +133,10 @@ is_clean_action() {
 
 handle_clean_command() {
     local action="$1"
+    if [ "$action" = "clean" ] || [ "$action" = "--clean" ]; then
+        shift
+        action="${1:-}"
+    fi
     local py_script
     py_script="$(resolve_clean_java_script)" || {
         echo "[ERROR] Could not find $CLEAN_JAVA_PY_NAME helper script." >&2

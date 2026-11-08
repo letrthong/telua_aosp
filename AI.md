@@ -63,8 +63,8 @@ When the user asks you to perform a task, map their intent to the corresponding 
 | **Sync with Clean Reset** | `telua --repo-sync --repo-reset -y` | Hard resets dirty repos before sync (AI must pass `-y`) |
 | **Run Unit Tests** | `telua t` (or `tel t` / `telua test` / `telua --test-mode true`) | Runs project test script configured in `apk.config` |
 | **Find & Replace Text Across Files** | `telua replace <old> <new> [path]` | Fast literal string replacement across directory or single file |
-| **Clean Java Trailing Whitespace** | `telua clean-java [diff\|all\|path]` | Strips trailing whitespace, expands tabs, normalizes `if (x)` & enforces LF |
-| **Report Unused Java Methods & Style** | `telua clean-java report [diff\|all\|path]` | 4-in-1 read-only report: unused methods, unused params, whitespace & `google-java-format` (`unused_java_report.txt`) |
+| **Clean Java Source Files** | `telua java [clean\|diff\|all\|path]` (alias: `telua clean-java`) | Strips trailing whitespace, expands tabs, normalizes `if (x)` & enforces LF |
+| **Report Unused Java Methods & Style** | `telua java report [diff\|all\|path]` (alias: `telua clean-java report`) | 4-in-1 read-only report: unused methods, unused params, whitespace & `google-java-format` (`unused_java_report.txt`) |
 | **Sphinx Doc-as-Code Manager** | `telua docs [init\|build\|clean\|serve\|check]` | Initializes template, validates images/sections & builds HTML |
 | **Security & SELinux Diagnostics** | `telua sec [action]` | Controls SELinux (status, perm, enforce), dumps AVC denials & privapp |
 | **Install Global CLI Alias & Completion** | `./build_apk.sh --install` | Adds `alias telua=...`, `alias tel=...`, and Tab Auto-completion into `~/.bashrc` |

@@ -48,7 +48,7 @@ _telua_completions() {
     fi
 
     # 1. Primary subcommands and global options
-    local subcommands="build b test t init install info update replace car dump sec security clean-java docs doc run multi my proj git docker network help version"
+    local subcommands="build b test t init install info update replace car dump sec security java clean-java docs doc run multi my proj git docker network help version"
     local options="-p --profile --no-reboot --start-deploy --platform --repo-sync --repo-reset -y --yes --config --softlink --test-mode --ram-monitor --find-file --find-dir --find-text --replace -h --help -v --version"
 
     # Context-aware completion based on the previous word
@@ -145,8 +145,8 @@ _telua_completions() {
             COMPREPLY=($(compgen -W "$run_groups" -- "$cur"))
             return 0
             ;;
-        clean-java)
-            local clean_options="diff all report help"
+        java|clean-java)
+            local clean_options="clean diff all report help"
             COMPREPLY=($(compgen -W "$clean_options" -- "$cur"))
             return 0
             ;;

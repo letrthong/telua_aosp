@@ -448,8 +448,8 @@ print_help() {
     printf "  \033[1;37m%-28s\033[0m %s\n" "car [action]" "Control AAOS car (vol-up, vol-down, vol-mute, ks, ks-stop, status)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "dump [target]" "Run dumpsys diagnostics (audio, car-service, car-audio, ...)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "sec, security [action]" "Security & SELinux diagnostics (status, perm, enforce, avc, ...)"
-    printf "  \033[1;37m%-28s\033[0m %s\n" "clean-java [target]" "Clean trailing whitespace in .java files (diff|all|<file|dir>)"
-    printf "  \033[1;37m%-28s\033[0m %s\n" "clean-java report [t]" "Report unused methods/params + whitespace issues (unused_java_report.txt)"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "java [target]" "Clean .java files (clean|diff|all|<path>) (alias: clean-java)"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "java report [t]" "Report unused methods/params, whitespace & google-java-format"
     printf "  \033[1;37m%-28s\033[0m %s\n" "docs, doc [action]" "Sphinx Doc-as-Code manager (init, build, clean, serve, check)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "run [group]" "Execute multi-command pipeline macro (dev-prep, audio-cycle, ...)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "my, proj [action]" "Execute personal / private pipeline macro (hello, ...)"
@@ -737,7 +737,7 @@ parse_arguments() {
                 handle_docs_command "$@"
                 exit 0
                 ;;
-            --clean-java|clean-java|cleanjava)
+            --java|java|--clean-java|clean-java|cleanjava)
                 if [ -n "$2" ] && [[ "$2" != --* ]]; then
                     CLEAN_ACTION="$2"
                     shift 2
@@ -745,7 +745,7 @@ parse_arguments() {
                     CLEAN_ACTION=""
                     shift 1
                 fi
-                # Pass remaining args so 'clean-java report <target>' reaches
+                # Pass remaining args so 'java report <target>' or 'java clean <target>' reaches
                 # handle_clean_command as its 2nd parameter.
                 handle_clean_command "$CLEAN_ACTION" "$@"
                 exit 0
