@@ -26,6 +26,7 @@ import unittest
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 REPORT_SCRIPT = os.path.join(REPO_ROOT, "python", "unused_methods_report.py")
+os.environ.setdefault("TELUA_SKIP_GJF_CLONE", "1")
 
 # Ensure repo root and python/ subdir are in python path
 for p in (REPO_ROOT, os.path.join(REPO_ROOT, "python")):
@@ -391,6 +392,7 @@ public class PathBasedTest {
         self.assertIn("[1] Unused methods", text)
         self.assertIn("[2] Unused parameters", text)
         self.assertIn("[3] Whitespace violations", text)
+        self.assertIn("[4] google-java-format violations", text)
         self.assertIn("deadMethod", text)
         self.assertIn("spare", text)
         self.assertIn("keyword-paren", text)
@@ -399,6 +401,53 @@ public class PathBasedTest {
         self.assertNotIn("frameworkInvokedTest", text)
         self.assertNotIn("plainHelper", text)
         self.assertNotIn("frameworkInvokedToo", text)
+
+
+# ------------------------------------------------------------------------------
+# [4] google-java-format violations
+# ------------------------------------------------------------------------------
+class TestGoogleJavaFormat(TempDirTestCase):
+    def test_diff_google_java_format_lines(self):
+        orig = ["package com.ex;", "public class A{", "  void f(){}", "}"]
+        fmt = ["package com.ex;", "public class A {", "    void f() {}", "}"]
+        violations = umr._diff_google_java_format_lines(orig, fmt)
+        self.assertTrue(len(violations) >= 1)
+        self.assertEqual(violations[0][0], 2)
+        self.assertIn("google-java-format", violations[0][1])
+
+    def test_find_jar_or_script_in_dir(self):
+        script = write_file(
+            os.path.join(self.test_dir, "run-google-java-format.sh"),
+            "#!/bin/bash\n")
+        found = umr._find_jar_or_script_in_dir(self.test_dir)
+        self.assertIsNotNone(found)
+        self.assertEqual(found[0], "hook")
+        self.assertIn(script, found[1])
+
+    def test_hook_runner_is_readonly_on_target(self):
+        src_file = write_file(
+            os.path.join(self.test_dir, "Sample.java"),
+            "package com.ex;\npublic class Sample{\n}\n")
+        with open(src_file, "rb") as f:
+            before = f.read()
+
+        # Mock pre-commit hook that rewrites its argument file in-place
+        mock_hook = write_file(
+            os.path.join(self.test_dir, "mock_hook.py"),
+            "import sys\n"
+            "p = sys.argv[-1]\n"
+            "with open(p, 'r', encoding='utf-8') as f:\n"
+            "    txt = f.read()\n"
+            "with open(p, 'w', encoding='utf-8') as f:\n"
+            "    f.write(txt.replace('Sample{', 'Sample {'))\n")
+        runner = ("hook", [sys.executable, mock_hook])
+        violations = umr._check_google_java_format_file(src_file, runner)
+        self.assertEqual(len(violations), 1)
+        self.assertEqual(violations[0][0], 2)
+        self.assertIn("Sample {", violations[0][1])
+        with open(src_file, "rb") as f:
+            self.assertEqual(f.read(), before,
+                             "hook check must never modify the original file")
 
 
 # ------------------------------------------------------------------------------

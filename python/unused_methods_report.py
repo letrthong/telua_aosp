@@ -5,9 +5,9 @@
 # ==============================================================================
 
 """Report Java methods and parameters that are declared but never used,
-plus whitespace hygiene violations (read-only preview of clean_java.py).
+plus whitespace hygiene and google-java-format violations (read-only preview).
 
-The report covers three checks:
+The report covers four checks:
 
   1. UNUSED METHODS - declared methods whose name never appears in code
      (outside their own declaration line) anywhere in the search scope.
@@ -26,6 +26,11 @@ The report covers three checks:
      lines, CRLF line endings and a missing single trailing newline. This is
      a read-only preview of exactly what clean_java.py would fix when run
      with 'clean-java'; the report itself never modifies files.
+  4. GOOGLE-JAVA-FORMAT VIOLATIONS - read-only style check powered by
+     google-java-format (or the maciejwalkowiak/google-java-format-pre-commit
+     Git submodule in third_party/google-java-format-pre-commit, initialized
+     automatically if missing). Reports lines whose formatting differs from
+     Google/AOSP Java Style without modifying any source file.
 
 The usage-search scope is the module/source tree of each target file: it
 walks up from the file to the nearest 'src' directory or project marker
@@ -75,9 +80,13 @@ Examples:
 """
 
 import bisect
+import difflib
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 from datetime import datetime
 
 # Reuse the masking + git helpers from the sibling whitespace cleaner so both
@@ -86,12 +95,18 @@ try:
     from clean_java import (_mask_non_code, get_git_modified_java_files,
                             _expand_leading_tabs, _fix_keyword_paren_spacing,
                             TAB_WIDTH, ENSURE_TRAILING_NEWLINE,
-                            FIX_KEYWORD_PAREN_SPACING, COLLAPSE_BLANK_LINES)
+                            FIX_KEYWORD_PAREN_SPACING, COLLAPSE_BLANK_LINES,
+                            ENABLE_GOOGLE_JAVA_FORMAT, GOOGLE_JAVA_FORMAT_AOSP,
+                            GOOGLE_JAVA_FORMAT_REPO_URL)
 except ImportError:  # pragma: no cover - direct copy fallback
     sys.exit("ERROR: clean_java.py must sit in the same directory as "
              "unused_methods_report.py")
 
 DEFAULT_REPORT_FILE = 'unused_java_report.txt'
+REPO_ROOT_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+GJF_DEFAULT_DIR = os.path.join(
+    REPO_ROOT_DIR, 'third_party', 'google-java-format-pre-commit')
 
 # ------------------------------------------------------------------------------
 # Declaration parsing
@@ -522,6 +537,223 @@ def is_method_used(name, decl_file, decl_line_idx, file_data):
 
 
 # ------------------------------------------------------------------------------
+# Google Java Format (maciejwalkowiak/google-java-format-pre-commit)
+# ------------------------------------------------------------------------------
+def ensure_google_java_format_repo(repo_dir=None, repo_url=None):
+    """Ensure the third_party/google-java-format-pre-commit submodule is
+    initialized; run 'git submodule update --init' or shallow clone if missing.
+
+    Returns True if `repo_dir` exists and is non-empty, False otherwise.
+    """
+    target_dir = repo_dir or GJF_DEFAULT_DIR
+    url = repo_url or GOOGLE_JAVA_FORMAT_REPO_URL
+    if os.path.isdir(target_dir) and os.listdir(target_dir):
+        return True
+    if os.environ.get('TELUA_SKIP_GJF_CLONE') == '1':
+        return False
+    if not shutil.which('git'):
+        return False
+    try:
+        subprocess.run(
+            ['git', '-C', REPO_ROOT_DIR, 'submodule', 'update',
+             '--init', '--recursive'],
+            capture_output=True, text=True, timeout=60)
+        if os.path.isdir(target_dir) and os.listdir(target_dir):
+            return True
+        os.makedirs(os.path.dirname(target_dir), exist_ok=True)
+        res = subprocess.run(
+            ['git', 'clone', '--depth', '1', url, target_dir],
+            capture_output=True, text=True, timeout=60)
+        return res.returncode == 0 and os.path.isdir(target_dir)
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _find_jar_or_script_in_dir(directory):
+    """Search `directory` for a google-java-format .jar or hook script."""
+    if not directory or not os.path.isdir(directory):
+        return None
+    jars = []
+    scripts = []
+    for root, dirs, files in os.walk(directory):
+        dirs[:] = [d for d in dirs if d != '.git']
+        for fn in sorted(files):
+            full = os.path.join(root, fn)
+            low = fn.lower()
+            if low.endswith('.jar') and 'google-java-format' in low:
+                jars.append(full)
+            elif (low in ('run-google-java-format.sh',
+                          'google-java-format.sh',
+                          'google-java-format',
+                          'pre-commit',
+                          'entrypoint.sh')
+                  or (low.endswith('.sh') and 'format' in low)):
+                scripts.append(full)
+    if jars and shutil.which('java'):
+        return ('jar', ['java', '-jar', jars[-1]])
+    if scripts:
+        script = scripts[0]
+        if script.endswith('.sh') and shutil.which('bash'):
+            return ('hook', ['bash', script])
+        return ('hook', [script])
+    return None
+
+
+def resolve_google_java_format_cmd(repo_dir=None, auto_clone=False):
+    """Locate a google-java-format runner: returns (kind, cmd_list) or None.
+
+    Lookup order:
+      1. GOOGLE_JAVA_FORMAT_PATH environment variable (.jar or binary/script).
+      2. ~/google-java-format-pre-commit (cloning first when auto_clone=True).
+      3. ~/.cache/google-java-format (cached .jar downloaded by pre-commit).
+      4. $ANDROID_BUILD_TOP/prebuilts/tools/common/google-java-format/...
+      5. 'google-java-format' on system PATH.
+    """
+    env_path = os.environ.get('GOOGLE_JAVA_FORMAT_PATH', '').strip()
+    if env_path and os.path.isfile(env_path):
+        if env_path.lower().endswith('.jar'):
+            return ('jar', ['java', '-jar', env_path])
+        return ('bin', [env_path])
+
+    target_dir = repo_dir or GJF_DEFAULT_DIR
+    if auto_clone and not os.path.isdir(target_dir):
+        ensure_google_java_format_repo(target_dir)
+
+    found = _find_jar_or_script_in_dir(target_dir)
+    if found is not None:
+        return found
+
+    cache_dir = os.path.join(
+        os.path.expanduser('~'), '.cache', 'google-java-format')
+    found_cache = _find_jar_or_script_in_dir(cache_dir)
+    if found_cache is not None:
+        return found_cache
+
+    android_top = os.environ.get('ANDROID_BUILD_TOP', '').strip()
+    if android_top:
+        aosp_bin = os.path.join(
+            android_top, 'prebuilts', 'tools', 'common',
+            'google-java-format', 'google-java-format')
+        if os.path.isfile(aosp_bin):
+            return ('bin', [aosp_bin])
+
+    sys_bin = shutil.which('google-java-format')
+    if sys_bin:
+        return ('bin', [sys_bin])
+    return None
+
+
+def _diff_google_java_format_lines(orig_lines, fmt_lines):
+    """Compare original vs google-java-format lines and return violations."""
+    violations = []
+    matcher = difflib.SequenceMatcher(None, orig_lines, fmt_lines)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == 'equal':
+            continue
+        line_no = i1 + 1 if i1 < len(orig_lines) else max(1, len(orig_lines))
+        src_line = orig_lines[i1] if i1 < len(orig_lines) else ''
+        if tag == 'replace':
+            expected = fmt_lines[j1].strip() if j1 < len(fmt_lines) else ''
+            if len(expected) > 60:
+                expected = expected[:57] + '...'
+            kind = (f"google-java-format style mismatch "
+                    f"(expected: '{expected}')")
+        elif tag == 'delete':
+            kind = (f"google-java-format removes {i2 - i1} line(s) "
+                    f"starting at line {line_no}")
+        else:  # 'insert'
+            inserted = fmt_lines[j1].strip() if j1 < len(fmt_lines) else ''
+            if len(inserted) > 60:
+                inserted = inserted[:57] + '...'
+            kind = (f"google-java-format inserts line(s) "
+                    f"(expected: '{inserted}')")
+        violations.append((line_no, kind, src_line))
+    return violations
+
+
+def _check_google_java_format_file(file_path, runner, aosp=None):
+    """Run google-java-format in read-only mode on `file_path` and return a
+    list of (line_no, kind, src_line) style violations. Never modifies
+    `file_path`."""
+    if runner is None:
+        return []
+    use_aosp = GOOGLE_JAVA_FORMAT_AOSP if aosp is None else aosp
+    kind, cmd = runner
+    try:
+        with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+            orig_text = f.read()
+    except OSError:
+        return []
+    orig_lines = orig_text.splitlines()
+
+    if kind in ('jar', 'bin'):
+        args = list(cmd)
+        if use_aosp:
+            args.append('--aosp')
+        args.append(file_path)
+        try:
+            res = subprocess.run(
+                args, capture_output=True, text=True,
+                encoding='utf-8', errors='replace', timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            return []
+        if res.returncode != 0 or not res.stdout:
+            return []
+        fmt_lines = res.stdout.splitlines()
+        return _diff_google_java_format_lines(orig_lines, fmt_lines)
+
+    # 'hook' script: run on a temporary copy so in-place (--replace) hooks
+    # never touch the real source file.
+    tmp_dir = tempfile.mkdtemp(prefix='telua_gjf_')
+    try:
+        tmp_file = os.path.join(tmp_dir, os.path.basename(file_path))
+        with open(tmp_file, 'w', encoding='utf-8', newline='\n') as f:
+            f.write(orig_text)
+        try:
+            res = subprocess.run(
+                list(cmd) + [tmp_file],
+                capture_output=True, text=True,
+                encoding='utf-8', errors='replace', timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            return []
+        # Prefer formatted temp file if modified in-place; otherwise stdout.
+        try:
+            with open(tmp_file, 'r', encoding='utf-8', errors='replace') as f:
+                after_text = f.read()
+        except OSError:
+            after_text = orig_text
+        if after_text != orig_text:
+            return _diff_google_java_format_lines(
+                orig_lines, after_text.splitlines())
+        if res.returncode == 0 and res.stdout.strip():
+            return _diff_google_java_format_lines(
+                orig_lines, res.stdout.splitlines())
+        return []
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def check_google_java_format(scope_files, runner=None, auto_clone=False):
+    """Run google-java-format across `scope_files` (read-only).
+
+    Returns (gjf_by_file, runner_available).
+    """
+    if not ENABLE_GOOGLE_JAVA_FORMAT:
+        return {}, False
+    active_runner = (runner if runner is not None
+                     else resolve_google_java_format_cmd(auto_clone=auto_clone))
+    if active_runner is None:
+        return {}, False
+    gjf_by_file = {}
+    for path in sorted(scope_files):
+        abspath = os.path.abspath(path)
+        violations = _check_google_java_format_file(abspath, active_runner)
+        if violations:
+            gjf_by_file[abspath] = violations
+    return gjf_by_file, True
+
+
+# ------------------------------------------------------------------------------
 # Report
 # ------------------------------------------------------------------------------
 def build_report(target_files):
@@ -576,10 +808,13 @@ def build_report(target_files):
             test_file_count, ws_by_file)
 
 
-def build_report_lines(target_files):
+def build_report_lines(target_files, gjf_runner=None, auto_clone_gjf=False):
     """Compose the full report as a list of text lines."""
     unused, unused_params, decl_count, scope_dirs, file_count, test_file_count, \
         ws_by_file = build_report(target_files)
+    scope_files = collect_java_files(scope_dirs)
+    gjf_by_file, gjf_available = check_google_java_format(
+        scope_files, runner=gjf_runner, auto_clone=auto_clone_gjf)
     cwd = os.getcwd()
 
     def rel(path):
@@ -646,10 +881,28 @@ def build_report_lines(target_files):
                     lines.append(f"                 > {shown}")
     lines.append("")
 
+    gjf_total = sum(len(v) for v in gjf_by_file.values())
+    gjf_note = ("read-only check via google-java-format"
+                if gjf_available
+                else "skipped - google-java-format not available")
+    lines.append(f"[4] google-java-format violations: {gjf_total} ({gjf_note})")
+    if gjf_by_file:
+        for path in sorted(gjf_by_file):
+            lines.append(f"{rel(path)}")
+            for line_no, kind, src in gjf_by_file[path]:
+                lines.append(f"    line {line_no:>5}: {kind}")
+                if src:
+                    shown = _expand_leading_tabs(src, TAB_WIDTH).rstrip()
+                    if len(shown) > 100:
+                        shown = shown[:97] + '...'
+                    lines.append(f"                 > {shown}")
+    lines.append("")
+
     lines.append("-" * 78)
     lines.append(f"Summary: {len(unused)} unused method(s), "
                  f"{len(unused_params)} unused parameter(s), "
-                 f"{ws_total} whitespace violation(s). Review before "
+                 f"{ws_total} whitespace violation(s), "
+                 f"{gjf_total} google-java-format violation(s). Review before "
                  f"deleting (heuristic report, see --help).")
     lines.append("=" * 78)
     return lines
@@ -657,7 +910,7 @@ def build_report_lines(target_files):
 
 def run_report(target_files, out_path):
     """Print the report and always save it to `out_path` for later review."""
-    lines = build_report_lines(target_files)
+    lines = build_report_lines(target_files, auto_clone_gjf=True)
     text = '\n'.join(lines)
     print(text)
     try:

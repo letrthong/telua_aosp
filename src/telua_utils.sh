@@ -90,6 +90,25 @@ ensure_script_permissions() {
             chmod +x "$script" 2>/dev/null || log_warn "Failed to chmod +x $script"
         fi
     done
+    # All third_party submodule scripts (e.g. google-java-format-pre-commit)
+    for script in "$repo_dir"/third_party/*/*.sh "$repo_dir"/third_party/*/pre-commit; do
+        if [ -f "$script" ]; then
+            chmod +x "$script" 2>/dev/null || log_warn "Failed to chmod +x $script"
+        fi
+    done
+}
+
+# Initialize and update Git submodules declared in .gitmodules (e.g.
+# third_party/google-java-format).
+# Usage: sync_git_submodules <repo_dir>
+sync_git_submodules() {
+    local repo_dir="$1"
+    if [ -z "$repo_dir" ] || [ ! -d "$repo_dir" ] || ! command -v git >/dev/null 2>&1; then
+        return 0
+    fi
+    if [ -f "$repo_dir/.gitmodules" ]; then
+        git -C "$repo_dir" submodule update --init --recursive 2>/dev/null || true
+    fi
 }
 
 # Create missing personal configs from their tracked '<file>.example' templates.
@@ -222,6 +241,7 @@ init_project_config() {
 
     # Create missing personal configs (apk_overlays.config, const_my_cli.config) from *.example
     ensure_personal_configs "$MASTER_SCRIPT_DIR"
+    sync_git_submodules "$MASTER_SCRIPT_DIR"
 
     if [ "$PWD" = "$SCRIPT_DIR" ]; then
         log_warn "Already in master script directory ($PWD). Template config is here."
@@ -408,6 +428,7 @@ run_git_update() {
     restore_personal_configs "$target_repo" "$backup_dir"
 
     if [ "$update_status" -eq 0 ]; then
+        sync_git_submodules "$target_repo"
         ensure_script_permissions "$target_repo"
         exit 0
     fi

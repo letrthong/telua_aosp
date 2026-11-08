@@ -70,8 +70,13 @@ SETTINGS = {
     'COLLAPSE_BLANK_LINES': '1',       # 1 = 2+ blank lines -> one blank line
     'ENABLE_GOOGLE_JAVA_FORMAT': '1',  # 1 = run google-java-format check in report
     'GOOGLE_JAVA_FORMAT_AOSP': '1',    # 1 = pass --aosp (4-space indentation)
+    'GOOGLE_JAVA_FORMAT_JAR_URL': (
+        'https://github.com/google/google-java-format/releases/download/'
+        'v1.24.0/google-java-format-1.24.0-all-deps.jar'
+    ),
     'GOOGLE_JAVA_FORMAT_REPO_URL': (
-        'https://github.com/maciejwalkowiak/google-java-format-pre-commit'
+        'https://github.com/google/google-java-format/releases/download/'
+        'v1.24.0/google-java-format-1.24.0-all-deps.jar'
     ),
 }
 
