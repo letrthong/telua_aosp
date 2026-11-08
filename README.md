@@ -206,7 +206,7 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `docs [action]`, `doc [action]` | Sphinx Doc-as-Code manager (`init`, `build`, `clean`, `serve`, `check`) using template in `sphinx/` |
 | `--run`, `run [group]` | Executes multi-command sequential pipeline group from `config/const_multi_cli.config` (alias: `telua multi [group]`) |
 | `my [action]`, `proj [action]` | Executes personal private pipeline macro from `config/const_my_cli.config` (`telua my hello`) |
-| `java [target]` | Cleans trailing whitespace in `.java` source files (`clean` \| `diff` \| `all` \| `<file\|dir>`; alias: `clean-java`) |
+| `java [target]` | Auto-cleans & fixes style in `.java` files (`diff`: current Git commit `HEAD` + working tree \| `all`: all files \| `<file\|dir>`; alias: `clean-java`) |
 | `java report [t]` | 4-in-1 static Java report: unused methods, unused params, whitespace & `google-java-format` violations (`t`: `diff` \| `all` \| `<file\|dir>`; saved to `unused_java_report.txt`; alias: `clean-java report`) |
 | `--find-file <pattern> [path]` | Searches for files by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-dir <pattern> [path]` | Searches for directories by pattern in `[path]` (defaults to `.` if omitted) |
@@ -226,10 +226,12 @@ telua t                               # Run unit test suite (shortcut for 'telua
 telua init                            # Initialize workspace & apply apk_overlays.config
 telua info                            # Inspect environment and device state
 telua update                          # Update toolkit: pulls origin/main & preserves personal configs
-telua java                            # Clean .java files in current directory (alias: telua clean-java)
-telua java all                        # Clean trailing whitespace in ALL .java files in workspace
-telua java packages/apps/Car/         # Clean trailing whitespace under a specific folder
+telua java                            # Auto-clean & fix style for current Git commit (HEAD) + modified .java files
+telua java diff                       # Explicitly clean & fix style for current Git commit (HEAD) + working tree
+telua java all                        # Clean & fix style in ALL .java files across the workspace
+telua java packages/apps/Car/         # Clean & fix style under a specific folder or file
 telua java report                     # 4-in-1 report: unused methods/params, whitespace & google-java-format
+telua java report diff                # Report on current Git commit (HEAD) + modified .java files
 telua java report all                 # Report across the whole workspace
 telua car vol-up                      # Increase volume (AAOS inject-key 24) (or: telua audio vol-up)
 telua car vol-down                    # Decrease volume (AAOS inject-key 25)
@@ -656,6 +658,38 @@ telua docs clean
 * **Tự động mở trình duyệt**: Lệnh `telua docs start` tự động phát hiện hệ điều hành (Windows, Linux, macOS) để mở ngay trang HTML trên trình duyệt mặc định. Nếu tài liệu chưa được biên dịch, nó sẽ tự động kích hoạt `build` trước.
 * **Khởi tạo Idempotent an toàn**: Khi chạy `telua docs init`, nếu thư mục `docs/` đã tồn tại và chứa file cấu hình (`conf.py` hoặc `metadata.json`), toolkit sẽ tự động bỏ qua và cảnh báo, đảm bảo không bao giờ làm mất tài liệu hiện có của bạn.
 * **Tự động nhận diện (Context-Aware Auto-Discovery)**: Tự động phát hiện thư mục tài liệu tại `./docs`, `./sphinx/template`, `./sphinx` hoặc ngay tại thư mục hiện tại `.`.
+
+---
+
+### 5.10 Tự động làm sạch & chuẩn hóa Google/AOSP Java Style (`telua java` / `clean-java`)
+
+Module `src/telua_clean.sh` kết hợp `python/clean_java.py` và `python/unused_methods_report.py` giúp tự động chỉnh sửa format và kiểm tra tĩnh mã nguồn Java:
+
+```bash
+# 1. Tự động sửa các file .java thuộc commit Git hiện tại (HEAD) + file đang sửa (Working Tree):
+tel java
+tel java diff
+
+# 2. Tự động quét và sửa TOÀN BỘ file .java trong thư mục hiện tại:
+tel java all
+
+# 3. Tự động sửa một file hoặc thư mục cụ thể:
+tel java src/com/example/MyService.java
+
+# 4. Xuất báo cáo tĩnh 4 tầng (Read-only, lưu vào unused_java_report.txt):
+tel java report           # Quét toàn bộ thư mục hiện tại
+tel java report diff      # Quét các file thuộc commit Git hiện tại (HEAD) + working tree
+```
+
+* **Các lỗi được `tel java diff` và `tel java all` tự động sửa tại chỗ (In-place Auto-Fix)**:
+  1. **Tab & Khoảng trắng**: Đổi leading `\t` thành 4 dấu cách, xóa khoảng trắng thừa cuối dòng, chuyển `CRLF` $\rightarrow$ `LF`, thu gọn nhiều dòng trống liên tiếp.
+  2. **Chuẩn hóa từ khóa điều khiển**: `if(x)` $\rightarrow$ `if (x)`, `if ( x )` $\rightarrow$ `if (x)` cho `if`, `for`, `while`, `switch`, `catch`, `try`, `synchronized`.
+  3. **Thêm dấu cách trước `{` và sau `,`**: `public class Foo{` $\rightarrow$ `public class Foo {`, `if (x){` $\rightarrow$ `if (x) {`, `}else{` $\rightarrow$ `} else {`, `foo(a,b)` $\rightarrow$ `foo(a, b)`.
+  4. **Đưa dấu `{` đứng riêng lẻ lên cuối dòng trước (K&R Style §4.1.2)**: `void f()\n{` $\rightarrow$ `void f() {`.
+  5. **Tự động bọc ngoặc nhọn `{}` cho `if (...)` và `else` đơn dòng / 2 dòng (Google Java Style §4.1.1)**:
+     - `if (a > 0) return;` $\rightarrow$ khối `if (a > 0) {\n    return;\n}` chuẩn chỉnh.
+     - `if (a < 0)\n    a = 0;\nelse\n    a = 1;` $\rightarrow$ tự động bọc `{ ... } else { ... }`.
+* **An toàn tuyệt đối cho Chuỗi & Comment**: Mọi nội dung bên trong `"..."`, `'...'`, `//` và `/* ... */` được bảo toàn nguyên vẹn 100%.
 
 ---
 

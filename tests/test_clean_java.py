@@ -345,6 +345,28 @@ class TestCleanWhitespaceInFile(TempDirTestCase):
         # Trailing whitespace after the string line was fixed.
         self.assertNotRegex(content, r"[ \t]+$")
 
+    def test_google_java_style_auto_fixes(self):
+        path = write_file(os.path.join(self.test_dir, "Style.java"),
+                          "package com.ex;\n"
+                          "public class Style{\n"
+                          "    void f(int a,int b)\n"
+                          "    {\n"
+                          "        if(a > 0) return;\n"
+                          "        if (b < 0)\n"
+                          "            b = 0;\n"
+                          "        else\n"
+                          "            b = 1;\n"
+                          "    }\n"
+                          "}\n")
+        self.assertTrue(cj.clean_whitespace_in_file(path))
+        content = read_file(path)
+        self.assertIn("public class Style {", content)
+        self.assertIn("    void f(int a, int b) {", content)
+        self.assertIn("        if (a > 0) {\n            return;\n        }", content)
+        self.assertIn("        if (b < 0) {\n            b = 0;\n        } else {\n            b = 1;\n        }", content)
+        # Second pass is idempotent
+        self.assertFalse(cj.clean_whitespace_in_file(path))
+
 
 # ------------------------------------------------------------------------------
 # get_git_modified_java_files
@@ -383,6 +405,26 @@ class TestGitModifiedFiles(TempDirTestCase):
         self.assertIn("Tracked.java", names)
         self.assertIn("Untracked.java", names)
         self.assertNotIn("notes.txt", names)
+
+    def test_git_repo_includes_head_commit_files(self):
+        repo = os.path.join(self.test_dir, "repo_head")
+        os.makedirs(repo)
+        self._git("init", "-q", cwd=repo)
+        self._git("config", "user.email", "t@t", cwd=repo)
+        self._git("config", "user.name", "t", cwd=repo)
+        write_file(os.path.join(repo, "Committed.java"),
+                   "class Committed {\n}\n")
+        self._git("add", "Committed.java", cwd=repo)
+        self._git("commit", "-qm", "commit java file", cwd=repo)
+
+        old_cwd = os.getcwd()
+        os.chdir(repo)
+        try:
+            files = cj.get_git_modified_java_files()
+        finally:
+            os.chdir(old_cwd)
+        names = [os.path.basename(f) for f in files]
+        self.assertIn("Committed.java", names)
 
     def test_non_git_dir_returns_empty(self):
         old_cwd = os.getcwd()

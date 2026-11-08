@@ -19,30 +19,35 @@ Clean Code Whitespace Tool for Java/Android (clean_java.py)
 ==============================================================================
 
 Description:
-  Scans Java source files and enforces whitespace hygiene:
+  Scans Java source files and enforces whitespace & Google/AOSP Java Style hygiene:
     1. Expands leading tabs (indentation) to 4 spaces per tab.
     2. Strips trailing whitespace & tabs from every line (CRLF -> LF).
     3. Trims trailing blank lines; the file ends with exactly one newline.
-    4. Normalizes control-flow keyword spacing: exactly one space between
-       the keyword and '(' (if(x) -> if (x)) and no redundant whitespace
-       inside the parentheses (if ( x ) -> if (x), catch ( Exception e ) ->
-       catch (Exception e), ...). String literals and comments are never
-       modified; multi-line conditions are left untouched.
+    4. Normalizes control-flow keyword spacing:
+         if(x) -> if (x), if ( x ) -> if (x), catch ( Exception e ) -> catch (Exception e).
     5. Collapses runs of 2+ consecutive blank lines into a single blank line.
-  Files that are already clean are skipped (not rewritten).
+    6. Fixes common Google/AOSP Java Style violations (FIX_GOOGLE_JAVA_STYLE=1):
+         - Inserts missing space before '{' (class A{ -> class A {, if (x){ -> if (x) {)
+         - Inserts missing space after ',' (foo(a,b) -> foo(a, b))
+         - Moves standalone '{' onto the end of the previous header line (K&R style)
+         - Wraps braceless single-statement 'if (...)' and 'else' blocks in '{}' braces
+  String literals and comments are never modified. Files that are already clean
+  are skipped (not rewritten).
 
 Config:
   config/const_clean_java.config (optional, bash-style KEY="VALUE") controls:
     ENSURE_TRAILING_NEWLINE, TAB_WIDTH, FIX_KEYWORD_PAREN_SPACING,
-    COLLAPSE_BLANK_LINES. Missing file/keys fall back to built-in defaults.
+    COLLAPSE_BLANK_LINES, FIX_GOOGLE_JAVA_STYLE.
+    Missing file/keys fall back to built-in defaults.
 
 Usage:
   python clean_java.py [OPTION | FILE_PATH | DIR_PATH]
 
 Options:
-  --diff, --git-diff    (Default) Clean trailing whitespace ONLY for Git modified/added .java files.
+  --diff, --git-diff    (Default) Clean & auto-fix Java files in current Git commit (HEAD)
+                        and working tree (modified/added/untracked).
   --all                 Recursively scan and clean ALL .java files in the current workspace.
-  <file_path>           Clean trailing whitespace for a specific target .java file.
+  <file_path>           Clean & auto-fix a specific target .java file.
   <dir_path>            Recursively scan and clean ALL .java files inside the specified directory.
   -h, --help            Show this CLI help message and exit.
 
@@ -68,6 +73,7 @@ SETTINGS = {
     'TAB_WIDTH': '4',                  # spaces per leading tab (indentation)
     'FIX_KEYWORD_PAREN_SPACING': '1',  # 1 = if(x) -> if (x), if ( x ) -> if (x)
     'COLLAPSE_BLANK_LINES': '1',       # 1 = 2+ blank lines -> one blank line
+    'FIX_GOOGLE_JAVA_STYLE': '1',      # 1 = auto-fix '{' spacing, ',', K&R '{', and 'if/else' braces
     'ENABLE_GOOGLE_JAVA_FORMAT': '1',  # 1 = run google-java-format check in report
     'GOOGLE_JAVA_FORMAT_AOSP': '1',    # 1 = pass --aosp (4-space indentation)
     'GOOGLE_JAVA_FORMAT_JAR_URL': (
@@ -84,8 +90,8 @@ SETTINGS = {
 def _load_clean_java_config(path=CLEAN_JAVA_CONFIG_FILE):
     """Merge KEY="VALUE" entries from const_clean_java.config into SETTINGS,
     then re-apply the module-level constants (TAB_WIDTH, ENSURE_TRAILING_NEWLINE,
-    FIX_KEYWORD_PAREN_SPACING, COLLAPSE_BLANK_LINES, ENABLE_GOOGLE_JAVA_FORMAT,
-    GOOGLE_JAVA_FORMAT_AOSP, GOOGLE_JAVA_FORMAT_REPO_URL).
+    FIX_KEYWORD_PAREN_SPACING, COLLAPSE_BLANK_LINES, FIX_GOOGLE_JAVA_STYLE,
+    ENABLE_GOOGLE_JAVA_FORMAT, GOOGLE_JAVA_FORMAT_AOSP, GOOGLE_JAVA_FORMAT_REPO_URL).
 
     Unknown keys, comments and blank lines are ignored; a missing or
     unreadable config file silently keeps the built-in defaults.
@@ -111,12 +117,14 @@ def _apply_settings():
     """Derive the module-level constants from the merged SETTINGS dict."""
     global TAB_WIDTH, ENSURE_TRAILING_NEWLINE
     global FIX_KEYWORD_PAREN_SPACING, COLLAPSE_BLANK_LINES
+    global FIX_GOOGLE_JAVA_STYLE
     global ENABLE_GOOGLE_JAVA_FORMAT, GOOGLE_JAVA_FORMAT_AOSP
     global GOOGLE_JAVA_FORMAT_REPO_URL
     TAB_WIDTH = int(SETTINGS['TAB_WIDTH'])
     ENSURE_TRAILING_NEWLINE = SETTINGS['ENSURE_TRAILING_NEWLINE'] == '1'
     FIX_KEYWORD_PAREN_SPACING = SETTINGS['FIX_KEYWORD_PAREN_SPACING'] == '1'
     COLLAPSE_BLANK_LINES = SETTINGS['COLLAPSE_BLANK_LINES'] == '1'
+    FIX_GOOGLE_JAVA_STYLE = SETTINGS['FIX_GOOGLE_JAVA_STYLE'] == '1'
     ENABLE_GOOGLE_JAVA_FORMAT = SETTINGS['ENABLE_GOOGLE_JAVA_FORMAT'] == '1'
     GOOGLE_JAVA_FORMAT_AOSP = SETTINGS['GOOGLE_JAVA_FORMAT_AOSP'] == '1'
     GOOGLE_JAVA_FORMAT_REPO_URL = SETTINGS['GOOGLE_JAVA_FORMAT_REPO_URL']
@@ -288,6 +296,198 @@ def _fix_keyword_paren_spacing(line, in_block_comment):
     return ''.join(out), in_block_comment, changed
 
 
+def _fix_style_spacing_on_line(line, in_block_comment):
+    """Fix single-line Google/AOSP Java Style spacing issues outside strings
+    and comments:
+      - Insert missing space before '{' on declarations and control headers
+        ('class Foo{' -> 'class Foo {', 'if (x){' -> 'if (x) {'), while
+        keeping array initializers ('new int[]{1, 2}') untouched.
+      - Insert missing space after '}' before 'else'/'catch'/'finally'
+        ('}else{' -> '} else {').
+      - Insert missing space after ',' ('foo(a,b)' -> 'foo(a, b)').
+    Returns (fixed_line, in_block_comment, changed).
+    """
+    masked, in_block_comment = _mask_non_code(line, in_block_comment)
+    n = len(line)
+    out = []
+    changed = False
+    for i in range(n):
+        ch = line[i]
+        mc = masked[i]
+        # Inside string/char literal or comment: preserve verbatim
+        if mc == ' ' and ch != ' ':
+            out.append(ch)
+            continue
+        if mc == '{' and i > 0:
+            prev_mc = masked[i - 1]
+            is_array_init = (i >= 2 and masked[i - 2:i] == '[]')
+            if prev_mc in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_)]>' and not is_array_init:
+                out.append(' ')
+                changed = True
+            out.append(ch)
+            continue
+        if mc == '}' and i + 1 < n and re.match(r'^(else|catch|finally)\b', masked[i + 1:]):
+            out.append(ch)
+            out.append(' ')
+            changed = True
+            continue
+        if mc == ',' and i + 1 < n and line[i + 1] not in (' ', '\t'):
+            out.append(ch)
+            out.append(' ')
+            changed = True
+            continue
+        out.append(ch)
+    return ''.join(out), in_block_comment, changed
+
+
+def _fix_standalone_open_brace(lines):
+    """Move a standalone '{' on its own line onto the end of the preceding
+    declaration or control-flow header line (K&R style, Google Java Style §4.1.2).
+    """
+    masked_lines = []
+    in_block = False
+    for line in lines:
+        m, in_block = _mask_non_code(line, in_block)
+        masked_lines.append(m)
+
+    out = []
+    out_masked = []
+    for i, line in enumerate(lines):
+        masked = masked_lines[i]
+        if (masked.strip() == '{'
+                and line.strip() == '{'
+                and out
+                and out_masked[-1].strip()
+                and not out_masked[-1].rstrip().endswith((';', '{', '}', ',', ':'))
+                and out[-1].rstrip() == out_masked[-1].rstrip()):
+            out[-1] = out[-1].rstrip() + ' {'
+            out_masked[-1] = out_masked[-1].rstrip() + ' {'
+            continue
+        out.append(line)
+        out_masked.append(masked)
+    return out
+
+
+def _fix_missing_braces(lines, tab_width=TAB_WIDTH):
+    """Auto-insert '{}' braces for braceless single-statement 'if (...)' and
+    'else' blocks (Google Java Style §4.1.1).
+
+    Handles:
+      - Single-line: 'if (cond) stmt;'      -> 'if (cond) {\\n    stmt;\\n}'
+      - Single-line: 'else stmt;'           -> 'else {\\n    stmt;\\n}'
+      - Two-line:    'if (cond)\\n    stmt;' -> 'if (cond) {\\n    stmt;\\n}'
+      - Two-line:    'else\\n    stmt;'      -> 'else {\\n    stmt;\\n}'
+    Already-braced statements ('if (x) { ... }') are left untouched.
+    """
+    lines = list(lines)
+    masked_lines = []
+    in_block = False
+    for line in lines:
+        m, in_block = _mask_non_code(line, in_block)
+        masked_lines.append(m)
+
+    out = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        line = lines[i]
+        masked = masked_lines[i]
+        stripped_masked = masked.lstrip(' ')
+        indent_len = len(masked) - len(stripped_masked)
+        indent = ' ' * indent_len
+        body_indent = ' ' * (indent_len + tab_width)
+
+        # Case 1: line starts with 'if (' or '} else if (' or 'else if ('
+        m_if = re.match(r'^((?:\}\s*)?(?:else\s+)?if\s*\()', stripped_masked)
+        if m_if:
+            open_idx = indent_len + m_if.end(1) - 1
+            close_idx = _find_matching_paren(masked, open_idx)
+            if close_idx != -1:
+                after_masked = masked[close_idx + 1:].strip()
+                after_raw = line[close_idx + 1:].strip()
+                header_raw = line[:close_idx + 1].rstrip()
+                # 1a. Single-line 'if (cond) stmt;'
+                if (after_masked
+                        and not after_masked.startswith('{')
+                        and after_masked.endswith(';')
+                        and after_masked != ';'
+                        and after_masked.count(';') == 1):
+                    out.append(f"{header_raw} {{")
+                    out.append(f"{body_indent}{after_raw}")
+                    if (i + 1 < n
+                            and len(masked_lines[i + 1]) - len(masked_lines[i + 1].lstrip(' ')) == indent_len
+                            and re.match(r'^else\b', masked_lines[i + 1].lstrip(' '))):
+                        lines[i + 1] = f"{indent}}} {lines[i + 1].lstrip(' ')}"
+                        masked_lines[i + 1] = f"{indent}}} {masked_lines[i + 1].lstrip(' ')}"
+                    else:
+                        out.append(f"{indent}}}")
+                    i += 1
+                    continue
+                # 1b. Two-line 'if (cond)\n    stmt;'
+                if (not after_masked
+                        and line.rstrip() == masked.rstrip()
+                        and i + 1 < n):
+                    next_masked = masked_lines[i + 1].strip()
+                    next_raw = lines[i + 1].strip()
+                    if (next_masked
+                            and not next_masked.startswith('{')
+                            and next_masked.endswith(';')
+                            and next_masked != ';'
+                            and next_masked.count(';') == 1
+                            and not re.match(r'^(if|for|while|switch|try)\b', next_masked)):
+                        out.append(f"{header_raw} {{")
+                        out.append(f"{body_indent}{next_raw}")
+                        if (i + 2 < n
+                                and len(masked_lines[i + 2]) - len(masked_lines[i + 2].lstrip(' ')) == indent_len
+                                and re.match(r'^else\b', masked_lines[i + 2].lstrip(' '))):
+                            lines[i + 2] = f"{indent}}} {lines[i + 2].lstrip(' ')}"
+                            masked_lines[i + 2] = f"{indent}}} {masked_lines[i + 2].lstrip(' ')}"
+                        else:
+                            out.append(f"{indent}}}")
+                        i += 2
+                        continue
+
+        # Case 2: line starts with 'else' or '} else' (and NOT 'else if')
+        m_else = re.match(r'^((?:\}\s*)?else)\b(?!\s*if\b)', stripped_masked)
+        if m_else:
+            else_end = indent_len + m_else.end(1)
+            after_masked = masked[else_end:].strip()
+            after_raw = line[else_end:].strip()
+            header_raw = line[:else_end].rstrip()
+            # 2a. Single-line 'else stmt;'
+            if (after_masked
+                    and not after_masked.startswith('{')
+                    and after_masked.endswith(';')
+                    and after_masked != ';'
+                    and after_masked.count(';') == 1):
+                out.append(f"{header_raw} {{")
+                out.append(f"{body_indent}{after_raw}")
+                out.append(f"{indent}}}")
+                i += 1
+                continue
+            # 2b. Two-line 'else\n    stmt;'
+            if (not after_masked
+                    and line.rstrip() == masked.rstrip()
+                    and i + 1 < n):
+                next_masked = masked_lines[i + 1].strip()
+                next_raw = lines[i + 1].strip()
+                if (next_masked
+                        and not next_masked.startswith('{')
+                        and next_masked.endswith(';')
+                        and next_masked != ';'
+                        and next_masked.count(';') == 1
+                        and not re.match(r'^(if|for|while|switch|try)\b', next_masked)):
+                    out.append(f"{header_raw} {{")
+                    out.append(f"{body_indent}{next_raw}")
+                    out.append(f"{indent}}}")
+                    i += 2
+                    continue
+
+        out.append(line)
+        i += 1
+    return out
+
+
 def clean_whitespace_in_file(file_path):
     """Clean one Java file in place:
       1. Expand leading tabs (indentation) to 4 spaces.
@@ -296,7 +496,10 @@ def clean_whitespace_in_file(file_path):
       4. Normalize control-flow header spacing: one space between keyword
          and '(' (if(x) -> if (x)) and no redundant whitespace inside the
          parentheses (if ( x ) -> if (x)); strings & comments untouched.
-      5. Collapse runs of 2+ consecutive blank lines into a single blank line.
+      5. Fix Google/AOSP Java Style spacing & braces (when FIX_GOOGLE_JAVA_STYLE=1):
+         space before '{', space after ',', K&R '{' placement, and '{}' braces
+         on single-statement 'if'/'else' blocks.
+      6. Collapse runs of 2+ consecutive blank lines into a single blank line.
     Every step honours config/const_clean_java.config (built-in defaults
     apply when the file or a key is missing).
     Returns True when the file was modified, False when unchanged or on error.
@@ -313,10 +516,20 @@ def clean_whitespace_in_file(file_path):
         in_block_comment = False
         for part in raw.split('\n'):
             expanded = _expand_leading_tabs(part, TAB_WIDTH).rstrip()
+            line_in_block = in_block_comment
             if FIX_KEYWORD_PAREN_SPACING:
                 expanded, in_block_comment, _ = _fix_keyword_paren_spacing(
-                    expanded, in_block_comment)
+                    expanded, line_in_block)
+            if FIX_GOOGLE_JAVA_STYLE:
+                expanded, in_block_comment, _ = _fix_style_spacing_on_line(
+                    expanded, line_in_block)
+            if not FIX_KEYWORD_PAREN_SPACING and not FIX_GOOGLE_JAVA_STYLE:
+                _, in_block_comment = _mask_non_code(expanded, line_in_block)
             cleaned_parts.append(expanded)
+
+        if FIX_GOOGLE_JAVA_STYLE:
+            cleaned_parts = _fix_standalone_open_brace(cleaned_parts)
+            cleaned_parts = _fix_missing_braces(cleaned_parts, TAB_WIDTH)
 
         if COLLAPSE_BLANK_LINES:
             # Collapse runs of 2+ blank lines into a single blank line.
@@ -354,19 +567,40 @@ def clean_whitespace_in_file(file_path):
         return False
 
 def get_git_modified_java_files():
-    """Fetch all modified, added, or untracked .java files using git diff and status."""
+    """Fetch .java files from current Git working tree (modified/added/untracked)
+    and current Git commit (HEAD)."""
     modified_files = set()
     try:
-        # 1. Staged and unstaged modified/added files
+        top_dir = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            text=True, stderr=subprocess.DEVNULL
+        ).strip()
+    except Exception:
+        return []
+
+    def _add_git_path(rel_path):
+        rel_path = rel_path.strip().strip('"')
+        if not rel_path.endswith(".java"):
+            return
+        candidate = os.path.normpath(os.path.join(top_dir, rel_path))
+        if os.path.isfile(candidate):
+            try:
+                rel_to_cwd = os.path.relpath(candidate, os.getcwd())
+            except ValueError:
+                rel_to_cwd = candidate
+            modified_files.add(rel_to_cwd)
+        elif os.path.isfile(rel_path):
+            modified_files.add(rel_path)
+
+    try:
+        # 1. Staged and unstaged modified/added files relative to HEAD
         diff_output = subprocess.check_output(
             ["git", "diff", "HEAD", "--name-only", "--diff-filter=ACMRT"],
             text=True, stderr=subprocess.DEVNULL
         )
         for line in diff_output.splitlines():
-            line = line.strip()
-            if line.endswith(".java") and os.path.isfile(line):
-                modified_files.add(line)
-        
+            _add_git_path(line)
+
         # 2. Untracked files
         status_output = subprocess.check_output(
             ["git", "status", "--porcelain"],
@@ -374,10 +608,17 @@ def get_git_modified_java_files():
         )
         for line in status_output.splitlines():
             line = line.strip()
-            if line.startswith("??") and line.endswith(".java"):
-                file_path = line[3:].strip()
-                if os.path.isfile(file_path):
-                    modified_files.add(file_path)
+            if line.startswith("??"):
+                _add_git_path(line[3:])
+
+        # 3. Files in the current Git commit (HEAD)
+        head_output = subprocess.check_output(
+            ["git", "show", "--pretty=format:", "--name-only",
+             "--diff-filter=ACMRT", "HEAD"],
+            text=True, stderr=subprocess.DEVNULL
+        )
+        for line in head_output.splitlines():
+            _add_git_path(line)
     except Exception:
         pass
     return sorted(list(modified_files))
