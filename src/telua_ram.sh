@@ -117,7 +117,7 @@ start_ram_sampler() {
             fi
             sleep "$RAM_SAMPLE_INTERVAL"
         done
-    ) &
+    ) >/dev/null 2>&1 </dev/null &
     RAM_SAMPLER_PID=$!
     log_info "RAM monitor: peak sampler started (every ${RAM_SAMPLE_INTERVAL}s, PID: $RAM_SAMPLER_PID)"
 }

@@ -207,6 +207,11 @@ _docs_ensure_sphinx_build() {
         return 0
     fi
 
+    if [ "${TELUA_DOCS_SKIP_PIP:-0}" = "1" ]; then
+        log_info "Skipping automatic Sphinx pip installation (TELUA_DOCS_SKIP_PIP=1)."
+        return 0
+    fi
+
     # Locate requirements.txt from central toolkit first (fallback to target directory)
     local req_file=""
     if [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/requirements.txt" ]; then
@@ -306,8 +311,8 @@ docs_cmd_init() {
         fi
     fi
 
-    # Interactive template selection if not specified and running in interactive terminal
-    if [ -z "$chosen_template" ] && [ -t 0 ]; then
+    # Interactive template selection if not specified and running in interactive terminal (both stdin and stdout must be TTY)
+    if [ -z "$chosen_template" ] && [ -t 0 ] && [ -t 1 ]; then
         echo ""
         echo -e "\033[1;36m============================================================\033[0m"
         echo -e "\033[1;32m  TELUA DOCS INITIALIZER — SELECT TEMPLATE\033[0m"

@@ -241,12 +241,13 @@ assert_success "Tab completion resolves -p profiles and -t templates" [ $? -eq 0
 log_test "Testing documentation module (telua docs help, init, check)..."
 TMP_DOCS_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_docs_test.XXXXXX")
 (
+    export TELUA_DOCS_SKIP_PIP=1
     # Check help output contains start and serve
     help_out=$("$MAIN_SCRIPT" docs help 2>&1)
     echo "$help_out" | grep -q "start \[port\]" && \
     echo "$help_out" | grep -q "serve \[port\]" && \
-    # Init into temp directory
-    "$MAIN_SCRIPT" docs init "$TMP_DOCS_DIR" >/dev/null 2>&1 && \
+    # Init into temp directory (verify non-interactive default fallback and explicit -t basic)
+    "$MAIN_SCRIPT" docs init "$TMP_DOCS_DIR" </dev/null >/dev/null 2>&1 && \
     [ -f "$TMP_DOCS_DIR/conf.py" ] && \
     [ -f "$TMP_DOCS_DIR/index.rst" ] && \
     [ -f "$TMP_DOCS_DIR/metadata.json" ] && \
