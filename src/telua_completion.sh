@@ -49,13 +49,43 @@ _telua_completions() {
 
     # 1. Primary subcommands and global options
     local subcommands="build init install info update replace car dump sec security clean-java docs doc run multi my proj git docker network help version"
-    local options="--no-reboot --start-deploy --platform --repo-sync --repo-reset -y --yes --config --softlink --test-mode --ram-monitor --find-file --find-dir --find-text --replace -h --help -v --version"
+    local options="-p --profile --no-reboot --start-deploy --platform --repo-sync --repo-reset -y --yes --config --softlink --test-mode --ram-monitor --find-file --find-dir --find-text --replace -h --help -v --version"
 
     # Context-aware completion based on the previous word
     case "$prev" in
         docs|doc)
             local docs_actions="start serve sync metadata build check clean init help"
             COMPREPLY=($(compgen -W "$docs_actions" -- "$cur"))
+            return 0
+            ;;
+        -t|--template)
+            COMPREPLY=($(compgen -W "basic architecture minimal api" -- "$cur"))
+            return 0
+            ;;
+        -p|--profile)
+            local profiles="oem_service car_audio vehicle_service"
+            local cfg_file=""
+            local check_dir="$PWD"
+            while [ "$check_dir" != "/" ] && [ "$check_dir" != "." ]; do
+                if [ -f "$check_dir/apk.config" ]; then
+                    cfg_file="$check_dir/apk.config"
+                    break
+                fi
+                check_dir="$(dirname "$check_dir")"
+            done
+            if [ -z "$cfg_file" ]; then
+                local root_dir
+                root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
+                [ -f "$root_dir/apk.config" ] && cfg_file="$root_dir/apk.config"
+            fi
+            if [ -n "$cfg_file" ] && [ -f "$cfg_file" ]; then
+                local dynamic_profiles
+                dynamic_profiles=$(sed -n '/^case "\$ACTIVE_PROJECT"/,/^esac/p' "$cfg_file" 2>/dev/null | grep -E '^[[:space:]]*"[^"]+"\)' | sed -E 's/^[[:space:]]*"([^"]+)"\).*/\1/' | tr '\n' ' ')
+                if [ -n "$dynamic_profiles" ]; then
+                    profiles="$dynamic_profiles"
+                fi
+            fi
+            COMPREPLY=($(compgen -W "$profiles" -- "$cur"))
             return 0
             ;;
         sec|security)

@@ -68,13 +68,19 @@ SETTINGS = {
     'TAB_WIDTH': '4',                  # spaces per leading tab (indentation)
     'FIX_KEYWORD_PAREN_SPACING': '1',  # 1 = if(x) -> if (x), if ( x ) -> if (x)
     'COLLAPSE_BLANK_LINES': '1',       # 1 = 2+ blank lines -> one blank line
+    'ENABLE_GOOGLE_JAVA_FORMAT': '1',  # 1 = run google-java-format check in report
+    'GOOGLE_JAVA_FORMAT_AOSP': '1',    # 1 = pass --aosp (4-space indentation)
+    'GOOGLE_JAVA_FORMAT_REPO_URL': (
+        'https://github.com/maciejwalkowiak/google-java-format-pre-commit'
+    ),
 }
 
 
 def _load_clean_java_config(path=CLEAN_JAVA_CONFIG_FILE):
     """Merge KEY="VALUE" entries from const_clean_java.config into SETTINGS,
     then re-apply the module-level constants (TAB_WIDTH, ENSURE_TRAILING_NEWLINE,
-    FIX_KEYWORD_PAREN_SPACING, COLLAPSE_BLANK_LINES).
+    FIX_KEYWORD_PAREN_SPACING, COLLAPSE_BLANK_LINES, ENABLE_GOOGLE_JAVA_FORMAT,
+    GOOGLE_JAVA_FORMAT_AOSP, GOOGLE_JAVA_FORMAT_REPO_URL).
 
     Unknown keys, comments and blank lines are ignored; a missing or
     unreadable config file silently keeps the built-in defaults.
@@ -100,10 +106,15 @@ def _apply_settings():
     """Derive the module-level constants from the merged SETTINGS dict."""
     global TAB_WIDTH, ENSURE_TRAILING_NEWLINE
     global FIX_KEYWORD_PAREN_SPACING, COLLAPSE_BLANK_LINES
+    global ENABLE_GOOGLE_JAVA_FORMAT, GOOGLE_JAVA_FORMAT_AOSP
+    global GOOGLE_JAVA_FORMAT_REPO_URL
     TAB_WIDTH = int(SETTINGS['TAB_WIDTH'])
     ENSURE_TRAILING_NEWLINE = SETTINGS['ENSURE_TRAILING_NEWLINE'] == '1'
     FIX_KEYWORD_PAREN_SPACING = SETTINGS['FIX_KEYWORD_PAREN_SPACING'] == '1'
     COLLAPSE_BLANK_LINES = SETTINGS['COLLAPSE_BLANK_LINES'] == '1'
+    ENABLE_GOOGLE_JAVA_FORMAT = SETTINGS['ENABLE_GOOGLE_JAVA_FORMAT'] == '1'
+    GOOGLE_JAVA_FORMAT_AOSP = SETTINGS['GOOGLE_JAVA_FORMAT_AOSP'] == '1'
+    GOOGLE_JAVA_FORMAT_REPO_URL = SETTINGS['GOOGLE_JAVA_FORMAT_REPO_URL']
 
 
 _load_clean_java_config()

@@ -457,6 +457,7 @@ print_help() {
     printf "  \033[1;37m%-28s\033[0m %s\n" "network" "Display Network & socket inspection cheatsheet"
     echo ""
     echo -e "\033[1;34mBuild & Deployment Options\033[0m \033[0;90m(used with 'build' or standalone):\033[0m"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "-p, --profile <name>" "Switch ACTIVE_PROJECT profile in $CONFIG_FILE_NAME and build/run"
     printf "  \033[1;36m%-28s\033[0m %s\n" "--no-reboot" "Fast restart (stop && start) instead of full device reboot"
     printf "  \033[1;36m%-28s\033[0m %s\n" "--start-deploy true|false" "Override ENABLE_DEPLOY from $CONFIG_FILE_NAME"
     printf "  \033[1;36m%-28s\033[0m %s\n" "--platform android|qnx" "Target platform: 'android' (default) or 'qnx' (reserved)"
@@ -499,9 +500,19 @@ parse_early_arguments() {
                 log_error "Config file specified via --config not found: $arg"
                 exit 1
             fi
+        elif [ "$prev" = "-p" ] || [ "$prev" = "--profile" ]; then
+            if [ -z "$arg" ] || [[ "$arg" == -* ]]; then
+                log_error "Missing profile name for $prev! Usage: $0 -p <profile_name>"
+                exit 1
+            fi
+            CLI_PROFILE="$arg"
         fi
         prev="$arg"
     done
+    if [ "$prev" = "-p" ] || [ "$prev" = "--profile" ]; then
+        log_error "Missing profile name for $prev! Usage: $0 -p <profile_name>"
+        exit 1
+    fi
 }
 
 # --- 1. Parse Command Line Arguments ---
@@ -518,7 +529,7 @@ parse_arguments() {
                 # Primary build subcommand: consume it and parse subsequent options
                 shift
                 ;;
-            --config)
+            --config|-p|--profile)
                 # Handled early in parse_early_arguments
                 shift 2
                 ;;
@@ -1157,7 +1168,21 @@ load_and_validate_config() {
         exit 1
     fi
 
-    # 2. Nạp cấu hình dự án (có thể ghi đè bất kỳ biến Car nào nếu cần)
+    # 2. Nếu truyền -p / --profile <name>, kiểm tra hợp lệ và cập nhật ACTIVE_PROJECT vào $CONFIG_FILE
+    if [ -n "${CLI_PROFILE:-}" ]; then
+        if ! ( eval "$(sed -E "s/^[[:space:]]*ACTIVE_PROJECT=.*/ACTIVE_PROJECT=\"$CLI_PROFILE\"/" "$CONFIG_FILE")" ); then
+            log_error "Failed to switch to profile '$CLI_PROFILE' in $CONFIG_FILE"
+            exit 1
+        fi
+        if grep -qE '^[[:space:]]*ACTIVE_PROJECT=' "$CONFIG_FILE"; then
+            sed -i -E "s/^[[:space:]]*ACTIVE_PROJECT=.*/ACTIVE_PROJECT=\"$CLI_PROFILE\"/" "$CONFIG_FILE"
+            log_info "Updated ACTIVE_PROJECT=\"$CLI_PROFILE\" in $CONFIG_FILE"
+        else
+            ACTIVE_PROJECT="$CLI_PROFILE"
+        fi
+    fi
+
+    # 3. Nạp cấu hình dự án (có thể ghi đè bất kỳ biến Car nào nếu cần)
     source "$CONFIG_FILE"
 
     local missing_vars=0
