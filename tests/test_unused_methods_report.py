@@ -489,12 +489,40 @@ class TestGoogleJavaFormat(TempDirTestCase):
             "import java.util.List;",
             "public class Clean {",
             "    void f(int a, int b) {",
-            "        int x = a + b;",
+            "        if (a > b) {",
+            "            int x = a + b;",
+            "        } else if (a == b) {",
+            "            int y = 0;",
+            "        } else {",
+            "            int z = 1;",
+            "        }",
             "    }",
             "}",
         ]
         self.assertEqual(
             umr._check_builtin_google_java_format_lines(lines), [])
+
+    def test_missing_braces_on_if_and_else_detected(self):
+        lines = [
+            "package com.ex;",
+            "public class NoBraces {",
+            "    void f(int a) {",
+            "        if (a > 0) return;",
+            "        if (a < 0)",
+            "            a = 0;",
+            "        else",
+            "            a = 1;",
+            "    }",
+            "}",
+        ]
+        violations = umr._check_builtin_google_java_format_lines(lines)
+        by_line = {line_no: kind for line_no, kind, _ in violations}
+        self.assertIn(4, by_line)
+        self.assertIn("'if' statement must use '{}' braces", by_line[4])
+        self.assertIn(5, by_line)
+        self.assertIn("'if' statement must use '{}' braces", by_line[5])
+        self.assertIn(7, by_line)
+        self.assertIn("'else' statement must use '{}' braces", by_line[7])
 
     def test_check_google_java_format_toggle(self):
         f = write_file(
