@@ -87,6 +87,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.request
 from datetime import datetime
 
 # Reuse the masking + git helpers from the sibling whitespace cleaner so both
@@ -106,7 +107,7 @@ DEFAULT_REPORT_FILE = 'unused_java_report.txt'
 REPO_ROOT_DIR = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 GJF_DEFAULT_DIR = os.path.join(
-    REPO_ROOT_DIR, 'third_party', 'google-java-format-pre-commit')
+    REPO_ROOT_DIR, 'third_party', 'google-java-format')
 
 # ------------------------------------------------------------------------------
 # Declaration parsing
@@ -540,8 +541,9 @@ def is_method_used(name, decl_file, decl_line_idx, file_data):
 # Google Java Format (maciejwalkowiak/google-java-format-pre-commit)
 # ------------------------------------------------------------------------------
 def ensure_google_java_format_repo(repo_dir=None, repo_url=None):
-    """Ensure the third_party/google-java-format-pre-commit submodule is
-    initialized; run 'git submodule update --init' or shallow clone if missing.
+    """Ensure third_party/google-java-format contains google-java-format;
+    downloads the official all-deps JAR from Google GitHub Releases (or clones
+    a git repo if `repo_url` is a repository URL) when missing.
 
     Returns True if `repo_dir` exists and is non-empty, False otherwise.
     """
@@ -551,21 +553,20 @@ def ensure_google_java_format_repo(repo_dir=None, repo_url=None):
         return True
     if os.environ.get('TELUA_SKIP_GJF_CLONE') == '1':
         return False
-    if not shutil.which('git'):
-        return False
     try:
-        subprocess.run(
-            ['git', '-C', REPO_ROOT_DIR, 'submodule', 'update',
-             '--init', '--recursive'],
-            capture_output=True, text=True, timeout=60)
-        if os.path.isdir(target_dir) and os.listdir(target_dir):
-            return True
-        os.makedirs(os.path.dirname(target_dir), exist_ok=True)
+        os.makedirs(target_dir, exist_ok=True)
+        if url.lower().endswith('.jar'):
+            jar_name = os.path.basename(url) or 'google-java-format-all-deps.jar'
+            dest_jar = os.path.join(target_dir, jar_name)
+            urllib.request.urlretrieve(url, dest_jar)
+            return os.path.isfile(dest_jar) and os.path.getsize(dest_jar) > 0
+        if not shutil.which('git'):
+            return False
         res = subprocess.run(
             ['git', 'clone', '--depth', '1', url, target_dir],
             capture_output=True, text=True, timeout=60)
         return res.returncode == 0 and os.path.isdir(target_dir)
-    except (OSError, subprocess.SubprocessError):
+    except Exception:
         return False
 
 
@@ -616,7 +617,8 @@ def resolve_google_java_format_cmd(repo_dir=None, auto_clone=False):
         return ('bin', [env_path])
 
     target_dir = repo_dir or GJF_DEFAULT_DIR
-    if auto_clone and not os.path.isdir(target_dir):
+    if auto_clone and (not os.path.isdir(target_dir)
+                       or not os.listdir(target_dir)):
         ensure_google_java_format_repo(target_dir)
 
     found = _find_jar_or_script_in_dir(target_dir)
