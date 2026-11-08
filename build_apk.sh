@@ -439,6 +439,7 @@ print_help() {
     echo ""
     echo -e "\033[1;32mPrimary Subcommands:\033[0m"
     printf "  \033[1;37m%-28s\033[0m %s\n" "build, b" "Build active module, push APK to device, and reboot"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "test, t" "Run project unit test suite (shortcut for --test-mode true)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "init" "Initialize $CONFIG_FILE_NAME in current directory (\$PWD)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "install" "Install 'telua' & 'tel' aliases in ~/.bashrc & dependencies"
     printf "  \033[1;37m%-28s\033[0m %s\n" "info" "Display general build config, paths, and connected DUT"
@@ -527,6 +528,10 @@ parse_arguments() {
         case "$1" in
             build|--build|b)
                 # Primary build subcommand: consume it and parse subsequent options
+                shift
+                ;;
+            test|--test|t)
+                TEST_MODE="true"
                 shift
                 ;;
             --config|-p|--profile)

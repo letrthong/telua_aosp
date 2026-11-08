@@ -47,6 +47,7 @@ log_test "Testing help option (-h / --help)..."
 out_help=$("$MAIN_SCRIPT" -h 2>&1 || true)
 assert_success "Help output contains usage instructions" grep -E -q "Usage:.*telua" <<< "$out_help"
 assert_success "Help lists build subcommand" grep -q "build, b" <<< "$out_help"
+assert_success "Help lists test subcommand" grep -q "test, t" <<< "$out_help"
 assert_success "Help lists init subcommand" grep -q "init" <<< "$out_help"
 
 # Test 4: Find utilities
