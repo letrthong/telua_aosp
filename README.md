@@ -22,9 +22,11 @@ An automated developer workflow script for building and deploying privileged sys
 | `config/const_network.config` | Frequently used Network, Port & ADB over Wi-Fi commands cheatsheet (`telua network`) |
 | `src/telua_security.sh` | Security & SELinux diagnostics commands module (`telua sec <action>`) |
 | `src/telua_clean.sh` | Java source code hygiene & trailing whitespace cleaner (`telua clean-java`) |
-| `python/unused_methods_report.py` | Reports declared-but-unused Java methods (`telua clean-java report`) |
+| `config/const_clean_java.config` | Configuration for `clean_java.py` and `google-java-format` checks |
+| `python/clean_java.py` | Enforces Java whitespace, tab expansion, keyword spacing & blank-line hygiene |
+| `python/unused_methods_report.py` | 4-in-1 static Java report: unused methods, unused params, whitespace & `google-java-format` (`telua clean-java report`) |
 | `src/telua_completion.sh` | Bash and Zsh Tab Auto-completion engine (`tel <Tab><Tab>`) |
-| `config_crypto.py` | Encrypt / decrypt `apk.config` with a password (PBKDF2 + Fernet) |
+| `python/config_crypto.py` | Encrypt / decrypt `apk.config` with a password (PBKDF2 + Fernet) |
 | `requirements.txt` | Python package dependencies for `config_crypto.py` (`cryptography`) |
 
 ---
@@ -177,6 +179,8 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 |---|---|
 | *(none)*, `-h`, `--help`, `help` | Displays interactive help menu, subcommands, and configuration file paths |
 | `build`, `b`, `--build` | Full cycle: Build module + Push APK (if `ENABLE_DEPLOY="true"`) + Full Device Reboot |
+| `test`, `t`, `--test` | Run project unit test suite (shortcut for `--test-mode true`) |
+| `-p <name>`, `--profile <name>` | Switch `ACTIVE_PROJECT` profile in `apk.config` (persists to file) and build/run |
 | `--no-reboot` | Fast runtime restart (`stop && start`, ~10–15s) instead of full device reboot |
 | `--config <path>` | Explicitly specifies path to `apk.config` to load |
 | `--init`, `init` | Initializes `apk.config` in current directory (`$PWD`), auto-creates missing personal configs from `*.example`, enforces script permissions, and merges `apk_overlays.config` via `config_overlay.py` |
@@ -202,11 +206,13 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `docs [action]`, `doc [action]` | Sphinx Doc-as-Code manager (`init`, `build`, `clean`, `serve`, `check`) using template in `sphinx/` |
 | `--run`, `run [group]` | Executes multi-command sequential pipeline group from `config/const_multi_cli.config` (alias: `telua multi [group]`) |
 | `my [action]`, `proj [action]` | Executes personal private pipeline macro from `config/const_my_cli.config` (`telua my hello`) |
-| `clean-java [target]` | Cleans trailing whitespace in `.java` source files (`diff` \| `all` \| `<file|dir>`; alias: `--clean-java`) || `clean-java report [t]` | Reports unused Java methods & parameters (`t`: `diff` \| `all` \| `<file\|dir>`; default: current directory; saved to `unused_java_report.txt`) || `--find-file <pattern> [path]` | Searches for files by pattern in `[path]` (defaults to `.` if omitted) |
+| `clean-java [target]` | Cleans trailing whitespace in `.java` source files (`diff` \| `all` \| `<file\|dir>`; alias: `--clean-java`) |
+| `clean-java report [t]` | 4-in-1 static Java report: unused methods, unused params, whitespace & `google-java-format` violations (`t`: `diff` \| `all` \| `<file\|dir>`; saved to `unused_java_report.txt`) |
+| `--find-file <pattern> [path]` | Searches for files by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-dir <pattern> [path]` | Searches for directories by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-text <text> [path]` | Greps for text string in files under `[path]` (defaults to `.` if omitted) |
 | `replace <old> <new> [path]` | Finds & replaces text across files under `[path]` (defaults to `.` if omitted; alias: `--replace`) |
-| `--test-mode true|false` | Runs unit test suite instead of compiling the APK |
+| `--test-mode true\|false` | Runs unit test suite instead of compiling the APK (or use `tel t` / `tel test`) |
 
 #### Usage Examples:
 ```bash
@@ -214,6 +220,8 @@ telua                                 # View interactive help menu & available s
 telua build                           # Build active module, push APK, and reboot device
 telua build --no-reboot               # Fast deploy after editing Java/Kotlin code (~5-10s)
 telua b                               # Short alias for 'telua build'
+telua b -p car_audio                  # Switch ACTIVE_PROJECT to 'car_audio' in apk.config & build
+telua t                               # Run unit test suite (shortcut for 'telua --test-mode true')
 ./build_apk.sh --install              # Install/update 'telua' & 'tel' aliases + Tab completion in ~/.bashrc
 telua init                            # Initialize workspace & apply apk_overlays.config
 telua info                            # Inspect environment and device state
@@ -433,14 +441,16 @@ telua clean-java report <t> # Report với target: diff (mặc định) | all | 
 telua clean-java help       # Hiển thị hướng dẫn chi tiết
 ```
 
-**`telua clean-java report`** (python/unused_methods_report.py) gồm 2 phần:
-- **[1] Unused methods**: method được khai báo nhưng tên không xuất hiện lần nào trong code (đã loại bỏ string/comment), trong phạm vi module `src/` của file. Tool tự bỏ qua constructor, `@Override`, method interface/abstract, `main()` và các override của `Object` (toString/equals/hashCode).
+**`telua clean-java report`** (`python/unused_methods_report.py`) thực hiện kiểm tra tĩnh **4 phần** ở chế độ **Read-Only** (không bao giờ sửa file gốc):
+- **[1] Unused methods**: method được khai báo nhưng tên không xuất hiện lần nào trong code (đã loại bỏ string/comment), trong phạm vi module `src/` của file. Tool tự bỏ qua constructor, `@Override`, method interface/abstract, `main()`, các override của `Object` (`toString`/`equals`/`hashCode`) và các file/method JUnit test (`@Test`, `@RunWith`, `test/`/`androidTest/`).
 - **[2] Unused parameters**: parameter không được dùng trong thân method (warning `-Wunused-parameter`). Fix theo kiểu comment tên giữ lại type: `void f(int data, int /*spare*/)` — parameter đã comment sẽ bị bỏ qua ở lần chạy sau.
+- **[3] Whitespace violations**: bản xem trước (read-only preview) các lỗi khoảng trắng mà `telua clean-java` sẽ sửa: trailing whitespace, leading tab, khoảng cách từ khóa điều khiển (`if(x)` $\rightarrow$ `if (x)`, `if ( x )` $\rightarrow$ `if (x)`), dòng trống liên tiếp ($\ge 2$ dòng), và xuống dòng `CRLF`.
+- **[4] google-java-format violations**: kiểm tra định dạng chuẩn Google / AOSP Java Style (hỗ trợ `google-java-format` JAR tự động tải về `third_party/google-java-format/`, prebuilt của AOSP và bộ phân tích Google Java Style tích hợp sẵn trong Python; cấu hình tại `config/const_clean_java.config`).
 
 Report luôn được lưu ra file `unused_java_report.txt` (đổi tên bằng `--out FILE` khi gọi trực tiếp python). Kết quả là heuristic — cần review trước khi xóa code:
 
 ```bash
-telua clean-java report src/com/bosch/car/oem/focus/FocusInteraction.java
+telua clean-java report src/com/example/app/MyService.java
 #   line 602: wantsPauseInsteadOfDucking  (private)
 #   line 691: getInteractionString  (private static)
 ```
@@ -567,13 +577,15 @@ source ~/.bashrc
 
 **Tính năng nổi bật:**
 - **Nhận diện cả 2 alias:** Hoạt động bình đẳng khi gõ `telua ` hoặc `tel `.
-- **Gợi ý cấp 1 (Subcommands & Options):** Gõ `tel <Tab><Tab>` hiển thị danh sách toàn bộ lệnh chính (`build`, `car`, `dump`, `clean-java`, `run`, `replace`, `info`, `init`, `--platform`, `--ram-monitor`, ...).
+- **Gợi ý cấp 1 (Subcommands & Options):** Gõ `tel <Tab><Tab>` hiển thị danh sách toàn bộ lệnh chính (`build`, `b`, `test`, `t`, `car`, `dump`, `clean-java`, `run`, `replace`, `info`, `init`, `-p`, `--profile`, `--platform`, `--ram-monitor`, ...).
 - **Gợi ý ngữ cảnh chuyên sâu (Context-aware):**
+  - `tel b -p <Tab><Tab>` / `tel --profile <Tab><Tab>`: Tự động đọc danh sách profile từ `apk.config` (`oem_service`, `car_audio`, `vehicle_service`, ...).
+  - `tel docs init -t <Tab><Tab>` / `tel docs init --template <Tab><Tab>`: Gợi ý các template Sphinx (`basic`, `architecture`, `minimal`, `api`).
   - `tel car <Tab><Tab>`: Đọc động từ `const_car.config` và gợi ý `vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`, `status`.
   - `tel dump <Tab><Tab>`: Đọc động từ `const_dumpsys.config` và gợi ý `audio`, `car-service`, `car-audio`, `media`, `battery`, `activity`.
   - `tel sec <Tab><Tab>`: Đọc động từ `const_security.config` và gợi ý `status`, `perm`, `enforce`, `avc`, `privapp`, `appops`, `keystore`, `policy`, `root`, `unroot`, `remount`, `disable-verity`.
   - `tel run <Tab><Tab>`: Đọc động từ `const_multi_cli.config` và gợi ý `audio-cycle`, `dev-prep`, `remount-reboot`, `audio-dump`, `unittest`.
-  - `tel clean-java <Tab><Tab>`: Gợi ý `diff`, `all`, `help`.
+  - `tel clean-java <Tab><Tab>`: Gợi ý `diff`, `all`, `report`, `help`.
   - `tel --platform <Tab><Tab>`: Gợi ý `android`, `qnx`.
   - `tel --start-deploy <Tab><Tab>`: Gợi ý `true`, `false`.
 

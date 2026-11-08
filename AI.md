@@ -54,16 +54,17 @@ When the user asks you to perform a task, map their intent to the corresponding 
 | User Intent | Recommended Command | Notes |
 |---|---|---|
 | **View General Help & Commands** | `telua` or `telua -h` | Displays primary subcommands, build options, and config paths |
-| **Build & Deploy APK (Full Reboot)** | `telua build` (or `telua b`) | Builds module, pushes APK, reboots device, captures logcat |
+| **Build & Deploy APK (Full Reboot)** | `telua build` (or `telua b` / `tel b`) | Builds module, pushes APK, reboots device, captures logcat |
+| **Switch Profile & Build** | `telua b -p <profile>` (or `tel b -p car_audio`) | Updates `ACTIVE_PROJECT` in `apk.config` and runs build |
 | **Fast Build & Deploy (No Reboot)** | `telua build --no-reboot` | Uses `stop && start` runtime framework restart |
 | **Compile APK Only (No Push)** | `telua build --start-deploy false` | Skips ADB remount and device transfer |
 | **Check Environment & Device Status** | `telua info` (or `telua --info`) | Verifies lunch target, module name, paths, and connected DUT |
 | **Sync Source Code via Repo** | `telua --repo-sync` | Runs `repo sync` + executes post-sync hook |
 | **Sync with Clean Reset** | `telua --repo-sync --repo-reset -y` | Hard resets dirty repos before sync (AI must pass `-y`) |
-| **Run Unit Tests** | `telua --test-mode true` | Runs project test script configured in `apk.config` |
+| **Run Unit Tests** | `telua t` (or `tel t` / `telua test` / `telua --test-mode true`) | Runs project test script configured in `apk.config` |
 | **Find & Replace Text Across Files** | `telua replace <old> <new> [path]` | Fast literal string replacement across directory or single file |
-| **Clean Java Trailing Whitespace** | `telua clean-java [diff\|all\|path]` | Strips trailing whitespace & enforces LF on Java source files |
-| **Report Unused Java Methods** | `telua clean-java report [diff\|all\|path]` | Lists unused methods & parameters; saved to `unused_java_report.txt` |
+| **Clean Java Trailing Whitespace** | `telua clean-java [diff\|all\|path]` | Strips trailing whitespace, expands tabs, normalizes `if (x)` & enforces LF |
+| **Report Unused Java Methods & Style** | `telua clean-java report [diff\|all\|path]` | 4-in-1 read-only report: unused methods, unused params, whitespace & `google-java-format` (`unused_java_report.txt`) |
 | **Sphinx Doc-as-Code Manager** | `telua docs [init\|build\|clean\|serve\|check]` | Initializes template, validates images/sections & builds HTML |
 | **Security & SELinux Diagnostics** | `telua sec [action]` | Controls SELinux (status, perm, enforce), dumps AVC denials & privapp |
 | **Install Global CLI Alias & Completion** | `./build_apk.sh --install` | Adds `alias telua=...`, `alias tel=...`, and Tab Auto-completion into `~/.bashrc` |
@@ -122,21 +123,27 @@ telua clean-java all      # Recursively cleans all .java files across workspace
 telua clean-java <path>   # Cleans a specific .java file or target directory
 ```
 
-### 4.4b Unused Method Report (`telua clean-java report`)
-Before deleting "dead" code, verify with the heuristic report (searches usages across the file's module `src/` tree, ignoring strings/comments; skips constructors, `@Override`, interface/abstract methods, `main()`, `Object` overrides, and test code - files under `tests/`/`androidTest/`/`test/` or with JUnit hints like `@Test`/`org.junit` are framework-invoked and excluded from the report, while still counting as usage sources for production methods):
+### 4.4b Unused Method, Parameter, Whitespace & Google-Java-Format Report (`telua clean-java report`)
+Before deleting "dead" code or committing Java changes, verify with the 4-in-1 read-only report:
+- **[1] Unused methods**: Searches usages across the file's module `src/` tree, ignoring strings/comments; skips constructors, `@Override`, interface/abstract methods, `main()`, `Object` overrides, and JUnit test code (`@Test`, `@RunWith`, `test/`/`androidTest/`).
+- **[2] Unused parameters**: Lists parameters unused in their method body; fix with the `int /*paramName*/` comment-out idiom.
+- **[3] Whitespace violations**: Read-only preview of what `telua clean-java` would fix (trailing whitespace, leading tabs, `if(x)` $\rightarrow$ `if (x)`, blank line runs, CRLF).
+- **[4] google-java-format violations**: Read-only Google/AOSP Java Style check (`google-java-format` JAR/prebuilt + built-in Google Java Style analyzer).
 ```bash
 telua clean-java report                       # Report all .java files under the CURRENT directory (default, read-only)
 telua clean-java report diff                  # Report Git-modified .java files only
 telua clean-java report all                   # Report all .java files in workspace
 telua clean-java report <file.java>           # Report one specific file
 ```
-The report is always saved to `./unused_java_report.txt` (override with `--out FILE` when calling the python helper directly). Section [2] lists unused parameters - fix with the `int /*paramName*/` comment-out idiom to suppress the warning.
+The report is always saved to `./unused_java_report.txt` (override with `--out FILE` when calling the python helper directly).
 
 ### 4.5 Tab Auto-completion Engine (`src/telua_completion.sh`)
 Supports both `telua` and short alias `tel` on Bash & Zsh:
 ```bash
 ./build_apk.sh --install  # Automatically installs both aliases & completion into ~/.bashrc
-tel <Tab><Tab>            # Subcommands: build, car, dump, clean-java, docs, run, replace...
+tel <Tab><Tab>            # Subcommands: build, b, test, t, car, dump, clean-java, docs, run, replace...
+tel b -p <Tab><Tab>       # Profiles from apk.config: oem_service, car_audio, vehicle_service
+tel docs init -t <Tab><Tab> # Sphinx templates: basic, architecture, minimal, api
 tel car <Tab><Tab>        # Car actions: vol-up, vol-down, vol-mute, ks, ks-stop, status
 tel dump <Tab><Tab>       # Dumpsys targets: audio, car-service, car-audio, media, battery...
 tel docs <Tab><Tab>       # Docs actions: start, serve, sync, metadata, build, check, clean, init
