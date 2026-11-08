@@ -146,6 +146,7 @@ assert_success "Report skips JUnit test files (content)" bash -c '! grep -q "pla
 assert_success "Report skips test directories (path)" bash -c '! grep -q "frameworkInvokedToo  (" <<< "$1"' bash <<< "$out_report2"
 assert_success "Report still finds production dead method" grep -q "deadMethod" <<< "$out_report2"
 assert_success "Report includes [4] google-java-format violations section" grep -q "\[4\] google-java-format violations" <<< "$out_report2"
+assert_success "Report includes [5] Unused imports section" grep -q "\[5\] Unused imports" <<< "$out_report2"
 rm -rf "$TMP_REPORT_DIR"
 
 # Test 4e: Profile switching (-p / --profile) updates apk.config and rejects invalid profile

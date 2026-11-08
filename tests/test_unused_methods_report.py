@@ -546,6 +546,51 @@ class TestGoogleJavaFormat(TempDirTestCase):
 
 
 # ------------------------------------------------------------------------------
+# [5] Unused imports & main(String[] args) parameter exemption
+# ------------------------------------------------------------------------------
+class TestUnusedImports(TempDirTestCase):
+    def test_find_unused_imports_in_lines(self):
+        lines = [
+            "package com.ex;",
+            "import java.util.List;",
+            "import java.util.Map;",
+            "import java.io.IOException;",
+            "import static java.util.Collections.emptyList;",
+            "import static java.util.Collections.singletonList;",
+            "/**",
+            " * Throws {@link IOException} when needed.",
+            " */",
+            "public class Sample {",
+            "    // Map is mentioned in a comment and string \"Map\" only",
+            "    private String note = \"Map\";",
+            "    private List<String> items = emptyList();",
+            "}",
+        ]
+        unused = umr._find_unused_imports_in_lines(lines)
+        targets = [(line_no, full) for line_no, full, _, _ in unused]
+        self.assertEqual(targets, [
+            (3, "java.util.Map"),
+            (6, "java.util.Collections.singletonList"),
+        ])
+
+    def test_report_includes_section_5_unused_imports_and_skips_main_args(self):
+        src = os.path.join(self.test_dir, "src", "com", "ex")
+        f = write_file(os.path.join(src, "Main.java"), """\
+package com.ex;
+import java.util.Set;
+public class Main {
+    public static void main(String[] args) {
+        System.out.println("Hello");
+    }
+}
+""")
+        report_text = "\n".join(umr.build_report_lines([f]))
+        self.assertIn("[5] Unused imports: 1", report_text)
+        self.assertIn("unused import 'java.util.Set'", report_text)
+        self.assertNotIn("unused parameter 'args'", report_text)
+
+
+# ------------------------------------------------------------------------------
 # main() CLI
 # ------------------------------------------------------------------------------
 class TestMainCli(TempDirTestCase):

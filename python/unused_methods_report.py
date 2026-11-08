@@ -405,7 +405,7 @@ def scan_java_file(file_path):
             # (@Test/@Before/...) are skipped: the runner invokes them.
             is_test_method = test_pending > 0
             test_pending = 0  # annotation consumed by this declaration
-            if not is_sync_block and not is_test_method:
+            if not is_sync_block and not is_test_method and name != 'main':
                 pm = re.search(re.escape(name) + r'\s*\(', masked)
                 if pm is not None:
                     _collect_params_and_body(
@@ -1013,6 +1013,263 @@ def check_google_java_format(scope_files, runner=None, auto_clone=False):
 
 
 # ------------------------------------------------------------------------------
+# [5] Unused Imports Detection
+# ------------------------------------------------------------------------------
+IMPORT_DECL_RE = re.compile(
+    r'^\s*import\s+(static\s+)?([\w.]+)\.([A-Za-z_$][\w$]*)\s*;')
+JAVADOC_TAG_RE = re.compile(
+    r'(?:@link|@linkplain|@see|@throws|@exception|@value)\s+#?'
+    r'([A-Za-z_$][\w$.#]*)')
+
+
+def _find_unused_imports_in_lines(raw_lines):
+    """Detect unused import statements in `raw_lines`.
+
+    Returns a list of (line_no_1based, import_target, simple_name, src_line).
+    Wildcard imports ('import pkg.*;') are skipped here because they are
+    already reported as style violations in section [4].
+    An import is considered used if its simple identifier appears in any
+    non-import code line (outside strings and comments) or in a Javadoc
+    reference tag (@link, @see, @throws, @exception, @value).
+    """
+    masked_lines = []
+    in_block = False
+    for raw in raw_lines:
+        line = raw.rstrip('\r\n')
+        masked, in_block = _mask_non_code(line, in_block)
+        masked_lines.append(masked)
+
+    imports = []
+    import_line_indices = set()
+    for idx, masked in enumerate(masked_lines):
+        m = IMPORT_DECL_RE.match(masked)
+        if m:
+            pkg_prefix = m.group(2)
+            simple_name = m.group(3)
+            full_target = f"{pkg_prefix}.{simple_name}"
+            imports.append((idx, idx + 1, full_target, simple_name,
+                            raw_lines[idx].rstrip('\r\n')))
+            import_line_indices.add(idx)
+
+    if not imports:
+        return []
+
+    code_lines = []
+    javadoc_idents = set()
+    for idx, masked in enumerate(masked_lines):
+        if idx in import_line_indices:
+            continue
+        stripped = masked.strip()
+        if stripped.startswith('package '):
+            continue
+        if stripped:
+            code_lines.append(masked)
+        raw_line = raw_lines[idx]
+        for jm in JAVADOC_TAG_RE.finditer(raw_line):
+            ref = jm.group(1)
+            head = re.split(r'[.#]', ref)[0]
+            if head:
+                javadoc_idents.add(head)
+
+    searchable_code = '\n'.join(code_lines)
+    unused_imports = []
+    for _idx, line_no, full_target, simple_name, src_line in imports:
+        if simple_name in javadoc_idents:
+            continue
+        if not _ident_pattern(simple_name).search(searchable_code):
+            unused_imports.append((line_no, full_target, simple_name, src_line))
+
+    return unused_imports
+
+
+def check_unused_imports(scope_files):
+    """Scan `scope_files` for unused imports and return a dict mapping
+    abspath -> [(line_no, full_target, simple_name, src_line), ...]."""
+    unused_by_file = {}
+    for path in sorted(scope_files):
+        abspath = os.path.abspath(path)
+        try:
+            with open(abspath, 'r', encoding='utf-8', errors='replace') as f:
+                raw_lines = f.read().splitlines()
+        except OSError:
+            continue
+        found = _find_unused_imports_in_lines(raw_lines)
+        if found:
+            unused_by_file[abspath] = found
+    return unused_by_file
+
+
+# ------------------------------------------------------------------------------
+# [6] Unused Private Fields Detection
+# ------------------------------------------------------------------------------
+FIELD_EXEMPT_ANNOTATION_RE = re.compile(
+    r'^\s*@(?:Mock|Spy|Captor|Inject|Autowired|Keep|SerializedName'
+    r'|BindView|Rule|ClassRule|SuppressWarnings)\b')
+FIELD_MODIFIER_PREFIX_RE = re.compile(
+    r'^(?:(?:private|public|protected|static|final|volatile|transient)\s+)+')
+FIELD_EXEMPT_NAMES = {'serialVersionUID', 'CREATOR'}
+
+
+def _field_visibility_label(mods):
+    parts = ['private']
+    for m in ('static', 'final', 'volatile', 'transient'):
+        if m in mods:
+            parts.append(m)
+    return ' '.join(parts)
+
+
+def _find_unused_private_fields_in_lines(raw_lines, skip_if_test=True):
+    """Detect unused private fields/constants in `raw_lines`.
+
+    Returns a list of (line_no_1based, field_name, vis_label, src_line).
+    """
+    masked_lines = []
+    in_block = False
+    for raw in raw_lines:
+        line = raw.rstrip('\r\n')
+        masked, in_block = _mask_non_code(line, in_block)
+        masked_lines.append(masked)
+
+    if skip_if_test and is_test_file('', masked_lines):
+        return []
+
+    candidates = []
+    exempt_pending = 0
+    for idx, masked in enumerate(masked_lines):
+        stripped = masked.strip()
+        if not stripped:
+            continue
+        if FIELD_EXEMPT_ANNOTATION_RE.match(stripped):
+            exempt_pending = 3
+        code = stripped
+        while code.startswith('@'):
+            m = LEADING_ANNOTATION_RE.match(code)
+            if not m:
+                break
+            if FIELD_EXEMPT_ANNOTATION_RE.match(code[:m.end()]):
+                exempt_pending = 3
+            code = code[m.end():].strip()
+        if not code:
+            continue
+
+        m_mod = FIELD_MODIFIER_PREFIX_RE.match(code)
+        if not m_mod:
+            if exempt_pending > 0:
+                exempt_pending -= 1
+            continue
+
+        mod_tokens = set(PREFIX_TOKEN_RE.findall(m_mod.group(0)))
+        if 'private' not in mod_tokens:
+            if exempt_pending > 0:
+                exempt_pending -= 1
+            continue
+
+        if re.search(r'\b(?:class|interface|enum|record)\b', code):
+            exempt_pending = 0
+            continue
+
+        if '=' in code:
+            lhs = code.split('=', 1)[0].strip()
+        elif ';' in code:
+            lhs = code.split(';', 1)[0].strip()
+        else:
+            lhs = ''
+
+        if not lhs or '(' in lhs or '{' in lhs or ';' in lhs:
+            if exempt_pending > 0:
+                exempt_pending -= 1
+            continue
+
+        lhs_no_arr = re.sub(r'(?:\[\s*\])+\s*$', '', lhs).rstrip()
+        nm = IDENT_TAIL_RE.search(lhs_no_arr)
+        if not nm:
+            if exempt_pending > 0:
+                exempt_pending -= 1
+            continue
+
+        field_name = nm.group(1)
+        before_name = lhs_no_arr[:nm.start()].strip()
+        type_tokens = [
+            t for t in PREFIX_TOKEN_RE.findall(before_name)
+            if t not in MODIFIER_WORDS
+        ]
+        if (not type_tokens
+                or field_name in CONTROL_KEYWORDS
+                or field_name in FIELD_EXEMPT_NAMES
+                or exempt_pending > 0):
+            exempt_pending = 0
+            continue
+
+        exempt_pending = 0
+        candidates.append((
+            idx,
+            idx + 1,
+            field_name,
+            _field_visibility_label(mod_tokens),
+            raw_lines[idx].rstrip('\r\n'),
+        ))
+
+    if not candidates:
+        return []
+
+    javadoc_idents = set()
+    for raw_line in raw_lines:
+        for jm in JAVADOC_TAG_RE.finditer(raw_line):
+            ref = jm.group(1)
+            for part in re.split(r'[.#]', ref):
+                if part:
+                    javadoc_idents.add(part)
+
+    unused_fields = []
+    for decl_idx, line_no, field_name, vis_label, src_line in candidates:
+        if field_name in javadoc_idents:
+            continue
+        pat = _ident_pattern(field_name)
+        used = False
+        for idx, masked in enumerate(masked_lines):
+            if idx == decl_idx:
+                # Check if referenced in a second statement or RHS on same line
+                rhs = masked.split('=', 1)[1] if '=' in masked else ''
+                after_semi = masked.split(';', 1)[1] if ';' in masked else ''
+                if pat.search(rhs) or pat.search(after_semi):
+                    used = True
+                    break
+                continue
+            if pat.search(masked):
+                used = True
+                break
+        if not used:
+            unused_fields.append((line_no, field_name, vis_label, src_line))
+
+    return unused_fields
+
+
+def check_unused_private_fields(scope_files):
+    """Scan non-test `scope_files` for unused private fields and return a dict
+    mapping abspath -> [(line_no, field_name, vis_label, src_line), ...]."""
+    unused_by_file = {}
+    for path in sorted(scope_files):
+        abspath = os.path.abspath(path)
+        try:
+            with open(abspath, 'r', encoding='utf-8', errors='replace') as f:
+                raw_lines = f.read().splitlines()
+        except OSError:
+            continue
+        masked_lines = []
+        in_block = False
+        for raw in raw_lines:
+            masked, in_block = _mask_non_code(raw.rstrip('\r\n'), in_block)
+            masked_lines.append(masked)
+        if is_test_file(abspath, masked_lines):
+            continue
+        found = _find_unused_private_fields_in_lines(
+            raw_lines, skip_if_test=False)
+        if found:
+            unused_by_file[abspath] = found
+    return unused_by_file
+
+
+# ------------------------------------------------------------------------------
 # Report
 # ------------------------------------------------------------------------------
 def build_report(target_files):
@@ -1074,6 +1331,8 @@ def build_report_lines(target_files, gjf_runner=None, auto_clone_gjf=False):
     scope_files = collect_java_files(scope_dirs)
     gjf_by_file, gjf_available = check_google_java_format(
         scope_files, runner=gjf_runner, auto_clone=auto_clone_gjf)
+    unused_imports_by_file = check_unused_imports(scope_files)
+    unused_fields_by_file = check_unused_private_fields(scope_files)
     cwd = os.getcwd()
 
     def rel(path):
@@ -1157,11 +1416,27 @@ def build_report_lines(target_files, gjf_runner=None, auto_clone_gjf=False):
                     lines.append(f"                 > {shown}")
     lines.append("")
 
+    unused_imports_total = sum(len(v) for v in unused_imports_by_file.values())
+    lines.append(f"[5] Unused imports: {unused_imports_total}")
+    if unused_imports_by_file:
+        for path in sorted(unused_imports_by_file):
+            lines.append(f"{rel(path)}")
+            for line_no, full_target, _simple, src in unused_imports_by_file[path]:
+                lines.append(
+                    f"    line {line_no:>5}: unused import '{full_target}'")
+                if src:
+                    shown = _expand_leading_tabs(src, TAB_WIDTH).rstrip()
+                    if len(shown) > 100:
+                        shown = shown[:97] + '...'
+                    lines.append(f"                 > {shown}")
+    lines.append("")
+
     lines.append("-" * 78)
     lines.append(f"Summary: {len(unused)} unused method(s), "
                  f"{len(unused_params)} unused parameter(s), "
                  f"{ws_total} whitespace violation(s), "
-                 f"{gjf_total} google-java-format violation(s). Review before "
+                 f"{gjf_total} google-java-format violation(s), "
+                 f"{unused_imports_total} unused import(s). Review before "
                  f"deleting (heuristic report, see --help).")
     lines.append("=" * 78)
     return lines
