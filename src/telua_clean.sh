@@ -82,15 +82,15 @@ ensure_google_java_format_pre_commit() {
     [ -n "${MASTER_SCRIPT_DIR:-}" ] && [ -d "${MASTER_SCRIPT_DIR}" ] && repo_dir="$MASTER_SCRIPT_DIR"
     local gjf_dir="$repo_dir/third_party/google-java-format"
     local gjf_jar="$gjf_dir/google-java-format-${GJF_JAR_VERSION}-all-deps.jar"
-    if [ -f "$gjf_jar" ]; then
+    if [ -s "$gjf_jar" ]; then
         return 0
     fi
     mkdir -p "$gjf_dir"
     echo "[INFO] Downloading google-java-format-${GJF_JAR_VERSION}-all-deps.jar into $gjf_dir ..."
     if command -v curl >/dev/null 2>&1; then
-        curl -fL "$GJF_JAR_URL" -o "$gjf_jar" || rm -f "$gjf_jar"
+        curl -fksSL "$GJF_JAR_URL" -o "$gjf_jar" || rm -f "$gjf_jar"
     elif command -v wget >/dev/null 2>&1; then
-        wget -qO "$gjf_jar" "$GJF_JAR_URL" || rm -f "$gjf_jar"
+        wget --no-check-certificate -qO "$gjf_jar" "$GJF_JAR_URL" || rm -f "$gjf_jar"
     fi
 }
 

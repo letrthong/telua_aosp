@@ -144,7 +144,21 @@ assert_success "Report skips @Test-annotated methods" bash -c '! grep -q "framew
 assert_success "Report skips JUnit test files (content)" bash -c '! grep -q "plainHelper  (" <<< "$1"' bash <<< "$out_report2"
 assert_success "Report skips test directories (path)" bash -c '! grep -q "frameworkInvokedToo  (" <<< "$1"' bash <<< "$out_report2"
 assert_success "Report still finds production dead method" grep -q "deadMethod" <<< "$out_report2"
+assert_success "Report includes [4] google-java-format violations section" grep -q "\[4\] google-java-format violations" <<< "$out_report2"
 rm -rf "$TMP_REPORT_DIR"
+
+# Test 4e: Profile switching (-p / --profile) updates apk.config and rejects invalid profile
+log_test "Testing profile switch (-p / --profile)..."
+TMP_PROF_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_profile_test.XXXXXX")
+cp "$REPO_ROOT/apk.config" "$TMP_PROF_DIR/apk.config"
+out_prof=$("$MAIN_SCRIPT" info --config "$TMP_PROF_DIR/apk.config" -p car_audio 2>&1 || true)
+assert_success "Profile switch (-p car_audio) updates ACTIVE_PROJECT in apk.config" grep -q 'ACTIVE_PROJECT="car_audio"' "$TMP_PROF_DIR/apk.config"
+assert_success "Info output reflects switched CarAudioService module" grep -q "CarAudioService" <<< "$out_prof"
+
+out_bad_prof=$("$MAIN_SCRIPT" info --config "$TMP_PROF_DIR/apk.config" -p non_existent_profile 2>&1 || true)
+assert_success "Invalid profile is rejected with error" grep -q "Unknown ACTIVE_PROJECT" <<< "$out_bad_prof"
+assert_success "Invalid profile does not corrupt apk.config" grep -q 'ACTIVE_PROJECT="car_audio"' "$TMP_PROF_DIR/apk.config"
+rm -rf "$TMP_PROF_DIR"
 
 # Test 5: Safe personal config backup and restore logic
 log_test "Testing personal config backup and restore isolation..."
@@ -206,6 +220,21 @@ TMP_HOME=$(mktemp -d "${TMPDIR:-/tmp}/telua_home_test.XXXXXX")
 )
 assert_success "Install adds aliases and tab completion" [ $? -eq 0 ]
 rm -rf "$TMP_HOME"
+
+# Test 6b: Tab completion for -p/--profile and -t/--template
+log_test "Testing tab completion for -p/--profile and -t/--template..."
+(
+    source "$REPO_ROOT/src/telua_completion.sh"
+    COMP_WORDS=(tel b -p "")
+    COMP_CWORD=3
+    _telua_completions
+    echo "${COMPREPLY[*]}" | grep -q "car_audio" && \
+    COMP_WORDS=(tel docs init -t "") && \
+    COMP_CWORD=4 && \
+    _telua_completions && \
+    echo "${COMPREPLY[*]}" | grep -q "architecture"
+)
+assert_success "Tab completion resolves -p profiles and -t templates" [ $? -eq 0 ]
 
 # Test 7: Documentation module (telua docs help, init, check)
 log_test "Testing documentation module (telua docs help, init, check)..."

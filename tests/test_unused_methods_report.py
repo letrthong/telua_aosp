@@ -449,6 +449,73 @@ class TestGoogleJavaFormat(TempDirTestCase):
             self.assertEqual(f.read(), before,
                              "hook check must never modify the original file")
 
+    def test_builtin_google_java_format_checker(self):
+        lines = [
+            "package com.ex;",
+            "import java.util.*;",
+            "public class Sample{",
+            "    void f(int a,int b)",
+            "    {",
+            "        int x = 1; int y = 2;",
+            "    }",
+            "}",
+        ]
+        violations = umr._check_builtin_google_java_format_lines(lines)
+        kinds = [k for _, k, _ in violations]
+        self.assertTrue(any("wildcard import" in k for k in kinds))
+        self.assertTrue(any("missing space before '{'" in k for k in kinds))
+        self.assertTrue(any("missing space after ','" in k for k in kinds))
+        self.assertTrue(any("'{' should sit at end" in k for k in kinds))
+        self.assertTrue(any("multiple statements" in k for k in kinds))
+
+    def test_builtin_line_length_and_import_exemption(self):
+        long_import = "import " + "a." * 50 + "Foo;"
+        long_code = "        String s = \"" + "x" * 95 + "\";"
+        lines = [
+            "package com.ex;",
+            long_import,
+            "public class Sample {",
+            long_code,
+            "}",
+        ]
+        violations = umr._check_builtin_google_java_format_lines(lines)
+        self.assertEqual(len(violations), 1)
+        self.assertEqual(violations[0][0], 4)
+        self.assertIn("> 100 columns", violations[0][1])
+
+    def test_builtin_clean_file_zero_violations(self):
+        lines = [
+            "package com.ex;",
+            "import java.util.List;",
+            "public class Clean {",
+            "    void f(int a, int b) {",
+            "        int x = a + b;",
+            "    }",
+            "}",
+        ]
+        self.assertEqual(
+            umr._check_builtin_google_java_format_lines(lines), [])
+
+    def test_check_google_java_format_toggle(self):
+        f = write_file(
+            os.path.join(self.test_dir, "Bad.java"),
+            "package com.ex;\npublic class Bad{\n}\n")
+        old_flag = umr.ENABLE_GOOGLE_JAVA_FORMAT
+        try:
+            umr.ENABLE_GOOGLE_JAVA_FORMAT = True
+            gjf_map, avail = umr.check_google_java_format(
+                [f], runner=("builtin", []))
+            self.assertTrue(avail)
+            self.assertIn(os.path.abspath(f), gjf_map)
+
+            umr.ENABLE_GOOGLE_JAVA_FORMAT = False
+            gjf_map_off, avail_off = umr.check_google_java_format(
+                [f], runner=("builtin", []))
+            self.assertFalse(avail_off)
+            self.assertEqual(gjf_map_off, {})
+        finally:
+            umr.ENABLE_GOOGLE_JAVA_FORMAT = old_flag
+
 
 # ------------------------------------------------------------------------------
 # main() CLI

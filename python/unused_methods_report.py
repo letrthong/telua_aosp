@@ -538,18 +538,108 @@ def is_method_used(name, decl_file, decl_line_idx, file_data):
 
 
 # ------------------------------------------------------------------------------
-# Google Java Format (maciejwalkowiak/google-java-format-pre-commit)
+# Google Java Format
 # ------------------------------------------------------------------------------
+GJF_JVM_EXPORTS = [
+    '--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED',
+    '--add-exports=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED',
+    '--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED',
+    '--add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED',
+    '--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED',
+    '--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED',
+]
+
+
+def _iter_ancestor_dirs(start_dirs):
+    """Yield ancestor directories of `start_dirs` up to 8 levels."""
+    seen = set()
+    for start in start_dirs:
+        if not start:
+            continue
+        cur = os.path.abspath(start)
+        for _ in range(8):
+            if cur not in seen and os.path.isdir(cur):
+                seen.add(cur)
+                yield cur
+            parent = os.path.dirname(cur)
+            if parent == cur:
+                break
+            cur = parent
+
+
+def _find_java_bin():
+    """Find a runnable 'java' binary from PATH, JAVA_HOME, /usr/lib/jvm, or
+    AOSP prebuilts."""
+    sys_java = shutil.which('java')
+    if sys_java:
+        return sys_java
+    java_home = os.environ.get('JAVA_HOME', '').strip()
+    if java_home:
+        cand = os.path.join(java_home, 'bin', 'java')
+        if os.path.isfile(cand):
+            return cand
+    for jvm_root in ('/usr/lib/jvm', '/usr/java'):
+        if os.path.isdir(jvm_root):
+            for entry in sorted(os.listdir(jvm_root), reverse=True):
+                cand = os.path.join(jvm_root, entry, 'bin', 'java')
+                if os.path.isfile(cand):
+                    return cand
+    sdk_java = os.path.join(
+        os.path.expanduser('~'), '.sdkman', 'candidates', 'java',
+        'current', 'bin', 'java')
+    if os.path.isfile(sdk_java):
+        return sdk_java
+    roots = [os.environ.get('ANDROID_BUILD_TOP', ''), os.getcwd(), REPO_ROOT_DIR]
+    for anc in _iter_ancestor_dirs(roots):
+        for prefix in ('', os.path.join('android', 'qssi'), 'android'):
+            jdk_root = os.path.join(anc, prefix, 'prebuilts', 'jdk')
+            if not os.path.isdir(jdk_root):
+                continue
+            for jdk_dir in sorted(os.listdir(jdk_root), reverse=True):
+                cand = os.path.join(
+                    jdk_root, jdk_dir, 'linux-x86', 'bin', 'java')
+                if os.path.isfile(cand):
+                    return cand
+    return None
+
+
+def _build_jar_runner(jar_path):
+    """Return ('jar', cmd_list) for `jar_path` if a java binary is available."""
+    java_bin = _find_java_bin()
+    if not java_bin:
+        return None
+    return ('jar', [java_bin] + GJF_JVM_EXPORTS + ['-jar', jar_path])
+
+
+def _find_aosp_google_java_format():
+    """Search AOSP prebuilts/tools/common/google-java-format for a runner."""
+    roots = [os.environ.get('ANDROID_BUILD_TOP', ''), os.getcwd(), REPO_ROOT_DIR]
+    for anc in _iter_ancestor_dirs(roots):
+        for prefix in ('', os.path.join('android', 'qssi'), 'android'):
+            gjf_dir = os.path.join(
+                anc, prefix, 'prebuilts', 'tools', 'common',
+                'google-java-format')
+            if not os.path.isdir(gjf_dir):
+                continue
+            found = _find_jar_or_script_in_dir(gjf_dir)
+            if found is not None:
+                return found
+            bin_path = os.path.join(gjf_dir, 'google-java-format')
+            if os.path.isfile(bin_path):
+                return ('bin', [bin_path])
+    return None
+
+
 def ensure_google_java_format_repo(repo_dir=None, repo_url=None):
     """Ensure third_party/google-java-format contains google-java-format;
     downloads the official all-deps JAR from Google GitHub Releases (or clones
     a git repo if `repo_url` is a repository URL) when missing.
 
-    Returns True if `repo_dir` exists and is non-empty, False otherwise.
+    Returns True if a runner is present in `repo_dir`, False otherwise.
     """
     target_dir = repo_dir or GJF_DEFAULT_DIR
     url = repo_url or GOOGLE_JAVA_FORMAT_REPO_URL
-    if os.path.isdir(target_dir) and os.listdir(target_dir):
+    if _find_jar_or_script_in_dir(target_dir) is not None:
         return True
     if os.environ.get('TELUA_SKIP_GJF_CLONE') == '1':
         return False
@@ -558,7 +648,21 @@ def ensure_google_java_format_repo(repo_dir=None, repo_url=None):
         if url.lower().endswith('.jar'):
             jar_name = os.path.basename(url) or 'google-java-format-all-deps.jar'
             dest_jar = os.path.join(target_dir, jar_name)
-            urllib.request.urlretrieve(url, dest_jar)
+            try:
+                import ssl
+                ctx = ssl._create_unverified_context()
+                with urllib.request.urlopen(url, context=ctx, timeout=60) as r, \
+                        open(dest_jar, 'wb') as out_f:
+                    shutil.copyfileobj(r, out_f)
+            except Exception:
+                if shutil.which('curl'):
+                    subprocess.run(
+                        ['curl', '-fksSL', url, '-o', dest_jar],
+                        capture_output=True, timeout=60)
+                elif shutil.which('wget'):
+                    subprocess.run(
+                        ['wget', '--no-check-certificate', '-qO', dest_jar, url],
+                        capture_output=True, timeout=60)
             return os.path.isfile(dest_jar) and os.path.getsize(dest_jar) > 0
         if not shutil.which('git'):
             return False
@@ -582,7 +686,8 @@ def _find_jar_or_script_in_dir(directory):
             full = os.path.join(root, fn)
             low = fn.lower()
             if low.endswith('.jar') and 'google-java-format' in low:
-                jars.append(full)
+                if os.path.getsize(full) > 0:
+                    jars.append(full)
             elif (low in ('run-google-java-format.sh',
                           'google-java-format.sh',
                           'google-java-format',
@@ -590,8 +695,10 @@ def _find_jar_or_script_in_dir(directory):
                           'entrypoint.sh')
                   or (low.endswith('.sh') and 'format' in low)):
                 scripts.append(full)
-    if jars and shutil.which('java'):
-        return ('jar', ['java', '-jar', jars[-1]])
+    if jars:
+        runner = _build_jar_runner(jars[-1])
+        if runner is not None:
+            return runner
     if scripts:
         script = scripts[0]
         if script.endswith('.sh') and shutil.which('bash'):
@@ -605,23 +712,26 @@ def resolve_google_java_format_cmd(repo_dir=None, auto_clone=False):
 
     Lookup order:
       1. GOOGLE_JAVA_FORMAT_PATH environment variable (.jar or binary/script).
-      2. ~/google-java-format-pre-commit (cloning first when auto_clone=True).
-      3. ~/.cache/google-java-format (cached .jar downloaded by pre-commit).
-      4. $ANDROID_BUILD_TOP/prebuilts/tools/common/google-java-format/...
+      2. AOSP prebuilts (prebuilts/tools/common/google-java-format/...).
+      3. third_party/google-java-format (auto-downloading JAR if auto_clone).
+      4. ~/.cache/google-java-format (cached .jar downloaded by pre-commit).
       5. 'google-java-format' on system PATH.
     """
     env_path = os.environ.get('GOOGLE_JAVA_FORMAT_PATH', '').strip()
     if env_path and os.path.isfile(env_path):
         if env_path.lower().endswith('.jar'):
-            return ('jar', ['java', '-jar', env_path])
+            return _build_jar_runner(env_path)
         return ('bin', [env_path])
 
-    target_dir = repo_dir or GJF_DEFAULT_DIR
-    if auto_clone and (not os.path.isdir(target_dir)
-                       or not os.listdir(target_dir)):
-        ensure_google_java_format_repo(target_dir)
+    aosp_found = _find_aosp_google_java_format()
+    if aosp_found is not None:
+        return aosp_found
 
+    target_dir = repo_dir or GJF_DEFAULT_DIR
     found = _find_jar_or_script_in_dir(target_dir)
+    if found is None and auto_clone:
+        ensure_google_java_format_repo(target_dir)
+        found = _find_jar_or_script_in_dir(target_dir)
     if found is not None:
         return found
 
@@ -631,18 +741,81 @@ def resolve_google_java_format_cmd(repo_dir=None, auto_clone=False):
     if found_cache is not None:
         return found_cache
 
-    android_top = os.environ.get('ANDROID_BUILD_TOP', '').strip()
-    if android_top:
-        aosp_bin = os.path.join(
-            android_top, 'prebuilts', 'tools', 'common',
-            'google-java-format', 'google-java-format')
-        if os.path.isfile(aosp_bin):
-            return ('bin', [aosp_bin])
-
     sys_bin = shutil.which('google-java-format')
     if sys_bin:
         return ('bin', [sys_bin])
-    return None
+    return ('builtin', [])
+
+
+def _check_builtin_google_java_format_lines(orig_lines, aosp=True):
+    """Built-in pure-Python Google/AOSP Java Style checker used when an
+    external google-java-format binary/JAR or Java runtime is not available.
+
+    Checks key Google/AOSP Java Style rules:
+      - K&R brace placement (no standalone '{' on a new line)
+      - space before '{' on declarations and control statements ('class A{',
+        'void f(){', 'if (x){')
+      - wildcard imports ('import foo.*;')
+      - space after ',' in argument/parameter lists ('foo(a,b)')
+      - multiple statements on a single line ('a = 1; b = 2;')
+      - column limit (100 columns per Google/AOSP Java Style)
+    """
+    violations = []
+    in_block = False
+    for idx, raw in enumerate(orig_lines):
+        line_no = idx + 1
+        line = raw.rstrip('\r\n')
+        masked, in_block = _mask_non_code(line, in_block)
+        code = masked.strip()
+        if not code:
+            continue
+
+        # 1. Wildcard import (Google Java Style §3.3.1)
+        if re.match(r'^import\s+(?:static\s+)?[\w.]+\.\*\s*;', code):
+            violations.append((
+                line_no,
+                "google-java-format style: wildcard import prohibited",
+                line))
+
+        # 2. Standalone opening brace '{' on its own line (K&R §4.1.2)
+        if code == '{':
+            violations.append((
+                line_no,
+                "google-java-format style: '{' should sit at end of previous line",
+                line))
+
+        # 3. Missing space before '{' (e.g. 'class Foo{', 'void m(){', 'if (x){')
+        if re.search(r'[A-Za-z0-9_)\]>]\{', code) and not re.search(
+                r'\[\]\{', code):
+            violations.append((
+                line_no,
+                "google-java-format style: missing space before '{'",
+                line))
+
+        # 4. Missing space after comma ','
+        if re.search(r',\S', code):
+            violations.append((
+                line_no,
+                "google-java-format style: missing space after ','",
+                line))
+
+        # 5. Multiple statements on one line (§4.3), excluding 'for (...; ...; ...)'
+        if not re.search(r'\bfor\s*\(', code) and code.count(';') > 1:
+            violations.append((
+                line_no,
+                "google-java-format style: multiple statements on one line",
+                line))
+
+        # 6. Column limit > 100 chars (§4.4), excluding package/import lines
+        expanded = _expand_leading_tabs(line, TAB_WIDTH)
+        if (len(expanded) > 100
+                and not code.startswith(('package ', 'import '))):
+            violations.append((
+                line_no,
+                f"google-java-format style: line length {len(expanded)} > 100 columns",
+                line))
+
+    return violations
 
 
 def _diff_google_java_format_lines(orig_lines, fmt_lines):
@@ -688,6 +861,10 @@ def _check_google_java_format_file(file_path, runner, aosp=None):
         return []
     orig_lines = orig_text.splitlines()
 
+    if kind == 'builtin':
+        return _check_builtin_google_java_format_lines(
+            orig_lines, aosp=use_aosp)
+
     if kind in ('jar', 'bin'):
         args = list(cmd)
         if use_aosp:
@@ -698,9 +875,11 @@ def _check_google_java_format_file(file_path, runner, aosp=None):
                 args, capture_output=True, text=True,
                 encoding='utf-8', errors='replace', timeout=30)
         except (OSError, subprocess.SubprocessError):
-            return []
+            return _check_builtin_google_java_format_lines(
+                orig_lines, aosp=use_aosp)
         if res.returncode != 0 or not res.stdout:
-            return []
+            return _check_builtin_google_java_format_lines(
+                orig_lines, aosp=use_aosp)
         fmt_lines = res.stdout.splitlines()
         return _diff_google_java_format_lines(orig_lines, fmt_lines)
 
