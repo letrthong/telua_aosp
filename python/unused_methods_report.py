@@ -1431,12 +1431,28 @@ def build_report_lines(target_files, gjf_runner=None, auto_clone_gjf=False):
                     lines.append(f"                 > {shown}")
     lines.append("")
 
+    unused_fields_total = sum(len(v) for v in unused_fields_by_file.values())
+    lines.append(f"[6] Unused private fields: {unused_fields_total}")
+    if unused_fields_by_file:
+        for path in sorted(unused_fields_by_file):
+            lines.append(f"{rel(path)}")
+            for line_no, fname, vis_label, src in unused_fields_by_file[path]:
+                lines.append(
+                    f"    line {line_no:>5}: {fname}  ({vis_label})")
+                if src:
+                    shown = _expand_leading_tabs(src, TAB_WIDTH).rstrip()
+                    if len(shown) > 100:
+                        shown = shown[:97] + '...'
+                    lines.append(f"                 > {shown}")
+    lines.append("")
+
     lines.append("-" * 78)
     lines.append(f"Summary: {len(unused)} unused method(s), "
                  f"{len(unused_params)} unused parameter(s), "
                  f"{ws_total} whitespace violation(s), "
                  f"{gjf_total} google-java-format violation(s), "
-                 f"{unused_imports_total} unused import(s). Review before "
+                 f"{unused_imports_total} unused import(s), "
+                 f"{unused_fields_total} unused private field(s). Review before "
                  f"deleting (heuristic report, see --help).")
     lines.append("=" * 78)
     return lines

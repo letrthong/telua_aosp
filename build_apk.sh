@@ -589,11 +589,11 @@ parse_arguments() {
                     shift 1
                 fi
                 ;;
-            --repo-sync)
+            --repo-sync|repo-sync|sync|--sync)
                 REPO_SYNC="true"
                 shift
                 ;;
-            --repo-reset)
+            --repo-reset|repo-reset|reset|--reset)
                 REPO_RESET="true"
                 shift
                 ;;
