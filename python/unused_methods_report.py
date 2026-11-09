@@ -103,6 +103,18 @@ except ImportError:  # pragma: no cover - direct copy fallback
     sys.exit("ERROR: clean_java.py must sit in the same directory as "
              "unused_methods_report.py")
 
+
+# ------------------------------------------------------------------------------
+# [6] Unused Private Fields Detection
+# ------------------------------------------------------------------------------
+LEADING_ANNOTATION_RE = re.compile(r'^@[\w$.]+(?:\s*\([^)]*\))?')
+FIELD_EXEMPT_ANNOTATION_RE = re.compile(
+    r'^\s*@(?:Mock|Spy|Captor|Inject|Autowired|Keep|SerializedName'
+    r'|BindView|Rule|ClassRule|SuppressWarnings)\b')
+FIELD_MODIFIER_PREFIX_RE = re.compile(
+    r'^(?:(?:private|public|protected|static|final|volatile|transient)\s+)+')
+FIELD_EXEMPT_NAMES = {'serialVersionUID', 'CREATOR'}
+
 DEFAULT_REPORT_FILE = 'unused_java_report.txt'
 REPO_ROOT_DIR = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
