@@ -1226,6 +1226,25 @@ run_tests() {
         exit 1
     fi
 
+    # Fast-fail: instrumented (on-device) test suites need a connected ADB
+    # device. Check BEFORE spending time on envsetup / coverage build so the
+    # user gets an immediate, actionable error instead of a late failure.
+    # Opt-out for host-only suites via TELUA_TEST_SKIP_DEVICE_CHECK=1.
+    if [ "${TELUA_TEST_SKIP_DEVICE_CHECK:-0}" != "1" ] && command -v adb >/dev/null 2>&1; then
+        local device_state
+        device_state="$(adb get-state 2>/dev/null | tr -d '[:space:]')"
+        if [ "$device_state" != "device" ]; then
+            log_error "No ADB device connected (state: '${device_state:-none}')."
+            log_error "Instrumented test suites (e.g. run_coverage.sh / atest) run ON DEVICE."
+            log_error "Connect & authorize a device, then re-run. To skip this check"
+            log_error "(host-only test suites), set: TELUA_TEST_SKIP_DEVICE_CHECK=1"
+            exit 1
+        fi
+        log_info "ADB device connected: $(adb devices | awk 'NR==2{print $1}')"
+    elif ! command -v adb >/dev/null 2>&1; then
+        log_warn "'adb' not found in PATH; skipping device pre-check for test mode."
+    fi
+
     # Project test scripts may need the AOSP build environment (e.g.
     # ANDROID_BUILD_TOP exported by lunch). Set it up best-effort: mandatory
     # inside an AOSP tree, skipped gracefully when this repo is standalone
