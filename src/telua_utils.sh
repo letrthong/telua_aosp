@@ -536,6 +536,29 @@ execute_command_pipeline() {
         return 1
     fi
 
+    # Auto device pre-check: if any step is an ADB command (directly or via
+    # 'adb shell ...' fallback), verify a device is connected & online BEFORE
+    # starting, so the pipeline fails fast with a clear message instead of
+    # failing mid-way at the first adb step. Host-only pipelines (no adb
+    # steps, e.g. 'unittest', 'net-up', 'logcat-stop') skip the check.
+    # Opt-out: TELUA_RUN_SKIP_DEVICE_CHECK=1.
+    local needs_device=0
+    local cmd_probe
+    for cmd_probe in "${steps[@]}"; do
+        if [[ "$cmd_probe" =~ ^adb([[:space:]]|$) ]] || [[ "$cmd_probe" =~ ^adb\ shell ]]; then
+            needs_device=1
+            break
+        fi
+    done
+    if [ "$needs_device" -eq 1 ] && [ "${TELUA_RUN_SKIP_DEVICE_CHECK:-0}" != "1" ]; then
+        log_info "Pipeline contains ADB steps; verifying device connectivity first..."
+        if ! check_adb_device_online; then
+            log_error "Pipeline '$pipeline_name' aborted before start (no ready device)."
+            log_error "Connect a device or set TELUA_RUN_SKIP_DEVICE_CHECK=1 to bypass."
+            return 1
+        fi
+    fi
+
     echo ""
     log_info "============================================================"
     log_info " Executing Pipeline: '$pipeline_name'"
