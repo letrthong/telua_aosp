@@ -302,3 +302,47 @@ table.docutils {
     stroke: #7b1fa2 !important;
     stroke-width: 2px !important;
 }
+
+/* 6. Image Lightbox — click-to-zoom for regular images */
+img.lightbox-enabled {
+    cursor: zoom-in !important;
+    transition: box-shadow 0.15s ease, opacity 0.15s ease !important;
+}
+
+img.lightbox-enabled:hover {
+    box-shadow: 0 4px 18px rgba(37, 99, 235, 0.25) !important;
+    opacity: 0.92 !important;
+}
+
+#mermaid-modal-body img.lightbox-img {
+    max-width: none !important;
+    max-height: none !important;
+    display: block !important;
+    transform-origin: center center;
+    transition: transform 0.12s ease-out;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    background: #ffffff;
+}
+
+/* Image mode: image fills 100% of the dialog width & height */
+.mermaid-modal.image-mode #mermaid-modal-viewport {
+    padding: 0 !important;
+    background: #0b0f19;
+}
+
+.mermaid-modal.image-mode #mermaid-modal-body {
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.mermaid-modal.image-mode img.lightbox-img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}

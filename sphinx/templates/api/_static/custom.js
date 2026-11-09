@@ -23,17 +23,17 @@
         modal.innerHTML = 
             '<div class="mermaid-modal-content">' +
             '  <div class="mermaid-modal-header">' +
-            '    <span class="mermaid-modal-title">🔍 Sơ Đồ Kiến Trúc (Fullscreen Viewer)</span>' +
+            '    <span class="mermaid-modal-title">🔍 Architecture Diagram (Fullscreen Viewer)</span>' +
             '    <div class="mermaid-modal-controls">' +
-            '      <button class="mermaid-ctrl-btn" id="mermaid-btn-zoom-out" title="Thu nhỏ (−)">−</button>' +
+            '      <button class="mermaid-ctrl-btn" id="mermaid-btn-zoom-out" title="Zoom Out (−)">−</button>' +
             '      <span class="mermaid-scale-display" id="mermaid-scale-val">100%</span>' +
-            '      <button class="mermaid-ctrl-btn" id="mermaid-btn-zoom-in" title="Phóng to (+)">+</button>' +
-            '      <button class="mermaid-ctrl-btn" id="mermaid-btn-reset" title="Vừa khung hình">Fit / Reset</button>' +
-            '      <button class="mermaid-ctrl-btn mermaid-download-btn" id="mermaid-btn-download" title="Tải ảnh vector SVG">📥 Tải SVG</button>' +
-            '      <button class="mermaid-ctrl-btn mermaid-close-btn" id="mermaid-btn-close" title="Đóng cửa sổ (Esc)">✕ Đóng</button>' +
+            '      <button class="mermaid-ctrl-btn" id="mermaid-btn-zoom-in" title="Zoom In (+)">+</button>' +
+            '      <button class="mermaid-ctrl-btn" id="mermaid-btn-reset" title="Fit to Screen">Fit / Reset</button>' +
+            '      <button class="mermaid-ctrl-btn mermaid-download-btn" id="mermaid-btn-download" title="Download Vector SVG">📥 SVG</button>' +
+            '      <button class="mermaid-ctrl-btn mermaid-close-btn" id="mermaid-btn-close" title="Close Window (Esc)">✕ Close</button>' +
             '    </div>' +
             '  </div>' +
-            '  <div id="mermaid-modal-viewport" title="Nhấp vào vùng trống hoặc nhấn Esc để đóng">' +
+            '  <div id="mermaid-modal-viewport" title="Click outside or press Esc to close">' +
             '    <div id="mermaid-modal-body"></div>' +
             '  </div>' +
             '</div>';
@@ -268,7 +268,7 @@
             zoomBtn.className = 'mermaid-btn mermaid-btn-zoom';
             zoomBtn.type = 'button';
             zoomBtn.innerHTML = '🔍 Zoom';
-            zoomBtn.title = 'Phóng to sơ đồ toàn màn hình';
+            zoomBtn.title = 'Enlarge diagram fullscreen';
             zoomBtn.addEventListener('click', function(e) {
                 e.stopPropagation();
                 openModalWithSvg(svg);
@@ -279,7 +279,7 @@
             dlBtn.className = 'mermaid-btn mermaid-btn-download';
             dlBtn.type = 'button';
             dlBtn.innerHTML = '📥 SVG';
-            dlBtn.title = 'Tải ảnh vector SVG siêu nét';
+            dlBtn.title = 'Download high-res vector SVG';
             dlBtn.addEventListener('click', function(e) {
                 e.stopPropagation();
                 downloadSvg(svg, 'diagram_' + (idx + 1));
@@ -306,4 +306,125 @@
         initMermaidToolbars();
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
+
+    /* ========================================================================
+     * Image Lightbox — click-to-zoom for regular raster images (.. image::)
+     * Reuses the mermaid modal shell; swaps the SVG body for an <img>.
+     * ======================================================================== */
+
+    var currentImgScale = 1.0;
+
+    function updateImgScale(newScale) {
+        currentImgScale = Math.round(newScale * 100) / 100;
+        var img = document.querySelector('#mermaid-modal-body img');
+        var scaleDisplay = document.getElementById('mermaid-scale-val');
+        if (img) {
+            img.style.transform = 'scale(' + currentImgScale + ')';
+        }
+        if (scaleDisplay) {
+            scaleDisplay.textContent = Math.round(currentImgScale * 100) + '%';
+        }
+    }
+
+    function openModalWithImg(img) {
+        createModalOnce();
+        var modal = document.getElementById('mermaid-modal');
+        var modalBody = document.getElementById('mermaid-modal-body');
+        var dlBtn = document.getElementById('mermaid-btn-download');
+        if (!modal || !modalBody) return;
+
+        // SVG download does not apply to raster images
+        if (dlBtn) dlBtn.style.display = 'none';
+
+        // Image mode: viewport padding off, image fills 100% width & height
+        modal.classList.add('image-mode');
+
+        currentSvgElement = null;
+
+        modalBody.innerHTML = '';
+        var clone = document.createElement('img');
+        clone.src = img.currentSrc || img.src;
+        clone.alt = img.alt || '';
+        clone.className = 'lightbox-img';
+        modalBody.appendChild(clone);
+
+        var title = modal.querySelector('.mermaid-modal-title');
+        if (title) {
+            title.textContent = '🖼️ ' + (img.alt || 'Image Viewer (Fullscreen)');
+        }
+
+        modal.classList.add('active');
+        currentImgScale = 1.0;
+        updateImgScale(1.0);
+    }
+
+    // Restore SVG mode (show download button, reset title) when a diagram is opened
+    var origOpenModalWithSvg = openModalWithSvg;
+    openModalWithSvg = function(sourceSvg) {
+        var dlBtn = document.getElementById('mermaid-btn-download');
+        if (dlBtn) dlBtn.style.display = '';
+        var modal = document.getElementById('mermaid-modal');
+        if (modal) modal.classList.remove('image-mode');
+        var title = document.querySelector('#mermaid-modal .mermaid-modal-title');
+        if (title) {
+            title.textContent = '🔍 Architecture Diagram (Fullscreen Viewer)';
+        }
+        origOpenModalWithSvg(sourceSvg);
+    };
+
+    function initImageLightbox() {
+        // Select content images, excluding icons inside the modal/toolbar
+        var images = document.querySelectorAll('.rst-content img, main img, article img, img[src*="_images/"]');
+        images.forEach(function(img) {
+            if (img.closest('#mermaid-modal')) return;
+            if (img.closest('.mermaid')) return;
+            if (img.getAttribute('data-lightbox') === 'on') return;
+            img.setAttribute('data-lightbox', 'on');
+            img.classList.add('lightbox-enabled');
+            img.addEventListener('click', function(e) {
+                e.preventDefault();
+                openModalWithImg(img);
+            });
+        });
+    }
+
+    // Wire modal controls for image mode: wheel zoom + button zoom
+    document.addEventListener('wheel', function(e) {
+        var modal = document.getElementById('mermaid-modal');
+        if (!modal || !modal.classList.contains('active')) return;
+        if (!document.querySelector('#mermaid-modal-body img')) return;
+        e.preventDefault();
+        var factor = e.deltaY < 0 ? 1.1 : 0.9;
+        updateImgScale(currentImgScale * factor);
+    }, { passive: false });
+
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('#mermaid-btn-zoom-in, #mermaid-btn-zoom-out, #mermaid-btn-reset');
+        if (!btn) return;
+        if (!document.querySelector('#mermaid-modal-body img')) return;
+        e.stopPropagation();
+        if (btn.id === 'mermaid-btn-zoom-in') updateImgScale(currentImgScale * 1.25);
+        else if (btn.id === 'mermaid-btn-zoom-out') updateImgScale(currentImgScale * 0.8);
+        else updateImgScale(1.0);
+    });
+
+    function initAll() {
+        initMermaidToolbars();
+        initImageLightbox();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(initAll, 300);
+            setTimeout(initAll, 1000);
+        });
+    } else {
+        setTimeout(initAll, 300);
+        setTimeout(initAll, 1000);
+    }
+
+    var observerAll = new MutationObserver(function() {
+        initAll();
+    });
+    observerAll.observe(document.documentElement, { childList: true, subtree: true });
 })();
