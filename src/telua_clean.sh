@@ -27,6 +27,7 @@
 #   - show_clean_help
 #   - is_clean_action
 #   - handle_clean_command
+#   - skill_cmd_setup (telua java skill: .skill/java/ softlink registry)
 #
 # Guard: skip re-definition when already sourced (idempotent).
 if [ "${TELUA_CLEAN_SOURCED:-}" = "1" ]; then
@@ -36,6 +37,82 @@ TELUA_CLEAN_SOURCED=1
 
 CLEAN_JAVA_PY_NAME="python/clean_java.py"
 UNUSED_REPORT_PY_NAME="python/unused_methods_report.py"
+
+# Skill registry locations (relative to the toolkit root, i.e. the directory
+# that contains this src/ folder). Both are git repos cloned under repos/.
+SKILL_DIR_NAME=".skill"
+SKILL_JAVA_SUBDIR="java"
+SKILL_SOURCE_TELUA="repos/telua_skill/Java_Android"
+SKILL_SOURCE_CLAUDE="repos/claude-code-java/skills"
+
+# Resolve the toolkit root (dir containing src/telua_clean.sh), preferring
+# MASTER_SCRIPT_DIR when this module is sourced from a softlinked copy.
+resolve_toolkit_root() {
+    if [ -n "${MASTER_SCRIPT_DIR:-}" ] && [ -d "$MASTER_SCRIPT_DIR/repos" ]; then
+        echo "$MASTER_SCRIPT_DIR"
+        return 0
+    fi
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    echo "$script_dir"
+}
+
+# telua java skill — create .skill/java/ with softlinks to the 2 skill sources:
+#   .skill/java/Java_Android -> repos/telua_skill/Java_Android   (rules/docs/design manifest)
+#   .skill/java/<skill-name> -> repos/claude-code-java/skills/<skill-name>  (per-skill SKILL.md)
+skill_cmd_setup() {
+    local toolkit_root
+    toolkit_root="$(resolve_toolkit_root)"
+    local telua_src="$toolkit_root/$SKILL_SOURCE_TELUA"
+    local claude_src="$toolkit_root/$SKILL_SOURCE_CLAUDE"
+
+    if [ ! -d "$telua_src" ]; then
+        echo "[ERROR] Skill source not found: $telua_src" >&2
+        echo "        Expected the telua_skill repo under repos/ (git clone first)." >&2
+        return 1
+    fi
+
+    local skill_root="$PWD/$SKILL_DIR_NAME"
+    local skill_java_dir="$skill_root/$SKILL_JAVA_SUBDIR"
+    mkdir -p "$skill_java_dir"
+
+    echo "[INFO] Skill registry: $skill_java_dir"
+
+    # 1. Link the whole Java_Android knowledge base (rules/docs/design/examples)
+    local link="$skill_java_dir/Java_Android"
+    if [ -L "$link" ] || [ -e "$link" ]; then
+        echo "[SKIP] $link already exists"
+    else
+        ln -s "$telua_src" "$link" \
+            && echo "[LINK] Java_Android -> $telua_src" \
+            || { echo "[ERROR] Failed to link Java_Android" >&2; return 1; }
+    fi
+
+    # 2. Link each individual claude-code-java skill (SKILL.md convention)
+    if [ -d "$claude_src" ]; then
+        local entry name linked=0 skipped=0
+        for entry in "$claude_src"/*; do
+            [ -d "$entry" ] || continue
+            name="$(basename "$entry")"
+            link="$skill_java_dir/$name"
+            if [ -L "$link" ] || [ -e "$link" ]; then
+                skipped=$((skipped + 1))
+            else
+                ln -s "$entry" "$link" \
+                    && { echo "[LINK] $name -> $entry"; linked=$((linked + 1)); } \
+                    || echo "[WARN]  Failed to link $name" >&2
+            fi
+        done
+        echo "[INFO] claude-code-java skills: $linked linked, $skipped already present"
+    else
+        echo "[WARN] claude-code-java skills not found: $claude_src (skipped)" >&2
+    fi
+
+    echo ""
+    echo "[OK] Skill registry ready: $skill_java_dir"
+    echo "     AI agents can now discover skills via .skill/java/ in this workspace."
+    return 0
+}
 
 resolve_clean_java_script() {
     local script_dir
@@ -103,6 +180,7 @@ show_clean_short_help() {
     echo "    telua java all              Clean all .java files under current workspace (clean-java all)"
     echo "    telua java <path>           Clean a specific .java file or directory"
     echo "    telua java report [t]       Report unused methods/params, whitespace & google-java-format"
+    echo "    telua java skill            Create .skill/java/ softlink registry (telua_skill + claude-code-java)"
     echo "    telua java help             Show detailed clean_java.py usage"
     echo ""
 }
@@ -120,7 +198,7 @@ show_clean_help() {
 is_clean_action() {
     local action="$1"
     case "$action" in
-        clean|diff|all|report|help|-h|--help) return 0 ;;
+        clean|diff|all|report|skill|help|-h|--help) return 0 ;;
         *.java) return 0 ;;
         *)
             if [ -d "$action" ] || [ -f "$action" ]; then
@@ -156,6 +234,9 @@ handle_clean_command() {
     case "$action" in
         help|-h|--help)
             show_clean_help
+            ;;
+        skill|--skill)
+            skill_cmd_setup
             ;;
         diff|--diff)
             "$py_cmd" "$py_script" --diff
