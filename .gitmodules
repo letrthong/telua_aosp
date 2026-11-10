@@ -1,3 +1,7 @@
 [submodule "third_party/google-java-format"]
 	path = third_party/google-java-format
 	url = https://github.com/google/google-java-format
+[submodule "repos/telua_skill"]
+	path = repos/telua_skill
+	url = https://github.com/letrthong/telua_skill.git
+	branch = main
