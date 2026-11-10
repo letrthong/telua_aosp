@@ -469,9 +469,9 @@ print_help() {
     printf "  \033[1;36m%-28s\033[0m %s\n" "--softlink [path]" "Symlink this script + copy $CONFIG_FILE_NAME into [path]"
     printf "  \033[1;36m%-28s\033[0m %s\n" "--test-mode true|false" "Run unit test suite instead of full build"
     printf "  \033[1;36m%-28s\033[0m %s\n" "--ram-monitor true|false" "Show RAM usage at start/end and track peak RAM (default: true)"
-    printf "  \033[1;36m%-28s\033[0m %s\n" "--find-file <pat> [path]" "Search for files by pattern in [path] (default: '.')"
-    printf "  \033[1;36m%-28s\033[0m %s\n" "--find-dir <pat> [path]" "Search for directories by pattern in [path] (default: '.')"
-    printf "  \033[1;36m%-28s\033[0m %s\n" "--find-text <text> [path]" "Search for text in files under [path] (default: '.')"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "--find-file, f-f <pat> [path]" "Search for files by pattern in [path] (default: '.')"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "--find-dir, f-d <pat> [path]" "Search for directories by pattern in [path] (default: '.')"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "--find-text, f-t <text> [path]" "Search for text in files under [path] (default: '.')"
     printf "  \033[1;36m%-28s\033[0m %s\n" "--replace <old> <new> [p]" "Find & replace text across files under [path] (default: '.')"
     printf "  \033[1;36m%-28s\033[0m %s\n" "-h, --help, help" "Display this help message and exit"
     echo ""
@@ -625,7 +625,7 @@ parse_arguments() {
                 SHOW_NETWORK_HELP="true"
                 shift
                 ;;
-            --find-file|find_file)
+            --find-file|find_file|f-file|f-f)
                 if [ -z "$2" ] || [[ "$2" == --* ]]; then
                     log_error "Missing pattern for --find-file! Usage: $0 --find-file <file_pattern> [search_path]"
                     exit 1
@@ -638,7 +638,7 @@ parse_arguments() {
                     shift 1
                 fi
                 ;;
-            --find-dir|find_dir)
+            --find-dir|find_dir|f-dir|f-d)
                 if [ -z "$2" ] || [[ "$2" == --* ]]; then
                     log_error "Missing pattern for --find-dir! Usage: $0 --find-dir <dir_pattern> [search_path]"
                     exit 1
@@ -651,7 +651,7 @@ parse_arguments() {
                     shift 1
                 fi
                 ;;
-            --find-text|find_text)
+            --find-text|find_text|f-text|f-t)
                 if [ -z "$2" ] || [[ "$2" == --* ]]; then
                     log_error "Missing text for --find-text! Usage: $0 --find-text <text_pattern> [search_path]"
                     exit 1
