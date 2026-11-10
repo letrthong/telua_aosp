@@ -1029,6 +1029,13 @@ show_info_android() {
         fi
         printf "  \033[1;37m%-20s\033[0m \033[0;33m%s\033[0m\n" "Internal ID:" "${internal_id:-unknown}"
         printf "  \033[1;37m%-20s\033[0m \033[0;33m%s\033[0m\n" "Vendor Build:" "${vendor_build_type:-unknown}"
+        local prod_mode prod_override prod_switch
+        prod_mode=$(adb shell getprop ro.boot.productionmode 2>/dev/null | tr -d '\r')
+        prod_override=$(adb shell getprop vendor.boot.productionoverride 2>/dev/null | tr -d '\r')
+        prod_switch=$(adb shell getprop vendor.prodmode.productionmodeswitched 2>/dev/null | tr -d '\r')
+        printf "  \033[1;37m%-20s\033[0m \033[0;36m%s\033[0m \033[0;90m(1=Production, 0=Normal)\033[0m\n" "Production Mode:" "${prod_mode:-unknown}"
+        printf "  \033[1;37m%-20s\033[0m \033[0;36m%s\033[0m \033[0;90m(runtime switch prop, empty after reboot)\033[0m\n" "Prod Override:" "${prod_override:-empty}"
+        printf "  \033[1;37m%-20s\033[0m \033[0;36m%s\033[0m \033[0;90m(1=mode switched this boot)\033[0m\n" "Prod Switched:" "${prod_switch:-empty}"
     else
         printf "  \033[1;37m%-20s\033[0m \033[1;31mNot installed / not in PATH\033[0m\n" "ADB Binary:"
     fi
