@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Telua Web — Config Manager</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">⚙</span>
+    <div>
+      <h1>Telua Web <span class="tag">Config Manager</span></h1>
+      <p class="sub">AOSP &amp; Automotive Toolkit — browse &amp; edit <code>*.config</code> / <code>*.json</code></p>
+    </div>
+  </div>
+  <div class="statusbar">
+    <nav class="tabs">
+      <button class="tab" id="tab-files" title="Browse &amp; edit config files">📄 Files</button>
+      <button class="tab active" id="tab-pipelines" title="Edit MY_CMD_* personal pipelines">⚡ Pipelines</button>
+    </nav>
+    <div class="chip hidden" id="chip-draft" title="Unsaved edits kept in browser draft (survives refresh). Click to discard.">✎ draft</div>
+    <div class="chip" id="chip-version" title="Toolkit version">v—</div>
+    <div class="chip" id="chip-project" title="Active project (apk.config)">project: —</div>
+    <div class="chip" id="chip-adb" title="Connected ADB devices">adb: —</div>
+    <div class="chip" id="chip-ram" title="System RAM">ram: —</div>
+    <button class="btn ghost" id="btn-refresh" title="Reload status &amp; file list">⟳ Refresh</button>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- ============ Sidebar: file registry ============ -->
+  <aside class="sidebar">
+    <div class="side-head">
+      <h2>Config Files</h2>
+      <input id="search" type="search" placeholder="Filter files…" autocomplete="off">
+    </div>
+    <ul id="file-list" class="file-list"></ul>
+    <div class="side-foot">
+      <button class="btn wide" id="btn-info">Run <code>build_apk.sh --info</code></button>
+    </div>
+  </aside>
+
+  <!-- ============ Editor pane (Files tab) ============ -->
+  <section class="editor-pane hidden" id="view-files">
+    <div class="editor-head">
+      <div class="editor-title">
+        <span id="editor-name" class="mono">—</span>
+        <span id="editor-meta" class="meta"></span>
+      </div>
+      <div class="editor-actions">
+        <label class="chk" title="Skip syntax validation on save">
+          <input type="checkbox" id="force-save"> force
+        </label>
+        <button class="btn" id="btn-reload" disabled>↺ Reload</button>
+        <button class="btn primary" id="btn-save" disabled>💾 Save</button>
+      </div>
+    </div>
+    <textarea id="editor" class="editor" spellcheck="false" disabled
+              placeholder="Select a config file on the left to edit it…"></textarea>
+    <div class="editor-foot">
+      <span id="editor-stats" class="meta">0 lines · 0 bytes</span>
+      <span id="editor-dirty" class="dirty hidden">● unsaved changes</span>
+    </div>
+  </section>
+
+  <!-- ============ Pipelines pane (MY_CMD_* / MULTI_CMD_* editor, default tab) ============ -->
+  <section class="editor-pane" id="view-pipelines">
+    <div class="editor-head">
+      <div class="editor-title">
+        <div class="src-switch" id="pl-source-switch">
+          <button class="src-btn active" data-source="my" title="config/const_my_cli.config — personal pipelines (telua my <name>)">my</button>
+          <button class="src-btn" data-source="multi" title="config/const_multi_cli.config — multi-CLI pipelines (telua run <group>)">multi</button>
+        </div>
+        <span class="mono" id="pl-file" style="color:var(--accent)">config/const_my_cli.config</span>
+        <span class="meta" id="pl-label">personal pipelines · <code>telua my &lt;name&gt;</code></span>
+      </div>
+      <div class="editor-actions">
+        <button class="btn" id="btn-pl-refresh">⟳ Refresh</button>
+        <button class="btn" id="btn-pl-add">＋ New pipeline</button>
+        <button class="btn primary" id="btn-pl-save" disabled>💾 Save all</button>
+      </div>
+    </div>
+    <div id="pipeline-list" class="pipeline-list"></div>
+    <div class="editor-foot">
+      <span id="pl-stats" class="meta">0 pipelines</span>
+      <span id="pl-dirty" class="dirty hidden">● unsaved changes</span>
+    </div>
+  </section>
+</main>
+
+<!-- ============ Profile switcher modal ============ -->
+<div class="modal hidden" id="modal-profile">
+  <div class="modal-box">
+    <h3>Switch ACTIVE_PROJECT</h3>
+    <p class="meta">Updates <code>ACTIVE_PROJECT="…"</code> in <code>apk.config</code>
+       (same as <code>telua -p &lt;name&gt;</code>). A <code>.bak</code> backup is created.</p>
+    <div id="profile-list" class="profile-list"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btn-profile-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Info output modal ============ -->
+<div class="modal hidden" id="modal-info">
+  <div class="modal-box wide">
+    <h3>build_apk.sh --info</h3>
+    <pre id="info-output" class="info-out">Loading…</pre>
+    <div class="modal-actions">
+      <button class="btn" id="btn-info-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Run output modal ============ -->
+<div class="modal hidden" id="modal-run">
+  <div class="modal-box wide">
+    <h3 id="run-title">Pipeline output</h3>
+    <pre id="run-output" class="info-out">Running…</pre>
+    <div class="modal-actions">
+      <button class="btn" id="btn-run-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Toast notifications ============ -->
+<div id="toasts" class="toasts"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

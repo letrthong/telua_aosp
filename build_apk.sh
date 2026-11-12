@@ -374,6 +374,23 @@ if [ "${TELUA_QNX_SOURCED:-}" != "1" ]; then
     fi
 fi
 
+# --- Web UI (single source of truth: src/telua_web.sh) ---
+# Code behind 'telua web <action>' (show_web_help, web_cmd_start, web_cmd_stop,
+# web_cmd_status, web_cmd_restart, web_cmd_log, handle_web_command) lives in
+# src/telua_web.sh; it drives the Flask server in web/telua_web.py with the
+# static frontend in web/static/. Sourcing it sets TELUA_WEB_SOURCED=1 and its
+# internal guard makes double-sourcing a no-op.
+# Lookup order: script dir -> master dir (both resolved through symlinks).
+if [ "${TELUA_WEB_SOURCED:-}" != "1" ]; then
+    if [ -f "$SCRIPT_DIR/src/telua_web.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$SCRIPT_DIR/src/telua_web.sh"
+    elif [ -f "$MASTER_SCRIPT_DIR/src/telua_web.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$MASTER_SCRIPT_DIR/src/telua_web.sh"
+    fi
+fi
+
 # --- Java source hygiene (single source of truth: src/telua_clean.sh) ---
 # Code behind 'telua clean-java [target]' (show_clean_short_help,
 # show_clean_help, is_clean_action, handle_clean_command) was extracted to
@@ -451,6 +468,7 @@ print_help() {
     printf "  \033[1;37m%-28s\033[0m %s\n" "java [target]" "Clean .java files (clean|diff|all|<path>) (alias: clean-java)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "java report [t]" "Report unused methods/params, whitespace & google-java-format"
     printf "  \033[1;37m%-28s\033[0m %s\n" "docs, doc [action]" "Sphinx Doc-as-Code manager (init, build, clean, serve, check)"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "web [action]" "Config Manager Web UI (start, stop, status, restart, log)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "run [group]" "Execute multi-command pipeline macro (dev-prep, audio-cycle, ...)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "my, proj [action]" "Execute personal / private pipeline macro (hello, ...)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "git" "Display Git & Google Repo cheatsheet"
@@ -735,6 +753,17 @@ parse_arguments() {
             --docs|docs|--doc|doc)
                 shift 1
                 handle_docs_command "$@"
+                exit 0
+                ;;
+            --web|web)
+                if [ -n "$2" ] && [[ "$2" != --* ]]; then
+                    WEB_ACTION="$2"
+                    shift 2
+                else
+                    WEB_ACTION=""
+                    shift 1
+                fi
+                handle_web_command "$WEB_ACTION" "$@"
                 exit 0
                 ;;
             --java|java|--clean-java|clean-java|cleanjava)
