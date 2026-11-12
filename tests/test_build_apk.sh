@@ -224,20 +224,36 @@ TMP_HOME=$(mktemp -d "${TMPDIR:-/tmp}/telua_home_test.XXXXXX")
 assert_success "Install adds aliases and tab completion" [ $? -eq 0 ]
 rm -rf "$TMP_HOME"
 
-# Test 6b: Tab completion for -p/--profile and -t/--template
-log_test "Testing tab completion for -p/--profile and -t/--template..."
+# Test 6b: Tab completion for top-level (java, web), subcommands, -p/--profile and -t/--template
+log_test "Testing tab completion for java, web, -p/--profile and -t/--template..."
 (
     source "$REPO_ROOT/src/telua_completion.sh"
-    COMP_WORDS=(tel b -p "")
-    COMP_CWORD=3
+    COMP_WORDS=(tel "")
+    COMP_CWORD=1
     _telua_completions
+    echo " ${COMPREPLY[*]} " | grep -q " java " && \
+    echo " ${COMPREPLY[*]} " | grep -q " web " && \
+    ! echo " ${COMPREPLY[*]} " | grep -q " clean-java " && \
+    COMP_WORDS=(tel web "") && \
+    COMP_CWORD=2 && \
+    _telua_completions && \
+    echo " ${COMPREPLY[*]} " | grep -q " start " && \
+    echo " ${COMPREPLY[*]} " | grep -q " restart " && \
+    COMP_WORDS=(tel java "") && \
+    COMP_CWORD=2 && \
+    _telua_completions && \
+    echo " ${COMPREPLY[*]} " | grep -q " report " && \
+    echo " ${COMPREPLY[*]} " | grep -q " skill " && \
+    COMP_WORDS=(tel b -p "") && \
+    COMP_CWORD=3 && \
+    _telua_completions && \
     echo "${COMPREPLY[*]}" | grep -q "car_audio" && \
     COMP_WORDS=(tel docs init -t "") && \
     COMP_CWORD=4 && \
     _telua_completions && \
     echo "${COMPREPLY[*]}" | grep -q "architecture"
 )
-assert_success "Tab completion resolves -p profiles and -t templates" [ $? -eq 0 ]
+assert_success "Tab completion resolves java, web, subcommands, -p profiles and -t templates" [ $? -eq 0 ]
 
 # Test 7: Documentation module (telua docs help, init, check)
 log_test "Testing documentation module (telua docs help, init, check)..."

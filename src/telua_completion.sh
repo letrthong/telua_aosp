@@ -33,7 +33,22 @@ if [ -n "${ZSH_VERSION:-}" ]; then
     autoload -U +X bashcompinit 2>/dev/null && bashcompinit 2>/dev/null || true
 fi
 
+_TELUA_COMPLETION_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/$(basename "${BASH_SOURCE[0]}")"
+_TELUA_COMPLETION_MTIME="$(stat -c %Y "$_TELUA_COMPLETION_FILE" 2>/dev/null || stat -f %m "$_TELUA_COMPLETION_FILE" 2>/dev/null || echo 0)"
+
 _telua_completions() {
+    # Auto-reload completion script if modified on disk (e.g. after 'tel update' or git pull)
+    if [ -n "${_TELUA_COMPLETION_FILE:-}" ] && [ -f "$_TELUA_COMPLETION_FILE" ] && [ -z "${_TELUA_COMP_RELOADING:-}" ]; then
+        local cur_mtime
+        cur_mtime="$(stat -c %Y "$_TELUA_COMPLETION_FILE" 2>/dev/null || stat -f %m "$_TELUA_COMPLETION_FILE" 2>/dev/null || echo 0)"
+        if [ "$cur_mtime" != "${_TELUA_COMPLETION_MTIME:-0}" ]; then
+            local _TELUA_COMP_RELOADING=1
+            source "$_TELUA_COMPLETION_FILE" 2>/dev/null || true
+            _telua_completions "$@"
+            return $?
+        fi
+    fi
+
     local cur prev words cword
     if [ -n "${ZSH_VERSION:-}" ]; then
         # Zsh compatibility layer
@@ -48,14 +63,19 @@ _telua_completions() {
     fi
 
     # 1. Primary subcommands and global options
-    local subcommands="build b test t sync init install info update replace car dump sec security java clean-java docs doc run multi my proj git docker network help version"
+    local subcommands="build b test t sync reset init install info update replace car dump sec security java docs doc web run multi my proj git docker network help version"
     local options="-p --profile --no-reboot --start-deploy --platform --repo-sync --repo-reset -y --yes --config --softlink --test-mode --ram-monitor --find-file --find-dir --find-text --replace -h --help -v --version"
 
     # Context-aware completion based on the previous word
     case "$prev" in
-        docs|doc)
+        docs|doc|--docs|--doc)
             local docs_actions="start serve sync metadata build check clean init help"
             COMPREPLY=($(compgen -W "$docs_actions" -- "$cur"))
+            return 0
+            ;;
+        web|--web)
+            local web_actions="start stop status restart log help"
+            COMPREPLY=($(compgen -W "$web_actions" -- "$cur"))
             return 0
             ;;
         -t|--template)
@@ -96,7 +116,7 @@ _telua_completions() {
             COMPREPLY=($(compgen -W "$profiles" -- "$cur"))
             return 0
             ;;
-        sec|security)
+        sec|security|--sec|--security)
             local sec_actions="host status perm enforce avc privapp appops keystore policy root unroot remount disable-verity help"
             local config_dir
             config_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../config" 2>/dev/null && pwd)"
@@ -110,7 +130,7 @@ _telua_completions() {
             COMPREPLY=($(compgen -W "$sec_actions" -- "$cur"))
             return 0
             ;;
-        car)
+        car|--car)
             local car_actions="vol-up vol-down vol-mute ks ks-stop status help"
             # Try to read dynamic actions from const_car.config if present
             local config_dir
@@ -125,7 +145,7 @@ _telua_completions() {
             COMPREPLY=($(compgen -W "$car_actions" -- "$cur"))
             return 0
             ;;
-        dump)
+        dump|--dump)
             local dump_targets="audio car-service car-audio media battery activity help"
             local config_dir
             config_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../config" 2>/dev/null && pwd)"
@@ -139,7 +159,7 @@ _telua_completions() {
             COMPREPLY=($(compgen -W "$dump_targets" -- "$cur"))
             return 0
             ;;
-        run|multi)
+        run|multi|--run|--multi)
             local run_groups="audio-cycle media-mute-cycle dev-prep remount-reboot audio-dump logcat-start logcat-stop net-up unittest help"
             local config_dir
             config_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../config" 2>/dev/null && pwd)"
@@ -153,16 +173,21 @@ _telua_completions() {
             COMPREPLY=($(compgen -W "$run_groups" -- "$cur"))
             return 0
             ;;
-        java|clean-java)
-            local clean_options="clean diff all report help"
+        java|--java|clean-java|--clean-java|cleanjava)
+            local clean_options="clean diff all report skill help"
             COMPREPLY=($(compgen -W "$clean_options" -- "$cur"))
             return 0
             ;;
-        my|proj)
+        report)
+            COMPREPLY=($(compgen -W "diff all help" -- "$cur") $(compgen -f -- "$cur"))
+            return 0
+            ;;
+        my|proj|--my|--proj|--project|project)
             local my_actions="hello help"
             local config_dir
             config_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../config" 2>/dev/null && pwd)"
-            local my_cfg="$config_dir/const_my_cli.config"
+            local my_cfg="$config_dir/overlay/const_my_cli.config"
+            [ ! -f "$my_cfg" ] && my_cfg="$config_dir/const_my_cli.config"
             [ ! -f "$my_cfg" ] && my_cfg="$config_dir/const_my_cli.config.example"
             if [ -f "$my_cfg" ]; then
                 local dynamic_my

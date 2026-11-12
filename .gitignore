@@ -234,6 +234,9 @@ deployment_log.txt
 *.pid
 .logcat.pid
 
+config/overlay/*.config
+config/overlay/*.bak
+!config/overlay/ReadMe.txt
 config/const_my_cli.config
 config/apk_overlays.config
 apk_overlays.config
