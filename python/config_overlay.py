@@ -48,7 +48,8 @@ import re
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_OVERLAY = os.path.join(SCRIPT_DIR, "apk_overlays.config")
+REPO_ROOT = os.path.dirname(SCRIPT_DIR) if os.path.basename(SCRIPT_DIR) == "python" else SCRIPT_DIR
+DEFAULT_OVERLAY = os.path.join(REPO_ROOT, "config", "apk_overlays.config")
 ASSIGN_RE = re.compile(r"^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 CASE_START_RE = re.compile(r"^\s*case\s+(.+?)\s+in\s*(?:#.*)?$")
 CASE_END_RE = re.compile(r"^\s*esac\b")

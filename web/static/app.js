@@ -299,7 +299,7 @@ async function saveFile() {
     toast("Saved ✓", `${data.name} (${data.bytes} bytes)` +
           (data.backup ? ` · backup: ${data.backup}` : ""), "ok");
     refreshFiles();
-    if (data.name === "apk.config") refreshStatus();
+    if (data.name === "config/apk.config" || data.name === "apk.config") refreshStatus();
   } catch (err) {
     // Validation error -> offer force save
     if (confirm(`Validation failed:\n${err.message}\n\nSave anyway (force)?`)) {
@@ -577,7 +577,7 @@ function openProfileModal() {
         toast("Profile switched ✓", `ACTIVE_PROJECT="${data.active_project}" (backup: ${data.backup || "none"})`, "ok");
         $("#modal-profile").classList.add("hidden");
         refreshStatus();
-        if (state.current && state.current.name === "apk.config") openFile("apk.config");
+        if (state.current && (state.current.name === "config/apk.config" || state.current.name === "apk.config")) openFile(state.current.name);
       } catch (err) {
         toast("Switch failed", err.message, "err");
       }
@@ -612,6 +612,8 @@ function switchTab(tab) {
     if (fileDraft && fileDraft.name && fileDraft.content != null &&
         state.files.some(f => f.name === fileDraft.name)) {
       openFile(fileDraft.name, fileDraft.content);
+    } else if (state.files.some(f => f.name === "config/apk.config")) {
+      openFile("config/apk.config");
     } else if (state.files.some(f => f.name === "apk.config")) {
       openFile("apk.config");
     }

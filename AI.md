@@ -27,13 +27,15 @@ When assisting a developer, **ALWAYS prefer using `telua` (or `./build_apk.sh`) 
 ```
 .
 ├── build_apk.sh              # Core orchestration engine & CLI entrypoint
-├── apk.config                # Project-specific active profile & lunch target
-├── apk_overlays.config.example # Personal/private override template
-├── config_overlay.py         # Smart overlay merger (merges apk_overlays.config)
-├── config_crypto.py          # Configuration encryption/decryption (Fernet AES)
+├── python/                   # Python automation & static analysis scripts
+│   ├── config_overlay.py     # Smart overlay merger (merges config/apk_overlays.config)
+│   └── config_crypto.py      # Configuration encryption/decryption (Fernet AES)
 ├── requirements.txt          # Python dependencies (cryptography)
 ├── sphinx/                   # Sphinx Doc-as-Code modular template & build scripts
-├── config/                   # Declarative global constant cheatsheets & commands
+├── config/                   # Declarative global constant cheatsheets & project configs
+│   ├── apk.config            # Project-specific active profile & lunch target
+│   ├── apk_overlays.config.example # Personal/private override template
+│   ├── enc_apk.config        # Encrypted configuration template
 │   ├── const_car.config      # AAOS car & audio key injection & test harness
 │   ├── const_dumpsys.config  # System diagnostics & AAOS dumpsys targets
 │   ├── const_security.config # Security, SELinux & permission diagnostics

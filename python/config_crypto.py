@@ -54,9 +54,11 @@ except ImportError:
     sys.exit("ERROR: missing dependency. Install it with: python3 -m pip install cryptography")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PLAIN_FILE = os.path.join(SCRIPT_DIR, "apk.config")
-ENCRYPTED_FILE = os.path.join(SCRIPT_DIR, "enc_apk.config")
-DECRYPTED_FILE = os.path.join(SCRIPT_DIR, "dec_apk.config")
+REPO_ROOT = os.path.dirname(SCRIPT_DIR) if os.path.basename(SCRIPT_DIR) == "python" else SCRIPT_DIR
+CONFIG_DIR = os.path.join(REPO_ROOT, "config")
+PLAIN_FILE = os.path.join(CONFIG_DIR, "apk.config")
+ENCRYPTED_FILE = os.path.join(CONFIG_DIR, "enc_apk.config")
+DECRYPTED_FILE = os.path.join(CONFIG_DIR, "dec_apk.config")
 SALT_SIZE = 16
 KDF_ITERATIONS = 600_000
 

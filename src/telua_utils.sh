@@ -177,13 +177,16 @@ install_python_requirements() {
 
 # --- 1b. Initialize Project Config (--init) ---
 # Apply apk_overlays.config (personal/site overrides) on top of a freshly created apk.config.
-# Looked up next to the script (SCRIPT_DIR), then in the master toolkit dir. No-op if absent.
+# Looked up under config/ (or root fallback) in SCRIPT_DIR and MASTER_SCRIPT_DIR. No-op if absent.
 apply_config_overlay() {
     local target_config="$1"
     local overlay_name="apk_overlays.config"
     local overlay_file="" overlay_script="" dir
 
     for dir in "$SCRIPT_DIR" "$MASTER_SCRIPT_DIR"; do
+        if [ -z "$overlay_file" ] && [ -f "$dir/config/$overlay_name" ]; then
+            overlay_file="$dir/config/$overlay_name"
+        fi
         if [ -z "$overlay_file" ] && [ -f "$dir/$overlay_name" ]; then
             overlay_file="$dir/$overlay_name"
         fi
@@ -217,13 +220,15 @@ apply_config_overlay() {
 }
 
 # --- 1b. Initialize Project Config (--init) ---
-# Creates $PWD/apk.config from the encrypted template (enc_apk.config, password
-# prompt) or the plain template, then applies the personal overlay.
+# Creates $PWD/apk.config from the encrypted template (config/enc_apk.config, password
+# prompt) or the plain template (config/apk.config), then applies the personal overlay.
 init_project_config() {
     local base_toolkit_dir="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}"
     local target_config="$PWD/$CONFIG_FILE_NAME"
-    local template_config="$base_toolkit_dir/$CONFIG_FILE_NAME"
-    local enc_config="$base_toolkit_dir/enc_apk.config"
+    local template_config="$base_toolkit_dir/config/$CONFIG_FILE_NAME"
+    [ ! -f "$template_config" ] && template_config="$base_toolkit_dir/$CONFIG_FILE_NAME"
+    local enc_config="$base_toolkit_dir/config/enc_apk.config"
+    [ ! -f "$enc_config" ] && enc_config="$base_toolkit_dir/enc_apk.config"
     # Prefer python/ subdir (new layout), fall back to repo root (old layout).
     local crypto_script
     if [ -f "$base_toolkit_dir/python/config_crypto.py" ]; then

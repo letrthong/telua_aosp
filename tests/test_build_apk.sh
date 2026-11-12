@@ -153,7 +153,7 @@ rm -rf "$TMP_REPORT_DIR"
 # Test 4e: Profile switching (-p / --profile) updates apk.config and rejects invalid profile
 log_test "Testing profile switch (-p / --profile)..."
 TMP_PROF_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_profile_test.XXXXXX")
-cp "$REPO_ROOT/apk.config" "$TMP_PROF_DIR/apk.config"
+cp "$REPO_ROOT/config/apk.config" "$TMP_PROF_DIR/apk.config"
 out_prof=$("$MAIN_SCRIPT" info --config "$TMP_PROF_DIR/apk.config" -p car_audio 2>&1 || true)
 assert_success "Profile switch (-p car_audio) updates ACTIVE_PROJECT in apk.config" grep -q 'ACTIVE_PROJECT="car_audio"' "$TMP_PROF_DIR/apk.config"
 assert_success "Info output reflects switched CarAudioService module" grep -q "CarAudioService" <<< "$out_prof"
@@ -169,9 +169,9 @@ TMP_TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_sh_test.XXXXXX")
 
 # Create mock repo environment
 mkdir -p "$TMP_TEST_DIR/config"
-echo "TEST_OVERLAY=1" > "$TMP_TEST_DIR/apk_overlays.config"
+echo "TEST_OVERLAY=1" > "$TMP_TEST_DIR/config/apk_overlays.config"
 echo "TEST_MY_CLI=1" > "$TMP_TEST_DIR/config/const_my_cli.config"
-echo "EXAMPLE_OVERLAY=1" > "$TMP_TEST_DIR/apk_overlays.config.example"
+echo "EXAMPLE_OVERLAY=1" > "$TMP_TEST_DIR/config/apk_overlays.config.example"
 
 # Extract and run backup/restore functions in subshell
 (
@@ -196,15 +196,15 @@ echo "EXAMPLE_OVERLAY=1" > "$TMP_TEST_DIR/apk_overlays.config.example"
 
     # Test backup
     b_dir="$(backup_personal_configs "$TMP_TEST_DIR")"
-    [ -n "$b_dir" ] && [ -f "$b_dir/apk_overlays.config" ]
+    [ -n "$b_dir" ] && [ -f "$b_dir/config/apk_overlays.config" ]
 
     # Simulate wipe
-    rm -f "$TMP_TEST_DIR/apk_overlays.config"
+    rm -f "$TMP_TEST_DIR/config/apk_overlays.config"
 
     # Test restore
     restore_personal_configs "$TMP_TEST_DIR" "$b_dir"
-    [ -f "$TMP_TEST_DIR/apk_overlays.config" ]
-    [ "$(cat "$TMP_TEST_DIR/apk_overlays.config")" = "TEST_OVERLAY=1" ]
+    [ -f "$TMP_TEST_DIR/config/apk_overlays.config" ]
+    [ "$(cat "$TMP_TEST_DIR/config/apk_overlays.config")" = "TEST_OVERLAY=1" ]
 )
 assert_success "Backup and restore preserves personal configs" [ $? -eq 0 ]
 

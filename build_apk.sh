@@ -37,7 +37,7 @@ DOCKER_CONFIG_FILE_NAME="const_docker.config"
 NETWORK_CONFIG_FILE_NAME="const_network.config"
 # Personal (untracked, git-ignored) files relative to the toolkit repo.
 # 'telua init' creates them from '<file>.example' if missing; 'telua update' backs them up and restores them.
-PERSONAL_CONFIG_FILES=("apk_overlays.config" "config/const_my_cli.config")
+PERSONAL_CONFIG_FILES=("config/apk_overlays.config" "config/const_my_cli.config")
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Resolve master script directory (even if executed through symlink)
@@ -54,7 +54,8 @@ get_master_script_dir() {
 }
 MASTER_SCRIPT_DIR="$(get_master_script_dir)"
 
-# Tìm apk.config: ưu tiên tại $PWD hoặc duyệt ngược lên các thư mục cha của dự án
+# Tìm apk.config: ưu tiên tại $PWD hoặc duyệt ngược lên các thư mục cha của dự án,
+# sau đó kiểm tra thư mục config/ của toolkit (hoặc root tương thích ngược).
 find_config_file() {
     local check_dir="$PWD"
     while [ "$check_dir" != "/" ] && [ "$check_dir" != "." ]; do
@@ -62,12 +63,28 @@ find_config_file() {
             echo "$check_dir/$CONFIG_FILE_NAME"
             return 0
         fi
+        if [ -f "$check_dir/config/$CONFIG_FILE_NAME" ]; then
+            echo "$check_dir/config/$CONFIG_FILE_NAME"
+            return 0
+        fi
         if [ -d "$check_dir/.repo" ]; then
             break
         fi
         check_dir="$(dirname "$check_dir")"
     done
-    echo "$SCRIPT_DIR/$CONFIG_FILE_NAME"
+    if [ -f "$SCRIPT_DIR/config/$CONFIG_FILE_NAME" ]; then
+        echo "$SCRIPT_DIR/config/$CONFIG_FILE_NAME"
+        return 0
+    fi
+    if [ -f "$MASTER_SCRIPT_DIR/config/$CONFIG_FILE_NAME" ]; then
+        echo "$MASTER_SCRIPT_DIR/config/$CONFIG_FILE_NAME"
+        return 0
+    fi
+    if [ -f "$SCRIPT_DIR/$CONFIG_FILE_NAME" ]; then
+        echo "$SCRIPT_DIR/$CONFIG_FILE_NAME"
+        return 0
+    fi
+    echo "$SCRIPT_DIR/config/$CONFIG_FILE_NAME"
 }
 
 CONFIG_FILE="$(find_config_file)"
@@ -502,8 +519,8 @@ print_help() {
     printf "  \033[0;90m%-28s\033[0m \033[0;36m%s\033[0m\n" "Git Cheatsheet (Global):" "$GIT_CONFIG_FILE"
     printf "  \033[0;90m%-28s\033[0m \033[0;36m%s\033[0m\n" "Docker Cheatsheet (Global):" "$DOCKER_CONFIG_FILE"
     printf "  \033[0;90m%-28s\033[0m \033[0;36m%s\033[0m\n" "Network Cheatsheet (Global):" "$NETWORK_CONFIG_FILE"
-    printf "  \033[0;90m%-28s\033[0m \033[0;37m%s\033[0m\n" "Master Template:" "$SCRIPT_DIR/$CONFIG_FILE_NAME"
-    printf "  \033[0;90m%-28s\033[0m \033[0;37m%s\033[0m\n" "Encrypted Template:" "$SCRIPT_DIR/enc_apk.config"
+    printf "  \033[0;90m%-28s\033[0m \033[0;37m%s\033[0m\n" "Master Template:" "$SCRIPT_DIR/config/$CONFIG_FILE_NAME"
+    printf "  \033[0;90m%-28s\033[0m \033[0;37m%s\033[0m\n" "Encrypted Template:" "$SCRIPT_DIR/config/enc_apk.config"
     echo ""
     echo -e "  \033[1;32mTip:\033[0m \033[0;90mRun\033[0m \033[1;36mtel b\033[0m \033[0;90mto build & deploy, or\033[0m \033[1;36mtel info\033[0m \033[0;90mto inspect environment & device.\033[0m"
     echo ""
@@ -962,10 +979,16 @@ install_to_project() {
     ln -sfn "$real_script" "$real_target/build_apk.sh"
     # rm first: if the old config is a symlink, 'cp' would write through it.
     rm -f "$real_target/$CONFIG_FILE_NAME"
-    cp "$SCRIPT_DIR/$CONFIG_FILE_NAME" "$real_target/$CONFIG_FILE_NAME"
+    local src_cfg="$SCRIPT_DIR/config/$CONFIG_FILE_NAME"
+    if [ ! -f "$src_cfg" ] && [ -f "$MASTER_SCRIPT_DIR/config/$CONFIG_FILE_NAME" ]; then
+        src_cfg="$MASTER_SCRIPT_DIR/config/$CONFIG_FILE_NAME"
+    elif [ ! -f "$src_cfg" ] && [ -f "$SCRIPT_DIR/$CONFIG_FILE_NAME" ]; then
+        src_cfg="$SCRIPT_DIR/$CONFIG_FILE_NAME"
+    fi
+    cp "$src_cfg" "$real_target/$CONFIG_FILE_NAME"
 
     log_success "Linked:  $real_target/build_apk.sh -> $real_script"
-    log_success "Copied:  $SCRIPT_DIR/$CONFIG_FILE_NAME -> $real_target/$CONFIG_FILE_NAME"
+    log_success "Copied:  $src_cfg -> $real_target/$CONFIG_FILE_NAME"
     log_info "Next: edit $real_target/$CONFIG_FILE_NAME, then run: cd \"$real_target\" && ./build_apk.sh --info"
 }
 
@@ -1294,6 +1317,9 @@ run_tests() {
     local config_dir
     config_dir="$(dirname "$CONFIG_FILE")"
     local test_dir="$config_dir/$TEST_RELATIVE_PATH"
+    if [ ! -d "$test_dir" ] && [ "$(basename "$config_dir")" = "config" ]; then
+        test_dir="$(dirname "$config_dir")/$TEST_RELATIVE_PATH"
+    fi
     if [ ! -d "$test_dir" ]; then
         log_error "Test directory '$test_dir' does not exist"
         exit 1

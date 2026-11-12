@@ -79,7 +79,7 @@ DEFAULT_ROOT = WEB_DIR.parent
 
 ROOT = DEFAULT_ROOT                 # toolkit root (config registry base), set by --root
 BUILD_APK_SH = ROOT / "build_apk.sh"
-APK_CONFIG = ROOT / "apk.config"
+APK_CONFIG = (ROOT / "config" / "apk.config") if (ROOT / "config" / "apk.config").is_file() else (ROOT / "apk.config")
 MY_CLI_CONFIG = ROOT / "config" / "const_my_cli.config"
 
 START_TIME = time.time()
@@ -147,7 +147,12 @@ def scan_files():
                 add("config/" + name)
 
     # Stable, human-friendly ordering: apk.config on top, then the rest.
-    priority = {"apk.config": 0, "apk_overlays.config": 1}
+    priority = {
+        "config/apk.config": 0,
+        "apk.config": 0,
+        "config/apk_overlays.config": 1,
+        "apk_overlays.config": 1,
+    }
     entries.sort(key=lambda f: (priority.get(f["name"], 2), f["name"]))
     return entries
 
@@ -830,7 +835,7 @@ def main():
             sys.exit(1)
         ROOT = root
         BUILD_APK_SH = ROOT / "build_apk.sh"
-        APK_CONFIG = ROOT / "apk.config"
+        APK_CONFIG = (ROOT / "config" / "apk.config") if (ROOT / "config" / "apk.config").is_file() else (ROOT / "apk.config")
         MY_CLI_CONFIG = ROOT / "config" / "const_my_cli.config"
 
     if not STATIC_DIR.is_dir():

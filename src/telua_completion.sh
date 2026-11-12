@@ -71,12 +71,20 @@ _telua_completions() {
                     cfg_file="$check_dir/apk.config"
                     break
                 fi
+                if [ -f "$check_dir/config/apk.config" ]; then
+                    cfg_file="$check_dir/config/apk.config"
+                    break
+                fi
                 check_dir="$(dirname "$check_dir")"
             done
             if [ -z "$cfg_file" ]; then
                 local root_dir
                 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
-                [ -f "$root_dir/apk.config" ] && cfg_file="$root_dir/apk.config"
+                if [ -f "$root_dir/config/apk.config" ]; then
+                    cfg_file="$root_dir/config/apk.config"
+                elif [ -f "$root_dir/apk.config" ]; then
+                    cfg_file="$root_dir/apk.config"
+                fi
             fi
             if [ -n "$cfg_file" ] && [ -f "$cfg_file" ]; then
                 local dynamic_profiles

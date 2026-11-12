@@ -7,10 +7,10 @@ An automated developer workflow script for building and deploying privileged sys
 | File | Purpose |
 |---|---|
 | `build_apk.sh` | Core execution script (orchestration logic, alias `telua`) |
-| `apk.config` | Active project configuration (profile selection, lunch targets, deploy flags, debug tags) |
-| `apk_overlays.config.example` | Template for personal/private project overrides (auto-applied by `telua init`) |
-| `apk_overlays.config` | Local confidential project overrides (untracked in Git, preserved across updates) |
-| `config_overlay.py` | Smart overlay merge engine (merges `apk_overlays.config` onto `apk.config`) |
+| `config/apk.config` | Active project configuration (profile selection, lunch targets, deploy flags, debug tags) |
+| `config/apk_overlays.config.example` | Template for personal/private project overrides (auto-applied by `telua init`) |
+| `config/apk_overlays.config` | Local confidential project overrides (untracked in Git, preserved across updates) |
+| `python/config_overlay.py` | Smart overlay merge engine (merges `config/apk_overlays.config` onto `apk.config`) |
 | `config/const_car.config` | Global AAOS Car & Audio ADB key injection commands configuration |
 | `config/const_dumpsys.config` | Global Dumpsys & AAOS diagnostics commands configuration |
 | `config/const_security.config` | Global Security, SELinux & permissions diagnostics configuration (`telua sec`) |
@@ -102,14 +102,15 @@ Maintain **a single golden copy of `build_apk.sh`** shared across multiple indep
 ```
 ~/code/telua_skill/.../build/           ← Master Repository (edit logic here)
 ├── build_apk.sh                        ← Master CLI engine & orchestration logic
-├── apk.config                          ← Active configuration profile
-├── apk_overlays.config.example         ← Personal override template (auto-copied by telua init)
-├── config_overlay.py                   ← Smart overlay merge engine (merges overrides into apk.config)
-├── config_crypto.py                    ← Configuration encryption utility (PBKDF2 + Fernet)
-├── enc_apk.config                      ← Encrypted configuration template (Base64)
+├── python/                             ← Python automation & static analysis scripts
+│   ├── config_overlay.py               ← Smart overlay merge engine (merges overrides into apk.config)
+│   └── config_crypto.py                ← Configuration encryption utility (PBKDF2 + Fernet)
 ├── requirements.txt                    ← Python dependencies (cryptography)
 ├── AI.md                               ← AI Assistant & LLM instruction reference
-└── config/                             ← Shared constants, macros & cheatsheets
+└── config/                             ← Shared constants, project configs, macros & cheatsheets
+    ├── apk.config                      ← Master active configuration profile
+    ├── apk_overlays.config.example     ← Personal override template (auto-copied by telua init)
+    ├── enc_apk.config                  ← Encrypted configuration template (Base64)
     ├── const_car.config                ← AAOS car & audio key injections
     ├── const_dumpsys.config            ← System dumpsys diagnostics
     ├── const_multi_cli.config          ← Multi-command sequential pipelines
@@ -121,7 +122,6 @@ Maintain **a single golden copy of `build_apk.sh`** shared across multiple indep
 ~/ws_main/android/qssi/tools/           ← Local Workspace (created via telua init / --softlink)
 ├── build_apk.sh  -> (symlink to master build_apk.sh)
 ├── apk.config        (ACTIVE_PROJECT="oem_service", target A)
-├── apk_overlays.config (Local confidential overrides, git-ignored)
 ├── OemService.apk    (Build output artifact copied here)
 └── deployment_log.txt
 ```
