@@ -37,7 +37,8 @@ DOCKER_CONFIG_FILE_NAME="const_docker.config"
 NETWORK_CONFIG_FILE_NAME="const_network.config"
 # Personal (untracked, git-ignored) files relative to the toolkit repo.
 # 'telua init' creates them from '<file>.example' if missing; 'telua update' backs them up and restores them.
-PERSONAL_CONFIG_FILES=("config/apk_overlays.config" "config/const_my_cli.config")
+# Both live in config/overlay/ (git-ignored — see .gitignore 'config/overlay/*.config').
+PERSONAL_CONFIG_FILES=("config/overlay/apk_overlays.config" "config/overlay/const_my_cli.config")
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Resolve master script directory (even if executed through symlink)

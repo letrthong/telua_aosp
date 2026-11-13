@@ -183,7 +183,12 @@ apply_config_overlay() {
     local overlay_name="apk_overlays.config"
     local overlay_file="" overlay_script="" dir
 
+    # Lookup order per dir: config/overlay/ (new personal overlay dir, git-ignored)
+    # -> config/ (legacy) -> repo root (legacy).
     for dir in "$SCRIPT_DIR" "$MASTER_SCRIPT_DIR"; do
+        if [ -z "$overlay_file" ] && [ -f "$dir/config/overlay/$overlay_name" ]; then
+            overlay_file="$dir/config/overlay/$overlay_name"
+        fi
         if [ -z "$overlay_file" ] && [ -f "$dir/config/$overlay_name" ]; then
             overlay_file="$dir/config/$overlay_name"
         fi

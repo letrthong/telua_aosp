@@ -146,10 +146,18 @@ def scan_files():
             if is_editable_name(name) and (cfg_dir / name).is_file():
                 add("config/" + name)
 
+    # 2b. Personal overlay dir (git-ignored): apk_overlays.config, const_my_cli.config
+    overlay_dir = ROOT / "config" / "overlay"
+    if overlay_dir.is_dir():
+        for name in sorted(os.listdir(overlay_dir)):
+            if is_editable_name(name) and (overlay_dir / name).is_file():
+                add("config/overlay/" + name)
+
     # Stable, human-friendly ordering: apk.config on top, then the rest.
     priority = {
         "config/apk.config": 0,
         "apk.config": 0,
+        "config/overlay/apk_overlays.config": 1,
         "config/apk_overlays.config": 1,
         "apk_overlays.config": 1,
     }

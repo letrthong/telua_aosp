@@ -49,7 +49,20 @@ import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR) if os.path.basename(SCRIPT_DIR) == "python" else SCRIPT_DIR
-DEFAULT_OVERLAY = os.path.join(REPO_ROOT, "config", "apk_overlays.config")
+
+
+def _default_overlay() -> str:
+    """Prefer config/overlay/apk_overlays.config (personal dir), fall back to legacy spots."""
+    for rel in (os.path.join("config", "overlay", "apk_overlays.config"),
+                os.path.join("config", "apk_overlays.config"),
+                "apk_overlays.config"):
+        candidate = os.path.join(REPO_ROOT, rel)
+        if os.path.isfile(candidate):
+            return candidate
+    return os.path.join(REPO_ROOT, "config", "overlay", "apk_overlays.config")
+
+
+DEFAULT_OVERLAY = _default_overlay()
 ASSIGN_RE = re.compile(r"^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 CASE_START_RE = re.compile(r"^\s*case\s+(.+?)\s+in\s*(?:#.*)?$")
 CASE_END_RE = re.compile(r"^\s*esac\b")

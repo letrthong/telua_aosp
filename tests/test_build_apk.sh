@@ -167,11 +167,11 @@ rm -rf "$TMP_PROF_DIR"
 log_test "Testing personal config backup and restore isolation..."
 TMP_TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_sh_test.XXXXXX")
 
-# Create mock repo environment
-mkdir -p "$TMP_TEST_DIR/config"
-echo "TEST_OVERLAY=1" > "$TMP_TEST_DIR/config/apk_overlays.config"
-echo "TEST_MY_CLI=1" > "$TMP_TEST_DIR/config/const_my_cli.config"
-echo "EXAMPLE_OVERLAY=1" > "$TMP_TEST_DIR/config/apk_overlays.config.example"
+# Create mock repo environment (personal configs live in config/overlay/)
+mkdir -p "$TMP_TEST_DIR/config/overlay"
+echo "TEST_OVERLAY=1" > "$TMP_TEST_DIR/config/overlay/apk_overlays.config"
+echo "TEST_MY_CLI=1" > "$TMP_TEST_DIR/config/overlay/const_my_cli.config"
+echo "EXAMPLE_OVERLAY=1" > "$TMP_TEST_DIR/config/overlay/apk_overlays.config.example"
 
 # Extract and run backup/restore functions in subshell
 (
@@ -196,15 +196,15 @@ echo "EXAMPLE_OVERLAY=1" > "$TMP_TEST_DIR/config/apk_overlays.config.example"
 
     # Test backup
     b_dir="$(backup_personal_configs "$TMP_TEST_DIR")"
-    [ -n "$b_dir" ] && [ -f "$b_dir/config/apk_overlays.config" ]
+    [ -n "$b_dir" ] && [ -f "$b_dir/config/overlay/apk_overlays.config" ]
 
     # Simulate wipe
-    rm -f "$TMP_TEST_DIR/config/apk_overlays.config"
+    rm -f "$TMP_TEST_DIR/config/overlay/apk_overlays.config"
 
     # Test restore
     restore_personal_configs "$TMP_TEST_DIR" "$b_dir"
-    [ -f "$TMP_TEST_DIR/config/apk_overlays.config" ]
-    [ "$(cat "$TMP_TEST_DIR/config/apk_overlays.config")" = "TEST_OVERLAY=1" ]
+    [ -f "$TMP_TEST_DIR/config/overlay/apk_overlays.config" ]
+    [ "$(cat "$TMP_TEST_DIR/config/overlay/apk_overlays.config")" = "TEST_OVERLAY=1" ]
 )
 assert_success "Backup and restore preserves personal configs" [ $? -eq 0 ]
 
