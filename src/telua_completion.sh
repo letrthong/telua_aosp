@@ -84,6 +84,8 @@ _telua_completions() {
             ;;
         -p|--profile)
             local profiles="oem_service car_audio vehicle_service"
+            local root_dir
+            root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
             local cfg_file=""
             local check_dir="$PWD"
             while [ "$check_dir" != "/" ] && [ "$check_dir" != "." ]; do
@@ -97,20 +99,54 @@ _telua_completions() {
                 fi
                 check_dir="$(dirname "$check_dir")"
             done
-            if [ -z "$cfg_file" ]; then
-                local root_dir
-                root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
+            if [ -z "$cfg_file" ] && [ -n "$root_dir" ]; then
                 if [ -f "$root_dir/config/apk.config" ]; then
                     cfg_file="$root_dir/config/apk.config"
                 elif [ -f "$root_dir/apk.config" ]; then
                     cfg_file="$root_dir/apk.config"
                 fi
             fi
+            # The toolkit's own config/apk.config is the pristine template, not a
+            # merged project config. When completing from it (e.g. 'telua init -p
+            # <TAB>' inside the toolkit repo), merge in the personal overlay
+            # (config/overlay/apk_overlays.config) exactly like 'telua init' does:
+            # overlay branches first, then template-only branches appended.
+            local cfg_is_template=0
+            if [ -n "$cfg_file" ] && [ -n "$root_dir" ] && [[ "$cfg_file" == "$root_dir"/* ]]; then
+                cfg_is_template=1
+            fi
+            if [ "$cfg_is_template" = "1" ]; then
+                local overlay_file=""
+                if [ -f "$root_dir/config/overlay/apk_overlays.config" ]; then
+                    overlay_file="$root_dir/config/overlay/apk_overlays.config"
+                elif [ -f "$root_dir/config/apk_overlays.config" ]; then
+                    overlay_file="$root_dir/config/apk_overlays.config"
+                fi
+                if [ -n "$overlay_file" ]; then
+                    local overlay_profiles
+                    overlay_profiles=$(sed -n '/^case "\$ACTIVE_PROJECT"/,/^esac/p' "$overlay_file" 2>/dev/null | grep -E '^[[:space:]]*"[^"]+"\)' | sed -E 's/^[[:space:]]*"([^"]+)"\).*/\1/' | tr '\n' ' ')
+                    if [ -n "$overlay_profiles" ]; then
+                        profiles="$overlay_profiles"
+                    fi
+                fi
+            fi
             if [ -n "$cfg_file" ] && [ -f "$cfg_file" ]; then
                 local dynamic_profiles
                 dynamic_profiles=$(sed -n '/^case "\$ACTIVE_PROJECT"/,/^esac/p' "$cfg_file" 2>/dev/null | grep -E '^[[:space:]]*"[^"]+"\)' | sed -E 's/^[[:space:]]*"([^"]+)"\).*/\1/' | tr '\n' ' ')
                 if [ -n "$dynamic_profiles" ]; then
-                    profiles="$dynamic_profiles"
+                    if [ "$cfg_is_template" = "1" ]; then
+                        # Union: overlay profiles first, then template-only profiles
+                        # (mirrors the branch merge performed by config_overlay.py).
+                        local p
+                        for p in $dynamic_profiles; do
+                            case " $profiles " in
+                                *" $p "*) ;;
+                                *) profiles="$profiles $p" ;;
+                            esac
+                        done
+                    else
+                        profiles="$dynamic_profiles"
+                    fi
                 fi
             fi
             COMPREPLY=($(compgen -W "$profiles" -- "$cur"))

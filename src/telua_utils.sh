@@ -219,6 +219,22 @@ apply_config_overlay() {
     fi
 }
 
+# Apply the profile requested via 'telua init -p <name>' to the freshly created
+# apk.config (after the overlay merge). No-op when no -p was given or the
+# ACTIVE_PROJECT key is missing. Usage: apply_init_profile <target_config>
+apply_init_profile() {
+    local target_config="$1"
+    if [ -z "${CLI_PROFILE:-}" ] || [ ! -f "$target_config" ]; then
+        return 0
+    fi
+    if grep -qE '^[[:space:]]*ACTIVE_PROJECT=' "$target_config"; then
+        sed -i -E "s/^[[:space:]]*ACTIVE_PROJECT=.*/ACTIVE_PROJECT=\"$CLI_PROFILE\"/" "$target_config"
+        log_info "Updated ACTIVE_PROJECT=\"$CLI_PROFILE\" in $target_config"
+    else
+        log_warn "No ACTIVE_PROJECT key in $target_config; profile '$CLI_PROFILE' not applied."
+    fi
+}
+
 # --- 1b. Initialize Project Config (--init) ---
 # Creates $PWD/apk.config from the encrypted template (config/enc_apk.config, password
 # prompt) or the plain template (config/apk.config), then applies the personal overlay.
@@ -278,6 +294,7 @@ init_project_config() {
                 unset input_pw
                 log_success "Successfully decrypted and created: $target_config"
                 apply_config_overlay "$target_config"
+                apply_init_profile "$target_config"
                 log_info "Next: edit $CONFIG_FILE_NAME, then run: telua --info"
                 exit 0
             else
@@ -293,6 +310,7 @@ init_project_config() {
         cp "$template_config" "$target_config"
         log_success "Initialized with default template: $target_config"
         apply_config_overlay "$target_config"
+        apply_init_profile "$target_config"
         log_info "Next: edit $CONFIG_FILE_NAME, then run: telua --info"
         exit 0
     fi
