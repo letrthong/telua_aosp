@@ -159,8 +159,12 @@ async function refreshStatus() {
 /* ---------------- File list ---------------- */
 // Files that have a dedicated Pipelines GUI view, mapped to their source key.
 const PIPELINE_GUI_FILES = {
+  "config/overlay/const_my_cli.config": "my",
+  "config/overlay/const_my_cli.config.example": "my",
   "config/const_my_cli.config": "my",
+  "config/const_my_cli.config.example": "my",
   "config/const_multi_cli.config": "multi",
+  "config/const_multi_cli.config.example": "multi",
 };
 
 function renderFiles(filter = "") {
@@ -204,7 +208,7 @@ function renderFiles(filter = "") {
 function handleFileClick(name) {
   const pipelinesActive = !$("#view-pipelines").classList.contains("hidden");
   const guiSource = PIPELINE_GUI_FILES[name];
-  if (pipelinesActive && guiSource) {
+  if (pipelinesActive && guiSource && state.plSource !== guiSource) {
     switchPipelineSource(guiSource);
     return;
   }
@@ -364,7 +368,8 @@ function renderPipelines() {
     list.appendChild(pipelineCard(p));
   }
   if (state.pipelines.length === 0) {
-    list.innerHTML = `<p class="meta">No pipelines found in const_my_cli.config.</p>`;
+    const fileLabel = $("#pl-file")?.textContent || "config/overlay/const_my_cli.config";
+    list.innerHTML = `<p class="meta">No pipelines found in ${escapeHtml(fileLabel)}.</p>`;
   }
   const total = state.pipelines.reduce((n, p) => n + p.steps.length, 0);
   $("#pl-stats").textContent =

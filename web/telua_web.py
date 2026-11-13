@@ -80,7 +80,12 @@ DEFAULT_ROOT = WEB_DIR.parent
 ROOT = DEFAULT_ROOT                 # toolkit root (config registry base), set by --root
 BUILD_APK_SH = ROOT / "build_apk.sh"
 APK_CONFIG = (ROOT / "config" / "apk.config") if (ROOT / "config" / "apk.config").is_file() else (ROOT / "apk.config")
-MY_CLI_CONFIG = ROOT / "config" / "const_my_cli.config"
+MY_CLI_CONFIG = (
+    (ROOT / "config" / "overlay" / "const_my_cli.config")
+    if (ROOT / "config" / "overlay" / "const_my_cli.config").is_file()
+    or not (ROOT / "config" / "const_my_cli.config").is_file()
+    else (ROOT / "config" / "const_my_cli.config")
+)
 
 START_TIME = time.time()
 FLASK_VERSION = ""
@@ -153,13 +158,15 @@ def scan_files():
             if is_editable_name(name) and (overlay_dir / name).is_file():
                 add("config/overlay/" + name)
 
-    # Stable, human-friendly ordering: apk.config on top, then the rest.
+    # Stable, human-friendly ordering: apk.config on top, then personal overlays, then the rest.
     priority = {
         "config/apk.config": 0,
         "apk.config": 0,
         "config/overlay/apk_overlays.config": 1,
         "config/apk_overlays.config": 1,
         "apk_overlays.config": 1,
+        "config/overlay/const_my_cli.config": 1,
+        "config/const_my_cli.config": 1,
     }
     entries.sort(key=lambda f: (priority.get(f["name"], 2), f["name"]))
     return entries
@@ -475,13 +482,20 @@ def _pipeline_source(source):
 
 def _pipeline_config_path(source):
     """Resolve the config file for a source (fall back to the .example)."""
-    _, desc = _pipeline_source(source)
-    path = desc["file"]
-    if path.is_file():
-        return path
-    example = path.with_suffix(".config.example")
-    if example.is_file():
-        return example
+    key, desc = _pipeline_source(source)
+    if key == "my":
+        candidates = [
+            ROOT / "config" / "overlay" / "const_my_cli.config",
+            ROOT / "config" / "const_my_cli.config",
+            ROOT / "config" / "overlay" / "const_my_cli.config.example",
+            ROOT / "config" / "const_my_cli.config.example",
+        ]
+    else:
+        path = ROOT / "config" / "const_multi_cli.config"
+        candidates = [path, path.with_suffix(".config.example")]
+    for cand in candidates:
+        if cand.is_file():
+            return cand
     return None
 
 
@@ -608,7 +622,7 @@ def rewrite_pipeline_config(pipelines, source="my"):
 
     path = _pipeline_config_path(source)
     if not path:
-        abort(404, description="%s not found (run 'telua init' first)." % path.name)
+        abort(404, description="Pipeline config for '%s' not found (run 'telua init' first)." % source)
     if not os.access(path, os.W_OK):
         abort(403, description="%s is read-only." % path.name)
 
@@ -678,7 +692,7 @@ def rewrite_pipeline_config(pipelines, source="my"):
     try:
         backup_path = path.with_suffix(path.suffix + ".bak")
         shutil.copy2(path, backup_path)
-        backup = str(backup_path.relative_to(ROOT))
+        backup = str(backup_path.relative_to(ROOT)).replace(os.sep, "/")
     except OSError:
         backup = None
 
@@ -696,7 +710,7 @@ def api_pipelines():
         "ok": True,
         "source": _pipeline_source(source)[0],
         "label": desc["label"],
-        "file": str(path.relative_to(ROOT)) if path else None,
+        "file": str(path.relative_to(ROOT)).replace(os.sep, "/") if path else None,
         "pipelines": parse_pipelines(source),
     })
 
@@ -820,7 +834,7 @@ def print_banner(host: str, port: int):
 
 
 def main():
-    global ROOT, BUILD_APK_SH, APK_CONFIG
+    global ROOT, BUILD_APK_SH, APK_CONFIG, MY_CLI_CONFIG
 
     parser = argparse.ArgumentParser(
         prog="telua_web.py",
@@ -844,7 +858,14 @@ def main():
         ROOT = root
         BUILD_APK_SH = ROOT / "build_apk.sh"
         APK_CONFIG = (ROOT / "config" / "apk.config") if (ROOT / "config" / "apk.config").is_file() else (ROOT / "apk.config")
-        MY_CLI_CONFIG = ROOT / "config" / "const_my_cli.config"
+        MY_CLI_CONFIG = (
+            (ROOT / "config" / "overlay" / "const_my_cli.config")
+            if (ROOT / "config" / "overlay" / "const_my_cli.config").is_file()
+            or not (ROOT / "config" / "const_my_cli.config").is_file()
+            else (ROOT / "config" / "const_my_cli.config")
+        )
+        PIPELINE_SOURCES["my"]["file"] = MY_CLI_CONFIG
+        PIPELINE_SOURCES["multi"]["file"] = ROOT / "config" / "const_multi_cli.config"
 
     if not STATIC_DIR.is_dir():
         sys.stderr.write("[ERROR] Static assets directory not found: %s\n" % STATIC_DIR)

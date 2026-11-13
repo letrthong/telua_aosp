@@ -1206,52 +1206,64 @@ show_info() {
 }
 
 # --- 2. Load & Validate Configuration ---
+# Helper: auto-strip CRLF (\r) before sourcing so editing .config files on a
+# Windows shared folder (/mnt/hgfs/...) never breaks bash with "$'\r': command not found".
+source_config_safe() {
+    local cfg="$1"
+    [ -f "$cfg" ] || return 1
+    if LC_ALL=C grep -q $'\r' "$cfg" 2>/dev/null; then
+        sed -i 's/\r$//' "$cfg" 2>/dev/null || true
+    fi
+    # shellcheck disable=SC1090
+    source "$cfg"
+}
+
 load_and_validate_config() {
     # 1. Nạp cấu hình Car chung (nằm cùng thư mục với build_apk.sh)
     if [ -f "$CAR_CONFIG_FILE" ]; then
-        source "$CAR_CONFIG_FILE"
+        source_config_safe "$CAR_CONFIG_FILE"
     elif [ -f "$MASTER_SCRIPT_DIR/$CAR_CONFIG_FILE_NAME" ]; then
-        source "$MASTER_SCRIPT_DIR/$CAR_CONFIG_FILE_NAME"
+        source_config_safe "$MASTER_SCRIPT_DIR/$CAR_CONFIG_FILE_NAME"
     elif [ -f "$SCRIPT_DIR/$CAR_CONFIG_FILE_NAME" ]; then
-        source "$SCRIPT_DIR/$CAR_CONFIG_FILE_NAME"
+        source_config_safe "$SCRIPT_DIR/$CAR_CONFIG_FILE_NAME"
     fi
 
     # 1b. Nạp cấu hình Dumpsys chung (nằm cùng thư mục với build_apk.sh)
     if [ -f "$DUMP_CONFIG_FILE" ]; then
-        source "$DUMP_CONFIG_FILE"
+        source_config_safe "$DUMP_CONFIG_FILE"
     elif [ -f "$MASTER_SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME" ]; then
-        source "$MASTER_SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME"
+        source_config_safe "$MASTER_SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME"
     elif [ -f "$SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME" ]; then
-        source "$SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME"
+        source_config_safe "$SCRIPT_DIR/$DUMP_CONFIG_FILE_NAME"
     fi
 
     # 1e. Nạp cấu hình Security chung (nằm cùng thư mục với build_apk.sh)
     if [ -f "$SECURITY_CONFIG_FILE" ]; then
-        source "$SECURITY_CONFIG_FILE"
+        source_config_safe "$SECURITY_CONFIG_FILE"
     elif [ -f "$MASTER_SCRIPT_DIR/$SECURITY_CONFIG_FILE_NAME" ]; then
-        source "$MASTER_SCRIPT_DIR/$SECURITY_CONFIG_FILE_NAME"
+        source_config_safe "$MASTER_SCRIPT_DIR/$SECURITY_CONFIG_FILE_NAME"
     elif [ -f "$SCRIPT_DIR/$SECURITY_CONFIG_FILE_NAME" ]; then
-        source "$SCRIPT_DIR/$SECURITY_CONFIG_FILE_NAME"
+        source_config_safe "$SCRIPT_DIR/$SECURITY_CONFIG_FILE_NAME"
     fi
 
     # 1c. Nạp cấu hình Multi-CLI Pipelines chung (nằm cùng thư mục với build_apk.sh)
     if [ -f "$MULTI_CONFIG_FILE" ]; then
-        source "$MULTI_CONFIG_FILE"
+        source_config_safe "$MULTI_CONFIG_FILE"
     elif [ -f "$MASTER_SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME" ]; then
-        source "$MASTER_SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME"
+        source_config_safe "$MASTER_SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME"
     elif [ -f "$SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME" ]; then
-        source "$SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME"
+        source_config_safe "$SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME"
     fi
 
     # 1d. Nạp cấu hình Personal Pipelines (const_my_cli.config hoặc fallback const_project_cli.config)
     if [ -f "$MY_CONFIG_FILE" ]; then
-        source "$MY_CONFIG_FILE"
+        source_config_safe "$MY_CONFIG_FILE"
     elif [ -f "$PROJECT_CONFIG_FILE" ]; then
-        source "$PROJECT_CONFIG_FILE"
+        source_config_safe "$PROJECT_CONFIG_FILE"
     elif [ -f "$MASTER_SCRIPT_DIR/$MY_CONFIG_FILE_NAME" ]; then
-        source "$MASTER_SCRIPT_DIR/$MY_CONFIG_FILE_NAME"
+        source_config_safe "$MASTER_SCRIPT_DIR/$MY_CONFIG_FILE_NAME"
     elif [ -f "$SCRIPT_DIR/$MY_CONFIG_FILE_NAME" ]; then
-        source "$SCRIPT_DIR/$MY_CONFIG_FILE_NAME"
+        source_config_safe "$SCRIPT_DIR/$MY_CONFIG_FILE_NAME"
     fi
 
     if [ ! -f "$CONFIG_FILE" ]; then
@@ -1275,7 +1287,7 @@ load_and_validate_config() {
     fi
 
     # 3. Nạp cấu hình dự án (có thể ghi đè bất kỳ biến Car nào nếu cần)
-    source "$CONFIG_FILE"
+    source_config_safe "$CONFIG_FILE"
 
     local missing_vars=0
     local required_vars=(

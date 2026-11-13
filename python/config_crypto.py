@@ -128,7 +128,7 @@ def get_password(arg_password: str | None, confirm: bool = False) -> str:
 
 def encrypt_single_file(src: str, dst: str, password: str) -> None:
     with open(src, "rb") as f:
-        plaintext = f.read()
+        plaintext = f.read().replace(b"\r\n", b"\n")
 
     salt = os.urandom(SALT_SIZE)
     token = Fernet(derive_key(password, salt)).encrypt(plaintext)
@@ -148,7 +148,7 @@ def decrypt_single_file(src: str, dst: str, password: str) -> None:
     salt, token = payload[:SALT_SIZE], payload[SALT_SIZE:]
 
     try:
-        plaintext = Fernet(derive_key(password, salt)).decrypt(token)
+        plaintext = Fernet(derive_key(password, salt)).decrypt(token).replace(b"\r\n", b"\n")
     except InvalidToken:
         sys.exit("ERROR: wrong password or corrupted file")
 
