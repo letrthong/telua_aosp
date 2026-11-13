@@ -265,6 +265,26 @@ init_project_config() {
         ensure_script_permissions "$MASTER_SCRIPT_DIR"
     fi
 
+    # Decrypt private overlay configs (enc_apk_overlays.config, enc_const_my_cli.config) if present
+    local enc_overlay="$base_toolkit_dir/config/overlay/enc_apk_overlays.config"
+    local enc_my_cli="$base_toolkit_dir/config/overlay/enc_const_my_cli.config"
+    if { [ -f "$enc_overlay" ] || [ -f "$enc_my_cli" ]; } && [ -f "$crypto_script" ] && [ -t 0 ] && [ -t 1 ]; then
+        echo -n -e "\033[1;33m[PROMPT]\033[0m Enter password to decrypt private configs in config/overlay/ (Press Enter to skip): "
+        local overlay_pw
+        read -r -s overlay_pw
+        echo ""
+        if [ -n "$overlay_pw" ]; then
+            install_python_requirements
+            log_info "Decrypting private overlay configs using config_crypto.py..."
+            if printf '%s\n' "$overlay_pw" | python3 "$crypto_script" decrypt -d "$base_toolkit_dir/config/overlay" --force - 2>/dev/null; then
+                log_success "Successfully decrypted private overlay configs in $base_toolkit_dir/config/overlay/"
+            else
+                log_warn "Decryption of private overlay configs failed (incorrect password)! Falling back to *.example..."
+            fi
+        fi
+        unset overlay_pw
+    fi
+
     # Create missing personal configs (apk_overlays.config, const_my_cli.config) from *.example
     ensure_personal_configs "$MASTER_SCRIPT_DIR"
     sync_git_submodules "$MASTER_SCRIPT_DIR"

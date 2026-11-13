@@ -236,6 +236,7 @@ deployment_log.txt
 
 config/overlay/*.config
 config/overlay/*.bak
+!config/overlay/enc_*.config
 !config/overlay/ReadMe.txt
 config/const_my_cli.config
 config/apk_overlays.config
