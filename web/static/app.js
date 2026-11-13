@@ -14,9 +14,10 @@ const $ = (sel) => document.querySelector(sel);
 const state = {
   files: [],
   current: null,      // { name, content, readonly, kind, mtime }
+  fileEditing: false, // locked by default until user clicks '✎ Edit'
   dirty: false,
   status: null,
-  pipelines: [],      // [{ name, description, array, steps, orphan }]
+  pipelines: [],      // [{ name, description, array, steps, orphan, _editing, _editingStep }]
   plDirty: false,
   plSource: "my",     // "my" (const_my_cli.config) | "multi" (const_multi_cli.config)
 };
@@ -56,9 +57,10 @@ function draftSavePipelines() {
       localStorage.removeItem(DRAFT_KEY_PIPES);
       return;
     }
+    const cleanPipelines = state.pipelines.map(({ _editing, _editingStep, ...rest }) => rest);
     localStorage.setItem(DRAFT_KEY_PIPES, JSON.stringify({
       source: state.plSource,
-      pipelines: state.pipelines,
+      pipelines: cleanPipelines,
       saved_at: new Date().toISOString(),
     }));
   } catch { /* best-effort */ }
@@ -241,19 +243,38 @@ function updateStats() {
   $("#editor-stats").textContent = `${lines} lines · ${bytes} bytes`;
 }
 
+function setFileEditing(editing) {
+  const c = state.current;
+  const canEdit = !!(c && !c.readonly);
+  state.fileEditing = canEdit && !!editing;
+  const editor = $("#editor");
+  editor.disabled = !c || c.readonly;
+  editor.readOnly = !state.fileEditing;
+  const editBtn = $("#btn-edit");
+  if (editBtn) {
+    editBtn.disabled = !canEdit;
+    editBtn.textContent = state.fileEditing ? "✓ Done" : "✎ Edit";
+    editBtn.classList.toggle("editing", state.fileEditing);
+    editBtn.title = state.fileEditing
+      ? "Lock editor (prevent accidental changes)"
+      : "Unlock editor to modify this file";
+  }
+}
+
 function setCurrentMeta() {
   const c = state.current;
   if (!c) {
     $("#editor-name").textContent = "—";
     $("#editor-meta").textContent = "";
+    setFileEditing(false);
     return;
   }
   $("#editor-name").textContent = c.name;
   $("#editor-meta").textContent =
-    `${c.kind} · ${c.readonly ? "read-only" : "editable"} · ${c.size} bytes · ${c.mtime_str || ""}`;
+    `${c.kind} · ${c.readonly ? "read-only" : (state.fileEditing ? "editing" : "locked (click ✎ Edit)")} · ${c.size} bytes · ${c.mtime_str || ""}`;
   $("#btn-reload").disabled = false;
-  $("#btn-save").disabled = c.readonly;
-  $("#editor").disabled = c.readonly;
+  $("#btn-save").disabled = !state.dirty || c.readonly;
+  setFileEditing(state.fileEditing);
 }
 
 async function openFile(name, draftContent = null) {
@@ -268,10 +289,12 @@ async function openFile(name, draftContent = null) {
     if (draftContent != null && draftContent !== data.content) {
       // Restore the unsaved draft on top of the freshly loaded file.
       $("#editor").value = draftContent;
+      setFileEditing(true);
       setDirty(true);
       toast("Draft restored", `Unsaved edits for ${name} recovered (last change: ${draftTime(draftContent && draftLoadFile()?.saved_at)}).`, "warn", 6000);
     } else {
       $("#editor").value = data.content;
+      setFileEditing(false);
       setDirty(false);
     }
     setCurrentMeta();
@@ -296,6 +319,7 @@ async function saveFile() {
       body: JSON.stringify(payload),
     });
     setDirty(false);
+    setFileEditing(false);
     draftClearFile();                  // server save succeeded -> drop the draft
     c.size = data.bytes;
     c.mtime_str = data.saved_at;
@@ -369,7 +393,7 @@ function renderPipelines() {
   }
   if (state.pipelines.length === 0) {
     const fileLabel = $("#pl-file")?.textContent || "config/overlay/const_my_cli.config";
-    list.innerHTML = `<p class="meta">No pipelines found in ${escapeHtml(fileLabel)}.</p>`;
+    list.innerHTML = `<p class="meta">No pipelines found in ${esc(fileLabel)}.</p>`;
   }
   const total = state.pipelines.reduce((n, p) => n + p.steps.length, 0);
   $("#pl-stats").textContent =
@@ -377,8 +401,9 @@ function renderPipelines() {
 }
 
 function pipelineCard(p) {
+  const isCardEditing = !!p._editing;
   const card = document.createElement("div");
-  card.className = "pl-card" + (p.orphan ? " orphan" : "");
+  card.className = "pl-card" + (p.orphan ? " orphan" : "") + (isCardEditing ? " editing" : "");
   card.dataset.name = p.name;
 
   // --- header: name + description + array tag ---
@@ -388,15 +413,30 @@ function pipelineCard(p) {
   const name = document.createElement("input");
   name.className = "pl-name";
   name.value = p.name;
-  name.title = "Pipeline name (used as: telua my <name>)";
-  name.addEventListener("input", () => { p.name = name.value; setPlDirty(true); });
+  name.readOnly = !isCardEditing;
+  name.title = isCardEditing
+    ? "Pipeline name (used as: telua my <name>)"
+    : "Locked — click '✎ Edit' to modify pipeline name";
+  name.addEventListener("input", () => {
+    if (!p._editing) return;
+    p.name = name.value;
+    setPlDirty(true);
+  });
   head.appendChild(name);
 
   const desc = document.createElement("input");
   desc.className = "pl-desc";
   desc.value = p.description || "";
+  desc.readOnly = !isCardEditing;
   desc.placeholder = "Description (shown by: telua my)";
-  desc.addEventListener("input", () => { p.description = desc.value; setPlDirty(true); });
+  desc.title = isCardEditing
+    ? "Pipeline description"
+    : "Locked — click '✎ Edit' to modify description";
+  desc.addEventListener("input", () => {
+    if (!p._editing) return;
+    p.description = desc.value;
+    setPlDirty(true);
+  });
   head.appendChild(desc);
 
   const tag = document.createElement("span");
@@ -412,10 +452,12 @@ function pipelineCard(p) {
   card.appendChild(stepsBox);
 
   const addStep = document.createElement("button");
-  addStep.className = "pl-add-step";
+  addStep.className = "pl-add-step" + (isCardEditing ? "" : " hidden");
   addStep.textContent = "＋ Add step";
   addStep.addEventListener("click", () => {
+    if (!p._editing) p._editing = true;
     p.steps.push("");
+    p._editingStep = p.steps.length - 1;
     stepsBox.appendChild(stepRow(p, "", p.steps.length - 1, stepsBox));
     setPlDirty(true);
     const inputs = stepsBox.querySelectorAll(".pl-step-cmd");
@@ -423,7 +465,7 @@ function pipelineCard(p) {
   });
   card.appendChild(addStep);
 
-  // --- footer: run + delete pipeline ---
+  // --- footer: run + edit + delete pipeline ---
   const foot = document.createElement("div");
   foot.className = "pl-card-foot";
 
@@ -434,9 +476,28 @@ function pipelineCard(p) {
   runBtn.addEventListener("click", () => runPipeline(p.name));
   foot.appendChild(runBtn);
 
+  const editBtn = document.createElement("button");
+  editBtn.className = "btn" + (isCardEditing ? " editing" : "");
+  editBtn.textContent = isCardEditing ? "✓ Done" : "✎ Edit";
+  editBtn.title = isCardEditing
+    ? "Finish editing and lock this pipeline"
+    : "Unlock this pipeline to edit name, description, and steps";
+  editBtn.addEventListener("click", () => {
+    p._editing = !p._editing;
+    if (!p._editing) p._editingStep = null;
+    renderPipelines();
+    if (p._editing) {
+      const targetCard = Array.from(document.querySelectorAll(".pl-card"))
+        .find(el => el.dataset.name === p.name);
+      targetCard?.querySelector(".pl-name")?.focus();
+    }
+  });
+  foot.appendChild(editBtn);
+
   const delBtn = document.createElement("button");
   delBtn.className = "btn danger";
   delBtn.textContent = "🗑 Delete";
+  delBtn.title = "Delete pipeline '" + p.name + "'";
   delBtn.addEventListener("click", () => {
     if (!confirm(`Delete pipeline '${p.name}' (${p.steps.length} steps)?`)) return;
     state.pipelines = state.pipelines.filter(x => x !== p);
@@ -450,6 +511,7 @@ function pipelineCard(p) {
 }
 
 function stepRow(p, step, idx, stepsBox) {
+  const isStepEditing = !!(p._editing || p._editingStep === idx);
   const row = document.createElement("div");
   row.className = "pl-step";
 
@@ -461,17 +523,47 @@ function stepRow(p, step, idx, stepsBox) {
   const input = document.createElement("input");
   input.className = "pl-step-cmd";
   input.value = step;
+  input.readOnly = !isStepEditing;
   input.placeholder = "adb shell … | git … | sleep 1 | echo …";
-  input.addEventListener("input", () => { p.steps[idx] = input.value; setPlDirty(true); });
+  input.title = isStepEditing
+    ? "Edit step command"
+    : "Locked — click '✎' on this step (or '✎ Edit' on the pipeline) to edit";
+  input.addEventListener("input", () => {
+    if (!isStepEditing) return;
+    p.steps[idx] = input.value;
+    setPlDirty(true);
+  });
   row.appendChild(input);
+
+  const editStepBtn = document.createElement("button");
+  editStepBtn.className = "pl-icon-btn edit" + (isStepEditing ? " active" : "");
+  editStepBtn.textContent = isStepEditing && !p._editing ? "✓" : "✎";
+  editStepBtn.title = isStepEditing
+    ? (p._editing ? "Editing enabled (click to focus step)" : "Lock this step")
+    : "Click to edit this step";
+  editStepBtn.addEventListener("click", () => {
+    if (p._editing) {
+      input.focus();
+      return;
+    }
+    p._editingStep = (p._editingStep === idx) ? null : idx;
+    rerenderSteps(p, stepsBox);
+    if (p._editingStep === idx) {
+      const inputs = stepsBox.querySelectorAll(".pl-step-cmd");
+      inputs[idx]?.focus();
+    }
+  });
+  row.appendChild(editStepBtn);
 
   const up = document.createElement("button");
   up.className = "pl-icon-btn";
   up.textContent = "↑";
   up.title = "Move up";
+  up.disabled = !isStepEditing || idx === 0;
   up.addEventListener("click", () => {
-    if (idx === 0) return;
+    if (!isStepEditing || idx === 0) return;
     [p.steps[idx - 1], p.steps[idx]] = [p.steps[idx], p.steps[idx - 1]];
+    if (p._editingStep === idx) p._editingStep = idx - 1;
     setPlDirty(true);
     rerenderSteps(p, stepsBox);
   });
@@ -481,9 +573,11 @@ function stepRow(p, step, idx, stepsBox) {
   down.className = "pl-icon-btn";
   down.textContent = "↓";
   down.title = "Move down";
+  down.disabled = !isStepEditing || idx >= p.steps.length - 1;
   down.addEventListener("click", () => {
-    if (idx >= p.steps.length - 1) return;
+    if (!isStepEditing || idx >= p.steps.length - 1) return;
     [p.steps[idx + 1], p.steps[idx]] = [p.steps[idx], p.steps[idx + 1]];
+    if (p._editingStep === idx) p._editingStep = idx + 1;
     setPlDirty(true);
     rerenderSteps(p, stepsBox);
   });
@@ -491,10 +585,12 @@ function stepRow(p, step, idx, stepsBox) {
 
   const del = document.createElement("button");
   del.className = "pl-icon-btn del";
-  del.textContent = "✕";
+  del.textContent = "🗑";
   del.title = "Delete step";
   del.addEventListener("click", () => {
+    if (!isStepEditing && !confirm(`Delete step #${idx + 1} from '${p.name}'?\n\n${step}`)) return;
     p.steps.splice(idx, 1);
+    if (p._editingStep === idx) p._editingStep = null;
     setPlDirty(true);
     rerenderSteps(p, stepsBox);
   });
@@ -552,7 +648,15 @@ function addPipeline() {
   const existing = new Set(state.pipelines.map(p => p.name));
   let name = "new_pipeline";
   while (existing.has(name)) { name = `new_pipeline_${++i}`; }
-  state.pipelines.push({ name, description: "", array: "MY_CMD_" + name.toUpperCase(), steps: [] });
+  const prefix = state.plSource === "multi" ? "MULTI" : "MY";
+  state.pipelines.push({
+    name,
+    description: "",
+    array: `${prefix}_CMD_` + name.toUpperCase(),
+    steps: [""],
+    _editing: true,
+    _editingStep: 0,
+  });
   setPlDirty(true);
   renderPipelines();
   const cards = document.querySelectorAll(".pl-card");
@@ -628,6 +732,12 @@ function switchTab(tab) {
 function wire() {
   $("#search").addEventListener("input", (e) => renderFiles(e.target.value));
   $("#btn-refresh").addEventListener("click", () => { refreshStatus(); refreshFiles(); });
+  $("#btn-edit").addEventListener("click", () => {
+    if (!state.current || state.current.readonly) return;
+    setFileEditing(!state.fileEditing);
+    setCurrentMeta();
+    if (state.fileEditing) $("#editor").focus();
+  });
   $("#btn-reload").addEventListener("click", () => state.current && openFile(state.current.name));
   $("#btn-save").addEventListener("click", saveFile);
   $("#btn-info").addEventListener("click", showInfo);

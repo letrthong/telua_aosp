@@ -217,7 +217,8 @@ code, .mono { font-family: var(--mono); }
   white-space: pre;
   overflow: auto;
 }
-.editor:disabled { color: var(--text-dim); }
+.editor:disabled, .editor[readonly] { color: var(--text-dim); cursor: default; }
+.btn.editing { border-color: var(--accent); color: var(--accent); background: rgba(88, 166, 255, .12); }
 
 .editor-foot {
   display: flex;
@@ -313,6 +314,11 @@ code, .mono { font-family: var(--mono); }
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 12px 14px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.pl-card.editing {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(88, 166, 255, .25);
 }
 .pl-card.orphan { border-color: var(--yellow); }
 .pl-card-head {
@@ -342,6 +348,16 @@ code, .mono { font-family: var(--mono); }
   color: var(--text);
   padding: 5px 10px;
   font-size: 12.5px;
+}
+.pl-name[readonly], .pl-desc[readonly], .pl-step-cmd[readonly] {
+  background: rgba(13, 17, 23, .45);
+  border-color: transparent;
+  cursor: default;
+  opacity: .9;
+}
+.pl-name[readonly]:focus, .pl-desc[readonly]:focus, .pl-step-cmd[readonly]:focus {
+  outline: none;
+  border-color: transparent;
 }
 .pl-array-tag {
   font-family: var(--mono);
@@ -382,9 +398,14 @@ code, .mono { font-family: var(--mono); }
   font-size: 13px;
   line-height: 1;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .pl-icon-btn:hover { border-color: var(--accent); color: var(--text); }
-.pl-icon-btn.del:hover { border-color: var(--red); color: var(--red); }
+.pl-icon-btn.edit.active { border-color: var(--accent); color: var(--accent); background: rgba(88, 166, 255, .15); }
+.pl-icon-btn.del:hover { border-color: var(--red); color: var(--red); background: rgba(248, 81, 73, .1); }
+.pl-icon-btn:disabled { opacity: .35; cursor: not-allowed; pointer-events: none; }
 .pl-add-step {
   align-self: flex-start;
   margin-top: 4px;
