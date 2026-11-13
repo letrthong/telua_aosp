@@ -6,28 +6,29 @@ An automated developer workflow script for building and deploying privileged sys
 
 | File | Purpose |
 |---|---|
-| `build_apk.sh` | Core execution script (orchestration logic, alias `telua`) |
+| `build_apk.sh` | Core execution script (orchestration logic, aliases `telua` & `tel`) |
 | `config/apk.config` | Active project configuration (profile selection, lunch targets, deploy flags, debug tags) |
-| `config/apk_overlays.config.example` | Template for personal/private project overrides (auto-applied by `telua init`) |
-| `config/apk_overlays.config` | Local confidential project overrides (untracked in Git, preserved across updates) |
-| `python/config_overlay.py` | Smart overlay merge engine (merges `config/apk_overlays.config` onto `apk.config`) |
-| `config/const_car.config` | Global AAOS Car & Audio ADB key injection commands configuration |
-| `config/const_dumpsys.config` | Global Dumpsys & AAOS diagnostics commands configuration |
-| `config/const_security.config` | Global Security, SELinux & permissions diagnostics configuration (`telua sec`) |
-| `config/const_multi_cli.config` | Global Multi-command sequential pipelines & macros with fail-fast safety |
-| `config/const_my_cli.config.example` | Template for personal private pipelines & macros (`telua my <action>`) |
-| `config/const_my_cli.config` | Personal private pipelines & macros (untracked in Git, preserved across updates) |
-| `config/const_git.config` | Frequently used Git & Google Repo commands cheatsheet (`telua git`) |
-| `config/const_docker.config` | Frequently used Docker daemon, container & image commands cheatsheet (`telua docker`) |
-| `config/const_network.config` | Frequently used Network, Port & ADB over Wi-Fi commands cheatsheet (`telua network`) |
-| `src/telua_security.sh` | Security & SELinux diagnostics commands module (`telua sec <action>`) |
-| `src/telua_clean.sh` | Java source code hygiene & trailing whitespace cleaner (`telua clean-java`) |
+| `config/overlay/apk_overlays.config.example` | Template for personal/private project overrides (auto-copied by `tel init`) |
+| `config/overlay/apk_overlays.config` | Local confidential project overrides (untracked in Git, preserved across updates) |
+| `config/overlay/const_my_cli.config.example` | Template for personal private pipelines & macros (`tel my <action>`) |
+| `config/overlay/const_my_cli.config` | Personal private pipelines & macros (untracked in Git, preserved across updates) |
+| `python/config_overlay.py` | Smart overlay merge engine (merges `config/overlay/apk_overlays.config` onto `apk.config`) |
+| `python/config_crypto.py` | Encrypt / decrypt private overlay configs (`apk_overlays.config`, `const_my_cli.config`) via PBKDF2 + Fernet (`tel crypto`, `tel enc`, `tel dec`) |
+| `config/const_car.config` | Global AAOS Car & Audio ADB key injection commands configuration (`tel car`) |
+| `config/const_dumpsys.config` | Global Dumpsys & AAOS diagnostics commands configuration (`tel dump`) |
+| `config/const_security.config` | Global Security, SELinux & permissions diagnostics configuration (`tel sec`) |
+| `config/const_multi_cli.config` | Global Multi-command sequential pipelines & macros with fail-fast safety (`tel run`) |
+| `config/const_git.config` | Frequently used Git & Google Repo commands cheatsheet (`tel git`) |
+| `config/const_docker.config` | Frequently used Docker daemon, container & image commands cheatsheet (`tel docker`) |
+| `config/const_network.config` | Frequently used Network, Port & ADB over Wi-Fi commands cheatsheet (`tel network`) |
 | `config/const_clean_java.config` | Configuration for `clean_java.py` and `google-java-format` checks |
-| `python/clean_java.py` | Enforces Java whitespace, tab expansion, keyword spacing & blank-line hygiene |
-| `python/unused_methods_report.py` | 4-in-1 static Java report: unused methods, unused params, whitespace & `google-java-format` (`telua clean-java report`) |
-| `src/telua_completion.sh` | Bash and Zsh Tab Auto-completion engine (`tel <Tab><Tab>`) |
-| `python/config_crypto.py` | Encrypt / decrypt `apk.config` with a password (PBKDF2 + Fernet) |
-| `requirements.txt` | Python package dependencies for `config_crypto.py` (`cryptography`) |
+| `src/telua_clean.sh` | Java source code hygiene, style auto-fixer, static report & AI skill linker (`tel java`) |
+| `python/clean_java.py` | Enforces Java whitespace, tab expansion, keyword spacing, K&R braces & Google Java Style |
+| `python/unused_methods_report.py` | 6-in-1 static Java report: unused methods, unused params, whitespace, `google-java-format`, unused imports & unused private fields (`tel java report`) |
+| `src/telua_web.sh` & `web/telua_web.py` | Config Manager Web UI (Flask backend + vanilla JS frontend, `tel web start`) |
+| `src/telua_docs.sh` & `sphinx/` | Sphinx Doc-as-Code manager with 4 project templates & live preview (`tel docs`) |
+| `src/telua_completion.sh` | Bash and Zsh Tab Auto-completion engine with auto-reload (`tel <Tab><Tab>`) |
+| `requirements.txt` | Python package dependencies (`cryptography`, `flask`, `sphinx`) |
 
 ---
 
@@ -46,9 +47,9 @@ An automated developer workflow script for building and deploying privileged sys
 - Exactly **one** ADB device/DUT connected.
 - Execute permissions and Linux (LF) line endings:
   ```bash
-  chmod +x build_apk.sh config_crypto.py config_overlay.py
-  dos2unix build_apk.sh *.config config/*.config *.py *.example      # required if files were transferred from Windows
-  git update-index --chmod=+x build_apk.sh config_crypto.py config_overlay.py # preserves 100755 in Git
+  chmod +x build_apk.sh src/*.sh python/*.py
+  dos2unix build_apk.sh src/*.sh config/*.config config/overlay/*.example python/*.py  # required if files were transferred from Windows
+  git update-index --chmod=+x build_apk.sh python/config_crypto.py python/config_overlay.py # preserves 100755 in Git
   ```
 
 ---
@@ -56,11 +57,11 @@ An automated developer workflow script for building and deploying privileged sys
 ## 2. Quick Start & CLI Installation
 
 ### Step 1: One-Time CLI Installation
-Make the scripts executable and install the global `telua` alias into your `~/.bashrc` (this also automatically installs any required Python packages from `requirements.txt`):
+Make the scripts executable and install the global `telua` & `tel` aliases into your `~/.bashrc` (this also automatically installs required Python packages from `requirements.txt`):
 
 ```bash
 # 1. Grant execution permissions
-chmod +x build_apk.sh config_crypto.py config_overlay.py
+chmod +x build_apk.sh src/*.sh python/*.py
 
 # 2. Install 'telua' & 'tel' commands and Tab Auto-completion into ~/.bashrc
 ./build_apk.sh --install
@@ -100,28 +101,39 @@ telua build --no-reboot
 Maintain **a single golden copy of `build_apk.sh`** shared across multiple independent AOSP checkouts, release branches, or workspaces. Each workspace maintains its own standalone `apk.config`.
 
 ```
-~/code/telua_skill/.../build/           ← Master Repository (edit logic here)
-├── build_apk.sh                        ← Master CLI engine & orchestration logic
+~/code/telua_aosp/                      ← Master Repository (edit logic here)
+├── build_apk.sh                        ← Master CLI engine & orchestration logic (aliases: telua, tel)
+├── src/                                ← 19 modular Bash domain scripts (telua_android.sh, telua_car.sh, ...)
 ├── python/                             ← Python automation & static analysis scripts
+│   ├── clean_java.py                   ← Google/AOSP Java Style auto-fixer
+│   ├── unused_methods_report.py        ← 6-in-1 static Java analyzer
 │   ├── config_overlay.py               ← Smart overlay merge engine (merges overrides into apk.config)
-│   └── config_crypto.py                ← Configuration encryption utility (PBKDF2 + Fernet)
-├── requirements.txt                    ← Python dependencies (cryptography)
+│   └── config_crypto.py                ← Private overlay encryption utility (PBKDF2 + Fernet AES)
+├── web/                                ← Config Manager Web UI (telua_web.py + static/)
+├── sphinx/                             ← Sphinx Doc-as-Code templates & build scripts
+├── requirements.txt                    ← Python dependencies
 ├── AI.md                               ← AI Assistant & LLM instruction reference
 └── config/                             ← Shared constants, project configs, macros & cheatsheets
     ├── apk.config                      ← Master active configuration profile
-    ├── apk_overlays.config.example     ← Personal override template (auto-copied by telua init)
-    ├── enc_apk.config                  ← Encrypted configuration template (Base64)
     ├── const_car.config                ← AAOS car & audio key injections
     ├── const_dumpsys.config            ← System dumpsys diagnostics
+    ├── const_security.config           ← SELinux & security diagnostics
+    ├── const_clean_java.config         ← Java cleaner & google-java-format settings
     ├── const_multi_cli.config          ← Multi-command sequential pipelines
-    ├── const_my_cli.config.example     ← Personal private pipeline macro template
     ├── const_docker.config             ← Docker & systemd cheatsheet
     ├── const_git.config                ← Git & Google Repo cheatsheet
-    └── const_network.config            ← Network & Wi-Fi debugging cheatsheet
+    ├── const_network.config            ← Network & Wi-Fi debugging cheatsheet
+    └── overlay/                        ← Personal / private configs (git-ignored plaintext, AES-encryptable)
+        ├── ReadMe.txt                  ← Mapping guide for personal overlay files
+        ├── apk_overlays.config.example ← Personal override template (auto-copied by tel init)
+        ├── const_my_cli.config.example ← Personal private pipeline macro template
+        ├── apk_overlays.config         ← Local confidential project overrides (git-ignored)
+        ├── const_my_cli.config         ← Local personal pipeline macros (git-ignored)
+        └── enc_*.config                ← Encrypted private overlay backups (created via tel enc)
 
 ~/ws_main/android/qssi/tools/           ← Local Workspace (created via telua init / --softlink)
 ├── build_apk.sh  -> (symlink to master build_apk.sh)
-├── apk.config        (ACTIVE_PROJECT="oem_service", target A)
+├── apk.config        (ACTIVE_PROJECT="oem_service", merged with config/overlay/apk_overlays.config)
 ├── OemService.apk    (Build output artifact copied here)
 └── deployment_log.txt
 ```
@@ -190,9 +202,9 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `--platform android\|qnx` | Target deployment platform: `android` (default, active) or `qnx` (reserved, currently skips deployment) |
 | `--start-deploy true\|false` | Overrides `ENABLE_DEPLOY` defined in `apk.config` |
 | `--softlink [path]` | Creates symlink to `build_apk.sh` and copies `apk.config` to `[path]` (falls back to `SOFTLINK_TARGET_PATH` from `apk.config` if omitted) |
-| `--repo-sync` | Executes `repo sync` from `ROOT_DIR`, navigates to `android/qssi`, and runs `post_sync_cli` before building |
+| `--repo-sync`, `sync` | Executes `repo sync` from `ROOT_DIR`, navigates to `android/qssi`, and runs `post_sync_cli` before building |
 | `--repo-sync-only` | Executes `repo sync` and `post_sync_cli` only, then exits without building |
-| `--repo-reset` | Executes `repo forall -c "git reset --hard && git clean -xdf"` (requires interactive `y` confirmation; bypass with `-y`) |
+| `--repo-reset`, `reset` | Executes `repo forall -c "git reset --hard && git clean -xdf"` (requires interactive `y` confirmation; bypass with `-y`) |
 | `-y`, `--yes` | Bypasses interactive confirmation prompts for dangerous operations (e.g., `--repo-reset`) |
 | `--git-diff` | Displays `git diff HEAD^ HEAD` in the script's git repository and exits |
 | `--git-amend` | Runs `git commit --amend --no-edit` (staged changes only) and exits |
@@ -203,11 +215,13 @@ nano apk.config          # configure ACTIVE_PROJECT="car_audio", target B
 | `car [action]`, `audio [action]` | Controls car/audio via ADB shell (`vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`, `car-status`) using commands from `config/const_car.config` |
 | `--dump`, `dump [target]` | Runs dumpsys diagnostics via ADB shell (`audio`, `car-service`, `car-audio`, `media`, `battery`, `activity`) using commands from `config/const_dumpsys.config` |
 | `sec [action]`, `security [action]` | Controls SELinux and runs security diagnostics (`status`, `perm`, `enforce`, `avc`, `privapp`, `appops`, `keystore`, `policy`, `root`, `unroot`, `remount`, `disable-verity`) using `config/const_security.config` |
-| `docs [action]`, `doc [action]` | Sphinx Doc-as-Code manager (`init`, `build`, `clean`, `serve`, `check`) using template in `sphinx/` |
+| `docs [action]`, `doc [action]` | Sphinx Doc-as-Code manager (`init [-t <tpl>]`, `sync`, `build`, `clean`, `start [port]`, `serve`, `check`) using templates in `sphinx/` |
+| `web [action]` | Config Manager Web UI (`start [port]`, `stop`, `status`, `restart [port]`, `log`, `help`) powered by Flask (`web/telua_web.py`) |
+| `crypto [action]`, `enc`, `dec` | Check, encrypt, or decrypt private configs (`apk_overlays.config`, `const_my_cli.config`) in `config/overlay/` (`status`, `encrypt`/`enc`, `decrypt`/`dec`) |
 | `--run`, `run [group]` | Executes multi-command sequential pipeline group from `config/const_multi_cli.config` (alias: `telua multi [group]`) |
-| `my [action]`, `proj [action]` | Executes personal private pipeline macro from `config/const_my_cli.config` (`telua my hello`) |
-| `java [target]` | Auto-cleans & fixes style in `.java` files (`diff`: current Git commit `HEAD` + working tree \| `all`: all files \| `<file\|dir>`; alias: `clean-java`) |
-| `java report [t]` | 4-in-1 static Java report: unused methods, unused params, whitespace & `google-java-format` violations (`t`: `diff` \| `all` \| `<file\|dir>`; saved to `unused_java_report.txt`; alias: `clean-java report`) |
+| `my [action]`, `proj [action]` | Executes personal private pipeline macro from `config/overlay/const_my_cli.config` (`telua my hello`) |
+| `java [target]` | Auto-cleans & fixes style in `.java` files (`diff`: current Git commit `HEAD` + working tree \| `all`: all files \| `<file\|dir>` \| `skill`: link `.skill/java/`; alias: `clean-java`) |
+| `java report [t]` | 6-in-1 static Java report: unused methods, unused params, whitespace, `google-java-format`, unused imports & unused private fields (`t`: `diff` \| `all` \| `<file\|dir>`; saved to `unused_java_report.txt`) |
 | `--find-file <pattern> [path]` | Searches for files by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-dir <pattern> [path]` | Searches for directories by pattern in `[path]` (defaults to `.` if omitted) |
 | `--find-text <text> [path]` | Greps for text string in files under `[path]` (defaults to `.` if omitted) |
@@ -230,9 +244,16 @@ telua java                            # Auto-clean & fix style for current Git c
 telua java diff                       # Explicitly clean & fix style for current Git commit (HEAD) + working tree
 telua java all                        # Clean & fix style in ALL .java files across the workspace
 telua java packages/apps/Car/         # Clean & fix style under a specific folder or file
-telua java report                     # 4-in-1 report: unused methods/params, whitespace & google-java-format
+telua java report                     # 6-in-1 report: unused methods/params/imports/fields, whitespace & style
 telua java report diff                # Report on current Git commit (HEAD) + modified .java files
 telua java report all                 # Report across the whole workspace
+telua java skill                      # Link .skill/java/ knowledge base & skills into current workspace
+telua web start                       # Launch Config Manager Web UI in background & open browser
+telua web status                      # Check Web UI server status, PID, port & health
+telua web stop                        # Stop background Web UI server
+telua crypto                          # Check existence & sync state of private configs in config/overlay/
+telua enc                             # Encrypt existing apk_overlays.config & const_my_cli.config in config/overlay/
+telua dec                             # Decrypt enc_apk_overlays.config & enc_const_my_cli.config in config/overlay/
 telua car vol-up                      # Increase volume (AAOS inject-key 24) (or: telua audio vol-up)
 telua car vol-down                    # Decrease volume (AAOS inject-key 25)
 telua car vol-mute                    # Mute volume (AAOS inject-key 164)
@@ -418,9 +439,9 @@ Các quy trình chạy tuần tự nhiều bước (pipeline / macro) được c
 
 ---
 
-### 5.3e Personal Pipelines (`config/const_my_cli.config`)
+### 5.3e Personal Pipelines (`config/overlay/const_my_cli.config`)
 
-Các quy trình chạy tuần tự riêng tư của cá nhân Developer được cấu hình trong **`config/const_my_cli.config`** (gọi qua `telua my <action>` hoặc alias `telua proj <action>`):
+Các quy trình chạy tuần tự riêng tư của cá nhân Developer được cấu hình trong **`config/overlay/const_my_cli.config`** (tự động tạo từ `config/overlay/const_my_cli.config.example` khi chạy `tel init`, gọi qua `telua my <action>` hoặc alias `telua proj <action>`):
 
 | Variable / Action | Commands in Pipeline | Purpose |
 |---|---|---|
@@ -429,32 +450,33 @@ Các quy trình chạy tuần tự riêng tư của cá nhân Developer được
 
 ---
 
-### 5.3f Java Source Hygiene (`telua clean-java` / `src/telua_clean.sh`)
+### 5.3f Java Source Hygiene, Static Report & AI Skills (`telua java` / `src/telua_clean.sh`)
 
-Công cụ chuẩn hóa mã nguồn Java tự động (`python/clean_java.py` điều khiển qua wrapper `src/telua_clean.sh`), giúp loại bỏ khoảng trắng thừa ở cuối dòng (trailing whitespaces) và chuẩn hóa ký tự xuống dòng UNIX (LF):
+Công cụ chuẩn hóa mã nguồn Java tự động (`python/clean_java.py` và `python/unused_methods_report.py` điều khiển qua wrapper `src/telua_clean.sh`), giúp tự động format theo chuẩn Google/AOSP Java Style và kiểm tra tĩnh 6 tầng:
 
 ```bash
-telua clean-java            # Quét và dọn dẹp các file .java đang sửa đổi trong Git (Git diff mode - mặc định)
-telua clean-java diff       # Tương đương lệnh trên
-telua clean-java all        # Quét và dọn dẹp TOÀN BỘ file .java trong toàn bộ workspace
-telua clean-java <path>     # Dọn dẹp một file .java cụ thể hoặc toàn bộ file trong thư mục <path>
-telua clean-java report     # Báo cáo method khai báo mà không được dùng (unused methods)
-telua clean-java report <t> # Report với target: diff (mặc định) | all | <file|dir>
-telua clean-java help       # Hiển thị hướng dẫn chi tiết
+tel java                    # Quét và tự động sửa các file .java thuộc commit HEAD + working tree
+tel java diff               # Tương đương lệnh trên
+tel java all                # Quét và tự động sửa TOÀN BỘ file .java trong toàn bộ workspace
+tel java <path>             # Dọn dẹp một file .java cụ thể hoặc toàn bộ file trong thư mục <path>
+tel java report             # Báo cáo tĩnh 6 tầng trên thư mục hiện tại (lưu vào unused_java_report.txt)
+tel java report <t>         # Report với target: diff | all | <file|dir>
+tel java skill              # Tạo thư mục .skill/java/ liên kết kho tri thức & AI skills cho dự án
+tel java help               # Hiển thị hướng dẫn chi tiết
 ```
 
-**`telua clean-java report`** (`python/unused_methods_report.py`) thực hiện kiểm tra tĩnh **4 phần** ở chế độ **Read-Only** (không bao giờ sửa file gốc):
+**`tel java report`** (`python/unused_methods_report.py`) thực hiện kiểm tra tĩnh **6 phần** ở chế độ **Read-Only** (không bao giờ sửa file gốc):
 - **[1] Unused methods**: method được khai báo nhưng tên không xuất hiện lần nào trong code (đã loại bỏ string/comment), trong phạm vi module `src/` của file. Tool tự bỏ qua constructor, `@Override`, method interface/abstract, `main()`, các override của `Object` (`toString`/`equals`/`hashCode`) và các file/method JUnit test (`@Test`, `@RunWith`, `test/`/`androidTest/`).
-- **[2] Unused parameters**: parameter không được dùng trong thân method (warning `-Wunused-parameter`). Fix theo kiểu comment tên giữ lại type: `void f(int data, int /*spare*/)` — parameter đã comment sẽ bị bỏ qua ở lần chạy sau.
-- **[3] Whitespace violations**: bản xem trước (read-only preview) các lỗi khoảng trắng mà `telua clean-java` sẽ sửa: trailing whitespace, leading tab, khoảng cách từ khóa điều khiển (`if(x)` $\rightarrow$ `if (x)`, `if ( x )` $\rightarrow$ `if (x)`), dòng trống liên tiếp ($\ge 2$ dòng), và xuống dòng `CRLF`.
-- **[4] google-java-format violations**: kiểm tra định dạng chuẩn Google / AOSP Java Style (hỗ trợ `google-java-format` JAR tự động tải về `third_party/google-java-format/`, prebuilt của AOSP và bộ phân tích Google Java Style tích hợp sẵn trong Python; cấu hình tại `config/const_clean_java.config`).
+- **[2] Unused parameters**: parameter không được dùng trong thân method (warning `-Wunused-parameter`, tự miễn trừ `main(String[] args)`). Fix theo kiểu comment tên giữ lại type: `void f(int data, int /*spare*/)`.
+- **[3] Whitespace violations**: bản xem trước (read-only preview) các lỗi khoảng trắng mà `tel java` sẽ sửa: trailing whitespace, leading tab, khoảng cách từ khóa điều khiển (`if(x)` $\rightarrow$ `if (x)`), dòng trống liên tiếp ($\ge 2$ dòng), và xuống dòng `CRLF`.
+- **[4] google-java-format violations**: kiểm tra định dạng chuẩn Google / AOSP Java Style (phát hiện thiếu dấu cách trước `{` / sau `,`, dấu `{` đứng riêng dòng, thiếu cặp ngoặc nhọn `{}` quanh `if (...)` / `else`, độ dài dòng > 100 ký tự; hỗ trợ cả `google-java-format` JAR tự tải về `third_party/google-java-format/`).
+- **[5] Unused imports**: phát hiện các dòng `import` thừa không được sử dụng trong code hay Javadoc (bỏ qua wildcard `.*`).
+- **[6] Unused private fields**: phát hiện các biến thành viên `private` được khai báo nhưng không được đọc/ghi ở đâu khác ngoài dòng khai báo (tự miễn trừ `serialVersionUID`, `TAG`, `LOG_TAG`).
 
-Report luôn được lưu ra file `unused_java_report.txt` (đổi tên bằng `--out FILE` khi gọi trực tiếp python). Kết quả là heuristic — cần review trước khi xóa code:
+Report luôn được lưu ra file `unused_java_report.txt` (đổi tên bằng `--out FILE` khi gọi trực tiếp python):
 
 ```bash
-telua clean-java report src/com/example/app/MyService.java
-#   line 602: wantsPauseInsteadOfDucking  (private)
-#   line 691: getInteractionString  (private static)
+tel java report src/com/example/app/MyService.java
 ```
 
 ---
@@ -463,14 +485,14 @@ telua clean-java report src/com/example/app/MyService.java
 
 | Variable | Description |
 |---|---|
-| `TEST_RELATIVE_PATH` | Path to test suite directory relative to script directory |
+| `TEST_RELATIVE_PATH` | Path to test suite directory relative to script/repo directory (`tests`) |
 | `TEST_BUILD_SCRIPT` | Executable test runner script (e.g., `run_unittest_test.sh`) |
 
 ---
 
 ### 5.4b QNX Target Configuration (Reserved for Future Use)
 
-Placeholder variables reserved in `apk.config` for future QNX Hypervisor / Guest VM deployment workflows:
+Placeholder variables reserved in `config/apk.config` for future QNX Hypervisor / Guest VM deployment workflows:
 
 | Variable | Default | Description |
 |---|---|---|
@@ -482,58 +504,50 @@ Placeholder variables reserved in `apk.config` for future QNX Hypervisor / Guest
 
 ---
 
-### 5.5 Configuration Encryption & Security (`config_crypto.py`)
+### 5.5 Private Overlay Encryption & Security (`tel crypto` / `python/config_crypto.py`)
 
-Encrypt or decrypt `apk.config` to protect internal targets, paths, and sensitive settings before committing or transferring files.
+Mã hóa và giải mã các file cấu hình riêng tư trong **`config/overlay/`** (`apk_overlays.config` và `const_my_cli.config`) để bảo vệ tuyệt đối thông tin nội bộ, đường dẫn dự án mật và lệnh riêng trước khi sao lưu hoặc chia sẻ qua Git:
 
-* **Cryptographic Scheme**: PBKDF2-HMAC-SHA256 (600,000 iterations) with a 16-byte random salt to derive a 256-bit key for [Fernet](https://cryptography.io/en/latest/fernet/) (AES-128-CBC + HMAC-SHA256).
-* **Format**: Base64 text `base64(salt(16 bytes) || Fernet token)`, safe for version control or text exchange.
-* **File Permissions**: Output files are created with restricted permissions (`0600` / owner read-write only).
-* **Safety Guardrails**: Decryption outputs to `dec_apk.config` by default to avoid accidentally overwriting the active `apk.config`. Overwriting requires `--force`.
+* **Cryptographic Scheme**: PBKDF2-HMAC-SHA256 (600,000 iterations) với 16-byte random salt riêng biệt cho từng file để sinh khóa 256-bit cho [Fernet](https://cryptography.io/en/latest/fernet/) (AES-128-CBC + HMAC-SHA256).
+* **Format**: Base64 text `base64(salt(16 bytes) || Fernet token)`, an toàn để commit lên Git (`!config/overlay/enc_*.config` được cho phép trong `.gitignore`, trong khi bản rõ `config/overlay/*.config` bị chặn hoàn toàn).
+* **File Permissions**: Các file đầu ra được gán quyền truy cập hạn chế (`0600` / chỉ owner mới đọc-ghi được).
+* **Kiểm tra tồn tại thông minh (Fast-Fail)**: Trước khi hỏi mật khẩu, `tel crypto` tự động kiểm tra sự tồn tại của `apk_overlays.config` và `const_my_cli.config` (hoặc `enc_*.config`). File nào tồn tại sẽ được xử lý tự động.
 
 #### Commands & Usage:
 
 ```bash
-# 1. Encrypt apk.config -> enc_apk.config (interactive hidden prompt: use '?' or omit)
-./config_crypto.py encrypt ?
-./config_crypto.py encrypt
+# 1. Kiểm tra trạng thái các file private và bản mã hóa trong config/overlay/:
+tel crypto                            # Hoặc: tel crypto status / tel crypto check
 
-# Or provide password directly via command line (NOTE: visible in shell history/ps):
-./config_crypto.py encrypt 12345
+# 2. Mã hóa các file private đang tồn tại trong config/overlay/ (hỏi mật khẩu ẩn):
+tel enc                               # Hoặc: tel crypto encrypt / tel encrypt
 
-# Or pipe password via stdin:
-echo "12345" | ./config_crypto.py encrypt -
+# Hoặc truyền trực tiếp mật khẩu trên dòng lệnh:
+tel enc "MySecretPassword"
 
-# 2. Decrypt enc_apk.config -> dec_apk.config (original apk.config is never touched)
-./config_crypto.py decrypt ?
-./config_crypto.py decrypt
+# 3. Giải mã các file enc_*.config trong config/overlay/ về lại bản rõ:
+tel dec                               # Hoặc: tel crypto decrypt / tel decrypt
 
-# Or with password directly:
-./config_crypto.py decrypt 12345
-
-# 3. Overwrite an existing dec_apk.config:
-./config_crypto.py decrypt ? --force
-./config_crypto.py decrypt 12345 --force
-
-# 4. Custom input and output paths:
-./config_crypto.py encrypt ? -i my.config -o my_enc.config
-./config_crypto.py decrypt ? -i my_enc.config -o my_dec.config --force
+# 4. Mã hóa / giải mã một file tùy chỉnh bất kỳ:
+tel enc -i my.config -o my_enc.config
+tel dec -i my_enc.config -o my_dec.config
 ```
 
-| Action | Default Input | Default Output | Behavior |
+| Action | Default Targets in `config/overlay/` | Output in `config/overlay/` | Behavior |
 |---|---|---|---|
-| `encrypt` | `apk.config` | `enc_apk.config` | Overwrites existing output file automatically |
-| `decrypt` | `enc_apk.config` | `dec_apk.config` | Preserves existing file; requires `--force` to overwrite |
+| `tel crypto status` | `apk_overlays.config`, `const_my_cli.config` | *(read-only status table)* | Báo cáo `SYNCED`, `MODIFIED`, `UNENCRYPTED`, `ENCRYPTED ONLY` hoặc `NOT CREATED` |
+| `tel enc` (`encrypt`) | `apk_overlays.config`, `const_my_cli.config` *(nếu tồn tại)* | `enc_apk_overlays.config`, `enc_const_my_cli.config` | Mã hóa mọi file private đang tồn tại bằng cùng mật khẩu |
+| `tel dec` (`decrypt`) | `enc_apk_overlays.config`, `enc_const_my_cli.config` *(nếu tồn tại)* | `apk_overlays.config`, `const_my_cli.config` | Giải mã khôi phục về file cấu hình cá nhân |
 
 ---
 
-### 5.5 Personal Overrides & Smart Merge (`apk_overlays.config` & `config_overlay.py`)
+### 5.5b Personal Overrides & Smart Merge (`config/overlay/apk_overlays.config` & `python/config_overlay.py`)
 
-Bộ công cụ hỗ trợ cơ chế nạp đè cấu hình cá nhân (**Personal & Private Overrides**) nhằm tách biệt hoàn toàn giữa cấu hình chuẩn của kho mã nguồn chung và các thông số riêng tư của từng lập trình viên/dự án mật:
+Bộ công cụ hỗ trợ cơ chế nạp đè cấu hình cá nhân (**Personal & Private Overrides**) nhằm tách biệt hoàn toàn giữa cấu hình chuẩn (`config/apk.config`) và các thông số riêng tư của từng lập trình viên/dự án mật (`config/overlay/`):
 
-* **File cấu hình cá nhân:** `apk_overlays.config` (được tạo tự động từ `apk_overlays.config.example` khi chạy `telua init` nếu chưa có).
-* **Bảo mật tuyệt đối (Zero Git Leak):** `apk_overlays.config` được đưa vào `.gitignore`, ngăn chặn triệt để nguy cơ commit nhầm đường dẫn nội bộ, key bí mật hay profile dự án riêng lên GitHub.
-* **Quy tắc Smart Merge (`config_overlay.py`):**
+* **File cấu hình cá nhân:** `config/overlay/apk_overlays.config` (được giải mã từ `enc_apk_overlays.config` hoặc tạo tự động từ `config/overlay/apk_overlays.config.example` khi chạy `tel init`).
+* **Bảo mật tuyệt đối (Zero Git Leak):** `config/overlay/*.config` được đưa vào `.gitignore`, ngăn chặn triệt để nguy cơ commit nhầm đường dẫn nội bộ hay profile dự án riêng lên Git.
+* **Quy tắc Smart Merge (`python/config_overlay.py`):**
   1. **Top-level variables:** Các biến ngoài cùng (`ACTIVE_PROJECT`, `BUILD_JOBS`, `CONFIG_TARGET_PRODUCT`, ...) được thay thế chính xác tại chỗ (in-place replacement) trong `apk.config`.
   2. **Case branch merge:** Các nhánh profile trong khối `case "$ACTIVE_PROJECT" in` (ví dụ `"oem_service")`) được thay thế theo từng nhánh độc lập. Các nhánh khác (`car_audio`, `vehicle_service`) hoàn toàn không bị ảnh hưởng.
   3. **Custom profile addition:** Nếu bạn khai báo một profile mới (ví dụ `"my_custom_service")`), engine sẽ tự động chèn nhánh mới ngay trước nhánh mặc định `*)`.
@@ -541,7 +555,7 @@ Bộ công cụ hỗ trợ cơ chế nạp đè cấu hình cá nhân (**Persona
 
 ```bash
 # Kiểm tra thử kết quả merge mà không làm thay đổi file (Dry-run mode):
-python3 config_overlay.py ./apk.config --dry-run
+python3 python/config_overlay.py ./apk.config --dry-run
 ```
 
 ---
@@ -551,45 +565,44 @@ python3 config_overlay.py ./apk.config --dry-run
 Tự động cập nhật kho lưu trữ master của bộ công cụ `telua` lên commit mới nhất từ nhánh `origin/main` với cơ chế bảo vệ file cá nhân toàn diện:
 
 ```bash
-telua update
+tel update
 # Hoặc:
 ./build_apk.sh --update
 ```
 
 * **Bảo vệ cấu hình cá nhân (Personal Configs Protection):**
-  1. Trước khi thực hiện `git pull`, script tự động sao lưu an toàn các file cá nhân (`apk_overlays.config` và `config/const_my_cli.config`) vào thư mục tạm `/tmp/`.
+  1. Trước khi thực hiện `git pull`, script tự động sao lưu an toàn các file cá nhân trong `config/overlay/` (`config/overlay/apk_overlays.config` và `config/overlay/const_my_cli.config`) vào thư mục tạm `/tmp/`.
   2. Tiến hành kéo mã nguồn từ `origin/main`.
   3. **Tự phục hồi xung đột (Self-Healing / Auto-Recovery):** Nếu phát hiện merge conflict hoặc tree bị dirty, kịch bản tự kích hoạt `git fetch origin main` và `git reset --hard origin/main`.
   4. Sau khi cập nhật xong, các file cá nhân được **tự động phục hồi nguyên vẹn** từ bản sao lưu tạm, đảm bảo không bao giờ bị mất cấu hình riêng khi update.
-  5. Tự động kiểm tra và khôi phục quyền thực thi (`chmod +x`) cho tất cả các script trong bộ công cụ.
+  5. Tự động đồng bộ Git submodules (`repos/`) và khôi phục quyền thực thi (`chmod +x`) cho tất cả các script trong bộ công cụ.
 
 ---
 
 ### 5.7 Bash & Zsh Tab Auto-completion Engine (`src/telua_completion.sh`)
 
-Bộ gợi ý phím Tab hai lần (<kbd>Tab</kbd><kbd>Tab</kbd>) giúp lập trình viên thao tác cực nhanh mà không cần nhớ cú pháp:
+Bộ gợi ý phím Tab hai lần (<kbd>Tab</kbd><kbd>Tab</kbd>) có cơ chế **Auto-Reload** tự động nạp lại khi file `src/telua_completion.sh` được cập nhật:
 
 ```bash
 # Cài đặt tự động vào ~/.bashrc:
-telua install
+tel install
 
 # Sau đó mở tab terminal mới hoặc:
 source ~/.bashrc
 ```
 
 **Tính năng nổi bật:**
-- **Nhận diện cả 2 alias:** Hoạt động bình đẳng khi gõ `telua ` hoặc `tel `.
-- **Gợi ý cấp 1 (Subcommands & Options):** Gõ `tel <Tab><Tab>` hiển thị danh sách toàn bộ lệnh chính (`build`, `b`, `test`, `t`, `car`, `dump`, `clean-java`, `run`, `replace`, `info`, `init`, `-p`, `--profile`, `--platform`, `--ram-monitor`, ...).
+- **Nhận diện cả 2 alias & Tự động Reload:** Hoạt động bình đẳng khi gõ `telua ` hoặc `tel `, tự kiểm tra timestamp (`mtime`) của `src/telua_completion.sh` để nạp lại ngay khi có thay đổi mà không cần `source ~/.bashrc` lại.
+- **Gợi ý cấp 1 (Subcommands & Options):** Gõ `tel <Tab><Tab>` hiển thị danh sách toàn bộ lệnh chính (`build`, `b`, `test`, `t`, `sync`, `reset`, `car`, `dump`, `sec`, `java`, `docs`, `web`, `crypto`, `enc`, `dec`, `run`, `my`, `replace`, `info`, `init`, ...).
 - **Gợi ý ngữ cảnh chuyên sâu (Context-aware):**
-  - `tel b -p <Tab><Tab>` / `tel --profile <Tab><Tab>`: Tự động đọc danh sách profile từ `apk.config` (`oem_service`, `car_audio`, `vehicle_service`, ...).
-  - `tel docs init -t <Tab><Tab>` / `tel docs init --template <Tab><Tab>`: Gợi ý các template Sphinx (`basic`, `architecture`, `minimal`, `api`).
-  - `tel car <Tab><Tab>`: Đọc động từ `const_car.config` và gợi ý `vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`, `status`.
-  - `tel dump <Tab><Tab>`: Đọc động từ `const_dumpsys.config` và gợi ý `audio`, `car-service`, `car-audio`, `media`, `battery`, `activity`.
-  - `tel sec <Tab><Tab>`: Đọc động từ `const_security.config` và gợi ý `status`, `perm`, `enforce`, `avc`, `privapp`, `appops`, `keystore`, `policy`, `root`, `unroot`, `remount`, `disable-verity`.
-  - `tel run <Tab><Tab>`: Đọc động từ `const_multi_cli.config` và gợi ý `audio-cycle`, `dev-prep`, `remount-reboot`, `audio-dump`, `unittest`.
-  - `tel java <Tab><Tab>` / `tel clean-java <Tab><Tab>`: Gợi ý `clean`, `diff`, `all`, `report`, `help`.
-  - `tel --platform <Tab><Tab>`: Gợi ý `android`, `qnx`.
-  - `tel --start-deploy <Tab><Tab>`: Gợi ý `true`, `false`.
+  - `tel b -p <Tab><Tab>` / `tel --profile <Tab><Tab>`: Tự động đọc danh sách profile từ `apk.config` / `config/apk.config` (`oem_service`, `car_audio`, `vehicle_service`, ...).
+  - `tel web <Tab><Tab>`: Gợi ý `start`, `stop`, `status`, `restart`, `log`, `help`.
+  - `tel crypto <Tab><Tab>`: Gợi ý `status`, `check`, `encrypt`, `decrypt`, `enc`, `dec`, `help`.
+  - `tel java <Tab><Tab>`: Gợi ý `clean`, `diff`, `all`, `report`, `skill`, `help`.
+  - `tel java report <Tab><Tab>`: Gợi ý `diff`, `all`, `help` và đường dẫn file/thư mục.
+  - `tel docs <Tab><Tab>`: Gợi ý `start`, `serve`, `sync`, `metadata`, `build`, `check`, `clean`, `init`, `help`.
+  - `tel docs init -t <Tab><Tab>`: Gợi ý các template Sphinx (`basic`, `architecture`, `minimal`, `api`).
+  - `tel car <Tab><Tab>`, `tel dump <Tab><Tab>`, `tel sec <Tab><Tab>`, `tel run <Tab><Tab>`, `tel my <Tab><Tab>`: Tự động trích xuất danh sách action từ các file `config/const_*.config` và `config/overlay/const_my_cli.config`.
 
 ---
 
@@ -598,8 +611,8 @@ source ~/.bashrc
 Chẩn đoán và kiểm soát bảo mật hệ thống Android / AAOS qua module `src/telua_security.sh` và cấu hình khai báo `config/const_security.config`:
 
 ```bash
-telua sec                             # Hiển thị bảng tra cứu nhanh các lệnh bảo mật
-telua sec help                        # Hiển thị chi tiết từng action kèm câu lệnh ADB thực thi
+tel sec                               # Hiển thị bảng tra cứu nhanh các lệnh bảo mật
+tel sec help                          # Hiển thị chi tiết từng action kèm câu lệnh ADB thực thi
 ```
 
 | Action | Chức năng | Câu lệnh thực thi |
@@ -624,40 +637,30 @@ telua sec help                        # Hiển thị chi tiết từng action k�
 
 ### 5.9 Quản lý tài liệu Sphinx Doc-as-Code (`telua docs` / `doc`)
 
-Hệ thống quản lý tài liệu dạng mã nguồn chuẩn quốc tế theo mô hình mô-đun (Modular Documentation) sử dụng **Sphinx** và theme **Furo**, tự động hóa toàn diện từ khởi tạo template, kiểm tra tính toàn vẹn (broken images/paths), tổng hợp (merge) đến mở xem trước trực tiếp trên trình duyệt:
+Hệ thống quản lý tài liệu dạng mã nguồn chuẩn quốc tế theo mô hình mô-đun (Modular Documentation) sử dụng **Sphinx** và theme **Furo**, hỗ trợ 4 bộ template chuyên biệt (`basic`, `architecture`, `minimal`, `api`), tự động hóa toàn diện từ khởi tạo template, đồng bộ `metadata.json`, kiểm tra tính toàn vẹn đến mở xem trước trực tiếp trên trình duyệt:
 
 ```bash
-# 1. Khởi tạo tài liệu trong thư mục ./docs (an toàn: KHÔNG ghi đè nếu đã tồn tại):
-telua docs init
+# 1. Khởi tạo tài liệu trong thư mục ./docs (hỗ trợ chọn 1 trong 4 template):
+tel docs init                         # Chọn template tương tác (hoặc mặc định 'basic')
+tel docs init -t architecture         # Khởi tạo theo template kiến trúc (basic | architecture | minimal | api)
 
 # 2. Kiểm tra tính toàn vẹn đường dẫn section và liên kết ảnh:
-telua docs check
+tel docs check
 
 # 3. Tự động kiểm tra format & đồng bộ file/folder mới vào metadata.json:
-telua docs sync           # Tự động trích xuất Title, tạo chapter wrapper & điền 'must update'
+tel docs sync                         # Tự động trích xuất Title, tạo chapter wrapper & điền 'must update'
 
 # 4. Tự động merge các section và biên dịch HTML tĩnh:
-telua docs build
+tel docs build
 
 # 5. Khởi chạy HTTP server và TỰ ĐỘNG MỞ trình duyệt xem tài liệu (mặc định port 8080):
-telua docs start          # Tự động build (nếu chưa có) & mở browser tại http://localhost:8080
-telua docs start 8080     # Tùy chỉnh port nếu cần
-telua docs serve          # Alias cho lệnh start
+tel docs start                        # Tự động build (nếu chưa có) & mở browser tại http://localhost:8080
+tel docs start 8080                   # Tùy chỉnh port nếu cần
+tel docs serve                        # Alias cho lệnh start
 
 # 6. Dọn dẹp thư mục build:
-telua docs clean
+tel docs clean
 ```
-
-* **Tự động đồng bộ & Kiểm tra Format (`telua docs sync`)**: Khi bạn tạo thêm folder chapter hoặc file `.rst` mới, lệnh `telua docs sync` sẽ:
-  * **Kiểm tra chuẩn Format**: Phát hiện file rỗng, tên file chứa khoảng trắng, underline heading không hợp lệ trước khi sync.
-  * **Bảo toàn dữ liệu cũ**: Giữ nguyên 100% các tiêu đề, mô tả và tác giả đã viết trước đó.
-  * **Trích xuất Heading thông minh**: Tự động đọc Heading 1 của file `.rst` để điền trường `title`.
-  * **Điền `"must update"` tự động**: Bất kỳ trường nào còn thiếu (`author`, `description`) sẽ được đánh dấu `"must update"` để bạn dễ dàng tìm và bổ sung.
-  * **Tự sinh file Chapter**: Tự tạo file `<chapter>.rst` với 2 marker gộp tài liệu nếu bạn mới chỉ tạo folder.
-* **Kiến trúc tách bạch (Clean Template Architecture)**: Các file nội dung (`conf.py`, `metadata.json`, `index.rst`, `asset/`, `chapter1/2/3/`) được lưu trong `sphinx/template/`, còn công cụ xử lý (`sync_metadata.py`, `check_sections.py`, `merge_docs.py`, `check_docs.py`) được cô lập trong `sphinx/scripts/`. Khi chạy `telua docs init`, người dùng có thư mục tài liệu tinh gọn và sạch sẽ, không bị lẫn các script Python nội bộ.
-* **Tự động mở trình duyệt**: Lệnh `telua docs start` tự động phát hiện hệ điều hành (Windows, Linux, macOS) để mở ngay trang HTML trên trình duyệt mặc định. Nếu tài liệu chưa được biên dịch, nó sẽ tự động kích hoạt `build` trước.
-* **Khởi tạo Idempotent an toàn**: Khi chạy `telua docs init`, nếu thư mục `docs/` đã tồn tại và chứa file cấu hình (`conf.py` hoặc `metadata.json`), toolkit sẽ tự động bỏ qua và cảnh báo, đảm bảo không bao giờ làm mất tài liệu hiện có của bạn.
-* **Tự động nhận diện (Context-Aware Auto-Discovery)**: Tự động phát hiện thư mục tài liệu tại `./docs`, `./sphinx/template`, `./sphinx` hoặc ngay tại thư mục hiện tại `.`.
 
 ---
 
@@ -676,9 +679,12 @@ tel java all
 # 3. Tự động sửa một file hoặc thư mục cụ thể:
 tel java src/com/example/MyService.java
 
-# 4. Xuất báo cáo tĩnh 4 tầng (Read-only, lưu vào unused_java_report.txt):
-tel java report           # Quét toàn bộ thư mục hiện tại
-tel java report diff      # Quét các file thuộc commit Git hiện tại (HEAD) + working tree
+# 4. Xuất báo cáo tĩnh 6 tầng (Read-only, lưu vào unused_java_report.txt):
+tel java report                       # Quét toàn bộ thư mục hiện tại
+tel java report diff                  # Quét các file thuộc commit Git hiện tại (HEAD) + working tree
+
+# 5. Liên kết kho tri thức & AI Skills (.skill/java/) vào dự án hiện tại:
+tel java skill
 ```
 
 * **Các lỗi được `tel java diff` và `tel java all` tự động sửa tại chỗ (In-place Auto-Fix)**:
@@ -690,6 +696,28 @@ tel java report diff      # Quét các file thuộc commit Git hiện tại (HEA
      - `if (a > 0) return;` $\rightarrow$ khối `if (a > 0) {\n    return;\n}` chuẩn chỉnh.
      - `if (a < 0)\n    a = 0;\nelse\n    a = 1;` $\rightarrow$ tự động bọc `{ ... } else { ... }`.
 * **An toàn tuyệt đối cho Chuỗi & Comment**: Mọi nội dung bên trong `"..."`, `'...'`, `//` và `/* ... */` được bảo toàn nguyên vẹn 100%.
+
+---
+
+### 5.11 Config Manager Web UI (`telua web` / `web/telua_web.py`)
+
+Giao diện quản trị cấu hình trực quan trên trình duyệt (Flask backend + Vanilla JS frontend) thông qua module `src/telua_web.sh` và `web/telua_web.py`:
+
+```bash
+tel web start                         # Khởi chạy Web UI ngầm (mặc định port 8788) & tự mở trình duyệt
+tel web start 9000                    # Khởi chạy trên port tùy chỉnh
+tel web status                        # Kiểm tra trạng thái server (PID, URL, health probe /api/ping)
+tel web restart                       # Khởi động lại Web UI server
+tel web log                           # Xem log trực tiếp (.telua_web.log)
+tel web stop                          # Dừng Web UI server
+```
+
+* **Tính năng chính trên giao diện Web UI**:
+  - **Duyệt & Chỉnh sửa mọi file `.config` / `.json`**: Tự động quét `config/apk.config`, `config/overlay/*.config` và `config/const_*.config`.
+  - **Kiểm tra cú pháp trước khi lưu (`bash -n` / JSON validation)** kèm tự động tạo file sao lưu `.bak`.
+  - **Chuyển đổi nhanh `ACTIVE_PROJECT` profile** chỉ bằng 1 cú click (tương đương `tel -p <profile>`).
+  - **Trình quản lý Pipeline trực quan (Visual Pipeline Editor)**: Thêm, sửa, xóa, sắp xếp thứ tự các bước trong `const_my_cli.config` và `const_multi_cli.config` và chạy thử trực tiếp từ trình duyệt.
+  - **Live Status**: Hiển thị phiên bản toolkit, thiết bị ADB đang kết nối, dung lượng RAM hệ thống và kết quả chẩn đoán `tel info`.
 
 ---
 

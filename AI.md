@@ -26,24 +26,32 @@ When assisting a developer, **ALWAYS prefer using `telua` (or `./build_apk.sh`) 
 
 ```
 .
-├── build_apk.sh              # Core orchestration engine & CLI entrypoint
+├── build_apk.sh              # Core orchestration engine & CLI entrypoint (aliases: telua, tel)
+├── src/                      # 19 modular Bash domain scripts (telua_android.sh, telua_car.sh, ...)
 ├── python/                   # Python automation & static analysis scripts
-│   ├── config_overlay.py     # Smart overlay merger (merges config/apk_overlays.config)
-│   └── config_crypto.py      # Configuration encryption/decryption (Fernet AES)
-├── requirements.txt          # Python dependencies (cryptography)
+│   ├── clean_java.py         # Google/AOSP Java Style auto-fixer
+│   ├── unused_methods_report.py # 6-in-1 static Java analyzer
+│   ├── config_overlay.py     # Smart overlay merger (merges config/overlay/apk_overlays.config)
+│   └── config_crypto.py      # Private overlay encryption/decryption (Fernet AES)
+├── web/                      # Config Manager Web UI (telua_web.py + static/)
+├── requirements.txt          # Python dependencies
 ├── sphinx/                   # Sphinx Doc-as-Code modular template & build scripts
 ├── config/                   # Declarative global constant cheatsheets & project configs
 │   ├── apk.config            # Project-specific active profile & lunch target
-│   ├── apk_overlays.config.example # Personal/private override template
-│   ├── enc_apk.config        # Encrypted configuration template
 │   ├── const_car.config      # AAOS car & audio key injection & test harness
 │   ├── const_dumpsys.config  # System diagnostics & AAOS dumpsys targets
 │   ├── const_security.config # Security, SELinux & permission diagnostics
+│   ├── const_clean_java.config # Java cleaner & google-java-format settings
 │   ├── const_multi_cli.config# Multi-command sequential pipelines / macros
-│   ├── const_my_cli.config.example # Personal pipeline template (telua my <action>)
 │   ├── const_docker.config   # Docker & systemd service cheatsheet
 │   ├── const_git.config      # Git & Google Repo cheatsheet
-│   └── const_network.config  # Linux ports & socket inspection cheatsheet
+│   ├── const_network.config  # Linux ports & socket inspection cheatsheet
+│   └── overlay/              # Personal / private configs (git-ignored plaintext, AES-encryptable)
+│       ├── apk_overlays.config.example # Personal/private override template
+│       ├── const_my_cli.config.example # Personal pipeline template (telua my <action>)
+│       ├── apk_overlays.config         # Local confidential project overrides (git-ignored)
+│       ├── const_my_cli.config         # Local personal pipeline macros (git-ignored)
+│       └── enc_*.config                # Encrypted private overlay backups (tel enc / tel dec)
 └── AI.md                     # This file (AI reference)
 ```
 
@@ -65,9 +73,12 @@ When the user asks you to perform a task, map their intent to the corresponding 
 | **Sync with Clean Reset** | `telua --repo-sync --repo-reset -y` | Hard resets dirty repos before sync (AI must pass `-y`) |
 | **Run Unit Tests** | `telua t` (or `tel t` / `telua test` / `telua --test-mode true`) | Runs project test script configured in `apk.config` |
 | **Find & Replace Text Across Files** | `telua replace <old> <new> [path]` | Fast literal string replacement across directory or single file |
-| **Clean Java Source Files** | `telua java [clean\|diff\|all\|path]` (alias: `telua clean-java`) | Strips trailing whitespace, expands tabs, normalizes `if (x)` & enforces LF |
-| **Report Unused Java Methods & Style** | `telua java report [diff\|all\|path]` (alias: `telua clean-java report`) | 4-in-1 read-only report: unused methods, unused params, whitespace & `google-java-format` (`unused_java_report.txt`) |
-| **Sphinx Doc-as-Code Manager** | `telua docs [init\|build\|clean\|serve\|check]` | Initializes template, validates images/sections & builds HTML |
+| **Clean Java Source Files** | `telua java [clean\|diff\|all\|path]` (alias: `telua clean-java`) | Strips trailing whitespace, expands tabs, normalizes `if (x)`, K&R braces & Google Java Style |
+| **Report Unused Java Methods & Style** | `telua java report [diff\|all\|path]` (alias: `telua clean-java report`) | 6-in-1 read-only report: unused methods, unused params, whitespace, `google-java-format`, unused imports & unused private fields |
+| **Link Java AI Skills** | `telua java skill` | Links `.skill/java/` knowledge base (`telua_skill` + `claude-code-java`) into workspace |
+| **Config Manager Web UI** | `telua web [start\|stop\|status\|restart\|log]` | Launches Flask Web UI to edit `.config` files, switch profiles & manage pipelines |
+| **Private Config Encryption** | `telua crypto [status\|enc\|dec]` (or `tel enc` / `tel dec`) | Checks, encrypts, or decrypts private configs in `config/overlay/` |
+| **Sphinx Doc-as-Code Manager** | `telua docs [init -t <tpl>\|sync\|build\|clean\|start\|check]` | Initializes template (`basic`, `architecture`, `minimal`, `api`), syncs metadata & builds HTML |
 | **Security & SELinux Diagnostics** | `telua sec [action]` | Controls SELinux (status, perm, enforce), dumps AVC denials & privapp |
 | **Install Global CLI Alias & Completion** | `./build_apk.sh --install` | Adds `alias telua=...`, `alias tel=...`, and Tab Auto-completion into `~/.bashrc` |
 | **Update Toolkit to Latest Main** | `telua update` | Pulls latest main commit with auto-recovery |
@@ -215,9 +226,10 @@ telua replace "<old_text>" "<new_text>" [path]  # Fast literal text replacement 
    - `APK_DEPLOY_PATH`: Target destination on device (e.g., `/system/priv-app/OemService`).
    - `DEBUG_LOG_TAGS`: List of tags enabled with `persist.log.tag.<TAG>=DEBUG`.
 
-2. **Secrets Protection (`config_crypto.py`)**:
-   - Encrypt: `python3 config_crypto.py encrypt <password>` -> `enc_apk.config`
-   - Decrypt: `python3 config_crypto.py decrypt <password> --force` -> `dec_apk.config`
+2. **Private Overlay Secrets Protection (`tel crypto` / `python/config_crypto.py`)**:
+   - Check status: `tel crypto` (or `tel crypto status`)
+   - Encrypt: `tel enc <password>` -> `config/overlay/enc_apk_overlays.config`, `config/overlay/enc_const_my_cli.config`
+   - Decrypt: `tel dec <password>` -> `config/overlay/apk_overlays.config`, `config/overlay/const_my_cli.config`
 
 ---
 
