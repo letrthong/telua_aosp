@@ -492,6 +492,7 @@ print_help() {
     printf "  \033[1;37m%-28s\033[0m %s\n" "java report [t]" "Report unused methods/params, whitespace & google-java-format"
     printf "  \033[1;37m%-28s\033[0m %s\n" "docs, doc [action]" "Sphinx Doc-as-Code manager (init, build, clean, serve, check)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "web [action]" "Config Manager Web UI (start, stop, status, restart, log)"
+    printf "  \033[1;37m%-28s\033[0m %s\n" "crypto [action]" "Encrypt/decrypt private overlay configs (status, enc, dec)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "run [group]" "Execute multi-command pipeline macro (dev-prep, audio-cycle, ...)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "my, proj [action]" "Execute personal / private pipeline macro (hello, ...)"
     printf "  \033[1;37m%-28s\033[0m %s\n" "git" "Display Git & Google Repo cheatsheet"
@@ -788,6 +789,27 @@ parse_arguments() {
                 fi
                 handle_web_command "$WEB_ACTION" "$@"
                 exit 0
+                ;;
+            --crypto|crypto)
+                if [ -n "$2" ] && [[ "$2" != -* ]]; then
+                    CRYPTO_ACTION="$2"
+                    shift 2
+                else
+                    CRYPTO_ACTION="status"
+                    shift 1
+                fi
+                handle_crypto_command "$CRYPTO_ACTION" "$@"
+                exit $?
+                ;;
+            --encrypt|encrypt|--enc|enc)
+                shift 1
+                handle_crypto_command "encrypt" "$@"
+                exit $?
+                ;;
+            --decrypt|decrypt|--dec|dec)
+                shift 1
+                handle_crypto_command "decrypt" "$@"
+                exit $?
                 ;;
             --java|java|--clean-java|clean-java|cleanjava)
                 if [ -n "$2" ] && [[ "$2" != --* ]]; then

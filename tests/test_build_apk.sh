@@ -233,7 +233,13 @@ log_test "Testing tab completion for java, web, -p/--profile and -t/--template..
     _telua_completions
     echo " ${COMPREPLY[*]} " | grep -q " java " && \
     echo " ${COMPREPLY[*]} " | grep -q " web " && \
+    echo " ${COMPREPLY[*]} " | grep -q " crypto " && \
     ! echo " ${COMPREPLY[*]} " | grep -q " clean-java " && \
+    COMP_WORDS=(tel crypto "") && \
+    COMP_CWORD=2 && \
+    _telua_completions && \
+    echo " ${COMPREPLY[*]} " | grep -q " encrypt " && \
+    echo " ${COMPREPLY[*]} " | grep -q " decrypt " && \
     COMP_WORDS=(tel web "") && \
     COMP_CWORD=2 && \
     _telua_completions && \
@@ -254,6 +260,30 @@ log_test "Testing tab completion for java, web, -p/--profile and -t/--template..
     echo "${COMPREPLY[*]}" | grep -q "architecture"
 )
 assert_success "Tab completion resolves java, web, subcommands, -p profiles and -t templates" [ $? -eq 0 ]
+
+# Test 6c: Private overlay crypto CLI (telua crypto status, enc, dec)
+log_test "Testing private overlay crypto CLI (telua crypto, enc, dec)..."
+TMP_CRYPTO_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_crypto_cli_test.XXXXXX")
+(
+    # 1. Empty dir -> status shows NOT CREATED and enc fails fast
+    status_out=$("$MAIN_SCRIPT" crypto status -d "$TMP_CRYPTO_DIR" 2>&1)
+    echo "$status_out" | grep -q "NOT CREATED" && \
+    ! "$MAIN_SCRIPT" enc "TestPw123" -d "$TMP_CRYPTO_DIR" >/dev/null 2>&1 && \
+    # 2. Create private files -> status shows UNENCRYPTED, enc encrypts both, dec decrypts both
+    printf 'ACTIVE_PROJECT="car_audio"\n' > "$TMP_CRYPTO_DIR/apk_overlays.config" && \
+    printf 'MY_GROUP_LIST=("demo :: echo hi")\n' > "$TMP_CRYPTO_DIR/const_my_cli.config" && \
+    status_unenc=$("$MAIN_SCRIPT" crypto status -d "$TMP_CRYPTO_DIR" 2>&1) && \
+    echo "$status_unenc" | grep -q "UNENCRYPTED" && \
+    "$MAIN_SCRIPT" enc "TestPw123" -d "$TMP_CRYPTO_DIR" >/dev/null 2>&1 && \
+    [ -f "$TMP_CRYPTO_DIR/enc_apk_overlays.config" ] && \
+    [ -f "$TMP_CRYPTO_DIR/enc_const_my_cli.config" ] && \
+    rm -f "$TMP_CRYPTO_DIR/apk_overlays.config" "$TMP_CRYPTO_DIR/const_my_cli.config" && \
+    "$MAIN_SCRIPT" dec "TestPw123" -d "$TMP_CRYPTO_DIR" >/dev/null 2>&1 && \
+    grep -q 'ACTIVE_PROJECT="car_audio"' "$TMP_CRYPTO_DIR/apk_overlays.config" && \
+    grep -q 'MY_GROUP_LIST=' "$TMP_CRYPTO_DIR/const_my_cli.config"
+)
+assert_success "Crypto CLI checks existence, encrypts and decrypts private overlay configs" [ $? -eq 0 ]
+rm -rf "$TMP_CRYPTO_DIR"
 
 # Test 7: Documentation module (telua docs help, init, check)
 log_test "Testing documentation module (telua docs help, init, check)..."

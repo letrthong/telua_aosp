@@ -63,7 +63,7 @@ _telua_completions() {
     fi
 
     # 1. Primary subcommands and global options
-    local subcommands="build b test t sync reset init install info update replace car dump sec security java docs doc web run multi my proj git docker network help version"
+    local subcommands="build b test t sync reset init install info update replace car dump sec security java docs doc web crypto enc dec run multi my proj git docker network help version"
     local options="-p --profile --no-reboot --start-deploy --platform --repo-sync --repo-reset -y --yes --config --softlink --test-mode --ram-monitor --find-file --find-dir --find-text --replace -h --help -v --version"
 
     # Context-aware completion based on the previous word
@@ -76,6 +76,11 @@ _telua_completions() {
         web|--web)
             local web_actions="start stop status restart log help"
             COMPREPLY=($(compgen -W "$web_actions" -- "$cur"))
+            return 0
+            ;;
+        crypto|--crypto)
+            local crypto_actions="status check encrypt decrypt enc dec help"
+            COMPREPLY=($(compgen -W "$crypto_actions" -- "$cur"))
             return 0
             ;;
         -t|--template)

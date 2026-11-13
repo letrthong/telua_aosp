@@ -656,4 +656,208 @@ execute_command_pipeline() {
     return 0
 }
 
+# ==============================================================================
+# 'telua crypto' / 'tel enc' / 'tel dec' support (Private Overlay Encryption)
+# ==============================================================================
+
+_crypto_get_python_cmd() {
+    local py path_to_py
+    for py in python3 python py; do
+        path_to_py="$(command -v "$py" 2>/dev/null || true)"
+        [ -z "$path_to_py" ] && continue
+        case "$path_to_py" in
+            *WindowsApps*) continue ;;
+        esac
+        if "$py" -c "import sys" >/dev/null 2>&1; then
+            echo "$py"
+            return 0
+        fi
+    done
+    echo ""
+}
+
+show_crypto_help() {
+    echo ""
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo -e "\033[1;32m  TELUA CRYPTO — Private Overlay Config Encryption (PBKDF2 + Fernet AES)\033[0m"
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo -e "  Usage: \033[1;33mtelua crypto [action] [options]\033[0m  (or shortcuts: \033[1;32mtel enc\033[0m / \033[1;32mtel dec\033[0m)"
+    echo ""
+    echo -e "\033[1;33mAVAILABLE ACTIONS:\033[0m"
+    printf "  \033[1;36m%-26s\033[0m %s\n" "status, check" "Check existence & sync state of private configs in config/overlay/"
+    printf "  \033[1;36m%-26s\033[0m %s\n" "encrypt, enc [pw]" "Encrypt existing apk_overlays.config & const_my_cli.config -> enc_*"
+    printf "  \033[1;36m%-26s\033[0m %s\n" "decrypt, dec [pw]" "Decrypt existing enc_apk_overlays.config & enc_const_my_cli.config"
+    printf "  \033[1;36m%-26s\033[0m %s\n" "help" "Show this help message"
+    echo ""
+    echo -e "\033[1;33mOPTIONS:\033[0m"
+    printf "  \033[1;36m%-26s\033[0m %s\n" "-d, --dir <path>" "Override target overlay directory (default: config/overlay)"
+    printf "  \033[1;36m%-26s\033[0m %s\n" "-i <in> -o <out>" "Encrypt/decrypt a single custom file explicitly"
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo ""
+}
+
+crypto_cmd_status() {
+    local overlay_dir="$1"
+    local priv_names=("apk_overlays.config" "const_my_cli.config")
+    local name plain_path enc_path
+
+    echo ""
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo -e "\033[1;32m  TELUA CRYPTO — PRIVATE OVERLAY CONFIG STATUS\033[0m"
+    echo -e "\033[1;36m================================================================================\033[0m"
+    printf "  \033[1;37m%-18s\033[0m %s\n" "Overlay Dir:" "$overlay_dir"
+    echo ""
+
+    for name in "${priv_names[@]}"; do
+        plain_path="$overlay_dir/$name"
+        enc_path="$overlay_dir/enc_$name"
+        local has_plain=0 has_enc=0
+        [ -f "$plain_path" ] && has_plain=1
+        [ -f "$enc_path" ] && has_enc=1
+
+        echo -e "  \033[1;33m• $name\033[0m"
+        if [ "$has_plain" -eq 1 ]; then
+            printf "    \033[0;90m%-16s\033[0m \033[1;32mEXISTS\033[0m (%s)\n" "Plaintext:" "$plain_path"
+        else
+            printf "    \033[0;90m%-16s\033[0m \033[0;90mMISSING\033[0m\n" "Plaintext:"
+        fi
+
+        if [ "$has_enc" -eq 1 ]; then
+            printf "    \033[0;90m%-16s\033[0m \033[1;36mEXISTS\033[0m (%s)\n" "Encrypted:" "$enc_path"
+        else
+            printf "    \033[0;90m%-16s\033[0m \033[0;90mMISSING\033[0m\n" "Encrypted:"
+        fi
+
+        if [ "$has_plain" -eq 1 ] && [ "$has_enc" -eq 1 ]; then
+            if [ "$plain_path" -nt "$enc_path" ]; then
+                printf "    \033[0;90m%-16s\033[0m \033[1;33mMODIFIED (plaintext is newer — run 'tel enc' to update)\033[0m\n" "Sync State:"
+            else
+                printf "    \033[0;90m%-16s\033[0m \033[1;32mSYNCED (encrypted backup is up-to-date)\033[0m\n" "Sync State:"
+            fi
+        elif [ "$has_plain" -eq 1 ] && [ "$has_enc" -eq 0 ]; then
+            printf "    \033[0;90m%-16s\033[0m \033[1;33mUNENCRYPTED (run 'tel enc' to encrypt)\033[0m\n" "Sync State:"
+        elif [ "$has_plain" -eq 0 ] && [ "$has_enc" -eq 1 ]; then
+            printf "    \033[0;90m%-16s\033[0m \033[1;36mENCRYPTED ONLY (run 'tel dec' to decrypt)\033[0m\n" "Sync State:"
+        else
+            printf "    \033[0;90m%-16s\033[0m \033[0;90mNOT CREATED (run 'tel init' to create from *.example)\033[0m\n" "Sync State:"
+        fi
+        echo ""
+    done
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo ""
+    return 0
+}
+
+handle_crypto_command() {
+    local action="${1:-status}"
+    shift 2>/dev/null || true
+
+    local base_toolkit_dir="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}"
+    local overlay_dir="$base_toolkit_dir/config/overlay"
+    local crypto_script="$base_toolkit_dir/python/config_crypto.py"
+    [ ! -f "$crypto_script" ] && crypto_script="$base_toolkit_dir/config_crypto.py"
+
+    # Parse optional -d / --dir to allow overriding overlay_dir
+    local -a forward_args=()
+    local has_explicit_input=0
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -d|--dir)
+                if [ -z "${2:-}" ]; then
+                    log_error "Missing directory path for $1"
+                    return 1
+                fi
+                overlay_dir="$2"
+                shift 2
+                ;;
+            -i|--input)
+                has_explicit_input=1
+                forward_args+=("$1" "$2")
+                shift 2
+                ;;
+            *)
+                forward_args+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    case "$action" in
+        status|check|"")
+            crypto_cmd_status "$overlay_dir"
+            return 0
+            ;;
+        help|-h|--help)
+            show_crypto_help
+            return 0
+            ;;
+        encrypt|enc|--encrypt|--enc)
+            if [ ! -f "$crypto_script" ]; then
+                log_error "Crypto helper script not found: $crypto_script"
+                return 1
+            fi
+            if [ "$has_explicit_input" -eq 0 ]; then
+                local found_plain=0
+                local f
+                for f in "apk_overlays.config" "const_my_cli.config"; do
+                    if [ -f "$overlay_dir/$f" ]; then
+                        log_info "Found private config to encrypt: $overlay_dir/$f -> $overlay_dir/enc_$f"
+                        found_plain=1
+                    fi
+                done
+                if [ "$found_plain" -eq 0 ]; then
+                    log_error "No private config files (apk_overlays.config, const_my_cli.config) found in $overlay_dir"
+                    log_info "Tip: Run 'tel init' or create $overlay_dir/apk_overlays.config first."
+                    return 1
+                fi
+                forward_args+=("-d" "$overlay_dir")
+            fi
+            install_python_requirements
+            local py_cmd
+            py_cmd="$(_crypto_get_python_cmd)"
+            if [ -z "$py_cmd" ]; then
+                log_error "Python 3 is required to run config_crypto.py."
+                return 1
+            fi
+            "$py_cmd" "$crypto_script" encrypt "${forward_args[@]}"
+            return $?
+            ;;
+        decrypt|dec|--decrypt|--dec)
+            if [ ! -f "$crypto_script" ]; then
+                log_error "Crypto helper script not found: $crypto_script"
+                return 1
+            fi
+            if [ "$has_explicit_input" -eq 0 ]; then
+                local found_enc=0
+                local f
+                for f in "enc_apk_overlays.config" "enc_const_my_cli.config"; do
+                    if [ -f "$overlay_dir/$f" ]; then
+                        log_info "Found encrypted config to decrypt: $overlay_dir/$f -> $overlay_dir/${f#enc_}"
+                        found_enc=1
+                    fi
+                done
+                if [ "$found_enc" -eq 0 ]; then
+                    log_error "No encrypted config files (enc_apk_overlays.config, enc_const_my_cli.config) found in $overlay_dir"
+                    return 1
+                fi
+                forward_args+=("-d" "$overlay_dir" "--force")
+            fi
+            install_python_requirements
+            local py_cmd
+            py_cmd="$(_crypto_get_python_cmd)"
+            if [ -z "$py_cmd" ]; then
+                log_error "Python 3 is required to run config_crypto.py."
+                return 1
+            fi
+            "$py_cmd" "$crypto_script" decrypt "${forward_args[@]}"
+            return $?
+            ;;
+        *)
+            log_error "Unknown crypto action '$action'!"
+            show_crypto_help
+            return 1
+            ;;
+    esac
+}
+
 
