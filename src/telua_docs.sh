@@ -46,8 +46,12 @@ show_docs_help() {
     echo -e "  Usage: \033[1;33mtelua docs <action> [options]\033[0m  (or: \033[1;33mtelua doc <action>\033[0m)"
     echo ""
     echo -e "\033[1;33mAVAILABLE ACTIONS:\033[0m"
-    printf "  \033[1;36m%-22s\033[0m %s\n" "start [port]" "Build (if needed), launch HTTP server & open browser (default: 8080)"
+    printf "  \033[1;36m%-22s\033[0m %s\n" "start [port]" "Build (if needed), launch HTTP server in BACKGROUND & open browser (default: 8080)"
     printf "  \033[1;36m%-22s\033[0m %s\n" "serve [port]" "Alias for 'start' to run local HTTP preview server"
+    printf "  \033[1;36m%-22s\033[0m %s\n" "stop" "Stop the background docs preview server"
+    printf "  \033[1;36m%-22s\033[0m %s\n" "status" "Show docs preview server status (PID, log path)"
+    printf "  \033[1;36m%-22s\033[0m %s\n" "restart [port]" "Restart the docs preview server"
+    printf "  \033[1;36m%-22s\033[0m %s\n" "log" "Show last 40 lines of the preview server log"
     printf "  \033[1;36m%-22s\033[0m %s\n" "sync [dir]" "Pre-check formatting & auto-sync folders/sections into metadata.json"
     printf "  \033[1;36m%-22s\033[0m %s\n" "build" "Validate, merge modular sections & compile Sphinx HTML"
     printf "  \033[1;36m%-22s\033[0m %s\n" "check" "Verify section file paths and image links"
@@ -671,7 +675,88 @@ docs_cmd_clean() {
     return 0
 }
 
-# Action: start / serve (opens browser and starts HTTP preview server)
+# Action: start / serve (builds if needed, launches HTTP preview server in BACKGROUND)
+# Server runs detached (survives terminal close), PID tracked in
+# '<docs_dir>/.telua_docs.pid', log in '<docs_dir>/.telua_docs.log'.
+# Manage with: telua docs stop | status | restart | log
+_DOCS_PID_FILE=".telua_docs.pid"
+_DOCS_LOG_FILE=".telua_docs.log"
+
+# Spawn a command fully detached from the current terminal, without depending
+# on any single external binary. Strategy (first available wins):
+#   1. nohup  (coreutils, present on every standard Linux/WSL install)
+#   2. setsid (util-linux, new session => immune to SIGHUP by design)
+#   3. plain bash: redirect stdin/stdout/stderr + background + disown
+#      (disown removes the job from the shell's job table so no SIGHUP is
+#       sent when the shell exits; redirecting all stdio prevents SIGTTIN/
+#       SIGTTOU from terminal access and avoids holding the tty open).
+# Usage: _docs_spawn_detached <log_file> <cmd> [args...]
+_docs_spawn_detached() {
+    local log_file="$1"; shift
+    if command -v nohup >/dev/null 2>&1; then
+        nohup "$@" > "$log_file" 2>&1 < /dev/null &
+    elif command -v setsid >/dev/null 2>&1; then
+        setsid "$@" > "$log_file" 2>&1 < /dev/null &
+    else
+        "$@" > "$log_file" 2>&1 < /dev/null &
+        disown "$!" 2>/dev/null || true
+    fi
+    echo $!
+}
+
+_docs_server_pid() {
+    local target_dir pid_file pid
+    target_dir="$(resolve_docs_dir "")" || return 1
+    pid_file="$target_dir/$_DOCS_PID_FILE"
+    [ -f "$pid_file" ] || return 1
+    pid="$(cat "$pid_file" 2>/dev/null)"
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && { echo "$pid"; return 0; }
+    rm -f "$pid_file" 2>/dev/null
+    return 1
+}
+
+docs_cmd_stop() {
+    local pid
+    pid="$(_docs_server_pid)" || { log_warn "Docs preview server is not running."; return 0; }
+    log_info "Stopping docs preview server (PID: $pid)..."
+    kill "$pid" 2>/dev/null || true
+    sleep 1
+    kill -9 "$pid" 2>/dev/null || true
+    rm -f "$(resolve_docs_dir "")/$_DOCS_PID_FILE" 2>/dev/null || true
+    log_success "Docs preview server stopped."
+}
+
+docs_cmd_status() {
+    local target_dir pid port
+    target_dir="$(resolve_docs_dir "")" || return 1
+    echo ""
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo -e "\033[1;32m  TELUA DOCS PREVIEW - SERVER STATUS\033[0m"
+    echo -e "  Docs root:       \033[0;33m$target_dir\033[0m"
+    if pid="$(_docs_server_pid)"; then
+        port="$(tr -dc '0-9' < "$target_dir/$_DOCS_LOG_FILE" 2>/dev/null | head -c 4)"
+        echo -e "  State:           \033[1;32mRUNNING\033[0m (PID: $pid)"
+        echo -e "  Log file:        $target_dir/$_DOCS_LOG_FILE"
+        echo -e "  Stop server:     \033[1;33mtelua docs stop\033[0m"
+    else
+        echo -e "  State:           \033[0;90mSTOPPED\033[0m"
+        echo -e "  Start server:    \033[1;33mtelua docs start [port]\033[0m"
+    fi
+    echo -e "\033[1;36m================================================================================\033[0m"
+    echo ""
+}
+
+docs_cmd_log() {
+    local target_dir
+    target_dir="$(resolve_docs_dir "")" || return 1
+    local log_file="$target_dir/$_DOCS_LOG_FILE"
+    if [ ! -f "$log_file" ]; then
+        log_warn "No log file found at $log_file (server never started?)."
+        return 0
+    fi
+    tail -n 40 "$log_file"
+}
+
 docs_cmd_start() {
     local target_dir
     target_dir="$(resolve_docs_dir "")"
@@ -692,24 +777,67 @@ docs_cmd_start() {
         return 1
     fi
 
+    # Already running? Just report and exit.
+    local pid
+    if pid="$(_docs_server_pid)"; then
+        log_warn "Docs preview server is already running (PID: $pid)."
+        log_info "Open: http://localhost:$port  (use 'telua docs stop' to stop it)"
+        _docs_open_browser "http://localhost:$port"
+        return 0
+    fi
+
     local preview_url="http://localhost:$port"
+    local pid_file="$target_dir/$_DOCS_PID_FILE"
+    local log_file="$target_dir/$_DOCS_LOG_FILE"
 
     echo ""
     log_info "============================================================"
-    log_info " Starting Documentation Preview Server on port $port"
+    log_info " Starting Documentation Preview Server on port $port (background)"
     log_info " Documentation root : $target_dir"
     log_info " HTML directory     : $html_dir"
     log_info " Local URL          : $preview_url"
-    log_info " Opening default browser..."
-    log_info " Press Ctrl+C to stop the HTTP server"
+    log_info " Log file           : $log_file"
     log_info "============================================================"
     echo ""
 
-    # Open browser automatically
-    _docs_open_browser "$preview_url"
+    # Launch detached (nohup -> setsid -> bash & disown fallback) so the
+    # terminal stays usable and the server survives terminal close.
+    (
+        cd "$target_dir" || exit 1
+        _docs_spawn_detached "$log_file" \
+            "$py_cmd" -m http.server "$port" --directory "$html_dir" \
+            > "$pid_file"
+    )
 
-    # Start HTTP server
-    "$py_cmd" -m http.server "$port" --directory "$html_dir"
+    # Health probe: wait until the server accepts connections (max 10s).
+    local elapsed=0 max_wait=10
+    while [ "$elapsed" -lt "$max_wait" ]; do
+        if command -v curl >/dev/null 2>&1; then
+            if curl -sf "http://127.0.0.1:$port/" >/dev/null 2>&1; then
+                break
+            fi
+        else
+            sleep 2
+            break
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+
+    if ! pid="$(_docs_server_pid)"; then
+        log_error "Docs preview server failed to start. Last log lines:"
+        tail -n 15 "$log_file" 2>/dev/null || true
+        return 1
+    fi
+
+    log_success "Docs preview server is running in background!"
+    printf "  \033[1;37m%-14s\033[0m \033[1;32m%s\033[0m\n" "URL:" "$preview_url"
+    printf "  \033[1;37m%-14s\033[0m %s\n" "PID:" "$pid"
+    printf "  \033[1;37m%-14s\033[0m %s\n" "Stop server:" "telua docs stop"
+    echo ""
+
+    _docs_open_browser "$preview_url"
+    return 0
 }
 
 # Action: sync / metadata (pre-validates format & synchronizes folders into metadata.json)
@@ -777,6 +905,19 @@ handle_docs_command() {
             ;;
         start|serve|run|preview)
             docs_cmd_start "$@"
+            ;;
+        stop)
+            docs_cmd_stop
+            ;;
+        status)
+            docs_cmd_status
+            ;;
+        restart|reload)
+            docs_cmd_stop
+            docs_cmd_start "$@"
+            ;;
+        log|logs)
+            docs_cmd_log
             ;;
         help|--help|-h|"")
             show_docs_help
