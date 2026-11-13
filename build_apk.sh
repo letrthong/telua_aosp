@@ -95,6 +95,11 @@ CONST_CONFIG_DIR_NAME="config"
 # Tìm các file const_*.config: ưu tiên tại config/ của MASTER_SCRIPT_DIR, sau đó là root (tương thích ngược)
 find_const_config_file() {
     local fname="$1"
+    # 0. Personal overlay first (config/overlay/, git-ignored — see config/overlay/ReadMe.txt)
+    if [ -f "$MASTER_SCRIPT_DIR/config/overlay/$fname" ]; then
+        echo "$MASTER_SCRIPT_DIR/config/overlay/$fname"
+        return 0
+    fi
     # 1. Ưu tiên trong thư mục config/ của MASTER_SCRIPT_DIR
     if [ -f "$MASTER_SCRIPT_DIR/$CONST_CONFIG_DIR_NAME/$fname" ]; then
         echo "$MASTER_SCRIPT_DIR/$CONST_CONFIG_DIR_NAME/$fname"
