@@ -495,10 +495,17 @@ parse_cli_item() {
         __pci_cmd=""
     fi
 
-    # Trim leading/trailing whitespace
-    __pci_act="$(echo "$__pci_act" | xargs)"
-    __pci_desc="$(echo "$__pci_desc" | xargs)"
-    [ -n "$__pci_cmd" ] && __pci_cmd="$(echo "$__pci_cmd" | xargs)"
+    # Trim leading/trailing whitespace WITHOUT xargs: xargs also strips shell
+    # quotes, which breaks commands containing quoted args (e.g.
+    # "grep -E 'A|B|C'") by silently removing the quotes before execution.
+    __pci_act="${__pci_act#"${__pci_act%%[![:space:]]*}"}"
+    __pci_act="${__pci_act%"${__pci_act##*[![:space:]]}"}"
+    __pci_desc="${__pci_desc#"${__pci_desc%%[![:space:]]*}"}"
+    __pci_desc="${__pci_desc%"${__pci_desc##*[![:space:]]}"}"
+    if [ -n "$__pci_cmd" ]; then
+        __pci_cmd="${__pci_cmd#"${__pci_cmd%%[![:space:]]*}"}"
+        __pci_cmd="${__pci_cmd%"${__pci_cmd##*[![:space:]]}"}"
+    fi
 
     printf -v "$__pci_out_action" '%s' "$__pci_act"
     printf -v "$__pci_out_desc" '%s' "$__pci_desc"
