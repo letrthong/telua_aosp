@@ -119,6 +119,6 @@ handle_system_command() {
         exit 1
     fi
 
-    execute_command_pipeline "$action" "$matched_desc" "SYSTEM/DOCKER CLI PIPELINE" "${cmds[@]}"
+    execute_command_pipeline "$action" "$matched_desc" "${cmds[@]}"
 }
 
