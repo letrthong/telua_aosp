@@ -550,6 +550,11 @@ print_help() {
 parse_early_arguments() {
     local prev=""
     for arg in "$@"; do
+        case "$arg" in
+            --init|--init-config|init)
+                CLI_IS_INIT="true"
+                ;;
+        esac
         if [ "$prev" = "--config" ]; then
             if [ -f "$arg" ]; then
                 CONFIG_FILE="$(readlink -f "$arg" 2>/dev/null || echo "$arg")"
@@ -1306,8 +1311,8 @@ load_and_validate_config() {
         exit 1
     fi
 
-    # 2. Nếu truyền -p / --profile <name>, kiểm tra hợp lệ và cập nhật ACTIVE_PROJECT vào $CONFIG_FILE
-    if [ -n "${CLI_PROFILE:-}" ]; then
+    # 2. Nếu truyền -p / --profile <name> (và không phải lệnh 'init'), kiểm tra hợp lệ và cập nhật ACTIVE_PROJECT vào $CONFIG_FILE
+    if [ -n "${CLI_PROFILE:-}" ] && [ "${CLI_IS_INIT:-false}" != "true" ]; then
         if ! ( eval "$(sed -E "s/^[[:space:]]*ACTIVE_PROJECT=.*/ACTIVE_PROJECT=\"$CLI_PROFILE\"/" "$CONFIG_FILE")" ); then
             log_error "Failed to switch to profile '$CLI_PROFILE' in $CONFIG_FILE"
             exit 1
