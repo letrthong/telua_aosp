@@ -699,25 +699,54 @@ tel java skill
 
 ---
 
-### 5.11 Config Manager Web UI (`telua web` / `web/telua_web.py`)
+### 5.11 Config Manager & Web Dashboard (`telua web` / `web/telua_web.py`)
 
-Giao diện quản trị cấu hình trực quan trên trình duyệt (Flask backend + Vanilla JS frontend) thông qua module `src/telua_web.sh` và `web/telua_web.py`:
+Giao diện web quản trị toàn diện trên trình duyệt (Flask backend + Vanilla JS frontend thuần, không phụ thuộc thư viện ngoài) thông qua module `src/telua_web.sh` và `web/telua_web.py`:
 
 ```bash
-tel web start                         # Khởi chạy Web UI ngầm (mặc định port 8788) & tự mở trình duyệt
+tel web start                         # Khởi chạy Web UI ngầm (mặc định port 8788) & tự động mở trình duyệt
 tel web start 9000                    # Khởi chạy trên port tùy chỉnh
-tel web status                        # Kiểm tra trạng thái server (PID, URL, health probe /api/ping)
+tel web status                        # Kiểm tra trạng thái server (PID, URL, health probe /api/ping, uptime)
 tel web restart                       # Khởi động lại Web UI server
 tel web log                           # Xem log trực tiếp (.telua_web.log)
 tel web stop                          # Dừng Web UI server
 ```
 
-* **Tính năng chính trên giao diện Web UI**:
-  - **Duyệt & Chỉnh sửa mọi file `.config` / `.json`**: Tự động quét `config/apk.config`, `config/overlay/*.config` và `config/const_*.config`.
-  - **Kiểm tra cú pháp trước khi lưu (`bash -n` / JSON validation)** kèm tự động tạo file sao lưu `.bak`.
-  - **Chuyển đổi nhanh `ACTIVE_PROJECT` profile** chỉ bằng 1 cú click (tương đương `tel -p <profile>`).
-  - **Trình quản lý Pipeline trực quan (Visual Pipeline Editor)**: Thêm, sửa, xóa, sắp xếp thứ tự các bước trong `const_my_cli.config` và `const_multi_cli.config` và chạy thử trực tiếp từ trình duyệt.
-  - **Live Status**: Hiển thị phiên bản toolkit, thiết bị ADB đang kết nối, dung lượng RAM hệ thống và kết quả chẩn đoán `tel info`.
+#### 🌟 Các phân hệ & Tính năng chính trên Web Dashboard:
+
+1. **📄 Files Tab — Trình Quản Lý & Chỉnh Sửa Cấu Hình An Toàn**:
+   - **Tự động quét & phân loại**: Liệt kê toàn bộ cấu hình dự án (`config/apk.config`), cấu hình bảo mật cá nhân (`config/overlay/*.config`) và các bộ macro hằng số (`config/const_*.config`) với thông tin size, mtime và trạng thái read-only.
+   - **Bộ lọc tìm kiếm tức thì**: Lọc file theo từ khóa nhanh chóng trong sidebar.
+   - **Chế độ xem an toàn (Lock/Edit mode)**: Mặc định ở chế độ chỉ đọc để tránh vô tình sửa đổi; chỉ mở khóa khi nhấn `✎ Edit`.
+   - **Bảo toàn bản nháp (Draft Persistence)**: Thay đổi chưa lưu được tự động ghi nhận vào `localStorage` (hiển thị chip thông báo `✎ draft`), không lo mất dữ liệu khi refresh trang hay đóng nhầm trình duyệt.
+   - **Xác thực cú pháp trước khi lưu**: Tự động chạy kiểm tra cú pháp `bash -n` cho các file shell/config và `json.loads` cho file JSON; ngăn chặn hoàn toàn việc lưu file hỏng.
+   - **Tự động sao lưu & Diff**: Tự động tạo bản sao lưu an toàn `.bak` trước khi ghi đè, hỗ trợ xem so sánh thay đổi (diff) trực quan.
+
+2. **⚡ Pipelines Tab — Trình Thiết Kế & Thực Thi Macro Trực Quan**:
+   - **Hỗ trợ đa nguồn pipeline**: Dễ dàng chuyển đổi giữa các nhóm cấu hình:
+     - `MY`: Macro cá nhân riêng tư (`const_my_cli.config` / `tel my <action>`)
+     - `MULTI`: Kịch bản phối hợp tuần tự (`const_multi_cli.config` / `tel run <group>`)
+     - `CAR`: Phím bấm & kiểm thử âm thanh ô tô AAOS (`const_car.config` / `tel car <action>`)
+     - `DUMP`: Chẩn đoán dumpsys dịch vụ (`const_dumpsys.config` / `tel dump <target>`)
+   - **Trình chỉnh sửa bước (Step Editor)**: Thêm mới, đổi tên nhóm, mô tả, thêm/sửa/xóa từng bước lệnh, kéo thả và sắp xếp thứ tự thực thi.
+   - **Thực thi trực tiếp với Live Streaming Logs**: Nhấn `▶ Run` để chạy ngay pipeline trên máy mục tiêu với Server-Sent Events (SSE) streaming output trực tiếp theo thời gian thực, có nút `⏹ Stop` ngắt tiến trình tức thì, `↻ Re-run` và `📋 Copy output`.
+
+3. **🖥 System Tab — Quản Trị Hệ Thống & Docker Pipelines**:
+   - Tích hợp trực tiếp với `config/const_system_cli.config` (`tel system <action>`).
+   - Cung cấp giao diện chạy các kịch bản kiểm tra dịch vụ hệ điều hành, dọn dẹp dung lượng đĩa, quản trị vòng đời Docker containers và kiểm tra kết nối mạng.
+
+4. **💻 Terminal Tab — Interactive Web CLI Console**:
+   - Bảng điều khiển dòng lệnh trực tiếp trên trình duyệt, cho phép thực thi bất kỳ lệnh `tel`, Bash, Git, ADB hay lệnh hệ thống nào.
+   - **Real-time SSE Output Streaming**: Log xuất hiện mượt mà theo từng dòng tương tự terminal máy thật.
+   - **Kiểm soát tiến trình (Process Control)**: Hỗ trợ nút `⏹ Stop` gửi tín hiệu ngắt tiến trình `SIGINT` (Ctrl+C) an toàn nếu lệnh bị treo hoặc chạy quá lâu.
+   - Hỗ trợ các phím tắt lệnh mẫu nhanh (e.g. `tel system ram`, `git status -s`, `df -h`, `tel --network-help`).
+
+5. **🎛 Thanh Trạng Thái & Quản Trị Toàn Cục (Top Statusbar & Modals)**:
+   - **Chuyển đổi Active Project Profile**: Click vào chip `project: <name>` để mở modal chọn đổi `ACTIVE_PROJECT` trong `apk.config` với 1 cú click chuột (tự động backup `.bak`).
+   - **🔐 Quản trị mã hóa Crypto Overlay (`#modal-crypto`)**: Click vào chip `🔐 crypto` để kiểm tra trạng thái các file overlay bí mật (`apk_overlays.config`, `const_my_cli.config`), hỗ trợ nhập mật khẩu để `Encrypt` (mã hóa sang `enc_*.config`), `Decrypt` (giải mã xem thử) hoặc `Decrypt & Override` (giải mã và áp dụng đè lên cấu hình đang chạy).
+   - **Giám sát thời gian thực**: Theo dõi số lượng thiết bị ADB đang kết nối và dung lượng/tỷ lệ phần trăm sử dụng RAM máy chủ build.
+   - **Palette 5 Chủ Đề Màu Sắc (Theme Selector)**: Hỗ trợ chuyển đổi tức thì giữa 🌙 *Dark (Mặc định)*, 💎 *Jade (Emerald)*, 🌊 *Ocean (Deep Blue)*, 🔮 *Amethyst (Purple)*, và ☀️ *Light*, tự động ghi nhớ sở thích giao diện của từng người dùng.
+   - **Quick Actions Bar**: Nút tắt chạy nhanh `tel info` (thông tin môi trường/thiết bị) và `tel run unittest` (chạy toàn bộ 120+ unit test suite của cả Python và Shell) với modal xem log chi tiết.
 
 ---
 
