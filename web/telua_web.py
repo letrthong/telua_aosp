@@ -677,6 +677,7 @@ def api_pipeline_stream():
             if proc.stdout is not None:
                 for line in iter(proc.stdout.readline, ""):
                     yield line
+                proc.stdout.close()
             code = proc.wait(timeout=300)
         except Exception as exc:  # pragma: no cover
             yield "\n[ERROR] Failed to stream pipeline: %s\n" % exc
@@ -770,6 +771,7 @@ def api_terminal_stream():
             if proc.stdout is not None:
                 for line in iter(proc.stdout.readline, ""):
                     yield line
+                proc.stdout.close()
             code = proc.wait(timeout=300)
         except Exception as exc:  # pragma: no cover
             yield "\n[ERROR] Failed to execute command: %s\n" % exc
