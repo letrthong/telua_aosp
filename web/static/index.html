@@ -24,7 +24,8 @@
   <div class="statusbar">
     <nav class="tabs">
       <button class="tab" id="tab-files" title="Browse &amp; edit config files">📄 Files</button>
-      <button class="tab active" id="tab-pipelines" title="Edit MY_CMD_* personal pipelines">⚡ Pipelines</button>
+      <button class="tab active" id="tab-pipelines" title="Edit MY_CMD_* / MULTI / CAR / DUMP pipelines">⚡ Pipelines</button>
+      <button class="tab" id="tab-system" title="System &amp; Docker CLI pipelines (config/const_system_cli.config — telua system <action>)">🖥 System</button>
     </nav>
     <div class="chip hidden" id="chip-draft" title="Unsaved edits kept in browser draft (survives refresh). Click to discard.">✎ draft</div>
     <div class="chip" id="chip-version" title="Toolkit version">v—</div>
@@ -90,6 +91,7 @@
           <button class="src-btn" data-source="multi" title="config/const_multi_cli.config — multi-CLI pipelines (telua run <group>)">multi</button>
           <button class="src-btn" data-source="car" title="config/const_car.config — AAOS Car control (telua car <action>)">car</button>
           <button class="src-btn" data-source="dump" title="config/const_dumpsys.config — Dumpsys diagnostics (telua dump <target>)">dump</button>
+          <button class="src-btn" data-source="system" title="config/const_system_cli.config — System &amp; Docker CLI pipelines (telua system <action>)">🖥 system</button>
         </div>
         <span class="hidden" id="pl-file">config/overlay/const_my_cli.config</span>
         <span class="hidden" id="pl-label"></span>

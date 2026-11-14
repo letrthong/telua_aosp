@@ -22,7 +22,7 @@
 # telua_docker.sh - Docker daemon, container & image utilities for the Telua
 # toolkit.
 # Single source of truth for the docker-related commands of build_apk.sh:
-#   - 'telua --docker-help' / 'telua docker' : show_docker_help
+#   - 'telua --docker-help' : show_docker_help
 #     (print const_docker.config cheatsheet, then exit)
 #
 # Usage (source, never execute):

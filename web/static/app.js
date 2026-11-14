@@ -287,6 +287,8 @@ const PIPELINE_GUI_FILES = {
   "config/const_my_cli.config.example": "my",
   "config/const_multi_cli.config": "multi",
   "config/const_multi_cli.config.example": "multi",
+  "config/const_system_cli.config": "system",
+  "config/overlay/const_system_cli.config": "system",
   "config/const_car.config": "car",
   "config/overlay/const_car.config": "car",
   "config/const_dumpsys.config": "dump",
@@ -569,12 +571,29 @@ async function loadPipelines(draft = null) {
   }
 }
 
+let _lastNonSystemPlSource = "my";
+
+function syncTopTabs() {
+  const isFiles = !$("#view-files").classList.contains("hidden");
+  const isSystem = !isFiles && (state.plSource === "system" || state.plSource === "docker");
+  const isPipelines = !isFiles && !isSystem;
+  $("#tab-files")?.classList.toggle("active", isFiles);
+  $("#tab-pipelines")?.classList.toggle("active", isPipelines);
+  $("#tab-system")?.classList.toggle("active", isSystem);
+}
+
 function switchPipelineSource(source) {
-  if (state.plSource === source) return;
+  if (source === "docker") source = "system";
+  if (source !== "system") _lastNonSystemPlSource = source;
+  if (state.plSource === source) {
+    syncTopTabs();
+    return;
+  }
   if (state.plDirty && !confirm("Switch source with unsaved pipeline edits?\n\nThe current draft is kept in browser storage and will be restored when you switch back.")) return;
   state.plSource = source;
   document.querySelectorAll("#pl-source-switch .src-btn").forEach(b =>
     b.classList.toggle("active", b.dataset.source === source));
+  syncTopTabs();
   loadPipelines(draftLoadPipelines());
 }
 
@@ -642,7 +661,7 @@ function pipelineCard(p) {
     }
     p.name = lower;
     card.dataset.name = lower;
-    const prefixMap = { my: "MY_CMD_", multi: "MULTI_CMD_", car: "ADB_SHELL_CAR_", dump: "ADB_SHELL_DUMP_" };
+    const prefixMap = { my: "MY_CMD_", multi: "MULTI_CMD_", docker: "SYSTEM_CMD_", system: "SYSTEM_CMD_", car: "ADB_SHELL_CAR_", dump: "ADB_SHELL_DUMP_" };
     const prefix = prefixMap[state.plSource] || "MY_CMD_";
     p.array = prefix + lower.replace(/-/g, "_").toUpperCase();
     if (!p.orphan) tag.textContent = p.array;
@@ -704,7 +723,7 @@ function pipelineCard(p) {
   const foot = document.createElement("div");
   foot.className = "pl-card-foot";
 
-  const runCmdMap = { my: "telua my ", multi: "telua run ", car: "telua car ", dump: "telua dump " };
+  const runCmdMap = { my: "telua my ", multi: "telua run ", system: "telua system ", docker: "telua system ", car: "telua car ", dump: "telua dump " };
   const runCmdPrefix = runCmdMap[state.plSource] || "telua my ";
   const runBtn = document.createElement("button");
   runBtn.className = "btn primary pl-run-btn";
@@ -921,7 +940,7 @@ let _lastRunPipelineName = null;
 
 async function runPipeline(name) {
   _lastRunPipelineName = name;
-  const cmdMap = { my: "telua my", multi: "telua run", car: "telua car", dump: "telua dump" };
+  const cmdMap = { my: "telua my", multi: "telua run", system: "telua system", docker: "telua system", car: "telua car", dump: "telua dump" };
   const cmd = cmdMap[state.plSource] || "telua my";
   $("#run-title").textContent = `${cmd} ${name}`;
   $("#run-output").textContent = "Running…";
@@ -966,7 +985,7 @@ function addPipeline() {
   const existing = new Set(state.pipelines.map(p => p.name));
   let name = "new_pipeline";
   while (existing.has(name)) { name = `new_pipeline_${++i}`; }
-  const prefixMap = { my: "MY_CMD_", multi: "MULTI_CMD_", car: "ADB_SHELL_CAR_", dump: "ADB_SHELL_DUMP_" };
+  const prefixMap = { my: "MY_CMD_", multi: "MULTI_CMD_", docker: "SYSTEM_CMD_", system: "SYSTEM_CMD_", car: "ADB_SHELL_CAR_", dump: "ADB_SHELL_DUMP_" };
   const prefix = prefixMap[state.plSource] || "MY_CMD_";
   state.pipelines.push({
     name,
@@ -1189,10 +1208,14 @@ async function runCryptoAction(action, force = false) {
 /* ---------------- Wiring ---------------- */
 function switchTab(tab) {
   const isFiles = tab === "files";
-  $("#tab-files").classList.toggle("active", isFiles);
-  $("#tab-pipelines").classList.toggle("active", !isFiles);
   $("#view-files").classList.toggle("hidden", !isFiles);
   $("#view-pipelines").classList.toggle("hidden", isFiles);
+  if (tab === "system") {
+    switchPipelineSource("system");
+  } else if (tab === "pipelines" && (state.plSource === "system" || state.plSource === "docker")) {
+    switchPipelineSource(_lastNonSystemPlSource || "my");
+  }
+  syncTopTabs();
   renderFiles($("#search").value);
   // Files tab is lazy: open the draft file (or apk.config) on first visit.
   if (isFiles && !state.current) {
@@ -1269,6 +1292,7 @@ function wire() {
   // Tab switching
   $("#tab-files").addEventListener("click", () => switchTab("files"));
   $("#tab-pipelines").addEventListener("click", () => { switchTab("pipelines"); renderFiles($("#search").value); });
+  $("#tab-system")?.addEventListener("click", () => { switchTab("system"); renderFiles($("#search").value); });
   $("#btn-pl-raw")?.addEventListener("click", () => {
     const currentPlFile = $("#pl-file")?.textContent;
     if (currentPlFile && currentPlFile !== "—") openFile(currentPlFile);
@@ -1352,10 +1376,12 @@ async function boot() {
   // Restore the last-used source from the draft if present.
   const pipeDraft = draftLoadPipelines();
   if (pipeDraft && pipeDraft.source) {
-    state.plSource = pipeDraft.source;
+    state.plSource = pipeDraft.source === "docker" ? "system" : pipeDraft.source;
+    if (state.plSource !== "system") _lastNonSystemPlSource = state.plSource;
     document.querySelectorAll("#pl-source-switch .src-btn").forEach(b =>
       b.classList.toggle("active", b.dataset.source === state.plSource));
   }
+  syncTopTabs();
   await loadPipelines(pipeDraft);
   updateDraftChip();
 

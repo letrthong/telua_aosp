@@ -180,6 +180,7 @@ def scan_files():
         "config/overlay/const_my_cli.config": 1,
         "config/const_my_cli.config": 1,
         "config/const_multi_cli.config": 2,
+        "config/const_system_cli.config": 2,
         "config/const_car.config": 2,
         "config/const_dumpsys.config": 2,
     }
@@ -639,6 +640,16 @@ PIPELINE_SOURCES = {
         "prefix": "MULTI",
         "label": "Multi-CLI pipelines (telua run <group>)",
     },
+    "docker": {
+        "file": ROOT / "config" / "const_system_cli.config",
+        "prefix": "SYSTEM",
+        "label": "System & Docker CLI pipelines (telua system <action>)",
+    },
+    "system": {
+        "file": ROOT / "config" / "const_system_cli.config",
+        "prefix": "SYSTEM",
+        "label": "System & Docker CLI pipelines (telua system <action>)",
+    },
     "car": {
         "file": ROOT / "config" / "const_car.config",
         "prefix": "CAR",
@@ -657,10 +668,10 @@ PIPELINE_SOURCES = {
 
 
 def _pipeline_source(source):
-    """Resolve a pipeline source key ('my' | 'multi' | 'car' | 'dump') to its descriptor."""
+    """Resolve a pipeline source key ('my' | 'multi' | 'docker' | 'car' | 'dump') to its descriptor."""
     key = (source or "my").strip().lower()
     if key not in PIPELINE_SOURCES:
-        abort(400, description="Unknown pipeline source '%s' (use 'my', 'multi', 'car', or 'dump')." % key)
+        abort(400, description="Unknown pipeline source '%s' (use 'my', 'multi', 'docker', 'car', or 'dump')." % key)
     return key, PIPELINE_SOURCES[key]
 
 
@@ -673,6 +684,12 @@ def _pipeline_config_path(source):
             ROOT / "config" / "const_my_cli.config",
             ROOT / "config" / "overlay" / "const_my_cli.config.example",
             ROOT / "config" / "const_my_cli.config.example",
+        ]
+    elif key in ("docker", "system"):
+        candidates = [
+            ROOT / "config" / "overlay" / "const_system_cli.config",
+            ROOT / "config" / "const_system_cli.config",
+            ROOT / "const_system_cli.config",
         ]
     elif key == "car":
         candidates = [
@@ -1102,6 +1119,8 @@ def api_pipeline_run():
         group_var = {
             "my": "MY_GROUP_LIST",
             "multi": "MULTI_GROUP_LIST",
+            "docker": "SYSTEM_GROUP_LIST",
+            "system": "SYSTEM_GROUP_LIST",
             "car": "CAR_CLI_LIST",
             "dump": "DUMP_CLI_LIST",
         }[key]
@@ -1109,8 +1128,8 @@ def api_pipeline_run():
     script = BUILD_APK_SH
     if not script.is_file():
         abort(404, description="build_apk.sh not found in %s" % ROOT)
-    # 'my' -> 'telua my <name>', 'multi' -> 'telua run <group>', 'car' -> 'telua car <action>', 'dump' -> 'telua dump <target>'
-    subcommand = {"my": "my", "multi": "run", "car": "car", "dump": "dump"}[key]
+    # 'my' -> 'telua my <name>', 'multi' -> 'telua run <group>', 'system'/'docker' -> 'telua system <action>'
+    subcommand = {"my": "my", "multi": "run", "docker": "system", "system": "system", "car": "car", "dump": "dump"}[key]
     try:
         proc = subprocess.run(
             ["bash", str(script), subcommand, name],
@@ -1204,6 +1223,8 @@ def main():
         )
         PIPELINE_SOURCES["my"]["file"] = MY_CLI_CONFIG
         PIPELINE_SOURCES["multi"]["file"] = ROOT / "config" / "const_multi_cli.config"
+        PIPELINE_SOURCES["docker"]["file"] = ROOT / "config" / "const_system_cli.config"
+        PIPELINE_SOURCES["system"]["file"] = ROOT / "config" / "const_system_cli.config"
 
     if not STATIC_DIR.is_dir():
         sys.stderr.write("[ERROR] Static assets directory not found: %s\n" % STATIC_DIR)

@@ -638,7 +638,7 @@ execute_command_pipeline() {
         step_start=$(date +%s)
 
         local ret=0
-        if [[ "$cmd" =~ ^(adb|sudo|echo|sleep|cd|export|source|\.|tel|telua|git|repo|python|python3|bash|sh|test|\[|mkdir|rm|cp|mv|ls|pwd)([[:space:]]|$) ]] || [[ "$cmd" =~ ^\./ ]]; then
+        if [[ "$cmd" =~ ^(adb|sudo|docker|systemctl|journalctl|service|echo|sleep|cd|export|source|\.|tel|telua|git|repo|python|python3|bash|sh|test|\[|mkdir|rm|cp|mv|ls|pwd)([[:space:]]|$) ]] || [[ "$cmd" =~ ^\./ ]]; then
             eval "$cmd"
             ret=$?
         else

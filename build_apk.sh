@@ -34,6 +34,7 @@ MY_CONFIG_FILE_NAME="const_my_cli.config"
 PROJECT_CONFIG_FILE_NAME="const_project_cli.config"
 GIT_CONFIG_FILE_NAME="const_git.config"
 DOCKER_CONFIG_FILE_NAME="const_docker.config"
+SYSTEM_CLI_CONFIG_FILE_NAME="const_system_cli.config"
 NETWORK_CONFIG_FILE_NAME="const_network.config"
 # Personal (untracked, git-ignored) files relative to the toolkit repo.
 # 'telua init' creates them from '<file>.example' if missing; 'telua update' backs them up and restores them.
@@ -146,6 +147,7 @@ DUMP_CONFIG_FILE="$(find_const_config_file "$DUMP_CONFIG_FILE_NAME")"
 SECURITY_CONFIG_FILE="$(find_const_config_file "$SECURITY_CONFIG_FILE_NAME")"
 GIT_CONFIG_FILE="$(find_const_config_file "$GIT_CONFIG_FILE_NAME")"
 DOCKER_CONFIG_FILE="$(find_const_config_file "$DOCKER_CONFIG_FILE_NAME")"
+SYSTEM_CLI_CONFIG_FILE="$(find_const_config_file "$SYSTEM_CLI_CONFIG_FILE_NAME")"
 NETWORK_CONFIG_FILE="$(find_const_config_file "$NETWORK_CONFIG_FILE_NAME")"
 MULTI_CONFIG_FILE="$(find_const_config_file "$MULTI_CONFIG_FILE_NAME")"
 MY_CONFIG_FILE="$(find_const_config_file "$MY_CONFIG_FILE_NAME")"
@@ -214,6 +216,18 @@ if [ "${TELUA_DOCKER_SOURCED:-}" != "1" ]; then
     elif [ -f "$MASTER_SCRIPT_DIR/src/telua_docker.sh" ]; then
         # shellcheck disable=SC1091
         source "$MASTER_SCRIPT_DIR/src/telua_docker.sh"
+    fi
+fi
+
+# --- System & Docker CLI pipelines (single source of truth: src/telua_system.sh) ---
+# Driven by config/const_system_cli.config (SYSTEM_GROUP_LIST, SYSTEM_CMD_*).
+if [ "${TELUA_SYSTEM_SOURCED:-}" != "1" ]; then
+    if [ -f "$SCRIPT_DIR/src/telua_system.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$SCRIPT_DIR/src/telua_system.sh"
+    elif [ -f "$MASTER_SCRIPT_DIR/src/telua_system.sh" ]; then
+        # shellcheck disable=SC1091
+        source "$MASTER_SCRIPT_DIR/src/telua_system.sh"
     fi
 fi
 
@@ -659,9 +673,20 @@ parse_arguments() {
                 SHOW_GIT_HELP="true"
                 shift
                 ;;
-            --docker-help|docker-help|docker|--docker)
+            --docker-help|docker-help)
                 SHOW_DOCKER_HELP="true"
                 shift
+                ;;
+            --system|system|--sys|sys|--docker|docker)
+                if [ -n "$2" ] && [[ "$2" != --* ]]; then
+                    SYSTEM_ACTION="$2"
+                    shift 2
+                else
+                    SYSTEM_ACTION=""
+                    shift 1
+                fi
+                handle_system_command "$SYSTEM_ACTION"
+                exit 0
                 ;;
             --network-help|network-help|network|--network)
                 SHOW_NETWORK_HELP="true"
@@ -1253,6 +1278,15 @@ load_and_validate_config() {
         source_config_safe "$MASTER_SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME"
     elif [ -f "$SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME" ]; then
         source_config_safe "$SCRIPT_DIR/$MULTI_CONFIG_FILE_NAME"
+    fi
+
+    # 1f. Nạp cấu hình System / Docker CLI Pipelines (const_system_cli.config)
+    if [ -f "$SYSTEM_CLI_CONFIG_FILE" ]; then
+        source_config_safe "$SYSTEM_CLI_CONFIG_FILE"
+    elif [ -f "$MASTER_SCRIPT_DIR/$SYSTEM_CLI_CONFIG_FILE_NAME" ]; then
+        source_config_safe "$MASTER_SCRIPT_DIR/$SYSTEM_CLI_CONFIG_FILE_NAME"
+    elif [ -f "$SCRIPT_DIR/$SYSTEM_CLI_CONFIG_FILE_NAME" ]; then
+        source_config_safe "$SCRIPT_DIR/$SYSTEM_CLI_CONFIG_FILE_NAME"
     fi
 
     # 1d. Nạp cấu hình Personal Pipelines (const_my_cli.config hoặc fallback const_project_cli.config)
