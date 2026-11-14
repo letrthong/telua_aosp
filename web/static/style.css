@@ -16,6 +16,49 @@
   --mono: "JetBrains Mono", "Cascadia Code", Consolas, "Courier New", monospace;
 }
 
+/* Theme 2: Jade / Emerald (Xanh Ngọc Bích) */
+:root[data-theme="jade"] {
+  --bg: #061c1a;
+  --bg-soft: #0b2926;
+  --bg-panel: #103834;
+  --border: #1e5e57;
+  --text: #ecfdf5;
+  --text-dim: #86cfc5;
+  --accent: #2dd4bf;
+  --green: #34d399;
+  --yellow: #fbbf24;
+  --red: #f87171;
+}
+
+/* Theme 3: Deep Ocean (Xanh Đại Dương) */
+:root[data-theme="ocean"] {
+  --bg: #071324;
+  --bg-soft: #0d1f38;
+  --bg-panel: #132c4e;
+  --border: #234978;
+  --text: #e0f2fe;
+  --text-dim: #7dd3fc;
+  --accent: #38bdf8;
+  --green: #4ade80;
+  --yellow: #facc15;
+  --red: #fb7185;
+}
+
+/* Theme 4: Amethyst (Tím Đêm) */
+:root[data-theme="amethyst"] {
+  --bg: #120c21;
+  --bg-soft: #1b1330;
+  --bg-panel: #251b42;
+  --border: #433270;
+  --text: #f3e8ff;
+  --text-dim: #b9a2db;
+  --accent: #c084fc;
+  --green: #4ade80;
+  --yellow: #fbbf24;
+  --red: #fb7185;
+}
+
+/* Theme 5: Light (Nền Sáng) */
 :root[data-theme="light"] {
   --bg: #eef2f7;
   --bg-soft: #ffffff;
@@ -895,7 +938,34 @@ code, .mono { font-family: var(--mono); }
 @keyframes slide-in { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes toast-countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
-/* ---------------- Light Theme Overrides ---------------- */
+/* ---------------- Light & Custom Theme Overrides ---------------- */
+.theme-select {
+  background: var(--bg-panel);
+  color: var(--text);
+  border: 1.5px solid var(--accent);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.theme-select:hover, .theme-select:focus {
+  box-shadow: 0 0 0 2px rgba(88, 166, 255, .25);
+}
+:root[data-theme="jade"] .pl-card,
+:root[data-theme="ocean"] .pl-card,
+:root[data-theme="amethyst"] .pl-card {
+  border-color: var(--border);
+  border-left-color: var(--accent);
+}
+:root[data-theme="jade"] .file-list li,
+:root[data-theme="ocean"] .file-list li,
+:root[data-theme="amethyst"] .file-list li {
+  background: var(--bg-panel);
+  border-color: var(--border);
+}
 :root[data-theme="light"] .btn.primary {
   color: #ffffff;
 }
