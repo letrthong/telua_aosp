@@ -1,63 +1,61 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # ==============================================================================
 # Copyright (C) 2026 Thong Le <letrthong@gmail.com>
 # Author & Maintainer: Thong Le <letrthong@gmail.com>
-#
-# Contribution History:
-#   - 2026-11: Thong Le <letrthong@gmail.com> (Architecture & Domain Design)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 # ==============================================================================
 #
-# telua_web.py - Flask Web UI backend for the Telua toolkit.
-# Single source of truth for the code behind 'telua web start':
-#   - Serves the static frontend (web/static/index.html + app.js + style.css)
-#   - REST API to browse & edit toolkit config files (*.config / *.json):
-#       GET  /api/ping     : liveness probe (used by 'telua web start/status')
-#       GET  /api/status   : toolkit version, active project, profiles, ADB, RAM
-#       GET  /api/files    : registry of editable config files
-#       GET  /api/file     : read one config file (?name=<relative path>)
-#       POST /api/file     : save one config file (backup + syntax validation)
-#       POST /api/profile  : switch ACTIVE_PROJECT in apk.config (like 'telua -p')
-#       GET  /api/info     : run 'build_apk.sh --info' and return its output
-#
-# Safety model:
-#   - Only files present in the scanned registry (root/*.config|*.json and
-#     config/*.config|*.json) can be read or written (whitelist, no traversal).
-#   - Saves create a '<file>.bak' backup of the previous content.
-#   - Bash files are validated with 'bash -n', JSON files with json.loads.
-#     A failing validation rejects the save unless force=true is passed.
-#   - Binds to 127.0.0.1 by default (use --host 0.0.0.0 to expose on LAN).
-#
-# Usage:
-#   python3 web/telua_web.py [--host 127.0.0.1] [--port 8788]
-#                            [--root /path/to/toolkit] [--open-browser]
-#
-# Requires: flask  (pip install flask  -  see requirements.txt)
+# telua_web.py — Flask backend for the Telua Web UI ('telua web start')
+# Core helpers live in:
+#   - web/telua_web_core.py      (file scanning, validation, system/crypto status)
+#   - web/telua_web_pipelines.py (pipeline parsing, serialization & rewriting)
 
 import argparse
-import json
 import os
 import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 from datetime import datetime
 from pathlib import Path
+
+SCRIPT_FILE = Path(__file__).resolve()
+WEB_DIR = SCRIPT_FILE.parent
+if str(WEB_DIR) not in sys.path:
+    sys.path.insert(0, str(WEB_DIR))
+
+from telua_web_core import (  # noqa: E402
+    PRIVATE_OVERLAY_NAMES,
+    adb_devices,
+    crypto_items_for_root,
+    ensure_overlay_configs as _ensure_overlay_configs_for_root,
+    is_editable_name,
+    parse_active_project_from_file,
+    parse_profiles_from_file,
+    parse_version_from_file,
+    ram_info,
+    scan_files_in_root,
+    validate_content,
+)
+from telua_web_pipelines import (  # noqa: E402
+    CAR_ROW_RE,
+    CAR_VAR_RE,
+    MY_GROUP_RE,
+    MY_STEP_RE,
+    _bash_quote,
+    _parse_cli_list_pipelines,
+    _rewrite_cli_list_lines,
+    parse_array_pipelines,
+    rewrite_array_pipeline_lines,
+    serialize_pipelines,
+)
 
 try:
     from flask import Flask, abort, jsonify, request, send_from_directory
@@ -70,11 +68,6 @@ except ImportError:  # pragma: no cover
     )
     sys.exit(1)
 
-# ------------------------------------------------------------------------------
-# Paths (resolved from this file location: <toolkit>/web/telua_web.py)
-# ------------------------------------------------------------------------------
-SCRIPT_FILE = Path(__file__).resolve()
-WEB_DIR = SCRIPT_FILE.parent
 STATIC_DIR = WEB_DIR / "static"
 DEFAULT_ROOT = WEB_DIR.parent
 
@@ -90,7 +83,7 @@ MY_CLI_CONFIG = (
 
 START_TIME = time.time()
 FLASK_VERSION = ""
-try:  # Flask 3.x removed __version__
+try:
     from importlib.metadata import version as _pkg_version
     FLASK_VERSION = _pkg_version("flask")
 except Exception:  # pragma: no cover
@@ -111,97 +104,14 @@ def handle_http_exception(exc):
 
 
 # ------------------------------------------------------------------------------
-# Config file registry (whitelist of editable files)
+# Root-bound wrappers around telua_web_core helpers
 # ------------------------------------------------------------------------------
-def is_editable_name(name: str) -> bool:
-    """True for *.config / *.json files, excluding backups & encrypted blobs."""
-    if not name.endswith((".config", ".json")):
-        return False
-    if name.endswith(".bak") or ".bak." in name:
-        return False
-    if name.startswith("enc_"):        # encrypted template: never edit via UI
-        return False
-    return True
-
-
 def ensure_overlay_configs():
-    """Auto-create missing personal configs in config/overlay/ from .example templates (never overwrites)."""
-    overlay_dir = ROOT / "config" / "overlay"
-    if not overlay_dir.is_dir():
-        return
-    for base in ("apk_overlays.config", "const_my_cli.config"):
-        dst = overlay_dir / base
-        src = overlay_dir / (base + ".example")
-        if not dst.exists() and src.is_file():
-            try:
-                shutil.copyfile(str(src), str(dst))
-            except OSError:
-                pass
+    _ensure_overlay_configs_for_root(ROOT)
 
 
 def scan_files():
-    """Scan toolkit root + config/ for editable config files."""
-    ensure_overlay_configs()
-    entries = []
-    seen = set()
-
-    def add(rel: str):
-        full = ROOT / rel
-        if rel in seen or not full.is_file():
-            return
-        seen.add(rel)
-        try:
-            stat = full.stat()
-        except OSError:
-            return
-        entries.append({
-            "name": rel.replace(os.sep, "/"),
-            "size": stat.st_size,
-            "mtime": int(stat.st_mtime),
-            "mtime_str": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
-            "readonly": (not os.access(full, os.W_OK)) or rel.endswith(".example"),
-            "kind": "json" if rel.endswith(".json") else "bash",
-            "group": "config" if rel.startswith("config/") else "root",
-        })
-
-    # 1. Root-level configs first (apk.config, apk_overlays.config, ...)
-    try:
-        for name in sorted(os.listdir(ROOT)):
-            if is_editable_name(name) and (ROOT / name).is_file():
-                add(name)
-    except OSError:
-        pass
-
-    # 2. Then the config/ directory (const_*.config cheatsheets & pipelines)
-    cfg_dir = ROOT / "config"
-    if cfg_dir.is_dir():
-        for name in sorted(os.listdir(cfg_dir)):
-            if is_editable_name(name) and (cfg_dir / name).is_file():
-                add("config/" + name)
-
-    # 2b. Personal overlay dir (git-ignored): apk_overlays.config, const_my_cli.config
-    overlay_dir = ROOT / "config" / "overlay"
-    if overlay_dir.is_dir():
-        for name in sorted(os.listdir(overlay_dir)):
-            if is_editable_name(name) and (overlay_dir / name).is_file():
-                add("config/overlay/" + name)
-
-    # Stable, human-friendly ordering: apk.config on top, then personal overlays & GUI configs, then the rest.
-    priority = {
-        "config/apk.config": 0,
-        "apk.config": 0,
-        "config/overlay/apk_overlays.config": 1,
-        "config/apk_overlays.config": 1,
-        "apk_overlays.config": 1,
-        "config/overlay/const_my_cli.config": 1,
-        "config/const_my_cli.config": 1,
-        "config/const_multi_cli.config": 2,
-        "config/const_system_cli.config": 2,
-        "config/const_car.config": 2,
-        "config/const_dumpsys.config": 2,
-    }
-    entries.sort(key=lambda f: (priority.get(f["name"], 3), f["name"]))
-    return entries
+    return scan_files_in_root(ROOT)
 
 
 def registry_names():
@@ -210,7 +120,7 @@ def registry_names():
 
 def resolve_allowed(name):
     """Resolve a registry name to an absolute path, aborting on anything else."""
-    if not name or "/" in name and ".." in name:
+    if not name or ("/" in name and ".." in name):
         abort(400, description="Invalid file name.")
     if name not in registry_names():
         abort(404, description="'%s' is not an editable config file." % name)
@@ -221,120 +131,24 @@ def resolve_allowed(name):
     return full
 
 
-# ------------------------------------------------------------------------------
-# Validation (bash -n for .config, json.loads for .json)
-# ------------------------------------------------------------------------------
-def validate_content(kind: str, content: str):
-    """Return None when valid, else a human-readable error string."""
-    if kind == "json":
-        try:
-            json.loads(content)
-            return None
-        except ValueError as exc:
-            return "Invalid JSON: %s" % exc
-    # Bash-style config: syntax check with 'bash -n' when bash is available.
-    bash = shutil.which("bash")
-    if not bash:
-        return None
-    tmp = tempfile.NamedTemporaryFile("w", suffix=".config", delete=False, encoding="utf-8")
-    try:
-        tmp.write(content)
-        tmp.close()
-        proc = subprocess.run([bash, "-n", tmp.name],
-                              capture_output=True, text=True, timeout=15)
-        if proc.returncode != 0:
-            err = (proc.stderr or "syntax error").strip()
-            # Strip the temp path from bash's message for readability.
-            err = err.replace(tmp.name, "<buffer>")
-            return "Bash syntax error: %s" % err
-        return None
-    except Exception as exc:  # pragma: no cover
-        return "Validation failed: %s" % exc
-    finally:
-        try:
-            os.unlink(tmp.name)
-        except OSError:
-            pass
-
-
-# ------------------------------------------------------------------------------
-# Toolkit status parsing (version / active project / profiles / adb / ram)
-# ------------------------------------------------------------------------------
 def parse_version():
-    try:
-        text = BUILD_APK_SH.read_text(encoding="utf-8", errors="ignore")
-        m = re.search(r'SCRIPT_VERSION="([^"]+)"', text)
-        return m.group(1) if m else "unknown"
-    except OSError:
-        return "unknown"
+    return parse_version_from_file(BUILD_APK_SH)
 
 
 def parse_active_project():
-    try:
-        text = APK_CONFIG.read_text(encoding="utf-8", errors="ignore")
-        m = re.search(r'^\s*ACTIVE_PROJECT\s*=\s*"([^"]*)"', text, re.M)
-        return m.group(1) if m else ""
-    except OSError:
-        return ""
+    return parse_active_project_from_file(APK_CONFIG)
 
 
 def parse_profiles():
-    """Extract profile names from the 'case "$ACTIVE_PROJECT" in ... esac' block."""
-    try:
-        text = APK_CONFIG.read_text(encoding="utf-8", errors="ignore")
-    except OSError:
-        return []
-    m = re.search(r'case\s+"\$ACTIVE_PROJECT"\s+in(.*?)\nesac', text, re.S)
-    if not m:
-        return []
-    names = re.findall(r'^\s{4}"([^"]+)"\)', m.group(1), re.M)
-    return [n for n in names if n != "*"]
+    return parse_profiles_from_file(APK_CONFIG)
 
 
-def adb_devices():
-    """Return the list of connected ADB device serials ([] when adb missing)."""
-    adb = shutil.which("adb")
-    if not adb:
-        return []
-    try:
-        proc = subprocess.run([adb, "devices"], capture_output=True, text=True, timeout=10)
-        devices = []
-        for line in (proc.stdout or "").splitlines()[1:]:
-            line = line.strip()
-            if line and "\t" in line:
-                serial, state = line.split("\t", 1)
-                devices.append({"serial": serial, "state": state.strip()})
-        return devices
-    except Exception:
-        return []
-
-
-def ram_info():
-    """Parse /proc/meminfo (Linux) into GB values; None when unavailable."""
-    try:
-        text = Path("/proc/meminfo").read_text(encoding="utf-8")
-    except OSError:
-        return None
-    values = {}
-    for key in ("MemTotal", "MemAvailable", "SwapTotal"):
-        m = re.search(r"^%s:\s+(\d+)" % key, text, re.M)
-        if m:
-            values[key] = int(m.group(1)) / 1048576.0  # kB -> GB
-    if "MemTotal" not in values:
-        return None
-    total = values.get("MemTotal", 0.0)
-    avail = values.get("MemAvailable", 0.0)
-    return {
-        "total_gb": round(total, 2),
-        "available_gb": round(avail, 2),
-        "used_gb": round(total - avail, 2),
-        "used_pct": int((total - avail) * 100 / total) if total > 0 else 0,
-        "swap_total_gb": round(values.get("SwapTotal", 0.0), 2),
-    }
+def _crypto_items():
+    return crypto_items_for_root(ROOT)
 
 
 # ------------------------------------------------------------------------------
-# REST API
+# REST API — Status & Files
 # ------------------------------------------------------------------------------
 @app.get("/api/ping")
 def api_ping():
@@ -476,50 +290,14 @@ def api_info():
 
 
 # ------------------------------------------------------------------------------
-# Crypto & Overlay API (python/config_crypto.py + python/config_overlay.py)
+# Crypto & Overlay API
 # ------------------------------------------------------------------------------
-PRIVATE_OVERLAY_NAMES = ("apk_overlays.config", "const_my_cli.config")
-
-
-def _crypto_items():
-    overlay_dir = ROOT / "config" / "overlay"
-    items = []
-    for name in PRIVATE_OVERLAY_NAMES:
-        plain_path = overlay_dir / name
-        enc_path = overlay_dir / ("enc_" + name)
-        dec_path = overlay_dir / ("dec_" + name)
-        p_exists = plain_path.is_file()
-        e_exists = enc_path.is_file()
-        d_exists = dec_path.is_file()
-        p_stat = plain_path.stat() if p_exists else None
-        e_stat = enc_path.stat() if e_exists else None
-        d_stat = dec_path.stat() if d_exists else None
-        items.append({
-            "name": name,
-            "plain_rel": "config/overlay/%s" % name,
-            "enc_rel": "config/overlay/enc_%s" % name,
-            "dec_rel": "config/overlay/dec_%s" % name,
-            "plain_exists": p_exists,
-            "plain_size": p_stat.st_size if p_stat else 0,
-            "plain_mtime": datetime.fromtimestamp(p_stat.st_mtime).strftime("%Y-%m-%d %H:%M") if p_stat else None,
-            "enc_exists": e_exists,
-            "enc_size": e_stat.st_size if e_stat else 0,
-            "enc_mtime": datetime.fromtimestamp(e_stat.st_mtime).strftime("%Y-%m-%d %H:%M") if e_stat else None,
-            "dec_exists": d_exists,
-            "dec_size": d_stat.st_size if d_stat else 0,
-            "dec_mtime": datetime.fromtimestamp(d_stat.st_mtime).strftime("%Y-%m-%d %H:%M") if d_stat else None,
-            "synced": bool(p_stat and e_stat and int(e_stat.st_mtime) >= int(p_stat.st_mtime)),
-        })
-    return items
-
-
 @app.get("/api/crypto/status")
 def api_crypto_status():
-    items = _crypto_items()
     return jsonify({
         "ok": True,
         "overlay_dir": "config/overlay",
-        "items": items,
+        "items": _crypto_items(),
     })
 
 
@@ -552,7 +330,6 @@ def api_crypto_action():
         if not crypto_script.is_file():
             abort(404, description="python/config_crypto.py not found.")
 
-        # Auto-install 'cryptography' if missing in the current Python environment.
         try:
             import cryptography  # noqa: F401
         except ImportError:
@@ -629,22 +406,8 @@ def api_crypto_action():
 
 
 # ------------------------------------------------------------------------------
-# Pipelines API (MY_GROUP_LIST/MY_CMD_* in const_my_cli.config AND
-#                MULTI_GROUP_LIST/MULTI_CMD_* in const_multi_cli.config)
+# Pipelines API
 # ------------------------------------------------------------------------------
-# A pipeline item is one entry of <PREFIX>_GROUP_LIST: "name :: description".
-# Its steps live in the bash array <PREFIX>_CMD_<NAME_UPPERCASE>=( "step 1" ... ).
-# The API exposes them as structured JSON so the Web UI can render one card per
-# pipeline with an editable step list (add / edit / delete / reorder).
-# Both config files share the same syntax; only the variable prefix differs:
-#   source="my"    -> config/const_my_cli.config    (MY_GROUP_LIST / MY_CMD_*)
-#   source="multi" -> config/const_multi_cli.config (MULTI_GROUP_LIST / MULTI_CMD_*)
-
-MY_GROUP_RE = re.compile(r'^\s*"([A-Za-z0-9_-]+)\s*::\s*([^"]*)"\s*$')
-MY_STEP_RE = re.compile(r'^\s*"(.*)"\s*$')
-CAR_VAR_RE = re.compile(r'^\s*(ADB_SHELL_[A-Z0-9_]+)\s*=\s*"((?:\\.|[^"\\])*)"\s*$')
-CAR_ROW_RE = re.compile(r'^\s*"([A-Za-z0-9_-]+)\s*::\s*([^:]*?)\s*::\s*([^"]*)"\s*$')
-
 PIPELINE_SOURCES = {
     "my": {
         "file": MY_CLI_CONFIG,
@@ -684,16 +447,16 @@ PIPELINE_SOURCES = {
 
 
 def _pipeline_source(source):
-    """Resolve a pipeline source key ('my' | 'multi' | 'docker' | 'car' | 'dump') to its descriptor."""
+    """Resolve a pipeline source key ('my' | 'multi' | 'system' | 'docker' | 'car' | 'dump') to its descriptor."""
     key = (source or "my").strip().lower()
     if key not in PIPELINE_SOURCES:
-        abort(400, description="Unknown pipeline source '%s' (use 'my', 'multi', 'docker', 'car', or 'dump')." % key)
+        abort(400, description="Unknown pipeline source '%s' (use 'my', 'multi', 'system', 'car', or 'dump')." % key)
     return key, PIPELINE_SOURCES[key]
 
 
 def _pipeline_config_path(source):
     """Resolve the config file for a source (fall back to the .example)."""
-    key, desc = _pipeline_source(source)
+    key, _ = _pipeline_source(source)
     if key == "my":
         candidates = [
             ROOT / "config" / "overlay" / "const_my_cli.config",
@@ -728,48 +491,6 @@ def _pipeline_config_path(source):
     return None
 
 
-def _parse_cli_list_pipelines(lines, list_var="CAR_CLI_LIST", var_prefix="ADB_SHELL_CAR_"):
-    """Parse ADB_SHELL_* variables + <LIST_VAR>=( ... ) from const_car/const_dumpsys.config."""
-    vars_map = {}
-    for line in lines:
-        m = CAR_VAR_RE.match(line)
-        if m:
-            vars_map[m.group(1)] = m.group(2).replace('\\"', '"').replace("\\\\", "\\")
-
-    list_re = re.compile(r"^\s*%s\s*=\s*\(" % re.escape(list_var))
-    in_list = False
-    pipelines = []
-    for line in lines:
-        if list_re.match(line):
-            in_list = True
-            continue
-        if in_list:
-            if line.strip().startswith(")"):
-                in_list = False
-                continue
-            m = CAR_ROW_RE.match(line)
-            if not m:
-                continue
-            name = m.group(1).strip()
-            desc = m.group(2).strip()
-            cmd_expr = m.group(3).strip()
-            ref_match = re.fullmatch(r"\$\{?([A-Za-z0-9_]+)\}?", cmd_expr)
-            if ref_match:
-                var_name = ref_match.group(1)
-                resolved_cmd = vars_map.get(var_name, cmd_expr)
-            else:
-                suffix = re.sub(r"[^A-Za-z0-9]", "_", name).upper()
-                var_name = "%s%s" % (var_prefix, suffix)
-                resolved_cmd = cmd_expr
-            pipelines.append({
-                "name": name,
-                "description": desc,
-                "array": var_name,
-                "steps": [resolved_cmd] if resolved_cmd else [],
-            })
-    return pipelines
-
-
 def parse_pipelines(source="my"):
     """Parse <PREFIX>_GROUP_LIST + <PREFIX>_CMD_* arrays (or CAR_CLI_LIST / DUMP_CLI_LIST) into pipeline dicts."""
     key, desc = _pipeline_source(source)
@@ -783,206 +504,12 @@ def parse_pipelines(source="my"):
 
     if key in ("car", "dump"):
         return _parse_cli_list_pipelines(lines, desc["list_var"], desc["var_prefix"])
-
-    prefix = desc["prefix"]
-    group_list_re = re.compile(r'^\s*%s_GROUP_LIST\s*=\s*\(' % prefix)
-    cmd_re = re.compile(r'^\s*%s_CMD_([A-Z0-9_]+)\s*=\s*\(\s*$' % prefix)
-
-    # 1. Registry entries from <PREFIX>_GROUP_LIST=( ... )
-    registry = []
-    in_group_list = False
-    for line in lines:
-        if group_list_re.match(line):
-            in_group_list = True
-            continue
-        if in_group_list:
-            if line.strip().startswith(")"):
-                in_group_list = False
-                continue
-            m = MY_GROUP_RE.match(line)
-            if m:
-                registry.append({"name": m.group(1).strip(), "description": m.group(2).strip()})
-
-    # 2. Step arrays: <PREFIX>_CMD_<SUFFIX>=( "step" ... ) possibly spanning lines.
-    arrays = {}
-    current_suffix = None
-    current_steps = []
-    for line in lines:
-        stripped = line.strip()
-        if current_suffix is None:
-            m = cmd_re.match(line)
-            if m:
-                current_suffix = m.group(1)
-                current_steps = []
-            continue
-        # Inside an array definition
-        if stripped.startswith(")"):
-            arrays[current_suffix] = current_steps
-            current_suffix = None
-            current_steps = []
-            continue
-        m = MY_STEP_RE.match(stripped)
-        if m:
-            current_steps.append(m.group(1).replace('\\"', '"').replace("\\\\", "\\"))
-
-    # 3. Merge: one pipeline per registry entry (steps may be missing).
-    pipelines = []
-    seen = set()
-    for item in registry:
-        name = item["name"]
-        suffix = re.sub(r"[^A-Za-z0-9]", "_", name).upper()
-        seen.add(suffix)
-        pipelines.append({
-            "name": name,
-            "description": item["description"],
-            "array": "%s_CMD_%s" % (prefix, suffix),
-            "steps": arrays.get(suffix, []),
-        })
-
-    # 4. Orphan arrays (defined but not registered) are still shown, flagged.
-    for suffix, steps in arrays.items():
-        if suffix not in seen:
-            pipelines.append({
-                "name": suffix.lower(),
-                "description": "(not registered in %s_GROUP_LIST)" % prefix,
-                "array": "%s_CMD_%s" % (prefix, suffix),
-                "steps": steps,
-                "orphan": True,
-            })
-    return pipelines
-
-
-def _bash_quote(step: str) -> str:
-    """Quote a step for safe embedding in a double-quoted bash array element."""
-    return step.replace("\\", "\\\\").replace('"', '\\"')
-
-
-def serialize_pipelines(pipelines, prefix="MY"):
-    """Rebuild the <PREFIX>_GROUP_LIST block and all <PREFIX>_CMD_* arrays.
-
-    Returns (group_list_lines, cmd_blocks) where cmd_blocks is a list of
-    (comment_hint, [array lines]) preserving the original array order.
-    """
-    group_lines = ["%s_GROUP_LIST=(" % prefix]
-    for p in pipelines:
-        if p.get("orphan"):
-            continue
-        group_lines.append('    "%s :: %s"' % (p["name"], p.get("description", "")))
-    group_lines.append(")")
-
-    cmd_blocks = []
-    for p in pipelines:
-        suffix = re.sub(r"[^A-Za-z0-9]", "_", p["name"]).upper()
-        block = ["%s_CMD_%s=(" % (prefix, suffix)]
-        for step in p.get("steps", []):
-            block.append('    "%s"' % _bash_quote(step))
-        block.append(")")
-        cmd_blocks.append((p["name"], block))
-    return group_lines, cmd_blocks
-
-
-def _rewrite_cli_list_lines(lines, pipelines, list_var="CAR_CLI_LIST", var_prefix="ADB_SHELL_CAR_"):
-    """Rewrite ADB_SHELL_* variables and <LIST_VAR>=( ... ) in const_car/const_dumpsys.config."""
-    vars_map = {}
-    orig_row_var = {}
-    list_re = re.compile(r"^\s*%s\s*=\s*\(" % re.escape(list_var))
-    in_list = False
-    for line in lines:
-        m = CAR_VAR_RE.match(line)
-        if m:
-            vars_map[m.group(1)] = m.group(2).replace('\\"', '"').replace("\\\\", "\\")
-        if list_re.match(line):
-            in_list = True
-            continue
-        if in_list:
-            if line.strip().startswith(")"):
-                in_list = False
-                continue
-            rm = CAR_ROW_RE.match(line)
-            if rm:
-                rname = rm.group(1).strip()
-                rcmd = rm.group(3).strip()
-                ref = re.fullmatch(r"\$\{?([A-Za-z0-9_]+)\}?", rcmd)
-                if ref:
-                    orig_row_var[rname] = ref.group(1)
-
-    new_vars = dict(vars_map)
-    resolved_rows = []
-    for p in pipelines:
-        if p.get("orphan"):
-            continue
-        name = p["name"]
-        cmd_str = " && ".join(s.strip() for s in p.get("steps", []) if s.strip())
-        var_name = orig_row_var.get(
-            name,
-            "%s%s" % (var_prefix, re.sub(r"[^A-Za-z0-9]", "_", name).upper()),
-        )
-        old_val = vars_map.get(var_name)
-        if var_name not in new_vars or cmd_str != old_val:
-            new_vars[var_name] = cmd_str
-        resolved_rows.append((p, var_name))
-
-    list_lines = ["%s=(" % list_var]
-    for p, var_name in resolved_rows:
-        list_lines.append('    "%-18s :: %-44s :: $%s"' % (p["name"], p.get("description", ""), var_name))
-    list_lines.append(")")
-
-    out = []
-    written_vars = set()
-    replaced_list = False
-    i = 0
-    n = len(lines)
-    while i < n:
-        line = lines[i]
-        m = CAR_VAR_RE.match(line)
-        if m:
-            vname = m.group(1)
-            written_vars.add(vname)
-            if vname in new_vars:
-                out.append('%s="%s"' % (vname, _bash_quote(new_vars[vname])))
-            else:
-                out.append(line)
-            i += 1
-            continue
-
-        if not replaced_list and list_re.match(line):
-            for _, vname in resolved_rows:
-                if vname not in written_vars:
-                    out.append('%s="%s"' % (vname, _bash_quote(new_vars.get(vname, ""))))
-                    written_vars.add(vname)
-            j = i
-            while j < n and not lines[j].strip().startswith(")"):
-                j += 1
-            out.extend(list_lines)
-            replaced_list = True
-            i = j + 1
-            continue
-
-        out.append(line)
-        i += 1
-
-    if not replaced_list:
-        for _, vname in resolved_rows:
-            if vname not in written_vars:
-                out.append('%s="%s"' % (vname, _bash_quote(new_vars.get(vname, ""))))
-                written_vars.add(vname)
-        out.extend(list_lines)
-    return out
+    return parse_array_pipelines(lines, desc["prefix"])
 
 
 def rewrite_pipeline_config(pipelines, source="my"):
-    """Rewrite <PREFIX>_GROUP_LIST and every <PREFIX>_CMD_* array in the file.
-
-    Strategy: replace the existing <PREFIX>_GROUP_LIST=( ... ) block in place,
-    then replace each existing <PREFIX>_CMD_<SUFFIX>=( ... ) block in place,
-    and append any brand-new arrays at the end of the file. Comments and all
-    other content are preserved untouched.
-    """
+    """Rewrite <PREFIX>_GROUP_LIST and every <PREFIX>_CMD_* array in the file."""
     key, desc = _pipeline_source(source)
-    prefix = desc["prefix"]
-    group_list_re = re.compile(r"^\s*%s_GROUP_LIST\s*=\s*\(" % prefix)
-    cmd_re = re.compile(r'^\s*%s_CMD_([A-Z0-9_]+)\s*=\s*\(\s*$' % prefix)
-
     path = _pipeline_config_path(source)
     if not path:
         abort(404, description="Pipeline config for '%s' not found (run 'telua init' first)." % source)
@@ -995,61 +522,12 @@ def rewrite_pipeline_config(pipelines, source="my"):
     if key in ("car", "dump"):
         out = _rewrite_cli_list_lines(lines, pipelines, desc["list_var"], desc["var_prefix"])
     else:
-        group_lines, cmd_blocks = serialize_pipelines(pipelines, prefix)
-        out = []
-        i = 0
-        n = len(lines)
-        replaced_groups = False
-        replaced_arrays = set()
-
-        while i < n:
-            line = lines[i]
-
-            # Replace the whole <PREFIX>_GROUP_LIST=( ... ) block
-            if not replaced_groups and group_list_re.match(line):
-                j = i
-                while j < n and not lines[j].strip().startswith(")"):
-                    j += 1
-                out.extend(group_lines)
-                replaced_groups = True
-                i = j + 1
-                continue
-
-            # Replace a whole <PREFIX>_CMD_<SUFFIX>=( ... ) block
-            m = cmd_re.match(line)
-            if m:
-                suffix = m.group(1)
-                j = i
-                while j < n and not lines[j].strip().startswith(")"):
-                    j += 1
-                for name_hint, block in cmd_blocks:
-                    block_suffix = re.sub(r"[^A-Za-z0-9]", "_", name_hint).upper()
-                    if block_suffix == suffix:
-                        out.extend(block)
-                        replaced_arrays.add(suffix)
-                        break
-                else:
-                    # Array removed in the new set: drop it entirely.
-                    pass
-                i = j + 1
-                continue
-
-            out.append(line)
-            i += 1
-
-        # Append arrays that did not exist before (new pipelines).
-        for name_hint, block in cmd_blocks:
-            suffix = re.sub(r"[^A-Za-z0-9]", "_", name_hint).upper()
-            if suffix not in replaced_arrays:
-                if out and out[-1].strip() != "":
-                    out.append("")
-                out.extend(block)
+        out = rewrite_array_pipeline_lines(lines, pipelines, desc["prefix"])
 
     new_text = "\n".join(out)
     if text.endswith("\n") or not text:
         new_text += "\n"
 
-    # Safety: the rewritten file must still be valid bash.
     error = validate_content("bash", new_text)
     if error:
         abort(400, description="Rewrite would break bash syntax: %s" % error)
@@ -1089,7 +567,6 @@ def api_pipelines_save():
     if not isinstance(pipelines, list):
         abort(400, description="Missing 'pipelines' list in request body.")
 
-    # Basic shape validation before touching the file.
     cleaned = []
     names = set()
     for p in pipelines:
@@ -1144,7 +621,6 @@ def api_pipeline_run():
     script = BUILD_APK_SH
     if not script.is_file():
         abort(404, description="build_apk.sh not found in %s" % ROOT)
-    # 'my' -> 'telua my <name>', 'multi' -> 'telua run <group>', 'system'/'docker' -> 'telua system <action>'
     subcommand = {"my": "my", "multi": "run", "docker": "system", "system": "system", "car": "car", "dump": "dump"}[key]
     try:
         proc = subprocess.run(
@@ -1160,7 +636,7 @@ def api_pipeline_run():
 
 
 # ------------------------------------------------------------------------------
-# Static frontend
+# Static frontend & entry point
 # ------------------------------------------------------------------------------
 @app.get("/")
 def index():
@@ -1172,9 +648,6 @@ def favicon():
     return ("", 204)
 
 
-# ------------------------------------------------------------------------------
-# Entry point
-# ------------------------------------------------------------------------------
 def open_browser(url: str):
     """Best-effort launch of the default browser (Linux / Windows / macOS)."""
     try:
@@ -1253,7 +726,6 @@ def main():
         threading.Timer(1.2, open_browser, args=(url,)).start()
 
     print_banner(args.host, args.port)
-    # threaded=True: concurrent static + API requests; debug off (production-ish).
     app.run(host=args.host, port=args.port, debug=False, threaded=True)
 
 
