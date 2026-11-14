@@ -247,7 +247,7 @@ code, .mono { font-family: var(--mono); }
 }
 .modal-box.wide { width: min(860px, 94vw); }
 .modal-box h3 { margin: 0 0 8px; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 
 .profile-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .profile-item {
@@ -445,9 +445,13 @@ code, .mono { font-family: var(--mono); }
 .pl-add-step:hover { border-color: var(--green); color: var(--green); }
 .pl-card-foot {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
   margin-top: 10px;
+}
+.pl-run-btn {
+  margin-right: auto;
 }
 
 /* ---------------- Toasts ---------------- */

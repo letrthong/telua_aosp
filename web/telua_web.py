@@ -61,6 +61,7 @@ from pathlib import Path
 
 try:
     from flask import Flask, abort, jsonify, request, send_from_directory
+    from werkzeug.exceptions import HTTPException
 except ImportError:  # pragma: no cover
     sys.stderr.write(
         "[ERROR] Flask is not installed.\n"
@@ -96,6 +97,17 @@ except Exception:  # pragma: no cover
     FLASK_VERSION = "unknown"
 
 app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="/static")
+
+
+@app.errorhandler(HTTPException)
+def handle_http_exception(exc):
+    """Return JSON instead of HTML for all abort() errors so the Web UI shows exact messages."""
+    return jsonify({
+        "ok": False,
+        "code": exc.code,
+        "error": exc.description,
+        "description": exc.description,
+    }), exc.code
 
 
 # ------------------------------------------------------------------------------
@@ -495,9 +507,13 @@ def api_crypto_action():
     target = str(data.get("target", "all")).strip()
     password = str(data.get("password", ""))
     apply_overlay = bool(data.get("apply_overlay", False))
+    force = bool(data.get("force", False))
+    if action == "decrypt_force":
+        action = "decrypt"
+        force = True
 
     if action not in ("encrypt", "decrypt", "apply_overlay"):
-        abort(400, description="Invalid action '%s' (use 'encrypt', 'decrypt', or 'apply_overlay')." % action)
+        abort(400, description="Invalid action '%s' (use 'encrypt', 'decrypt', 'decrypt_force', or 'apply_overlay')." % action)
     if target not in ("all", "apk_overlays.config", "const_my_cli.config"):
         abort(400, description="Invalid target '%s'." % target)
 
@@ -512,19 +528,34 @@ def api_crypto_action():
         if not crypto_script.is_file():
             abort(404, description="python/config_crypto.py not found.")
 
+        # Auto-install 'cryptography' if missing in the current Python environment.
+        try:
+            import cryptography  # noqa: F401
+        except ImportError:
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "cryptography"],
+                cwd=str(ROOT), capture_output=True, text=True, timeout=60,
+            )
+
+        force_args = ["--force"] if (action == "encrypt" or force) else []
+
         if target == "all":
-            cmd = [sys.executable, str(crypto_script), action, "-d", str(overlay_dir), "-p", "-"]
+            if action == "decrypt":
+                has_any_enc = any((overlay_dir / ("enc_" + n)).is_file() for n in PRIVATE_OVERLAY_NAMES)
+                if not has_any_enc:
+                    abort(400, description="No encrypted files (enc_*.config) found in config/overlay/ to decrypt. Click '🔐 Encrypt' first.")
+            cmd = [sys.executable, str(crypto_script), action, "-", "-d", str(overlay_dir)] + force_args
         else:
             plain_file = overlay_dir / target
             enc_file = overlay_dir / ("enc_" + target)
             if action == "encrypt":
                 if not plain_file.is_file():
                     abort(404, description="config/overlay/%s does not exist." % target)
-                cmd = [sys.executable, str(crypto_script), "encrypt", "-i", str(plain_file), "-o", str(enc_file), "-p", "-"]
+                cmd = [sys.executable, str(crypto_script), "encrypt", "-", "-i", str(plain_file), "-o", str(enc_file), "--force"]
             else:
                 if not enc_file.is_file():
-                    abort(404, description="config/overlay/enc_%s does not exist." % target)
-                cmd = [sys.executable, str(crypto_script), "decrypt", "-i", str(enc_file), "-o", str(plain_file), "-p", "-"]
+                    abort(404, description="config/overlay/enc_%s does not exist yet (click '🔐 Encrypt' first)." % target)
+                cmd = [sys.executable, str(crypto_script), "decrypt", "-", "-i", str(enc_file), "-o", str(plain_file)] + force_args
 
         try:
             proc = subprocess.run(

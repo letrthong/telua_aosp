@@ -503,18 +503,30 @@ function pipelineCard(p) {
   });
   card.appendChild(addStep);
 
-  // --- footer: run + edit + delete pipeline ---
+  // --- footer: run (left / start of row) --- delete + edit (right / end of row) ---
   const foot = document.createElement("div");
   foot.className = "pl-card-foot";
 
   const runCmdMap = { my: "telua my ", multi: "telua run ", car: "telua car ", dump: "telua dump " };
   const runCmdPrefix = runCmdMap[state.plSource] || "telua my ";
   const runBtn = document.createElement("button");
-  runBtn.className = "btn";
+  runBtn.className = "btn primary pl-run-btn";
   runBtn.textContent = "▶ Run";
   runBtn.title = "Execute: " + runCmdPrefix + p.name;
   runBtn.addEventListener("click", () => runPipeline(p.name));
   foot.appendChild(runBtn);
+
+  const delBtn = document.createElement("button");
+  delBtn.className = "btn danger";
+  delBtn.textContent = "🗑 Delete";
+  delBtn.title = "Delete pipeline '" + p.name + "'";
+  delBtn.addEventListener("click", () => {
+    if (!confirm(`Delete pipeline '${p.name}' (${p.steps.length} steps)?`)) return;
+    state.pipelines = state.pipelines.filter(x => x !== p);
+    setPlDirty(true);
+    renderPipelines();
+  });
+  foot.appendChild(delBtn);
 
   const editBtn = document.createElement("button");
   editBtn.className = "btn" + (isCardEditing ? " editing" : "");
@@ -534,17 +546,6 @@ function pipelineCard(p) {
   });
   foot.appendChild(editBtn);
 
-  const delBtn = document.createElement("button");
-  delBtn.className = "btn danger";
-  delBtn.textContent = "🗑 Delete";
-  delBtn.title = "Delete pipeline '" + p.name + "'";
-  delBtn.addEventListener("click", () => {
-    if (!confirm(`Delete pipeline '${p.name}' (${p.steps.length} steps)?`)) return;
-    state.pipelines = state.pipelines.filter(x => x !== p);
-    setPlDirty(true);
-    renderPipelines();
-  });
-  foot.appendChild(delBtn);
   card.appendChild(foot);
 
   return card;
@@ -751,7 +752,40 @@ async function showInfo() {
 }
 
 /* ---------------- Crypto & Overlay modal ---------------- */
+let _lastCryptoItems = [];
+
+function updateCryptoButtons() {
+  const target = $("#crypto-target")?.value || "all";
+  const relevant = target === "all"
+    ? _lastCryptoItems
+    : _lastCryptoItems.filter(it => it.name === target);
+  const canEncrypt = relevant.some(it => it.plain_exists);
+  const canDecrypt = relevant.some(it => it.enc_exists);
+  const encBtn = $("#btn-crypto-encrypt");
+  const decBtn = $("#btn-crypto-decrypt");
+  const decForceBtn = $("#btn-crypto-decrypt-force");
+  if (encBtn) {
+    encBtn.disabled = !canEncrypt;
+    encBtn.title = canEncrypt
+      ? "Encrypt plain .config -> enc_*.config"
+      : "No plain .config file found for the selected target";
+  }
+  if (decBtn) {
+    decBtn.disabled = !canDecrypt;
+    decBtn.title = canDecrypt
+      ? "Decrypt enc_*.config -> plain .config (safe mode: does not overwrite existing files)"
+      : "No enc_*.config file exists yet — click '🔐 Encrypt' first";
+  }
+  if (decForceBtn) {
+    decForceBtn.disabled = !canDecrypt;
+    decForceBtn.title = canDecrypt
+      ? "Decrypt enc_*.config and OVERWRITE existing plain .config files"
+      : "No enc_*.config file exists yet — click '🔐 Encrypt' first";
+  }
+}
+
 function renderCryptoItems(items = []) {
+  _lastCryptoItems = items;
   const list = $("#crypto-status-list");
   if (!list) return;
   list.innerHTML = "";
@@ -787,6 +821,7 @@ function renderCryptoItems(items = []) {
     chip.textContent = `🔐 enc: ${encCount}/${items.length}`;
     chip.className = "chip " + (encCount === items.length ? "ok" : encCount > 0 ? "warn" : "");
   }
+  updateCryptoButtons();
 }
 
 async function refreshCryptoStatus() {
@@ -809,7 +844,7 @@ async function openCryptoModal(defaultTarget = "all") {
   $("#crypto-password")?.focus();
 }
 
-async function runCryptoAction(action) {
+async function runCryptoAction(action, force = false) {
   const target = $("#crypto-target")?.value || "all";
   const password = $("#crypto-password")?.value || "";
   const applyOverlay = !!$("#crypto-apply-after-dec")?.checked;
@@ -821,22 +856,35 @@ async function runCryptoAction(action) {
     return;
   }
 
+  if (action === "decrypt" && force) {
+    const targetDesc = target === "all" ? "all private overlay configs" : `config/overlay/${target}`;
+    if (!confirm(`Decrypt & Override ${targetDesc}?\n\nThis will overwrite the current plain .config file(s) on disk with the encrypted version.`)) {
+      return;
+    }
+  }
+
+  const label = (action === "decrypt" && force) ? "decrypt (override)" : action;
   if (out) {
-    out.textContent = `Running ${action}…`;
+    out.textContent = `Running ${label}…`;
     out.classList.remove("hidden");
   }
   try {
     const data = await api("/api/crypto/action", {
       method: "POST",
-      body: JSON.stringify({ action, target, password, apply_overlay: applyOverlay }),
+      body: JSON.stringify({ action, target, password, apply_overlay: applyOverlay, force }),
     });
     if ($("#crypto-password")) $("#crypto-password").value = "";
     if (out) {
-      out.textContent = data.output || `${action} completed successfully.`;
+      out.textContent = data.output || `${label} completed successfully.`;
       out.classList.remove("hidden");
     }
     renderCryptoItems(data.items || []);
-    toast(`Crypto ${action} ✓`, data.output || "Success", "ok");
+    toast(`Crypto ${label} ✓`, data.output || "Success", "ok");
+    if (action === "decrypt" && force) {
+      // Discard any stale browser drafts so the freshly decrypted config takes effect immediately.
+      if (target === "all" || target === "const_my_cli.config") draftClearPipelines();
+      if (state.current && (target === "all" || state.current.name.endsWith(target))) draftClearFile();
+    }
     await Promise.all([refreshFiles(), refreshStatus()]);
     if (action === "decrypt" || action === "apply_overlay") {
       await loadPipelines(draftLoadPipelines());
@@ -847,7 +895,7 @@ async function runCryptoAction(action) {
       out.textContent = `[ERROR] ${err.message}`;
       out.classList.remove("hidden");
     }
-    toast(`Crypto ${action} failed`, err.message, "err");
+    toast(`Crypto ${label} failed`, err.message, "err");
   }
 }
 
@@ -905,9 +953,11 @@ function wire() {
     if (state.dirty) await saveFile();
     await runCryptoAction("apply_overlay");
   });
-  $("#btn-crypto-encrypt")?.addEventListener("click", () => runCryptoAction("encrypt"));
-  $("#btn-crypto-decrypt")?.addEventListener("click", () => runCryptoAction("decrypt"));
-  $("#btn-crypto-apply")?.addEventListener("click", () => runCryptoAction("apply_overlay"));
+  $("#crypto-target")?.addEventListener("change", updateCryptoButtons);
+  $("#btn-crypto-encrypt")?.addEventListener("click", () => runCryptoAction("encrypt", false));
+  $("#btn-crypto-decrypt")?.addEventListener("click", () => runCryptoAction("decrypt", false));
+  $("#btn-crypto-decrypt-force")?.addEventListener("click", () => runCryptoAction("decrypt", true));
+  $("#btn-crypto-apply")?.addEventListener("click", () => runCryptoAction("apply_overlay", false));
 
   // Tab switching
   $("#tab-files").addEventListener("click", () => switchTab("files"));

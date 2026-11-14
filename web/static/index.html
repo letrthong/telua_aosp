@@ -162,8 +162,9 @@
     <pre id="crypto-output" class="info-out hidden"></pre>
     <div class="modal-actions">
       <button class="btn" id="btn-crypto-apply" title="Merge config/overlay/apk_overlays.config into config/apk.config (no password needed)">⚡ Apply apk_overlays → apk.config</button>
-      <button class="btn primary" id="btn-crypto-encrypt">🔐 Encrypt</button>
-      <button class="btn primary" id="btn-crypto-decrypt">🔓 Decrypt</button>
+      <button class="btn primary" id="btn-crypto-encrypt" title="Encrypt plain .config → enc_*.config">🔐 Encrypt</button>
+      <button class="btn primary" id="btn-crypto-decrypt" title="Decrypt enc_*.config → plain .config (safe: refuses if plain file already exists)">🔓 Decrypt</button>
+      <button class="btn danger" id="btn-crypto-decrypt-force" title="Decrypt enc_*.config and OVERWRITE existing plain .config files">⚠️ Decrypt &amp; Override</button>
       <button class="btn" id="btn-crypto-close">Close</button>
     </div>
   </div>

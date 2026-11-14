@@ -101,10 +101,14 @@ _web_get_python_cmd() {
     echo ""
 }
 
-# Ensure Flask is importable; auto-install via pip when missing (opt-out via
-# TELUA_WEB_SKIP_PIP=1). Returns 0 when Flask is available.
+# Ensure Flask & cryptography are importable; auto-install via pip when missing
+# (opt-out via TELUA_WEB_SKIP_PIP=1). Returns 0 when Flask is available.
 _web_ensure_flask() {
     local py_cmd="$1"
+    if ! "$py_cmd" -c "import cryptography" >/dev/null 2>&1 && [ "${TELUA_WEB_SKIP_PIP:-0}" != "1" ]; then
+        "$py_cmd" -m pip install cryptography >/dev/null 2>&1 \
+            || "$py_cmd" -m pip install --user cryptography >/dev/null 2>&1 || true
+    fi
     if "$py_cmd" -c "import flask" >/dev/null 2>&1; then
         return 0
     fi

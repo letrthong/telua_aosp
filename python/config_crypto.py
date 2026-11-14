@@ -100,7 +100,7 @@ def check_paths(src: str, dst: str, force: bool) -> None:
     if os.path.abspath(src) == os.path.abspath(dst):
         sys.exit("ERROR: input and output must be different files")
     if os.path.exists(dst) and not force:
-        sys.exit(f"ERROR: '{dst}' already exists (use --force to overwrite)")
+        sys.exit(f"ERROR: '{dst}' already exists (use --force or click '⚠️ Decrypt & Override' to overwrite)")
 
 
 def get_password(arg_password: str | None, confirm: bool = False) -> str:
@@ -217,6 +217,7 @@ def encrypt(args: argparse.Namespace) -> None:
 
 
 def decrypt(args: argparse.Namespace) -> None:
+    force = bool(args.force)
     if args.input:
         src = args.input
         if args.output:
@@ -225,7 +226,7 @@ def decrypt(args: argparse.Namespace) -> None:
             base = os.path.basename(src)
             plain_name = base[4:] if base.startswith("enc_") else f"dec_{base}"
             dst = os.path.join(os.path.dirname(src) or ".", plain_name)
-        check_paths(src, dst, args.force)
+        check_paths(src, dst, force)
         password = get_password(args.password, confirm=False)
         decrypt_single_file(src, dst, password)
         return
@@ -237,7 +238,7 @@ def decrypt(args: argparse.Namespace) -> None:
         sys.exit(f"ERROR: no encrypted private config files ({enc_names}) found in {target_dir}")
 
     for src, dst in targets:
-        check_paths(src, dst, args.force)
+        check_paths(src, dst, force)
 
     password = get_password(args.password, confirm=False)
     for src, dst in targets:
@@ -251,6 +252,7 @@ def main() -> None:
     for name, func in (("encrypt", encrypt), ("decrypt", decrypt)):
         p = sub.add_parser(name)
         p.add_argument("password", nargs="?", help="password, '?' to prompt interactively, '-' for stdin, or omit")
+        p.add_argument("-p", "--password", dest="password_opt", help="password or '-' for stdin (optional flag alias)")
         p.add_argument("-i", "--input", help="explicit input file (optional; defaults to config/overlay/ private files)")
         p.add_argument("-o", "--output", help="explicit output file (optional)")
         p.add_argument("-d", "--dir", help="override overlay directory to scan (default: config/overlay)")
@@ -258,6 +260,8 @@ def main() -> None:
         p.set_defaults(func=func)
 
     args = parser.parse_args()
+    if getattr(args, "password_opt", None) is not None:
+        args.password = args.password_opt
     args.func(args)
 
 
