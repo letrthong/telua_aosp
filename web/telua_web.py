@@ -44,6 +44,12 @@ from telua_web_core import (  # noqa: E402
     scan_files_in_root,
     validate_content,
 )
+from telua_web_docs import (  # noqa: E402
+    html_to_rst,
+    resolve_rst_target,
+    rst_to_html,
+    scan_docs_files,
+)
 from telua_web_pipelines import (  # noqa: E402
     CAR_ROW_RE,
     CAR_VAR_RE,
@@ -859,6 +865,189 @@ def api_terminal_stop():
     for p in procs:
         _kill_term_proc(p)
     return jsonify({"ok": True, "stopped": len(procs)})
+
+
+# ------------------------------------------------------------------------------
+# REST API — Sphinx Docs & RST <-> HTML Conversion (Quill.js integration)
+# ------------------------------------------------------------------------------
+@app.get("/api/docs/files")
+def api_docs_files():
+    """List all discoverable .rst documentation files."""
+    custom_dir = request.args.get("dir", "").strip()
+    files, effective_dir = scan_docs_files(ROOT, custom_dir=custom_dir or None)
+    return jsonify({"ok": True, "files": files, "dir": effective_dir})
+
+
+@app.get("/api/docs/file")
+def api_docs_file_read():
+    """Read a specific .rst file, returning both raw RST and converted HTML."""
+    name = request.args.get("name", "").strip()
+    custom_dir = request.args.get("dir", "").strip()
+    if not name or ".." in name or not name.endswith(".rst"):
+        abort(400, description="Invalid .rst file name.")
+    target, full_name = resolve_rst_target(name, ROOT, custom_dir=custom_dir or None)
+    if not target.is_file():
+        abort(404, description=f"File '{name}' not found.")
+    try:
+        content = target.read_text(encoding="utf-8", errors="replace")
+        stat = target.stat()
+        mtime = int(stat.st_mtime)
+    except OSError as exc:
+        abort(500, description=f"Failed to read file: {exc}")
+
+    return jsonify({
+        "ok": True,
+        "name": name,
+        "full_path": full_name,
+        "rst": content,
+        "html": rst_to_html(content),
+        "mtime": mtime,
+        "readonly": not os.access(str(target), os.W_OK),
+    })
+
+
+@app.post("/api/docs/file")
+def api_docs_file_write():
+    """Write/save a .rst file from either raw RST or Quill.js HTML."""
+    payload = request.get_json(silent=True) or {}
+    name = payload.get("name", "").strip()
+    custom_dir = payload.get("dir", "").strip()
+    content = payload.get("content", "")
+    fmt = payload.get("format", "rst").lower()
+
+    if not name or ".." in name or not name.endswith(".rst"):
+        abort(400, description="Invalid .rst file name.")
+    target, full_name = resolve_rst_target(name, ROOT, custom_dir=custom_dir or None)
+
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        abort(500, description=f"Failed to create directory: {exc}")
+
+    # If incoming format is HTML, convert to RST first
+    if fmt == "html":
+        rst_content = html_to_rst(content)
+    else:
+        rst_content = content
+
+    # Create backup .bak if target exists
+    if target.is_file():
+        try:
+            bak = target.with_suffix(".rst.bak")
+            shutil.copyfile(str(target), str(bak))
+        except OSError:
+            pass
+
+    try:
+        target.write_text(rst_content, encoding="utf-8")
+        stat = target.stat()
+    except OSError as exc:
+        abort(500, description=f"Failed to write file: {exc}")
+
+    return jsonify({
+        "ok": True,
+        "name": name,
+        "full_path": full_name,
+        "rst": rst_content,
+        "html": rst_to_html(rst_content),
+        "mtime": int(stat.st_mtime),
+    })
+
+
+@app.post("/api/docs/convert")
+def api_docs_convert():
+    """Convert on-the-fly between RST and HTML."""
+    payload = request.get_json(silent=True) or {}
+    content = payload.get("content", "")
+    direction = payload.get("direction", "rst2html").lower()
+
+    if direction in ("rst2html", "rst_to_html"):
+        return jsonify({"ok": True, "html": rst_to_html(content)})
+    elif direction in ("html2rst", "html_to_rst"):
+        return jsonify({"ok": True, "rst": html_to_rst(content)})
+    abort(400, description="Unknown conversion direction. Use 'rst2html' or 'html2rst'.")
+
+
+@app.post("/api/docs/build")
+def api_docs_build():
+    """Trigger Sphinx build in background or sync."""
+    cmd = ["bash", "build_apk.sh", "docs", "build"] if (ROOT / "build_apk.sh").is_file() and not sys.platform.startswith("win") else None
+    if cmd is None:
+        src_dir = ROOT / "sphinx" / "templates" / "architecture"
+        out_dir = ROOT / "docs" / "_build" / "html"
+        cmd = [sys.executable, "-m", "sphinx", "-b", "html", str(src_dir), str(out_dir)]
+
+    try:
+        proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=40)
+        return jsonify({
+            "ok": proc.returncode == 0,
+            "exit_code": proc.returncode,
+            "stdout": proc.stdout,
+            "stderr": proc.stderr,
+        })
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+_DOCS_SERVER_PROC = None
+
+@app.post("/api/docs/start")
+def api_docs_start():
+    """Launch Sphinx HTTP preview server (telua docs start) and open in browser."""
+    global _DOCS_SERVER_PROC
+    payload = request.get_json(silent=True) or {}
+    custom_dir = payload.get("dir", "").strip()
+    port = int(payload.get("port", 8789))
+
+    if custom_dir:
+        base = Path(custom_dir)
+        target_dir = base if base.is_absolute() else (ROOT / base).resolve()
+    else:
+        target_dir = (ROOT / "docs") if (ROOT / "docs").is_dir() else (ROOT / "sphinx" / "templates" / "architecture")
+
+    html_dir = target_dir / "_build" / "html"
+
+    # If _build/html/index.html does not exist, build first
+    if not (html_dir / "index.html").is_file():
+        cmd = [sys.executable, "-m", "sphinx", "-b", "html", str(target_dir), str(html_dir)]
+        try:
+            subprocess.run(cmd, cwd=str(ROOT), capture_output=True, timeout=40)
+        except Exception:
+            pass
+
+    if not html_dir.is_dir():
+        html_dir.mkdir(parents=True, exist_ok=True)
+        (html_dir / "index.html").write_text("<h1>Sphinx Docs Preview</h1><p>Ready to build.</p>", encoding="utf-8")
+
+    is_alive = False
+    if _DOCS_SERVER_PROC is not None:
+        try:
+            if _DOCS_SERVER_PROC.poll() is None:
+                is_alive = True
+        except Exception:
+            is_alive = False
+
+    url = f"http://localhost:{port}"
+
+    if not is_alive:
+        try:
+            _DOCS_SERVER_PROC = subprocess.Popen(
+                [sys.executable, "-m", "http.server", str(port), "--directory", str(html_dir)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception as exc:
+            abort(500, description=f"Failed to start docs server: {exc}")
+
+    open_browser(url)
+
+    return jsonify({
+        "ok": True,
+        "url": url,
+        "port": port,
+        "pid": _DOCS_SERVER_PROC.pid if _DOCS_SERVER_PROC else None,
+        "html_dir": str(html_dir),
+    })
 
 
 # ------------------------------------------------------------------------------

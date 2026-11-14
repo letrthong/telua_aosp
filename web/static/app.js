@@ -584,14 +584,16 @@ let _lastNonSystemPlSource = "my";
 function syncTopTabs() {
   const isFiles = !$("#view-files").classList.contains("hidden");
   const isTerminal = !$("#view-terminal")?.classList.contains("hidden");
-  const isSystem = !isFiles && !isTerminal && (state.plSource === "system" || state.plSource === "docker");
-  const isPipelines = !isFiles && !isTerminal && !isSystem;
+  const isDocs = !$("#view-docs")?.classList.contains("hidden");
+  const isSystem = !isFiles && !isTerminal && !isDocs && (state.plSource === "system" || state.plSource === "docker");
+  const isPipelines = !isFiles && !isTerminal && !isDocs && !isSystem;
   $("#tab-files")?.classList.toggle("active", isFiles);
   $("#tab-pipelines")?.classList.toggle("active", isPipelines);
   $("#tab-system")?.classList.toggle("active", isSystem);
   $("#tab-terminal")?.classList.toggle("active", isTerminal);
+  $("#tab-docs")?.classList.toggle("active", isDocs);
   try {
-    const activeTabName = isFiles ? "files" : (isTerminal ? "terminal" : (isSystem ? "system" : "pipelines"));
+    const activeTabName = isFiles ? "files" : (isTerminal ? "terminal" : (isDocs ? "docs" : (isSystem ? "system" : "pipelines")));
     localStorage.setItem(LAST_TAB_KEY, activeTabName);
     localStorage.setItem(LAST_SOURCE_KEY, state.plSource);
   } catch { /* ignore */ }
@@ -600,9 +602,10 @@ function syncTopTabs() {
 function switchPipelineSource(source) {
   if (source === "docker") source = "system";
   if (source !== "system") _lastNonSystemPlSource = source;
-  // Ensure Pipelines view is visible if user clicks a source while in Terminal or Files
+  // Ensure Pipelines view is visible if user clicks a source while in Terminal, Files, or Docs
   $("#view-files")?.classList.add("hidden");
   $("#view-terminal")?.classList.add("hidden");
+  $("#view-docs")?.classList.add("hidden");
   $("#view-pipelines")?.classList.remove("hidden");
   if (state.plSource === source) {
     syncTopTabs();
@@ -1770,14 +1773,390 @@ async function runTerminalCommand(explicitCmd = null) {
   }
 }
 
+/* ---------------- Sphinx Docs & Quill.js ---------------- */
+let _quill = null;
+let _docsFiles = [];
+let _currentDoc = null; // { name, rst, html, mtime, readonly }
+let _docsMode = "wysiwyg"; // "wysiwyg" | "raw" | "split"
+let _docsDirty = false;
+let _docsCustomDir = localStorage.getItem("telua_web_docs_dir") || "";
+
+function initQuill() {
+  if (_quill || !window.Quill || !$("#quill-editor")) return;
+  _quill = new Quill("#quill-editor", {
+    theme: "snow",
+    placeholder: "Write Sphinx documentation here… Format headings, bold, italic, code blocks visually.",
+    modules: {
+      toolbar: [
+        [{ header: [1, 2, 3, 4, false] }],
+        ["bold", "italic", "underline", "strike"],
+        ["blockquote", "code-block"],
+        [{ list: "ordered" }, { list: "bullet" }],
+        ["link", "clean"],
+      ],
+    },
+  });
+  _quill.on("text-change", (delta, oldDelta, source) => {
+    if (source === "user") {
+      setDocsDirty(true);
+      if (_docsMode === "split") {
+        updateDocsPreview();
+      }
+    }
+  });
+}
+
+function setDocsDirty(val) {
+  _docsDirty = Boolean(val);
+  const badge = $("#docs-dirty-badge");
+  if (badge) badge.style.display = _docsDirty ? "inline" : "none";
+}
+
+async function loadDocsFiles(customDir = _docsCustomDir) {
+  const sel = $("#docs-file-select");
+  if (sel) sel.innerHTML = '<option value="">Loading .rst files…</option>';
+  try {
+    const url = `/api/docs/files?dir=${encodeURIComponent(customDir || "")}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "Failed to scan docs files");
+    _docsFiles = data.files || [];
+    const dirLabel = $("#docs-dir-label");
+    if (dirLabel) {
+      if (data.dir) {
+        const parts = data.dir.replace(/\\/g, "/").split("/");
+        dirLabel.textContent = parts[parts.length - 1] || "docs";
+        dirLabel.parentElement.title = `Docs Root: ${data.dir} (Click to change)`;
+      } else {
+        dirLabel.textContent = "docs";
+        dirLabel.parentElement.title = "Default docs root (Click to change)";
+      }
+    }
+    renderDocsFileSelect();
+    if (_docsFiles.length > 0 && (!_currentDoc || !_docsFiles.some(f => f.name === _currentDoc.name))) {
+      const arch = _docsFiles.find(f => f.name.includes("chapter1_section1") || f.name.includes("index.rst")) || _docsFiles[0];
+      loadDocFile(arch.name);
+    }
+  } catch (err) {
+    if (sel) sel.innerHTML = `<option value="">Error loading docs (${err.message})</option>`;
+    toast("Docs Scan Failed", String(err.message || err), "danger");
+  }
+}
+
+function renderDocsFileSelect() {
+  const sel = $("#docs-file-select");
+  if (!sel) return;
+  if (_docsFiles.length === 0) {
+    sel.innerHTML = '<option value="">No .rst files found</option>';
+    return;
+  }
+  const groups = {};
+  for (const f of _docsFiles) {
+    const cat = f.category || "other";
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(f);
+  }
+  let html = '<option value="">— Select an .rst file to edit —</option>';
+  for (const [cat, files] of Object.entries(groups)) {
+    const label = cat.charAt(0).toUpperCase() + cat.slice(1);
+    html += `<optgroup label="Template: ${label}">`;
+    for (const f of files) {
+      const selected = _currentDoc && _currentDoc.name === f.name ? "selected" : "";
+      html += `<option value="${f.name}" ${selected}>${f.title || f.name} (${f.name})</option>`;
+    }
+    html += `</optgroup>`;
+  }
+  sel.innerHTML = html;
+}
+
+async function loadDocFile(name) {
+  if (!name) return;
+  if (_docsDirty && !confirm("You have unsaved changes in the current document. Discard and switch file?")) {
+    renderDocsFileSelect();
+    return;
+  }
+  initQuill();
+  const badge = $("#docs-status-badge");
+  if (badge) badge.textContent = "Loading…";
+  try {
+    const url = `/api/docs/file?name=${encodeURIComponent(name)}&dir=${encodeURIComponent(_docsCustomDir || "")}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "Failed to read file");
+    _currentDoc = data;
+    setDocsDirty(false);
+
+    if (_quill) {
+      _quill.root.innerHTML = data.html || "<p></p>";
+    }
+    const rawTa = $("#docs-raw-rst");
+    if (rawTa) rawTa.value = data.rst || "";
+
+    const meta = $("#docs-file-meta");
+    if (meta) {
+      meta.textContent = `${data.name} · ${data.rst.length} chars · format: RST`;
+    }
+    if (badge) badge.textContent = data.readonly ? "Read-only" : "Ready";
+    renderDocsFileSelect();
+    if (_docsMode === "split") updateDocsPreview();
+  } catch (err) {
+    toast("Failed to open doc", String(err.message || err), "danger");
+    if (badge) badge.textContent = "Error";
+  }
+}
+
+async function setDocsMode(mode) {
+  if (mode === _docsMode) return;
+  initQuill();
+  const badge = $("#docs-status-badge");
+  const wysiwygPane = $("#docs-pane-wysiwyg");
+  const rawPane = $("#docs-pane-raw");
+  const previewPane = $("#docs-pane-preview");
+
+  $("#btn-docs-mode-wysiwyg")?.classList.toggle("active", mode === "wysiwyg");
+  $("#btn-docs-mode-raw")?.classList.toggle("active", mode === "raw");
+  $("#btn-docs-mode-split")?.classList.toggle("active", mode === "split");
+
+  // Sync content between editors
+  if (_docsMode === "wysiwyg" && (mode === "raw" || mode === "split")) {
+    // Convert current Quill HTML to RST
+    if (_quill && _docsDirty) {
+      if (badge) badge.textContent = "Converting HTML → RST…";
+      try {
+        const res = await fetch("/api/docs/convert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: _quill.root.innerHTML, direction: "html2rst" }),
+        });
+        const data = await res.json();
+        if (data.ok && $("#docs-raw-rst")) {
+          $("#docs-raw-rst").value = data.rst;
+        }
+      } catch (err) {
+        console.error("HTML2RST conversion failed:", err);
+      }
+      if (badge) badge.textContent = "Ready";
+    }
+  } else if (_docsMode === "raw" && (mode === "wysiwyg" || mode === "split")) {
+    // Convert current raw RST to HTML for Quill / preview
+    const rst = $("#docs-raw-rst")?.value || "";
+    if (badge) badge.textContent = "Converting RST → HTML…";
+    try {
+      const res = await fetch("/api/docs/convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: rst, direction: "rst2html" }),
+      });
+      const data = await res.json();
+      if (data.ok && _quill) {
+        _quill.root.innerHTML = data.html;
+      }
+    } catch (err) {
+      console.error("RST2HTML conversion failed:", err);
+    }
+    if (badge) badge.textContent = "Ready";
+  }
+
+  _docsMode = mode;
+  if (mode === "wysiwyg") {
+    wysiwygPane?.classList.remove("hidden");
+    wysiwygPane?.classList.remove("split-left");
+    rawPane?.classList.add("hidden");
+    previewPane?.classList.add("hidden");
+  } else if (mode === "raw") {
+    wysiwygPane?.classList.add("hidden");
+    rawPane?.classList.remove("hidden");
+    rawPane?.classList.remove("split-left");
+    previewPane?.classList.add("hidden");
+  } else if (mode === "split") {
+    wysiwygPane?.classList.remove("hidden");
+    wysiwygPane?.classList.add("split-left");
+    rawPane?.classList.add("hidden");
+    previewPane?.classList.remove("hidden");
+    updateDocsPreview();
+  }
+}
+
+function updateDocsPreview() {
+  const preview = $("#docs-preview-content");
+  if (!preview) return;
+  if (_quill) {
+    preview.innerHTML = _quill.root.innerHTML;
+  } else if ($("#docs-raw-rst")) {
+    preview.textContent = $("#docs-raw-rst").value;
+  }
+}
+
+async function saveCurrentDoc() {
+  if (!_currentDoc || !_currentDoc.name) {
+    toast("No file open", "Please select a documentation file first.", "warn");
+    return;
+  }
+  const badge = $("#docs-status-badge");
+  if (badge) badge.textContent = "Saving…";
+
+  let content = "";
+  let format = "rst";
+  if (_docsMode === "wysiwyg" || _docsMode === "split") {
+    content = _quill ? _quill.root.innerHTML : "";
+    format = "html";
+  } else {
+    content = $("#docs-raw-rst")?.value || "";
+    format = "rst";
+  }
+
+  try {
+    const res = await fetch("/api/docs/file", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: _currentDoc.name,
+        dir: _docsCustomDir || "",
+        content: content,
+        format: format,
+      }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "Save failed");
+    _currentDoc.rst = data.rst;
+    _currentDoc.html = data.html;
+    if ($("#docs-raw-rst")) $("#docs-raw-rst").value = data.rst;
+    setDocsDirty(false);
+    if (badge) badge.textContent = "Saved ✔";
+    toast("Saved Successfully 💾", `${_currentDoc.name} written (backup .rst.bak created).`, "ok", 3000);
+  } catch (err) {
+    if (badge) badge.textContent = "Save Failed";
+    toast("Save Failed", String(err.message || err), "danger");
+  }
+}
+
+async function buildSphinxDocs() {
+  const badge = $("#docs-status-badge");
+  if (badge) badge.textContent = "Building Sphinx…";
+  toast("Building Docs 🔨", "Compiling Sphinx HTML in background…", "info", 3000);
+  try {
+    const res = await fetch("/api/docs/build", { method: "POST" });
+    const data = await res.json();
+    if (data.ok) {
+      if (badge) badge.textContent = "Build Success ✔";
+      toast("Sphinx Build Succeeded 🎉", "Documentation compiled successfully to docs/_build/html.", "ok", 5000);
+    } else {
+      if (badge) badge.textContent = "Build Warning";
+      const errDetail = data.stderr || data.error || "Build returned non-zero code";
+      toast("Sphinx Build Warning", errDetail.slice(0, 160), "warn", 6000);
+    }
+  } catch (err) {
+    if (badge) badge.textContent = "Build Error";
+    toast("Build Error", String(err.message || err), "danger");
+  }
+}
+
+async function startSphinxDocs() {
+  const badge = $("#docs-status-badge");
+  if (badge) badge.textContent = "Starting Docs Server…";
+  toast("Launching Docs 🚀", "Starting HTTP preview server & opening browser…", "info", 3000);
+  try {
+    const res = await fetch("/api/docs/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dir: _docsCustomDir || "" }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      if (badge) badge.textContent = `Live :${data.port || 8789} ✔`;
+      toast("Docs Server Live 🌐", `Preview opened at ${data.url}`, "ok", 4000);
+      try {
+        window.open(data.url, "_blank");
+      } catch { /* browser popup blocker */ }
+    } else {
+      if (badge) badge.textContent = "Server Error";
+      toast("Failed to start docs server", data.error || "Unknown error", "danger");
+    }
+  } catch (err) {
+    if (badge) badge.textContent = "Server Error";
+    toast("Server Error", String(err.message || err), "danger");
+  }
+}
+
+async function handleDocsFileUpload(file) {
+  if (!file) return;
+  initQuill();
+  const badge = $("#docs-status-badge");
+  if (badge) badge.textContent = "Importing…";
+
+  try {
+    const rawText = await file.text();
+    const fname = file.name.toLowerCase();
+    let rstContent = "";
+    let htmlContent = "";
+
+    if (fname.endsWith(".html") || fname.endsWith(".htm")) {
+      htmlContent = rawText;
+      const res = await fetch("/api/docs/convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: rawText, direction: "html2rst" }),
+      });
+      const data = await res.json();
+      rstContent = data.ok ? data.rst : rawText;
+    } else {
+      rstContent = rawText;
+      const res = await fetch("/api/docs/convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: rawText, direction: "rst2html" }),
+      });
+      const data = await res.json();
+      htmlContent = data.ok ? data.html : `<p>${rawText}</p>`;
+    }
+
+    let saveName = file.name;
+    if (!saveName.endsWith(".rst")) {
+      saveName = saveName.replace(/\.[^.]+$/, "") + ".rst";
+    }
+    if (!saveName.includes("/")) {
+      saveName = `docs/${saveName}`;
+    }
+
+    _currentDoc = {
+      name: saveName,
+      rst: rstContent,
+      html: htmlContent,
+      mtime: Math.floor(Date.now() / 1000),
+      readonly: false,
+    };
+
+    if (_quill) {
+      _quill.root.innerHTML = htmlContent || "<p></p>";
+    }
+    const rawTa = $("#docs-raw-rst");
+    if (rawTa) rawTa.value = rstContent;
+
+    const meta = $("#docs-file-meta");
+    if (meta) {
+      meta.textContent = `Imported: ${saveName} (${(file.size / 1024).toFixed(1)} KB) · Click '💾 Save RST' to write to disk.`;
+    }
+
+    setDocsDirty(true);
+    if (badge) badge.textContent = "Imported (Unsaved)";
+    toast("File Imported 📤", `${file.name} loaded into editor. Ready to edit and save.`, "ok", 4000);
+    if (_docsMode === "split") updateDocsPreview();
+  } catch (err) {
+    if (badge) badge.textContent = "Import Failed";
+    toast("Import Failed", String(err.message || err), "danger");
+  }
+}
+
 /* ---------------- Wiring ---------------- */
 function switchTab(tab) {
   const isFiles = tab === "files";
   const isTerminal = tab === "terminal";
-  const isPipelinesView = !isFiles && !isTerminal;
+  const isDocs = tab === "docs";
+  const isPipelinesView = !isFiles && !isTerminal && !isDocs;
   $("#view-files")?.classList.toggle("hidden", !isFiles);
   $("#view-pipelines")?.classList.toggle("hidden", !isPipelinesView);
   $("#view-terminal")?.classList.toggle("hidden", !isTerminal);
+  $("#view-docs")?.classList.toggle("hidden", !isDocs);
   if (tab === "system") {
     switchPipelineSource("system");
   } else if (tab === "pipelines" && (state.plSource === "system" || state.plSource === "docker")) {
@@ -1787,6 +2166,13 @@ function switchTab(tab) {
   renderFiles($("#search")?.value || "");
   if (isTerminal) {
     setTimeout(() => $("#term-input")?.focus(), 40);
+    return;
+  }
+  if (isDocs) {
+    initQuill();
+    if (_docsFiles.length === 0) {
+      loadDocsFiles();
+    }
     return;
   }
   // Files tab is lazy: open the draft file (or apk.config) on first visit.
@@ -1867,6 +2253,68 @@ function wire() {
   $("#tab-pipelines")?.addEventListener("click", () => { switchTab("pipelines"); renderFiles($("#search")?.value || ""); });
   $("#tab-system")?.addEventListener("click", () => { switchTab("system"); renderFiles($("#search")?.value || ""); });
   $("#tab-terminal")?.addEventListener("click", () => { switchTab("terminal"); renderFiles($("#search")?.value || ""); });
+  $("#tab-docs")?.addEventListener("click", () => switchTab("docs"));
+
+  // Sphinx Docs wiring
+  $("#docs-file-select")?.addEventListener("change", (e) => loadDocFile(e.target.value));
+  $("#btn-docs-mode-wysiwyg")?.addEventListener("click", () => setDocsMode("wysiwyg"));
+  $("#btn-docs-mode-raw")?.addEventListener("click", () => setDocsMode("raw"));
+  $("#btn-docs-mode-split")?.addEventListener("click", () => setDocsMode("split"));
+  $("#btn-docs-save")?.addEventListener("click", () => saveCurrentDoc());
+  $("#btn-docs-build")?.addEventListener("click", () => buildSphinxDocs());
+  $("#btn-docs-start")?.addEventListener("click", () => startSphinxDocs());
+  $("#docs-raw-rst")?.addEventListener("input", () => {
+    setDocsDirty(true);
+    if (_docsMode === "split") updateDocsPreview();
+  });
+
+  const docsWs = $("#docs-workspace");
+  if (docsWs) {
+    docsWs.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      docsWs.classList.add("drag-over");
+    });
+    docsWs.addEventListener("dragleave", (e) => {
+      e.preventDefault();
+      docsWs.classList.remove("drag-over");
+    });
+    docsWs.addEventListener("drop", (e) => {
+      e.preventDefault();
+      docsWs.classList.remove("drag-over");
+      const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (file) handleDocsFileUpload(file);
+    });
+  }
+
+  // Change Docs Root Directory Modal wiring
+  $("#btn-docs-change-dir")?.addEventListener("click", () => {
+    const modal = $("#modal-docs-dir");
+    const input = $("#input-docs-dir");
+    if (input) input.value = _docsCustomDir || "";
+    modal?.classList.remove("hidden");
+    setTimeout(() => input?.focus(), 40);
+  });
+  $("#btn-docs-dir-cancel")?.addEventListener("click", () => {
+    $("#modal-docs-dir")?.classList.add("hidden");
+  });
+  $("#btn-docs-dir-apply")?.addEventListener("click", () => {
+    const input = $("#input-docs-dir");
+    const val = input ? input.value.trim() : "";
+    _docsCustomDir = val;
+    try {
+      localStorage.setItem("telua_web_docs_dir", _docsCustomDir);
+    } catch { /* ignore */ }
+    $("#modal-docs-dir")?.classList.add("hidden");
+    loadDocsFiles(_docsCustomDir);
+    toast("Docs Root Updated 📁", val ? `Scanning: ${val}` : "Restored to default docs & templates.", "info", 3500);
+  });
+  document.querySelectorAll(".btn-docs-dir-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const dir = chip.dataset.dir || "";
+      const input = $("#input-docs-dir");
+      if (input) input.value = dir;
+    });
+  });
 
   // Terminal wiring
   $("#btn-term-run")?.addEventListener("click", () => runTerminalCommand());

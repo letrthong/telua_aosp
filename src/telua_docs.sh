@@ -25,7 +25,7 @@
 #                          (idempotent: does NOT overwrite if directory exists)
 #   - 'telua docs build' : Check, merge modular sections & compile Sphinx HTML
 #   - 'telua docs clean' : Remove _build directory
-#   - 'telua docs serve' : Run local HTTP preview server (default: port 8080)
+#   - 'telua docs serve' : Run local HTTP preview server (default: port 8789)
 #   - 'telua docs check' : Validate section file paths & image links
 #
 # Usage (source, never execute):
@@ -46,7 +46,7 @@ show_docs_help() {
     echo -e "  Usage: \033[1;33mtelua docs <action> [options]\033[0m  (or: \033[1;33mtelua doc <action>\033[0m)"
     echo ""
     echo -e "\033[1;33mAVAILABLE ACTIONS:\033[0m"
-    printf "  \033[1;36m%-22s\033[0m %s\n" "start [port]" "Build (if needed), launch HTTP server in BACKGROUND & open browser (default: 8080)"
+    printf "  \033[1;36m%-22s\033[0m %s\n" "start [port]" "Build (if needed), launch HTTP server in BACKGROUND & open browser (default: 8789)"
     printf "  \033[1;36m%-22s\033[0m %s\n" "serve [port]" "Alias for 'start' to run local HTTP preview server"
     printf "  \033[1;36m%-22s\033[0m %s\n" "stop" "Stop the background docs preview server"
     printf "  \033[1;36m%-22s\033[0m %s\n" "status" "Show docs preview server status (PID, log path)"
@@ -435,7 +435,7 @@ docs_cmd_init() {
     echo -e "    1. Project config       : \033[1;37m$target_dir/conf.py\033[0m (project name, author, theme)"
     echo -e "    2. Edit metadata        : \033[1;37m$target_dir/metadata.json\033[0m"
     echo -e "    3. Build HTML           : \033[1;33mtelua docs build\033[0m"
-    echo -e "    4. Open HTML preview    : \033[1;33mtelua docs start\033[0m  (default port 8080)"
+    echo -e "    4. Open HTML preview    : \033[1;33mtelua docs start\033[0m  (default port 8789)"
     echo ""
     return 0
 }
@@ -760,7 +760,7 @@ docs_cmd_log() {
 docs_cmd_start() {
     local target_dir
     target_dir="$(resolve_docs_dir "")"
-    local port="${1:-8080}"
+    local port="${1:-8789}"
 
     local html_dir="$target_dir/_build/html"
     if [ ! -f "$html_dir/index.html" ]; then

@@ -1098,3 +1098,205 @@ code, .mono { font-family: var(--mono); }
   box-shadow: 0 0 0 2px rgba(88, 166, 255, .28);
 }
 
+/* ---------------- Sphinx Docs & Quill.js ---------------- */
+.docs-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  background: var(--bg);
+  transition: outline .15s, background-color .15s;
+}
+.docs-workspace.drag-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: -6px;
+  background: rgba(88, 166, 255, .08) !important;
+}
+.docs-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+.docs-pane.split-left {
+  border-right: 1px solid var(--border);
+}
+.docs-preview-head {
+  padding: 8px 14px;
+  background: var(--bg-soft);
+  border-bottom: 1px solid var(--border);
+}
+.docs-preview-body {
+  flex: 1;
+  padding: 18px 22px;
+  overflow: auto;
+  color: var(--text);
+  line-height: 1.65;
+}
+.docs-preview-body h1, .docs-preview-body h2, .docs-preview-body h3 {
+  color: var(--accent);
+  margin-top: 16px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+.docs-preview-body p {
+  margin: 10px 0;
+}
+.docs-preview-body .admonition {
+  border-left: 4px solid var(--accent);
+  background: var(--bg-soft);
+  padding: 10px 14px;
+  margin: 12px 0;
+  border-radius: 4px;
+}
+.docs-preview-body .admonition.warning {
+  border-left-color: var(--yellow);
+}
+.docs-preview-body .admonition.danger {
+  border-left-color: var(--red);
+}
+.docs-preview-body .admonition-title {
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.docs-preview-body pre, .docs-preview-body code {
+  background: var(--bg-soft);
+  font-family: var(--mono);
+  border-radius: 4px;
+}
+.docs-preview-body pre {
+  padding: 12px 14px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+}
+
+/* Tables in docs */
+.docs-preview-body table, .ql-editor table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+  font-size: 13.5px;
+}
+.docs-preview-body th, .docs-preview-body td, .ql-editor th, .ql-editor td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+}
+.docs-preview-body th, .ql-editor th {
+  background: var(--bg-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Mermaid diagram blocks */
+.mermaid-block {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-soft);
+  margin: 16px 0;
+  overflow: hidden;
+}
+.mermaid-label {
+  padding: 6px 12px;
+  background: rgba(88, 166, 255, .12);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border);
+}
+.mermaid-block pre.mermaid {
+  margin: 0;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text);
+  overflow-x: auto;
+}
+
+/* Images */
+.docs-preview-body img, .ql-editor img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  margin: 12px 0;
+}
+
+/* Quill Theme overrides to match telua_web dark / theme variables */
+.quill-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+.ql-toolbar.ql-snow {
+  background: var(--bg-soft) !important;
+  border: none !important;
+  border-bottom: 1px solid var(--border) !important;
+  font-family: var(--font) !important;
+  padding: 8px 12px !important;
+}
+.ql-container.ql-snow {
+  border: none !important;
+  font-family: var(--font) !important;
+  font-size: 14.5px !important;
+  color: var(--text) !important;
+  background: var(--bg) !important;
+  flex: 1;
+  overflow-y: auto !important;
+}
+.ql-snow .ql-stroke {
+  stroke: var(--text-dim) !important;
+}
+.ql-snow .ql-fill {
+  fill: var(--text-dim) !important;
+}
+.ql-snow button:hover .ql-stroke,
+.ql-snow .ql-picker-label:hover .ql-stroke,
+.ql-snow.ql-toolbar button.ql-active .ql-stroke {
+  stroke: var(--accent) !important;
+}
+.ql-snow button:hover .ql-fill,
+.ql-snow .ql-picker-label:hover .ql-fill,
+.ql-snow.ql-toolbar button.ql-active .ql-fill {
+  fill: var(--accent) !important;
+}
+.ql-snow .ql-picker {
+  color: var(--text) !important;
+}
+.ql-snow .ql-picker-options {
+  background: var(--bg-soft) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .3) !important;
+}
+.ql-editor {
+  line-height: 1.65 !important;
+  padding: 20px 24px !important;
+  min-height: 100% !important;
+  color: var(--text) !important;
+}
+.ql-editor h1, .ql-editor h2, .ql-editor h3 {
+  color: var(--accent) !important;
+}
+.ql-editor pre.ql-syntax {
+  background: var(--bg-soft) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 6px !important;
+  font-family: var(--mono) !important;
+  padding: 12px 14px !important;
+}
+.ql-editor blockquote {
+  border-left: 4px solid var(--accent) !important;
+  color: var(--text-dim) !important;
+  padding-left: 14px !important;
+}
+

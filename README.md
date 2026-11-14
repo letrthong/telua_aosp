@@ -653,9 +653,9 @@ tel docs sync                         # Tự động trích xuất Title, tạo 
 # 4. Tự động merge các section và biên dịch HTML tĩnh:
 tel docs build
 
-# 5. Khởi chạy HTTP server và TỰ ĐỘNG MỞ trình duyệt xem tài liệu (mặc định port 8080):
-tel docs start                        # Tự động build (nếu chưa có) & mở browser tại http://localhost:8080
-tel docs start 8080                   # Tùy chỉnh port nếu cần
+# 5. Khởi chạy HTTP server và TỰ ĐỘNG MỞ trình duyệt xem tài liệu (mặc định port 8789):
+tel docs start                        # Tự động build (nếu chưa có) & mở browser tại http://localhost:8789
+tel docs start 8789                   # Tùy chỉnh port nếu cần
 tel docs serve                        # Alias cho lệnh start
 
 # 6. Dọn dẹp thư mục build:
@@ -741,7 +741,17 @@ tel web stop                          # Dừng Web UI server
    - **Kiểm soát tiến trình (Process Control)**: Hỗ trợ nút `⏹ Stop` gửi tín hiệu ngắt tiến trình `SIGINT` (Ctrl+C) an toàn nếu lệnh bị treo hoặc chạy quá lâu.
    - Hỗ trợ các phím tắt lệnh mẫu nhanh (e.g. `tel system ram`, `git status -s`, `df -h`, `tel --network-help`).
 
-5. **🎛 Thanh Trạng Thái & Quản Trị Toàn Cục (Top Statusbar & Modals)**:
+5. **📚 Docs Tab — Sphinx Doc-as-Code & Visual Editor**:
+   - **Soạn thảo trực quan 2 chiều (RST $\leftrightarrow$ HTML)**: Tích hợp trình soạn thảo trực quan hiện đại (**Quill.js**, lưu trữ offline 100%) cho phép viết tài liệu kiến trúc kỹ thuật như Word/Google Docs mà không cần thuộc cú pháp RST khắt khe.
+   - **Chuyển đổi 2 chiều tự động**: Tự động chuyển đổi mượt mà giữa HTML và reStructuredText (RST) thông qua `docutils` và engine phân tích cú pháp Python (`web/telua_web_docs.py`), hỗ trợ đầy đủ tiêu đề, danh sách, khối mã `code-block`, hộp chú thích `.. note::`, `.. warning::`...
+   - **3 Chế độ làm việc linh hoạt**:
+     - 🎨 *Visual*: Soạn thảo tài liệu bằng giao diện trực quan thân thiện.
+     - 📝 *Raw RST*: Chỉnh sửa trực tiếp mã nguồn reStructuredText với font monospace chuẩn.
+     - 👁 *Split View*: Chia đôi màn hình, vừa soạn thảo vừa xem Live HTML Preview thời gian thực.
+   - **Quản lý thư mục linh hoạt & Chọn file**: Tự động quét và phân nhóm 46+ file tài liệu trong các template Sphinx (`architecture`, `api`, `basic`, `minimal`, `docs/`), hỗ trợ nút **📁 Change Dir** để đổi sang bất kỳ thư mục tài liệu thực tế nào của dự án.
+   - **An toàn & Tự động Build/Preview**: Tự động sinh bản sao lưu `.rst.bak` trước khi lưu, kèm nút **🔨 Build Docs** để biên dịch trực tiếp và nút **🚀 Start Docs** để khởi chạy preview server ngầm tại `http://localhost:8789`.
+
+6. **🎛 Thanh Trạng Thái & Quản Trị Toàn Cục (Top Statusbar & Modals)**:
    - **Chuyển đổi Active Project Profile**: Click vào chip `project: <name>` để mở modal chọn đổi `ACTIVE_PROJECT` trong `apk.config` với 1 cú click chuột (tự động backup `.bak`).
    - **🔐 Quản trị mã hóa Crypto Overlay (`#modal-crypto`)**: Click vào chip `🔐 crypto` để kiểm tra trạng thái các file overlay bí mật (`apk_overlays.config`, `const_my_cli.config`), hỗ trợ nhập mật khẩu để `Encrypt` (mã hóa sang `enc_*.config`), `Decrypt` (giải mã xem thử) hoặc `Decrypt & Override` (giải mã và áp dụng đè lên cấu hình đang chạy).
    - **Giám sát thời gian thực**: Theo dõi số lượng thiết bị ADB đang kết nối và dung lượng/tỷ lệ phần trăm sử dụng RAM máy chủ build.
