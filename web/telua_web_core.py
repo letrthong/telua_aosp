@@ -239,3 +239,4 @@ def crypto_items_for_root(root: Path):
             "synced": bool(p_stat and e_stat and int(e_stat.st_mtime) >= int(p_stat.st_mtime)),
         })
     return items
+

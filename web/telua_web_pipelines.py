@@ -283,3 +283,4 @@ def rewrite_array_pipeline_lines(lines, pipelines, prefix="MY"):
             out.extend(block)
 
     return out
+
