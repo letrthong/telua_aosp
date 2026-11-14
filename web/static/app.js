@@ -240,23 +240,61 @@ function renderFiles(filter = "") {
     const li = document.createElement("li");
     li.dataset.name = f.name;
     const guiSource = PIPELINE_GUI_FILES[f.name];
+    const isOverlay = f.name.startsWith("config/overlay/") || f.name.includes("apk_overlays");
+    const isDec = f.name.includes("/dec_") || f.name.startsWith("dec_");
+    const isCore = f.name === "config/apk.config" || f.name === "apk.config";
     const isActive = pipelinesActive
       ? (f.name === activePlFile || guiSource === state.plSource)
       : !!(state.current && state.current.name === f.name);
-    if (isActive) li.classList.add("active");
 
-    const name = document.createElement("span");
-    name.className = "fname";
-    name.textContent = f.name;
+    if (isActive) li.classList.add("active");
+    if (f.readonly) li.classList.add("kind-ro");
+    else if (isDec) li.classList.add("kind-dec");
+    else if (isOverlay) li.classList.add("kind-overlay");
+    else if (isCore) li.classList.add("kind-core");
+    else if (guiSource) li.classList.add("kind-gui");
+
+    const slashIdx = f.name.lastIndexOf("/");
+    const dirPart = slashIdx >= 0 ? f.name.slice(0, slashIdx + 1) : "";
+    const basePart = slashIdx >= 0 ? f.name.slice(slashIdx + 1) : f.name;
+
+    const nameWrap = document.createElement("div");
+    nameWrap.className = "fname-wrap";
+    if (dirPart) {
+      const dirSpan = document.createElement("span");
+      dirSpan.className = "fdir";
+      dirSpan.textContent = dirPart;
+      nameWrap.appendChild(dirSpan);
+    }
+    const baseSpan = document.createElement("span");
+    baseSpan.className = "fname";
+    baseSpan.textContent = basePart;
+    nameWrap.appendChild(baseSpan);
+
     li.title = `${f.name} · ${f.size} bytes · ${f.mtime_str}` +
       (guiSource ? ` · ⚡ GUI (${guiSource})` : "");
-    li.appendChild(name);
+    li.appendChild(nameWrap);
 
     const right = document.createElement("span");
     right.className = "fgroup";
-    right.textContent = pipelinesActive
-      ? (guiSource || "gui")
-      : (f.readonly ? "🔒 ro" : (guiSource ? "⚡ gui" : f.group));
+    if (pipelinesActive) {
+      right.textContent = `⚡ ${guiSource || "gui"}`;
+      right.classList.add("badge-gui");
+    } else if (f.readonly) {
+      right.textContent = "🔒 ro";
+      right.classList.add("badge-ro");
+    } else if (isDec) {
+      right.textContent = "👁 dec";
+      right.classList.add("badge-dec");
+    } else if (isOverlay) {
+      right.textContent = guiSource ? `🔐 ${guiSource}` : "🔐 priv";
+      right.classList.add("badge-overlay");
+    } else if (guiSource) {
+      right.textContent = `⚡ ${guiSource}`;
+      right.classList.add("badge-gui");
+    } else {
+      right.textContent = f.group;
+    }
     li.appendChild(right);
 
     li.addEventListener("click", () => handleFileClick(f.name));
