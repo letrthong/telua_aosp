@@ -578,6 +578,23 @@ code, .mono { font-family: var(--mono); }
 }
 
 /* ---------------- Pipelines view ---------------- */
+.pl-filter-box input {
+  background: var(--bg);
+  border: 1px solid #485366;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  width: 220px;
+  transition: border-color .15s, width .15s, box-shadow .15s;
+}
+.pl-filter-box input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(88, 166, 255, .22);
+  width: 260px;
+}
 .src-switch {
   display: flex;
   gap: 2px;
@@ -731,17 +748,32 @@ code, .mono { font-family: var(--mono); }
   cursor: pointer;
 }
 .pl-add-step:hover { border-color: var(--green); color: var(--green); }
+.pl-card.collapsed .pl-card-head {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
 .pl-card-foot {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid rgba(110, 118, 129, .25);
 }
 .pl-run-btn {
   margin-right: auto;
+}
+.btn.eye-btn {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: #8b949e;
+}
+.btn.eye-btn.active {
+  border-color: #39c5cf;
+  color: #56d4dd;
+  background: rgba(57, 197, 207, .12);
 }
 
 /* ---------------- Toasts ---------------- */

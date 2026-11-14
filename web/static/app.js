@@ -57,7 +57,7 @@ function draftSavePipelines() {
       localStorage.removeItem(DRAFT_KEY_PIPES);
       return;
     }
-    const cleanPipelines = state.pipelines.map(({ _editing, _editingStep, ...rest }) => rest);
+    const cleanPipelines = state.pipelines.map(({ _editing, _editingStep, _expanded, ...rest }) => rest);
     localStorage.setItem(DRAFT_KEY_PIPES, JSON.stringify({
       source: state.plSource,
       pipelines: cleanPipelines,
@@ -563,22 +563,44 @@ function switchPipelineSource(source) {
 function renderPipelines() {
   const list = $("#pipeline-list");
   list.innerHTML = "";
-  for (const p of state.pipelines) {
+  const rawQuery = ($("#pl-filter")?.value || "").trim().toLowerCase();
+  const terms = rawQuery ? rawQuery.split(/[\s,]+/).filter(Boolean) : [];
+
+  const filtered = terms.length === 0
+    ? state.pipelines
+    : state.pipelines.filter(p => {
+        const hay = [
+          p.name || "",
+          p.description || "",
+          p.array || "",
+          ...(p.steps || []),
+        ].join(" ").toLowerCase();
+        return terms.some(t => hay.includes(t));
+      });
+
+  for (const p of filtered) {
     list.appendChild(pipelineCard(p));
   }
   if (state.pipelines.length === 0) {
     const fileLabel = $("#pl-file")?.textContent || "config/overlay/const_my_cli.config";
     list.innerHTML = `<p class="meta">No pipelines found in ${esc(fileLabel)}.</p>`;
+  } else if (filtered.length === 0) {
+    list.innerHTML = `<p class="meta">Không tìm thấy CLI nào khớp với từ khóa "<b>${esc(rawQuery)}</b>".</p>`;
   }
   const total = state.pipelines.reduce((n, p) => n + p.steps.length, 0);
-  $("#pl-stats").textContent =
-    `${state.pipelines.length} pipelines · ${total} steps`;
+  $("#pl-stats").textContent = terms.length > 0
+    ? `Showing ${filtered.length} / ${state.pipelines.length} pipelines · ${total} steps`
+    : `${state.pipelines.length} pipelines · ${total} steps`;
 }
 
 function pipelineCard(p) {
   const isCardEditing = !!p._editing;
+  const isExpanded = !!(p._expanded || isCardEditing || p._editingStep != null);
   const card = document.createElement("div");
-  card.className = "pl-card" + (p.orphan ? " orphan" : "") + (isCardEditing ? " editing" : "");
+  card.className = "pl-card" +
+    (p.orphan ? " orphan" : "") +
+    (isCardEditing ? " editing" : "") +
+    (isExpanded ? " expanded" : " collapsed");
   card.dataset.name = p.name;
 
   // --- header: name + description + array tag ---
@@ -638,7 +660,7 @@ function pipelineCard(p) {
     else if (p.steps.length > 1) p.steps = [p.steps[0]];
   }
   const stepsBox = document.createElement("div");
-  stepsBox.className = "pl-steps";
+  stepsBox.className = "pl-steps" + (isExpanded ? "" : " hidden");
   p.steps.forEach((step, idx) => stepsBox.appendChild(stepRow(p, step, idx, stepsBox)));
   card.appendChild(stepsBox);
 
@@ -648,8 +670,10 @@ function pipelineCard(p) {
     addStep.textContent = "＋ Add step";
     addStep.addEventListener("click", () => {
       if (!p._editing) p._editing = true;
+      p._expanded = true;
       p.steps.push("");
       p._editingStep = p.steps.length - 1;
+      stepsBox.classList.remove("hidden");
       stepsBox.appendChild(stepRow(p, "", p.steps.length - 1, stepsBox));
       setPlDirty(true);
       const inputs = stepsBox.querySelectorAll(".pl-step-cmd");
@@ -658,7 +682,7 @@ function pipelineCard(p) {
     card.appendChild(addStep);
   }
 
-  // --- footer: run (left / start of row) --- delete + edit (right / end of row) ---
+  // --- footer: run (left / start of row) --- eye + delete + edit (right / end of row) ---
   const foot = document.createElement("div");
   foot.className = "pl-card-foot";
 
@@ -670,6 +694,24 @@ function pipelineCard(p) {
   runBtn.title = "Execute: " + runCmdPrefix + p.name;
   runBtn.addEventListener("click", () => runPipeline(p.name));
   foot.appendChild(runBtn);
+
+  const stepLabel = isSingleStep ? "1 cmd" : `${p.steps.length} ${p.steps.length === 1 ? "step" : "steps"}`;
+  const eyeBtn = document.createElement("button");
+  eyeBtn.className = "btn eye-btn" + (isExpanded ? " active" : "");
+  eyeBtn.textContent = isExpanded ? `👁 Hide (${stepLabel})` : `👁 ${stepLabel}`;
+  eyeBtn.title = isExpanded
+    ? "Ẩn danh sách câu lệnh để tiết kiệm không gian"
+    : "Hiện danh sách câu lệnh trong khối này";
+  eyeBtn.addEventListener("click", () => {
+    if (p._editing) {
+      toast("Đang ở chế độ Edit", "Hãy bấm '✓ Done' để khóa lại trước khi ẩn danh sách lệnh.", "info", 3500);
+      return;
+    }
+    p._expanded = !isExpanded;
+    if (!p._expanded) p._editingStep = null;
+    renderPipelines();
+  });
+  foot.appendChild(eyeBtn);
 
   const delBtn = document.createElement("button");
   delBtn.className = "btn danger" + (isCardEditing ? "" : " hidden");
@@ -702,7 +744,11 @@ function pipelineCard(p) {
   editBtn.addEventListener("click", () => {
     const wasEditing = !!p._editing;
     p._editing = !p._editing;
-    if (!p._editing) p._editingStep = null;
+    if (p._editing) {
+      p._expanded = true;
+    } else {
+      p._editingStep = null;
+    }
     renderPipelines();
     if (p._editing) {
       const targetCard = Array.from(document.querySelectorAll(".pl-card"))
@@ -895,6 +941,9 @@ async function runPipeline(name) {
 }
 
 function addPipeline() {
+  if ($("#pl-filter") && $("#pl-filter").value) {
+    $("#pl-filter").value = "";
+  }
   let i = 1;
   const existing = new Set(state.pipelines.map(p => p.name));
   let name = "new_pipeline";
@@ -907,6 +956,7 @@ function addPipeline() {
     array: `${prefix}` + name.toUpperCase(),
     steps: [""],
     _editing: true,
+    _expanded: true,
     _editingStep: 0,
   });
   setPlDirty(true);
@@ -1199,6 +1249,7 @@ function wire() {
     const currentPlFile = $("#pl-file")?.textContent;
     if (currentPlFile && currentPlFile !== "—") openFile(currentPlFile);
   });
+  $("#pl-filter")?.addEventListener("input", () => renderPipelines());
   $("#btn-pl-refresh").addEventListener("click", () => loadPipelines(draftLoadPipelines()));
   $("#btn-pl-add").addEventListener("click", addPipeline);
   $("#btn-pl-save").addEventListener("click", savePipelines);
