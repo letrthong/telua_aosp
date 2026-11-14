@@ -386,6 +386,112 @@ code, .mono { font-family: var(--mono); }
   overflow: auto;
 }
 
+/* ---------------- Jade / Emerald Run Modal ---------------- */
+.modal-box.jade-modal {
+  background: linear-gradient(160deg, #0f3d39 0%, #092927 100%);
+  border: 2px solid #2dd4bf;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .78), 0 0 30px rgba(45, 212, 191, .28);
+  color: #ecfdf5;
+  padding: 18px 22px;
+}
+.run-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(45, 212, 191, .35);
+}
+.run-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.run-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(45, 212, 191, .2);
+  border: 1px solid #2dd4bf;
+  color: #5eead4;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.jade-modal h3 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 15px;
+  color: #99f6e4;
+  letter-spacing: .3px;
+}
+.run-badge {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(45, 212, 191, .5);
+  background: rgba(6, 78, 59, .65);
+  color: #a7f3d0;
+  white-space: nowrap;
+}
+.run-badge.running {
+  color: #fde68a;
+  border-color: #f59e0b;
+  background: rgba(120, 53, 15, .55);
+}
+.run-badge.ok {
+  color: #6ee7b7;
+  border-color: #10b981;
+  background: rgba(6, 95, 70, .7);
+}
+.run-badge.err {
+  color: #fca5a5;
+  border-color: #ef4444;
+  background: rgba(127, 29, 29, .65);
+}
+.info-out.run-terminal {
+  background: #051817;
+  border: 1.5px solid rgba(45, 212, 191, .45);
+  border-radius: 10px;
+  padding: 14px 16px;
+  color: #e6fffa;
+  font-size: 12.5px;
+  line-height: 1.6;
+  max-height: 62vh;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, .55);
+}
+.run-modal-foot {
+  padding-top: 10px;
+  border-top: 1px solid rgba(45, 212, 191, .28);
+}
+.run-modal-foot #btn-run-again {
+  margin-right: auto;
+}
+.btn.jade-btn {
+  background: rgba(13, 148, 136, .22);
+  border: 1px solid rgba(45, 212, 191, .55);
+  color: #ccfbf1;
+  font-weight: 600;
+}
+.btn.jade-btn:hover:not(:disabled) {
+  background: rgba(20, 184, 166, .38);
+  border-color: #5eead4;
+  color: #ffffff;
+}
+.btn.jade-btn.primary {
+  background: #0d9488;
+  border-color: #2dd4bf;
+  color: #ffffff;
+}
+.btn.jade-btn.primary:hover:not(:disabled) {
+  background: #14b8a6;
+}
+
 /* ---------------- Pipelines view ---------------- */
 .src-switch {
   display: flex;

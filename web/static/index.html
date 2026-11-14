@@ -123,11 +123,19 @@
 
 <!-- ============ Run output modal ============ -->
 <div class="modal hidden" id="modal-run">
-  <div class="modal-box wide">
-    <h3 id="run-title">Pipeline output</h3>
-    <pre id="run-output" class="info-out">Running…</pre>
-    <div class="modal-actions">
-      <button class="btn" id="btn-run-close">Close</button>
+  <div class="modal-box wide jade-modal">
+    <div class="run-modal-head">
+      <div class="run-title-wrap">
+        <span class="run-icon">▶</span>
+        <h3 id="run-title">Pipeline output</h3>
+      </div>
+      <span id="run-status-badge" class="run-badge running">⏳ Running…</span>
+    </div>
+    <pre id="run-output" class="info-out run-terminal">Running…</pre>
+    <div class="modal-actions run-modal-foot">
+      <button class="btn jade-btn" id="btn-run-again" title="Execute this pipeline again">↻ Re-run</button>
+      <button class="btn jade-btn" id="btn-run-copy" title="Copy command output to clipboard">📋 Copy output</button>
+      <button class="btn jade-btn primary" id="btn-run-close">Close</button>
     </div>
   </div>
 </div>

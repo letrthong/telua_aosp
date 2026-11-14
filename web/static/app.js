@@ -433,8 +433,8 @@ async function saveFile() {
     c.size = data.bytes;
     c.mtime_str = data.saved_at;
     setCurrentMeta();
-    toast("Saved ✓", `${data.name} (${data.bytes} bytes)` +
-          (data.backup ? ` · backup: ${data.backup}` : ""), "ok");
+    toast("Đã lưu xong ✓ (Saved)", `${data.name} (${data.bytes} bytes)` +
+          (data.backup ? ` · backup: ${data.backup}` : ""), "ok", 4500);
     refreshFiles();
     if (data.name === "config/apk.config" || data.name === "apk.config") refreshStatus();
   } catch (err) {
@@ -598,6 +598,7 @@ function pipelineCard(p) {
     state.pipelines = state.pipelines.filter(x => x !== p);
     setPlDirty(true);
     renderPipelines();
+    toast("Chưa lưu (Unsaved)", "Đã xóa pipeline — hãy nhấp '💾 Save all' (hoặc Ctrl+S) để lưu lại!", "warn", 5000);
   });
   foot.appendChild(delBtn);
 
@@ -608,6 +609,7 @@ function pipelineCard(p) {
     ? "Finish editing and lock this pipeline"
     : "Unlock this pipeline to edit name, description, and steps";
   editBtn.addEventListener("click", () => {
+    const wasEditing = !!p._editing;
     p._editing = !p._editing;
     if (!p._editing) p._editingStep = null;
     renderPipelines();
@@ -615,6 +617,8 @@ function pipelineCard(p) {
       const targetCard = Array.from(document.querySelectorAll(".pl-card"))
         .find(el => el.dataset.name === p.name);
       targetCard?.querySelector(".pl-name")?.focus();
+    } else if (wasEditing && state.plDirty) {
+      toast("Nhắc lưu thay đổi 💾", "Bạn đã chỉnh sửa xong — hãy nhấp nút '💾 Save all' (hoặc Ctrl+S) để lưu vào file!", "warn", 5500);
     }
   });
   foot.appendChild(editBtn);
@@ -660,11 +664,14 @@ function stepRow(p, step, idx, stepsBox) {
       input.focus();
       return;
     }
-    p._editingStep = (p._editingStep === idx) ? null : idx;
+    const wasStepEditing = (p._editingStep === idx);
+    p._editingStep = wasStepEditing ? null : idx;
     rerenderSteps(p, stepsBox);
     if (p._editingStep === idx) {
       const inputs = stepsBox.querySelectorAll(".pl-step-cmd");
       inputs[idx]?.focus();
+    } else if (wasStepEditing && state.plDirty) {
+      toast("Nhắc lưu thay đổi 💾", "Bạn đã sửa xong bước này — hãy nhấp nút '💾 Save all' (hoặc Ctrl+S) để lưu vào file!", "warn", 5500);
     }
   });
   row.appendChild(editStepBtn);
@@ -732,18 +739,28 @@ async function savePipelines() {
     });
     setPlDirty(false);
     draftClearPipelines();             // server save succeeded -> drop the draft
-    toast("Pipelines saved ✓", `${data.source}: ${data.count} pipelines · backup: ${data.backup || "none"}`, "ok");
+    toast("Đã lưu xong ✓ (Saved all)", `${data.source}: đã lưu ${data.count} pipelines thành công · backup: ${data.backup || "none"}`, "ok", 4500);
     await loadPipelines();
   } catch (err) {
     toast("Save failed", err.message, "err");
   }
 }
 
+let _lastRunPipelineName = null;
+
 async function runPipeline(name) {
+  _lastRunPipelineName = name;
   const cmdMap = { my: "telua my", multi: "telua run", car: "telua car", dump: "telua dump" };
   const cmd = cmdMap[state.plSource] || "telua my";
   $("#run-title").textContent = `${cmd} ${name}`;
   $("#run-output").textContent = "Running…";
+  const badge = $("#run-status-badge");
+  if (badge) {
+    badge.textContent = "⏳ Running…";
+    badge.className = "run-badge running";
+  }
+  const rerunBtn = $("#btn-run-again");
+  if (rerunBtn) rerunBtn.disabled = true;
   $("#modal-run").classList.remove("hidden");
   try {
     const data = await api("/api/pipeline/run", {
@@ -754,8 +771,19 @@ async function runPipeline(name) {
       (data.output || "(no output)") +
       `\n\n[exit code: ${data.exit_code}]`
     );
+    if (badge) {
+      const ok = data.exit_code === 0;
+      badge.textContent = ok ? "✔ Exit 0 (Success)" : `✖ Exit ${data.exit_code}`;
+      badge.className = "run-badge " + (ok ? "ok" : "err");
+    }
   } catch (err) {
     $("#run-output").textContent = `[ERROR] ${err.message}`;
+    if (badge) {
+      badge.textContent = "✖ Error";
+      badge.className = "run-badge err";
+    }
+  } finally {
+    if (rerunBtn) rerunBtn.disabled = false;
   }
 }
 
@@ -1002,9 +1030,14 @@ function wire() {
   $("#btn-refresh").addEventListener("click", () => { refreshStatus(); refreshFiles(); });
   $("#btn-edit").addEventListener("click", () => {
     if (!state.current || state.current.readonly) return;
+    const wasEditing = state.fileEditing;
     setFileEditing(!state.fileEditing);
     setCurrentMeta();
-    if (state.fileEditing) $("#editor").focus();
+    if (state.fileEditing) {
+      $("#editor").focus();
+    } else if (wasEditing && state.dirty) {
+      toast("Nhắc lưu thay đổi 💾", "Bạn đã chỉnh sửa xong — hãy nhấp nút '💾 Save' (hoặc Ctrl+S) để lưu file!", "warn", 5500);
+    }
   });
   $("#btn-reload").addEventListener("click", () => state.current && openFile(state.current.name));
   $("#btn-save").addEventListener("click", saveFile);
@@ -1012,6 +1045,18 @@ function wire() {
   $("#btn-info-close").addEventListener("click", () => $("#modal-info").classList.add("hidden"));
   $("#btn-profile-close").addEventListener("click", () => $("#modal-profile").classList.add("hidden"));
   $("#btn-run-close").addEventListener("click", () => $("#modal-run").classList.add("hidden"));
+  $("#btn-run-again")?.addEventListener("click", () => {
+    if (_lastRunPipelineName) runPipeline(_lastRunPipelineName);
+  });
+  $("#btn-run-copy")?.addEventListener("click", async () => {
+    const text = $("#run-output")?.innerText || "";
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("Copied ✓", "Command output copied to clipboard.", "ok", 2200);
+    } catch {
+      toast("Copy failed", "Select text manually to copy.", "warn");
+    }
+  });
   $("#btn-crypto-close")?.addEventListener("click", () => $("#modal-crypto").classList.add("hidden"));
 
   // Crypto & Overlay actions
