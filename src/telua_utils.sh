@@ -621,6 +621,15 @@ execute_command_pipeline() {
     log_info " Total Steps: $total_steps"
     log_info "============================================================"
 
+    # Ensure 'tel' and 'telua' work inside non-interactive pipeline subshells (e.g. Web UI '▶ Run')
+    # where ~/.bashrc aliases are not loaded.
+    if ! command -v tel >/dev/null 2>&1; then
+        tel() { "$MASTER_SCRIPT_DIR/build_apk.sh" "$@"; }
+    fi
+    if ! command -v telua >/dev/null 2>&1; then
+        telua() { "$MASTER_SCRIPT_DIR/build_apk.sh" "$@"; }
+    fi
+
     local step_idx=1
     for cmd in "${steps[@]}"; do
         echo ""
@@ -629,7 +638,7 @@ execute_command_pipeline() {
         step_start=$(date +%s)
 
         local ret=0
-        if [[ "$cmd" =~ ^(adb|sudo|echo|sleep)[[:space:]] ]] || [[ "$cmd" =~ ^adb ]]; then
+        if [[ "$cmd" =~ ^(adb|sudo|echo|sleep|cd|export|source|\.|tel|telua|git|repo|python|python3|bash|sh|test|\[|mkdir|rm|cp|mv|ls|pwd)([[:space:]]|$) ]] || [[ "$cmd" =~ ^\./ ]]; then
             eval "$cmd"
             ret=$?
         else
