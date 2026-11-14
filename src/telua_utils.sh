@@ -72,10 +72,10 @@ ensure_script_permissions() {
             chmod +x "$repo_dir/$script" || log_warn "Failed to chmod +x $repo_dir/$script"
         fi
     done
-    # All python helpers under python/ (glob covers future additions).
-    for script in "$repo_dir"/python/*.py; do
+    # All python helpers under python/, web/, and tests/ (glob covers future additions).
+    for script in "$repo_dir"/python/*.py "$repo_dir"/web/*.py "$repo_dir"/tests/*.py "$repo_dir"/tests/*.sh; do
         if [ -f "$script" ]; then
-            chmod +x "$script" || log_warn "Failed to chmod +x $script"
+            chmod +x "$script" 2>/dev/null || log_warn "Failed to chmod +x $script"
         fi
     done
     # All shell modules under src/ (glob may not match on older checkouts).

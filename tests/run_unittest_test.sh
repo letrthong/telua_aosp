@@ -27,7 +27,7 @@ TOTAL_SUITES=2
 SUITES_PASSED=0
 
 # ------------------------------------------------------------------------------
-# 1. Run Python Unit Tests (config_crypto.py & config_overlay.py)
+# 1. Run Python Unit Tests (test_*.py: crypto, overlay, clean_java, telua_web, ...)
 # ------------------------------------------------------------------------------
 echo -e "${C_YELLOW}[SUITE 1/2] Running Python Unit Tests...${C_RESET}"
 chmod +x test_*.py 2>/dev/null || true
