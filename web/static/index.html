@@ -26,7 +26,7 @@
       <button class="tab" id="tab-files" title="Browse &amp; edit config files">📄 Files</button>
       <button class="tab active" id="tab-pipelines" title="Edit MY_CMD_* / MULTI / CAR / DUMP pipelines">⚡ Pipelines</button>
       <button class="tab" id="tab-system" title="System &amp; Docker CLI pipelines (config/const_system_cli.config — telua system <action>)">🖥 System</button>
-      <button class="tab" id="tab-terminal" title="Interactive Web CLI Terminal — gõ và thực thi trực tiếp lệnh tel / Linux / Git / ADB">💻 Terminal</button>
+      <button class="tab" id="tab-terminal" title="Interactive Web CLI Terminal — run tel / Linux / Git / ADB commands directly">💻 Terminal</button>
     </nav>
     <div class="chip hidden" id="chip-draft" title="Unsaved edits kept in browser draft (survives refresh). Click to discard.">✎ draft</div>
     <div class="chip" id="chip-version" title="Toolkit version">v—</div>
@@ -34,12 +34,12 @@
     <div class="chip" id="chip-crypto" title="Private overlay encryption &amp; apply (config/overlay/)">🔐 crypto</div>
     <div class="chip" id="chip-adb" title="Connected ADB devices">adb: —</div>
     <div class="chip" id="chip-ram" title="System RAM">ram: —</div>
-    <select class="theme-select" id="theme-select" title="Chọn tông màu nền giao diện (tự lưu vào trình duyệt)">
-      <option value="dark">🌙 Dark (Mặc định)</option>
-      <option value="jade">💎 Jade (Xanh Ngọc Bích)</option>
-      <option value="ocean">🌊 Ocean (Xanh Đại Dương)</option>
-      <option value="amethyst">🔮 Amethyst (Tím Đêm)</option>
-      <option value="light">☀️ Light (Nền Sáng)</option>
+    <select class="theme-select" id="theme-select" title="Select UI color theme (saved in browser)">
+      <option value="dark">🌙 Dark (Default)</option>
+      <option value="jade">💎 Jade (Emerald)</option>
+      <option value="ocean">🌊 Ocean (Deep Blue)</option>
+      <option value="amethyst">🔮 Amethyst (Purple)</option>
+      <option value="light">☀️ Light</option>
     </select>
     <button class="btn ghost" id="btn-refresh" title="Reload status &amp; file list">⟳ Refresh</button>
   </div>
@@ -100,7 +100,7 @@
       </div>
       <div class="editor-actions">
         <div class="pl-filter-box">
-          <input id="pl-filter" type="search" placeholder="🔍 Tìm CLI (vd: ks, vol, diag…)" autocomplete="off" title="Lọc nhanh CLI theo tên, mô tả hoặc câu lệnh">
+          <input id="pl-filter" type="search" placeholder="🔍 Filter CLI (e.g. ks, vol, diag…)" autocomplete="off" title="Quickly filter CLI by name, description, or command">
         </div>
         <button class="btn" id="btn-pl-crypto" title="Encrypt or decrypt private overlay configs (const_my_cli.config / apk_overlays.config)">🔐 Crypto</button>
         <button class="btn" id="btn-pl-raw" title="Open raw config file in text editor">📄 Raw file</button>
@@ -131,7 +131,7 @@
       </div>
     </div>
     <div class="term-quick-bar" id="term-quick-bar">
-      <span class="meta">⚡ Gợi ý nhanh:</span>
+      <span class="meta">⚡ Quick commands:</span>
       <button class="term-chip" data-cmd="tel --info">tel --info</button>
       <button class="term-chip" data-cmd="tel system">tel system</button>
       <button class="term-chip" data-cmd="tel system ram">tel system ram</button>
@@ -142,14 +142,14 @@
       <button class="term-chip" data-cmd="git status -s">git status -s</button>
       <button class="term-chip" data-cmd="adb devices -l">adb devices -l</button>
     </div>
-    <pre id="term-output" class="info-out run-terminal term-screen">💻 Telua Web CLI Terminal sẵn sàng.
-• Gõ lệnh bất kỳ bên dưới (vd: tel system ram, tel --git-help, git status -s, free -h, df -h, adb devices…) và nhấn Enter.
-• Phím tắt: ↑ / ↓ để gọi lại lịch sử lệnh · Ctrl+C (hoặc nút ⏹ Stop) để dừng lệnh đang chạy · gõ 'clear' để xóa màn hình.
+    <pre id="term-output" class="info-out run-terminal term-screen">💻 Telua Web CLI Terminal is ready.
+• Type any CLI command below (e.g. tel system ram, tel --git-help, git status -s, free -h, df -h, adb devices…) and press Enter.
+• Shortcuts: ↑ / ↓ for command history · Ctrl+C (or ⏹ Stop) to abort a running command · type 'clear' to clear the screen.
 </pre>
     <div class="term-input-bar">
       <span class="term-prompt mono">tel $</span>
       <input id="term-input" type="text" class="term-input mono"
-             placeholder="Gõ lệnh CLI tại đây (vd: tel system ram, git status -s, df -h, tel --network-help)… Enter để chạy, Ctrl+C để dừng"
+             placeholder="Type CLI command here (e.g. tel system ram, git status -s, df -h, tel --network-help)… Press Enter to run, Ctrl+C to stop"
              autocomplete="off" spellcheck="false">
       <button class="btn primary" id="btn-term-run">▶ Run</button>
       <button class="btn danger" id="btn-term-stop" disabled title="Stop running command (Ctrl+C / SIGINT)">⏹ Stop</button>
@@ -237,14 +237,14 @@
   <div class="modal-box confirm-modal">
     <div class="confirm-head">
       <span class="confirm-icon" id="confirm-icon">🗑</span>
-      <h3 id="confirm-title">Xác nhận xóa</h3>
+      <h3 id="confirm-title">Confirm Delete</h3>
     </div>
     <p class="confirm-msg" id="confirm-msg"></p>
     <pre class="confirm-detail hidden" id="confirm-detail"></pre>
-    <p class="confirm-hint" id="confirm-hint">💡 Sau khi xóa, bạn vẫn cần bấm <b>💾 Save all</b> để ghi chính thức xuống file.</p>
+    <p class="confirm-hint" id="confirm-hint">💡 After deleting, remember to click <b>💾 Save all</b> to write changes to disk.</p>
     <div class="modal-actions confirm-foot">
-      <button class="btn" id="btn-confirm-cancel">Hủy (Cancel)</button>
-      <button class="btn danger-solid" id="btn-confirm-ok">🗑 Xác nhận xóa</button>
+      <button class="btn" id="btn-confirm-cancel">Cancel</button>
+      <button class="btn danger-solid" id="btn-confirm-ok">🗑 Confirm Delete</button>
     </div>
   </div>
 </div>

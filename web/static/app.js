@@ -30,11 +30,11 @@ const LAST_SOURCE_KEY = "telua_web_last_source";     // "my" | "multi" | "car" |
 const LAST_FILE_KEY = "telua_web_last_file";         // last opened file name in Files tab
 const THEME_KEY = "telua_web_theme";                 // "dark" | "jade" | "ocean" | "amethyst" | "light"
 const THEME_LABELS = {
-  dark: "🌙 Dark (Mặc định)",
-  jade: "💎 Jade (Xanh Ngọc Bích)",
-  ocean: "🌊 Ocean (Xanh Đại Dương)",
-  amethyst: "🔮 Amethyst (Tím Đêm)",
-  light: "☀️ Light (Nền Sáng)",
+  dark: "🌙 Dark (Default)",
+  jade: "💎 Jade (Emerald)",
+  ocean: "🌊 Ocean (Deep Blue)",
+  amethyst: "🔮 Amethyst (Purple)",
+  light: "☀️ Light",
 };
 
 function applyTheme(theme) {
@@ -144,11 +144,11 @@ function toast(title, body, kind = "info", timeout = 5000) {
 let _confirmResolver = null;
 
 function confirmDialog({
-  title = "Xác nhận xóa",
-  message = "Bạn có chắc chắn muốn xóa mục này?",
+  title = "Confirm Delete",
+  message = "Are you sure you want to delete this item?",
   detail = "",
-  hint = "💡 Sau khi xóa, bạn vẫn cần bấm '💾 Save all' để ghi chính thức xuống file.",
-  confirmText = "🗑 Xác nhận xóa",
+  hint = "💡 After deleting, remember to click '💾 Save all' to write changes to disk.",
+  confirmText = "🗑 Confirm Delete",
   icon = "🗑",
 } = {}) {
   const modal = $("#modal-confirm");
@@ -525,7 +525,7 @@ async function saveFile() {
     c.size = data.bytes;
     c.mtime_str = data.saved_at;
     setCurrentMeta();
-    toast("Đã lưu xong ✓ (Saved)", `${data.name} (${data.bytes} bytes)` +
+    toast("Saved ✓", `${data.name} (${data.bytes} bytes)` +
           (data.backup ? ` · backup: ${data.backup}` : ""), "ok", 5000);
     refreshFiles();
     if (data.name === "config/apk.config" || data.name === "apk.config") refreshStatus();
@@ -641,7 +641,7 @@ function renderPipelines() {
     const fileLabel = $("#pl-file")?.textContent || "config/overlay/const_my_cli.config";
     list.innerHTML = `<p class="meta">No pipelines found in ${esc(fileLabel)}.</p>`;
   } else if (filtered.length === 0) {
-    list.innerHTML = `<p class="meta">Không tìm thấy CLI nào khớp với từ khóa "<b>${esc(rawQuery)}</b>".</p>`;
+    list.innerHTML = `<p class="meta">No CLI pipelines match "<b>${esc(rawQuery)}</b>".</p>`;
   }
   const total = state.pipelines.reduce((n, p) => n + p.steps.length, 0);
   $("#pl-stats").textContent = terms.length > 0
@@ -756,11 +756,11 @@ function pipelineCard(p) {
   eyeBtn.className = "btn eye-btn" + (isExpanded ? " active" : "");
   eyeBtn.textContent = isExpanded ? `👁 Hide (${stepLabel})` : `👁 ${stepLabel}`;
   eyeBtn.title = isExpanded
-    ? "Ẩn danh sách câu lệnh để tiết kiệm không gian"
-    : "Hiện danh sách câu lệnh trong khối này";
+    ? "Hide command list to save space"
+    : "Show commands in this pipeline";
   eyeBtn.addEventListener("click", () => {
     if (p._editing) {
-      toast("Đang ở chế độ Edit", "Hãy bấm '✓ Done' để khóa lại trước khi ẩn danh sách lệnh.", "info", 3500);
+      toast("Editing in progress", "Click '✓ Done' to lock the card before collapsing commands.", "info", 3500);
       return;
     }
     p._expanded = !isExpanded;
@@ -776,18 +776,18 @@ function pipelineCard(p) {
   delBtn.addEventListener("click", async () => {
     const stepPreview = p.steps.filter(Boolean).map((s, i) => `${i + 1}. ${s}`).join("\n");
     const ok = await confirmDialog({
-      title: `Xóa Pipeline '${p.name}'?`,
-      message: `Bạn có chắc muốn xóa khối lệnh '${p.name}' (${p.steps.length} bước)${p.description ? " — " + p.description : ""}?`,
+      title: `Delete Pipeline '${p.name}'?`,
+      message: `Are you sure you want to delete pipeline '${p.name}' (${p.steps.length} steps)${p.description ? " — " + p.description : ""}?`,
       detail: stepPreview || "(empty pipeline)",
-      hint: "💡 Sau khi xóa trên giao diện, hãy bấm '💾 Save all' (hoặc Ctrl+S) để lưu chính thức xuống file.",
-      confirmText: "🗑 Xóa Pipeline",
+      hint: "💡 After deleting in the UI, click '💾 Save all' (or Ctrl+S) to write changes to disk.",
+      confirmText: "🗑 Delete Pipeline",
       icon: "🗑",
     });
     if (!ok) return;
     state.pipelines = state.pipelines.filter(x => x !== p);
     setPlDirty(true);
     renderPipelines();
-    toast("Nhắc lưu thay đổi 💾", `Đã xóa pipeline '${p.name}' — hãy nhấp nút '💾 Save all' (hoặc Ctrl+S) để xác nhận lưu xuống file!`, "warn", 5000);
+    toast("Unsaved changes 💾", `Deleted pipeline '${p.name}' — click '💾 Save all' (or Ctrl+S) to save to disk!`, "warn", 5000);
   });
   foot.appendChild(delBtn);
 
@@ -811,7 +811,7 @@ function pipelineCard(p) {
         .find(el => el.dataset.name === p.name);
       targetCard?.querySelector(".pl-name")?.focus();
     } else if (wasEditing && state.plDirty) {
-      toast("Nhắc lưu thay đổi 💾", "Bạn đã chỉnh sửa xong — hãy nhấp nút '💾 Save all' (hoặc Ctrl+S) để lưu vào file!", "warn", 5000);
+      toast("Unsaved changes 💾", "Finished editing — click '💾 Save all' (or Ctrl+S) to save to disk!", "warn", 5000);
     }
   });
   foot.appendChild(editBtn);
@@ -867,7 +867,7 @@ function stepRow(p, step, idx, stepsBox) {
       const inputs = stepsBox.querySelectorAll(".pl-step-cmd");
       inputs[idx]?.focus();
     } else if (wasStepEditing && state.plDirty) {
-      toast("Nhắc lưu thay đổi 💾", "Bạn đã sửa xong bước này — hãy nhấp nút '💾 Save all' (hoặc Ctrl+S) để lưu vào file!", "warn", 5000);
+      toast("Unsaved changes 💾", "Step updated — click '💾 Save all' (or Ctrl+S) to save to disk!", "warn", 5000);
     }
   });
   row.appendChild(editStepBtn);
@@ -908,11 +908,11 @@ function stepRow(p, step, idx, stepsBox) {
     del.addEventListener("click", async () => {
       if (step && step.trim()) {
         const ok = await confirmDialog({
-          title: `Xóa bước #${idx + 1} trong '${p.name}'?`,
-          message: `Bạn có chắc muốn xóa dòng lệnh #${idx + 1} khỏi pipeline '${p.name}'?`,
+          title: `Delete step #${idx + 1} in '${p.name}'?`,
+          message: `Are you sure you want to remove step #${idx + 1} from pipeline '${p.name}'?`,
           detail: step,
-          hint: "💡 Sau khi xóa, hãy bấm '💾 Save all' (hoặc Ctrl+S) để xác nhận lưu xuống file.",
-          confirmText: "🗑 Xóa bước này",
+          hint: "💡 After deleting, click '💾 Save all' (or Ctrl+S) to write changes to disk.",
+          confirmText: "🗑 Delete Step",
           icon: "🗑",
         });
         if (!ok) return;
@@ -921,7 +921,7 @@ function stepRow(p, step, idx, stepsBox) {
       if (p._editingStep === idx) p._editingStep = null;
       setPlDirty(true);
       rerenderSteps(p, stepsBox);
-      toast("Nhắc lưu thay đổi 💾", `Đã xóa bước #${idx + 1} — hãy nhấp '💾 Save all' (hoặc Ctrl+S) để xác nhận lưu xuống file!`, "warn", 5000);
+      toast("Unsaved changes 💾", `Deleted step #${idx + 1} — click '💾 Save all' (or Ctrl+S) to save to disk!`, "warn", 5000);
     });
     row.appendChild(del);
   }
@@ -948,7 +948,7 @@ async function savePipelines() {
     });
     setPlDirty(false);
     draftClearPipelines();             // server save succeeded -> drop the draft
-    toast("Đã lưu xong ✓ (Saved all)", `${data.source}: đã lưu ${data.count} pipelines thành công · backup: ${data.backup || "none"}`, "ok", 5000);
+    toast("Saved all ✓", `${data.source}: saved ${data.count} pipelines · backup: ${data.backup || "none"}`, "ok", 5000);
     await loadPipelines();
   } catch (err) {
     toast("Save failed", err.message, "err");
@@ -957,6 +957,20 @@ async function savePipelines() {
 
 let _lastRunPipelineName = null;
 let _lastRunPipelineSource = null;
+let _runAbortController = null;
+let _runStoppedByUser = false;
+
+async function stopPipelineRun() {
+  if (!_runAbortController) return;
+  _runStoppedByUser = true;
+  const badge = $("#run-status-badge");
+  if (badge) {
+    badge.textContent = "⏹ Stopping…";
+    badge.className = "run-badge err";
+  }
+  try { await fetch("/api/terminal/stop", { method: "POST" }); } catch { /* ignore */ }
+  try { _runAbortController.abort(); } catch { /* ignore */ }
+}
 
 async function runPipeline(name, explicitSource = null) {
   const source = explicitSource || state.plSource;
@@ -970,7 +984,7 @@ async function runPipeline(name, explicitSource = null) {
   const stepsHint = matchedPl && matchedPl.steps?.length
     ? matchedPl.steps.map((s, i) => `  [${i + 1}/${matchedPl.steps.length}] ${s}`).join("\n")
     : `  $ ${cmd} ${name}`;
-  outEl.textContent = `⏳ Đang khởi chạy: ${cmd} ${name}…\n${stepsHint}\n`;
+  outEl.textContent = `⏳ Starting: ${cmd} ${name}…\n${stepsHint}\n`;
 
   const badge = $("#run-status-badge");
   let elapsed = 0;
@@ -981,17 +995,25 @@ async function runPipeline(name, explicitSource = null) {
   let receivedStreamChunk = false;
   const timerId = setInterval(() => {
     elapsed++;
-    if (badge) badge.textContent = `⏳ Running… (${elapsed}s)`;
-    if (!receivedStreamChunk && outEl) {
+    if (badge && !_runStoppedByUser) badge.textContent = `⏳ Running… (${elapsed}s)`;
+    if (!receivedStreamChunk && outEl && !_runStoppedByUser) {
       outEl.textContent =
-        `⏳ Đang thực thi '${cmd} ${name}'… (${elapsed}s đã trôi qua)\n` +
+        `⏳ Executing '${cmd} ${name}'… (${elapsed}s elapsed)\n` +
         `${stepsHint}\n\n` +
-        `[Đang chạy tiến trình trên máy chủ — kết quả sẽ hiển thị ngay bên dưới…]`;
+        `[Running process on host — live output will appear below…]`;
     }
   }, 1000);
 
+  _runStoppedByUser = false;
+  _runAbortController = new AbortController();
+  const signal = _runAbortController.signal;
   const rerunBtn = $("#btn-run-again");
+  const runStopBtn = $("#btn-run-stop");
   if (rerunBtn) rerunBtn.disabled = true;
+  if (runStopBtn) {
+    runStopBtn.disabled = false;
+    runStopBtn.classList.add("danger-solid");
+  }
   $("#modal-run").classList.remove("hidden");
 
   try {
@@ -1000,6 +1022,7 @@ async function runPipeline(name, explicitSource = null) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, source }),
+      signal,
     });
 
     if (res.ok && res.body) {
@@ -1040,6 +1063,7 @@ async function runPipeline(name, explicitSource = null) {
     const data = await api("/api/pipeline/run", {
       method: "POST",
       body: JSON.stringify({ name, source }),
+      signal,
     });
     receivedStreamChunk = true;
     outEl.innerHTML = ansiToHtml(
@@ -1052,14 +1076,27 @@ async function runPipeline(name, explicitSource = null) {
       badge.className = "run-badge " + (ok ? "ok" : "err");
     }
   } catch (err) {
-    outEl.textContent = `[ERROR] ${err.message}`;
-    if (badge) {
-      badge.textContent = "✖ Error";
-      badge.className = "run-badge err";
+    if (_runStoppedByUser || err.name === "AbortError") {
+      outEl.innerHTML += `\n<span style="color:#d29922;font-weight:700">^C [Stopped by user · ${elapsed}s]</span>\n`;
+      if (badge) {
+        badge.textContent = `⏹ Stopped (${elapsed}s)`;
+        badge.className = "run-badge err";
+      }
+    } else {
+      outEl.textContent = `[ERROR] ${err.message}`;
+      if (badge) {
+        badge.textContent = "✖ Error";
+        badge.className = "run-badge err";
+      }
     }
   } finally {
     clearInterval(timerId);
+    _runAbortController = null;
     if (rerunBtn) rerunBtn.disabled = false;
+    if (runStopBtn) {
+      runStopBtn.disabled = true;
+      runStopBtn.classList.remove("danger-solid");
+    }
   }
 }
 
@@ -1241,15 +1278,15 @@ async function runCryptoAction(action, force = false) {
   }
 
   if (action === "decrypt" && force) {
-    const targetDesc = target === "all" ? "tất cả file cấu hình trong config/overlay/" : `config/overlay/${target}`;
+    const targetDesc = target === "all" ? "all config files in config/overlay/" : `config/overlay/${target}`;
     const ok = await confirmDialog({
-      title: "⚠️ Giải mã & Ghi đè (Decrypt & Override)",
-      message: `Bạn có chắc muốn giải mã từ enc_*.config và GHI ĐÈ trực tiếp lên ${targetDesc}?`,
+      title: "⚠️ Decrypt & Override",
+      message: `Are you sure you want to decrypt enc_*.config and OVERWRITE ${targetDesc}?`,
       detail: target === "all"
         ? "enc_apk_overlays.config → apk_overlays.config\nenc_const_my_cli.config → const_my_cli.config"
         : `enc_${target} → ${target}`,
-      hint: "💡 Nếu chỉ muốn kiểm tra nội dung mà không ghi đè, hãy bấm nút '🔓 Decrypt' (sẽ tạo file dec_*.config).",
-      confirmText: "⚠️ Xác nhận Ghi đè",
+      hint: "💡 To inspect decrypted content without overwriting active files, click '🔓 Decrypt' instead (creates dec_*.config).",
+      confirmText: "⚠️ Confirm Override",
       icon: "⚠️",
     });
     if (!ok) return;
@@ -1335,7 +1372,7 @@ function _extractAndApplyTermPwd(rawText) {
 function clearTerminalOutput() {
   const outEl = $("#term-output");
   if (outEl) {
-    outEl.innerHTML = ansiToHtml("💻 Telua Web CLI Terminal — màn hình đã được làm sạch.\n");
+    outEl.innerHTML = ansiToHtml("💻 Telua Web CLI Terminal — screen cleared.\n");
   }
   const badge = $("#term-status-badge");
   if (badge) {
@@ -1390,7 +1427,7 @@ async function _fallbackTerminalViaExistingApis(cmd, signal = null) {
     return {
       ok: true,
       exit_code: 0,
-      output: `[DANH SÁCH LỆNH '${listMatch[1].toUpperCase()}' (${data.file || src})]\n` + lines.join("\n") + "\n",
+      output: `[AVAILABLE '${listMatch[1].toUpperCase()}' COMMANDS (${data.file || src})]\n` + lines.join("\n") + "\n",
     };
   }
   const runMatch = norm.match(/^(?:tel|telua)\s+(system|docker|my|run|car|dump)\s+([A-Za-z0-9_-]+)$/);
@@ -1502,7 +1539,7 @@ async function runTerminalCommand(explicitCmd = null) {
     return;
   }
   if (_termRunning) {
-    toast("Terminal đang chạy", "Vui lòng đợi lệnh hiện tại hoàn tất.", "warn", 2500);
+    toast("Terminal busy", "Please wait for the current command to finish (or click ⏹ Stop).", "warn", 2500);
     return;
   }
 
@@ -1524,12 +1561,18 @@ async function runTerminalCommand(explicitCmd = null) {
   const badge = $("#term-status-badge");
   const runBtn = $("#btn-term-run");
   const stopBtn = $("#btn-term-stop");
+  const stopTopBtn = $("#btn-term-stop-top");
   _termRunning = true;
   _termStoppedByUser = false;
   _termAbortController = new AbortController();
   const signal = _termAbortController.signal;
   if (runBtn) runBtn.disabled = true;
-  stopBtn?.classList.remove("hidden");
+  [stopBtn, stopTopBtn].forEach(b => {
+    if (b) {
+      b.disabled = false;
+      b.classList.add("danger-solid");
+    }
+  });
 
   const separator = outEl && outEl.innerHTML.trim() ? "\n" : "";
   const shortDir = _termCwd ? (_termCwd === "/" ? "/" : (_termCwd.split(/[\\/]/).filter(Boolean).pop() || _termCwd)) : "";
@@ -1537,7 +1580,7 @@ async function runTerminalCommand(explicitCmd = null) {
   const baseHtml = (outEl ? outEl.innerHTML : "") +
     `${separator}<span style="color:#3fb950;font-weight:700">${esc(promptLabel)}</span> <span style="color:#58a6ff;font-weight:700">${esc(cmd)}</span>\n`;
   if (outEl) {
-    outEl.innerHTML = baseHtml + `<span style="opacity:.7">⏳ Running… (nhấn Ctrl+C hoặc nút ⏹ Stop để dừng)</span>\n`;
+    outEl.innerHTML = baseHtml + `<span style="opacity:.7">⏳ Running… (press Ctrl+C or click ⏹ Stop to abort)</span>\n`;
     outEl.scrollTop = outEl.scrollHeight;
   }
 
@@ -1631,8 +1674,8 @@ async function runTerminalCommand(explicitCmd = null) {
         return;
       }
       throw new Error(
-        "Server Web đang chạy tiến trình cũ trong bộ nhớ (chưa nạp API /api/terminal/*).\n" +
-        "👉 Hãy chạy lệnh 'tel web restart' trên máy Linux để kích hoạt thực thi mọi lệnh shell (ls, git, free, df...)!"
+        "Web server is running an older in-memory process (missing /api/terminal/*).\n" +
+        "👉 Run 'tel web restart' on the host to enable full terminal streaming!"
       );
     }
 
@@ -1682,7 +1725,12 @@ async function runTerminalCommand(explicitCmd = null) {
     _termRunning = false;
     _termAbortController = null;
     if (runBtn) runBtn.disabled = false;
-    stopBtn?.classList.add("hidden");
+    [stopBtn, stopTopBtn].forEach(b => {
+      if (b) {
+        b.disabled = true;
+        b.classList.remove("danger-solid");
+      }
+    });
     input?.focus();
   }
 }
@@ -1725,7 +1773,7 @@ function wire() {
   $("#theme-select")?.addEventListener("change", (e) => {
     const val = e.target.value;
     applyTheme(val);
-    toast("Đã đổi nền giao diện 🎨", `${THEME_LABELS[val] || val} — đã lưu vào trình duyệt.`, "info", 5000);
+    toast("Theme updated 🎨", `${THEME_LABELS[val] || val} — saved in browser.`, "info", 5000);
   });
   $("#search").addEventListener("input", (e) => renderFiles(e.target.value));
   $("#btn-refresh").addEventListener("click", () => { refreshStatus(); refreshFiles(); });
@@ -1737,7 +1785,7 @@ function wire() {
     if (state.fileEditing) {
       $("#editor").focus();
     } else if (wasEditing && state.dirty) {
-      toast("Nhắc lưu thay đổi 💾", "Bạn đã chỉnh sửa xong — hãy nhấp nút '💾 Save' (hoặc Ctrl+S) để lưu file!", "warn", 5000);
+      toast("Unsaved changes 💾", "Finished editing — click '💾 Save' (or Ctrl+S) to save the file!", "warn", 5000);
     }
   });
   $("#btn-reload").addEventListener("click", () => state.current && openFile(state.current.name));
@@ -1788,6 +1836,8 @@ function wire() {
   // Terminal wiring
   $("#btn-term-run")?.addEventListener("click", () => runTerminalCommand());
   $("#btn-term-stop")?.addEventListener("click", () => stopTerminalCommand());
+  $("#btn-term-stop-top")?.addEventListener("click", () => stopTerminalCommand());
+  $("#btn-run-stop")?.addEventListener("click", () => stopPipelineRun());
   $("#btn-term-clear")?.addEventListener("click", clearTerminalOutput);
   $("#btn-term-copy")?.addEventListener("click", async () => {
     const text = $("#term-output")?.innerText || "";
@@ -1856,11 +1906,11 @@ function wire() {
   // Click on the draft chip discards the browser draft (keeps server files intact)
   $("#chip-draft").addEventListener("click", async () => {
     const ok = await confirmDialog({
-      title: "Hủy bản nháp chưa lưu (Discard Draft)?",
-      message: "Bạn có muốn hủy các chỉnh sửa chưa lưu trên trình duyệt và khôi phục lại nội dung gốc trên đĩa?",
+      title: "Discard Unsaved Draft?",
+      message: "Are you sure you want to discard unsaved browser edits and restore the original file content from disk?",
       detail: "",
-      hint: "💡 Các file cấu hình trên đĩa không bị ảnh hưởng.",
-      confirmText: "↺ Khôi phục bản gốc",
+      hint: "💡 Config files on disk are not modified.",
+      confirmText: "↺ Restore Original",
       icon: "↺",
     });
     if (!ok) return;
@@ -1875,7 +1925,7 @@ function wire() {
     if (state.current) openFile(state.current.name);
     loadPipelines();
     updateDraftChip();
-    toast("Đã khôi phục bản gốc", "Các thay đổi chưa lưu đã được hủy bỏ.", "info", 5000);
+    toast("Original restored", "Unsaved draft changes have been discarded.", "info", 5000);
   });
   $("#chip-draft").style.cursor = "pointer";
 
