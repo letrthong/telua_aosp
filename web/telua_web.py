@@ -474,16 +474,25 @@ PIPELINE_SOURCES = {
     "car": {
         "file": ROOT / "config" / "const_car.config",
         "prefix": "CAR",
+        "list_var": "CAR_CLI_LIST",
+        "var_prefix": "ADB_SHELL_CAR_",
         "label": "AAOS Car control commands (telua car <action>)",
+    },
+    "dump": {
+        "file": ROOT / "config" / "const_dumpsys.config",
+        "prefix": "DUMP",
+        "list_var": "DUMP_CLI_LIST",
+        "var_prefix": "ADB_SHELL_DUMP_",
+        "label": "Dumpsys diagnostics commands (telua dump <target>)",
     },
 }
 
 
 def _pipeline_source(source):
-    """Resolve a pipeline source key ('my' | 'multi' | 'car') to its descriptor."""
+    """Resolve a pipeline source key ('my' | 'multi' | 'car' | 'dump') to its descriptor."""
     key = (source or "my").strip().lower()
     if key not in PIPELINE_SOURCES:
-        abort(400, description="Unknown pipeline source '%s' (use 'my', 'multi', or 'car')." % key)
+        abort(400, description="Unknown pipeline source '%s' (use 'my', 'multi', 'car', or 'dump')." % key)
     return key, PIPELINE_SOURCES[key]
 
 
@@ -503,6 +512,12 @@ def _pipeline_config_path(source):
             ROOT / "config" / "const_car.config",
             ROOT / "const_car.config",
         ]
+    elif key == "dump":
+        candidates = [
+            ROOT / "config" / "overlay" / "const_dumpsys.config",
+            ROOT / "config" / "const_dumpsys.config",
+            ROOT / "const_dumpsys.config",
+        ]
     else:
         path = ROOT / "config" / "const_multi_cli.config"
         candidates = [path, path.with_suffix(".config.example")]
@@ -512,19 +527,19 @@ def _pipeline_config_path(source):
     return None
 
 
-def _parse_car_pipelines(lines):
-    """Parse ADB_SHELL_CAR_* variables + CAR_CLI_LIST=( ... ) from const_car.config."""
+def _parse_cli_list_pipelines(lines, list_var="CAR_CLI_LIST", var_prefix="ADB_SHELL_CAR_"):
+    """Parse ADB_SHELL_* variables + <LIST_VAR>=( ... ) from const_car/const_dumpsys.config."""
     vars_map = {}
     for line in lines:
         m = CAR_VAR_RE.match(line)
         if m:
             vars_map[m.group(1)] = m.group(2).replace('\\"', '"').replace("\\\\", "\\")
 
-    car_list_re = re.compile(r"^\s*CAR_CLI_LIST\s*=\s*\(")
+    list_re = re.compile(r"^\s*%s\s*=\s*\(" % re.escape(list_var))
     in_list = False
     pipelines = []
     for line in lines:
-        if car_list_re.match(line):
+        if list_re.match(line):
             in_list = True
             continue
         if in_list:
@@ -543,7 +558,7 @@ def _parse_car_pipelines(lines):
                 resolved_cmd = vars_map.get(var_name, cmd_expr)
             else:
                 suffix = re.sub(r"[^A-Za-z0-9]", "_", name).upper()
-                var_name = "ADB_SHELL_CAR_%s" % suffix
+                var_name = "%s%s" % (var_prefix, suffix)
                 resolved_cmd = cmd_expr
             pipelines.append({
                 "name": name,
@@ -555,7 +570,7 @@ def _parse_car_pipelines(lines):
 
 
 def parse_pipelines(source="my"):
-    """Parse <PREFIX>_GROUP_LIST + <PREFIX>_CMD_* arrays (or CAR_CLI_LIST) into pipeline dicts."""
+    """Parse <PREFIX>_GROUP_LIST + <PREFIX>_CMD_* arrays (or CAR_CLI_LIST / DUMP_CLI_LIST) into pipeline dicts."""
     key, desc = _pipeline_source(source)
     path = _pipeline_config_path(source)
     if not path:
@@ -565,8 +580,8 @@ def parse_pipelines(source="my"):
     except OSError:
         return []
 
-    if key == "car":
-        return _parse_car_pipelines(lines)
+    if key in ("car", "dump"):
+        return _parse_cli_list_pipelines(lines, desc["list_var"], desc["var_prefix"])
 
     prefix = desc["prefix"]
     group_list_re = re.compile(r'^\s*%s_GROUP_LIST\s*=\s*\(' % prefix)
@@ -665,17 +680,17 @@ def serialize_pipelines(pipelines, prefix="MY"):
     return group_lines, cmd_blocks
 
 
-def _rewrite_car_lines(lines, pipelines):
-    """Rewrite ADB_SHELL_CAR_* variables and CAR_CLI_LIST=( ... ) in const_car.config."""
+def _rewrite_cli_list_lines(lines, pipelines, list_var="CAR_CLI_LIST", var_prefix="ADB_SHELL_CAR_"):
+    """Rewrite ADB_SHELL_* variables and <LIST_VAR>=( ... ) in const_car/const_dumpsys.config."""
     vars_map = {}
     orig_row_var = {}
-    car_list_re = re.compile(r"^\s*CAR_CLI_LIST\s*=\s*\(")
+    list_re = re.compile(r"^\s*%s\s*=\s*\(" % re.escape(list_var))
     in_list = False
     for line in lines:
         m = CAR_VAR_RE.match(line)
         if m:
             vars_map[m.group(1)] = m.group(2).replace('\\"', '"').replace("\\\\", "\\")
-        if car_list_re.match(line):
+        if list_re.match(line):
             in_list = True
             continue
         if in_list:
@@ -699,17 +714,17 @@ def _rewrite_car_lines(lines, pipelines):
         cmd_str = " && ".join(s.strip() for s in p.get("steps", []) if s.strip())
         var_name = orig_row_var.get(
             name,
-            "ADB_SHELL_CAR_%s" % re.sub(r"[^A-Za-z0-9]", "_", name).upper(),
+            "%s%s" % (var_prefix, re.sub(r"[^A-Za-z0-9]", "_", name).upper()),
         )
         old_val = vars_map.get(var_name)
         if var_name not in new_vars or cmd_str != old_val:
             new_vars[var_name] = cmd_str
         resolved_rows.append((p, var_name))
 
-    car_lines = ["CAR_CLI_LIST=("]
+    list_lines = ["%s=(" % list_var]
     for p, var_name in resolved_rows:
-        car_lines.append('    "%-8s :: %-44s :: $%s"' % (p["name"], p.get("description", ""), var_name))
-    car_lines.append(")")
+        list_lines.append('    "%-18s :: %-44s :: $%s"' % (p["name"], p.get("description", ""), var_name))
+    list_lines.append(")")
 
     out = []
     written_vars = set()
@@ -729,7 +744,7 @@ def _rewrite_car_lines(lines, pipelines):
             i += 1
             continue
 
-        if not replaced_list and car_list_re.match(line):
+        if not replaced_list and list_re.match(line):
             for _, vname in resolved_rows:
                 if vname not in written_vars:
                     out.append('%s="%s"' % (vname, _bash_quote(new_vars.get(vname, ""))))
@@ -737,7 +752,7 @@ def _rewrite_car_lines(lines, pipelines):
             j = i
             while j < n and not lines[j].strip().startswith(")"):
                 j += 1
-            out.extend(car_lines)
+            out.extend(list_lines)
             replaced_list = True
             i = j + 1
             continue
@@ -750,7 +765,7 @@ def _rewrite_car_lines(lines, pipelines):
             if vname not in written_vars:
                 out.append('%s="%s"' % (vname, _bash_quote(new_vars.get(vname, ""))))
                 written_vars.add(vname)
-        out.extend(car_lines)
+        out.extend(list_lines)
     return out
 
 
@@ -776,8 +791,8 @@ def rewrite_pipeline_config(pipelines, source="my"):
     text = path.read_text(encoding="utf-8", errors="replace")
     lines = text.splitlines()
 
-    if key == "car":
-        out = _rewrite_car_lines(lines, pipelines)
+    if key in ("car", "dump"):
+        out = _rewrite_cli_list_lines(lines, pipelines, desc["list_var"], desc["var_prefix"])
     else:
         group_lines, cmd_blocks = serialize_pipelines(pipelines, prefix)
         out = []
@@ -916,13 +931,18 @@ def api_pipeline_run():
     key, _ = _pipeline_source(source)
     known = {p["name"] for p in parse_pipelines(key)}
     if name not in known:
-        group_var = {"my": "MY_GROUP_LIST", "multi": "MULTI_GROUP_LIST", "car": "CAR_CLI_LIST"}[key]
+        group_var = {
+            "my": "MY_GROUP_LIST",
+            "multi": "MULTI_GROUP_LIST",
+            "car": "CAR_CLI_LIST",
+            "dump": "DUMP_CLI_LIST",
+        }[key]
         abort(404, description="Pipeline '%s' not found in %s." % (name, group_var))
     script = BUILD_APK_SH
     if not script.is_file():
         abort(404, description="build_apk.sh not found in %s" % ROOT)
-    # 'my' -> 'telua my <name>', 'multi' -> 'telua run <group>', 'car' -> 'telua car <action>'
-    subcommand = {"my": "my", "multi": "run", "car": "car"}[key]
+    # 'my' -> 'telua my <name>', 'multi' -> 'telua run <group>', 'car' -> 'telua car <action>', 'dump' -> 'telua dump <target>'
+    subcommand = {"my": "my", "multi": "run", "car": "car", "dump": "dump"}[key]
     try:
         proc = subprocess.run(
             ["bash", str(script), subcommand, name],
