@@ -158,7 +158,7 @@ def scan_files():
             if is_editable_name(name) and (overlay_dir / name).is_file():
                 add("config/overlay/" + name)
 
-    # Stable, human-friendly ordering: apk.config on top, then personal overlays, then the rest.
+    # Stable, human-friendly ordering: apk.config on top, then personal overlays & GUI configs, then the rest.
     priority = {
         "config/apk.config": 0,
         "apk.config": 0,
@@ -167,8 +167,11 @@ def scan_files():
         "apk_overlays.config": 1,
         "config/overlay/const_my_cli.config": 1,
         "config/const_my_cli.config": 1,
+        "config/const_multi_cli.config": 2,
+        "config/const_car.config": 2,
+        "config/const_dumpsys.config": 2,
     }
-    entries.sort(key=lambda f: (priority.get(f["name"], 2), f["name"]))
+    entries.sort(key=lambda f: (priority.get(f["name"], 3), f["name"]))
     return entries
 
 
@@ -622,7 +625,7 @@ def parse_pipelines(source="my"):
             continue
         m = MY_STEP_RE.match(stripped)
         if m:
-            current_steps.append(m.group(1))
+            current_steps.append(m.group(1).replace('\\"', '"').replace("\\\\", "\\"))
 
     # 3. Merge: one pipeline per registry entry (steps may be missing).
     pipelines = []

@@ -177,23 +177,48 @@ function renderFiles(filter = "") {
   const list = $("#file-list");
   list.innerHTML = "";
   const q = filter.trim().toLowerCase();
-  const files = state.files.filter(f => !q || f.name.toLowerCase().includes(q));
+  const pipelinesActive = !$("#view-pipelines").classList.contains("hidden");
+  const activePlFile = $("#pl-file")?.textContent || "";
+
+  const sideTitle = document.querySelector(".side-head h2");
+  if (sideTitle) {
+    sideTitle.textContent = pipelinesActive ? "Pipeline Configs" : "Config Files";
+  }
+
+  const allNames = new Set(state.files.map(f => f.name));
+  const files = state.files.filter(f => {
+    if (q && !f.name.toLowerCase().includes(q)) return false;
+    if (pipelinesActive) {
+      if (!PIPELINE_GUI_FILES[f.name]) return false;
+      // Hide .example in Pipelines tab if the active .config file already exists
+      if (f.name.endsWith(".example") && allNames.has(f.name.slice(0, -".example".length))) {
+        return false;
+      }
+    }
+    return true;
+  });
 
   for (const f of files) {
     const li = document.createElement("li");
     li.dataset.name = f.name;
-    if (state.current && state.current.name === f.name) li.classList.add("active");
+    const guiSource = PIPELINE_GUI_FILES[f.name];
+    const isActive = pipelinesActive
+      ? (f.name === activePlFile || guiSource === state.plSource)
+      : !!(state.current && state.current.name === f.name);
+    if (isActive) li.classList.add("active");
 
     const name = document.createElement("span");
     name.className = "fname";
     name.textContent = f.name;
     li.title = `${f.name} · ${f.size} bytes · ${f.mtime_str}` +
-      (PIPELINE_GUI_FILES[f.name] ? " · ⚡ has Pipelines GUI" : "");
+      (guiSource ? ` · ⚡ GUI (${guiSource})` : "");
     li.appendChild(name);
 
     const right = document.createElement("span");
     right.className = "fgroup";
-    right.textContent = f.readonly ? "🔒 ro" : f.group;
+    right.textContent = pipelinesActive
+      ? (guiSource || "gui")
+      : (f.readonly ? "🔒 ro" : (guiSource ? "⚡ gui" : f.group));
     li.appendChild(right);
 
     li.addEventListener("click", () => handleFileClick(f.name));
@@ -207,15 +232,14 @@ function renderFiles(filter = "") {
 }
 
 // Context-aware file click:
-//   - Files tab active  -> load the file into the editor (classic behavior).
-//   - Pipelines tab active AND the file has a Pipelines GUI (const_my_cli /
-//     const_multi_cli) -> show the Pipelines GUI with the matching source.
-//   - Otherwise -> fall back to the editor.
+//   - Pipelines tab active -> switch the Pipelines GUI to the clicked file's source.
+//   - Files tab active     -> load the clicked file into the text editor.
 function handleFileClick(name) {
   const pipelinesActive = !$("#view-pipelines").classList.contains("hidden");
   const guiSource = PIPELINE_GUI_FILES[name];
-  if (pipelinesActive && guiSource && state.plSource !== guiSource) {
+  if (pipelinesActive && guiSource) {
     switchPipelineSource(guiSource);
+    renderFiles($("#search").value);
     return;
   }
   openFile(name);
@@ -375,6 +399,7 @@ async function loadPipelines(draft = null) {
       setPlDirty(false);
     }
     renderPipelines();
+    renderFiles($("#search").value);
   } catch (err) {
     toast("Pipelines load failed", err.message, "err");
   }
@@ -723,6 +748,7 @@ function switchTab(tab) {
   $("#tab-pipelines").classList.toggle("active", !isFiles);
   $("#view-files").classList.toggle("hidden", !isFiles);
   $("#view-pipelines").classList.toggle("hidden", isFiles);
+  renderFiles($("#search").value);
   // Files tab is lazy: open the draft file (or apk.config) on first visit.
   if (isFiles && !state.current) {
     const fileDraft = draftLoadFile();
@@ -755,7 +781,11 @@ function wire() {
 
   // Tab switching
   $("#tab-files").addEventListener("click", () => switchTab("files"));
-  $("#tab-pipelines").addEventListener("click", () => switchTab("pipelines"));
+  $("#tab-pipelines").addEventListener("click", () => { switchTab("pipelines"); renderFiles($("#search").value); });
+  $("#btn-pl-raw")?.addEventListener("click", () => {
+    const currentPlFile = $("#pl-file")?.textContent;
+    if (currentPlFile && currentPlFile !== "—") openFile(currentPlFile);
+  });
   $("#btn-pl-refresh").addEventListener("click", () => loadPipelines(draftLoadPipelines()));
   $("#btn-pl-add").addEventListener("click", addPipeline);
   $("#btn-pl-save").addEventListener("click", savePipelines);
