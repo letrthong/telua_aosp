@@ -2006,6 +2006,20 @@ function wire() {
 
 /* ---------------- Boot ---------------- */
 async function boot() {
+  // Self-heal if browser served a stale cached index.html (304 Not Modified) missing core panes
+  if (!document.querySelector("#view-pipelines") || !document.querySelector("#editor") || !document.querySelector("#btn-term-new-session")) {
+    try {
+      const healed = sessionStorage.getItem("telua_dom_healed");
+      if (!healed) {
+        sessionStorage.setItem("telua_dom_healed", "1");
+        await fetch(window.location.pathname, { cache: "reload" });
+        window.location.reload();
+        return;
+      }
+    } catch { /* ignore */ }
+  } else {
+    try { sessionStorage.removeItem("telua_dom_healed"); } catch { /* ignore */ }
+  }
   wire();
   await Promise.all([refreshStatus(), refreshFiles(), refreshCryptoStatus()]);
 

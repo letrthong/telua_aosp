@@ -663,6 +663,7 @@ def api_pipeline_stream():
     def generate():
         env = dict(os.environ)
         env["PYTHONUNBUFFERED"] = "1"
+        proc = None
         try:
             proc = subprocess.Popen(
                 ["bash", str(script), subcommand, name],
@@ -673,7 +674,10 @@ def api_pipeline_stream():
                 text=True,
                 bufsize=1,
                 env=env,
+                start_new_session=(os.name != "nt"),
             )
+            with _ACTIVE_TERM_LOCK:
+                _ACTIVE_TERM_PROCS.add(proc)
             if proc.stdout is not None:
                 for line in iter(proc.stdout.readline, ""):
                     yield line
@@ -682,6 +686,12 @@ def api_pipeline_stream():
         except Exception as exc:  # pragma: no cover
             yield "\n[ERROR] Failed to stream pipeline: %s\n" % exc
             code = 1
+        finally:
+            if proc is not None:
+                with _ACTIVE_TERM_LOCK:
+                    _ACTIVE_TERM_PROCS.discard(proc)
+                if proc.poll() is None:
+                    _kill_term_proc(proc)
         yield "\n__TELUA_EXIT_CODE__:%d\n" % code
 
     return Response(
@@ -854,9 +864,18 @@ def api_terminal_stop():
 # ------------------------------------------------------------------------------
 # Static frontend & entry point
 # ------------------------------------------------------------------------------
+@app.after_request
+def _disable_static_cache(response):
+    """Prevent stale 304 caching of index.html / app.js / style.css during live edits."""
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
 @app.get("/")
 def index():
-    return send_from_directory(str(STATIC_DIR), "index.html", max_age=0)
+    return send_from_directory(str(STATIC_DIR), "index.html", max_age=0, conditional=False)
 
 
 @app.get("/favicon.ico")
