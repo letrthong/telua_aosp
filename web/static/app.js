@@ -1473,8 +1473,10 @@ async function runTerminalCommand(explicitCmd = null) {
   if (runBtn) runBtn.disabled = true;
 
   const separator = outEl && outEl.innerHTML.trim() ? "\n" : "";
+  const shortDir = _termCwd ? (_termCwd === "/" ? "/" : (_termCwd.split(/[\\/]/).filter(Boolean).pop() || _termCwd)) : "";
+  const promptLabel = shortDir ? `tel:${shortDir} $` : "tel $";
   const baseHtml = (outEl ? outEl.innerHTML : "") +
-    `${separator}<span style="color:#3fb950;font-weight:700">tel $</span> <span style="color:#58a6ff;font-weight:700">${esc(cmd)}</span>\n`;
+    `${separator}<span style="color:#3fb950;font-weight:700">${esc(promptLabel)}</span> <span style="color:#58a6ff;font-weight:700">${esc(cmd)}</span>\n`;
   if (outEl) {
     outEl.innerHTML = baseHtml + `<span style="opacity:.7">⏳ Running…</span>\n`;
     outEl.scrollTop = outEl.scrollHeight;
@@ -1494,7 +1496,7 @@ async function runTerminalCommand(explicitCmd = null) {
     const res = await fetch("/api/terminal/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ command: cmd }),
+      body: JSON.stringify({ command: cmd, cwd: _termCwd }),
     });
 
     if (res.ok && res.body) {
@@ -1508,7 +1510,9 @@ async function runTerminalCommand(explicitCmd = null) {
         if (done) break;
         if (value) {
           rawBuffer += decoder.decode(value, { stream: true });
-          const cleanPreview = rawBuffer.replace(/\n?__TELUA_EXIT_CODE__:\s*-?\d+\s*$/, "");
+          const cleanPreview = rawBuffer
+            .replace(/\n?__TELUA_EXIT_CODE__:\s*-?\d+\s*$/, "")
+            .replace(/\n?__TELUA_PWD__:[^\r\n]+\r?\n?/g, "\n");
           if (outEl) {
             outEl.innerHTML = baseHtml + ansiToHtml(cleanPreview);
             outEl.scrollTop = outEl.scrollHeight;
@@ -1518,11 +1522,13 @@ async function runTerminalCommand(explicitCmd = null) {
 
       const m = rawBuffer.match(/__TELUA_EXIT_CODE__:(-?\d+)/);
       if (m) exitCode = parseInt(m[1], 10);
-      const finalOutput = rawBuffer.replace(/\n?__TELUA_EXIT_CODE__:\s*-?\d+\s*$/, "");
+      const withoutExit = rawBuffer.replace(/\n?__TELUA_EXIT_CODE__:\s*-?\d+\s*$/, "");
+      const finalOutput = _extractAndApplyTermPwd(withoutExit) ||
+        (/^cd(\s|$)/.test(cmd) && exitCode === 0 ? `📂 cwd → ${_termCwd}\n` : "(no output)\n");
       const statusColor = exitCode === 0 ? "#3fb950" : "#f85149";
       if (outEl) {
         outEl.innerHTML = baseHtml +
-          ansiToHtml(finalOutput || "(no output)\n") +
+          ansiToHtml(finalOutput) +
           `<span style="color:${statusColor};opacity:.85">[exit code: ${exitCode} · ${elapsed}s]</span>\n`;
         outEl.scrollTop = outEl.scrollHeight;
       }
@@ -1558,13 +1564,15 @@ async function runTerminalCommand(explicitCmd = null) {
 
     const data = await api("/api/terminal/run", {
       method: "POST",
-      body: JSON.stringify({ command: cmd }),
+      body: JSON.stringify({ command: cmd, cwd: _termCwd }),
     });
     const ok = data.exit_code === 0;
     const statusColor = ok ? "#3fb950" : "#f85149";
+    const cleanedOut = _extractAndApplyTermPwd(data.output || "") ||
+      (/^cd(\s|$)/.test(cmd) && ok ? `📂 cwd → ${_termCwd}\n` : "(no output)\n");
     if (outEl) {
       outEl.innerHTML = baseHtml +
-        ansiToHtml(data.output || "(no output)\n") +
+        ansiToHtml(cleanedOut) +
         `<span style="color:${statusColor};opacity:.85">[exit code: ${data.exit_code} · ${elapsed}s]</span>\n`;
       outEl.scrollTop = outEl.scrollHeight;
     }
