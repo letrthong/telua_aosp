@@ -184,6 +184,19 @@ web_cmd_start() {
         return 1
     fi
 
+    # Auto-create personal overlay configs from .example if missing (never overwrites existing)
+    if declare -F ensure_personal_configs >/dev/null 2>&1; then
+        ensure_personal_configs "$root"
+    else
+        local rel
+        for rel in "config/overlay/apk_overlays.config" "config/overlay/const_my_cli.config"; do
+            if [ ! -f "$root/$rel" ] && [ -f "$root/$rel.example" ]; then
+                cp "$root/$rel.example" "$root/$rel" 2>/dev/null && \
+                    log_info "Created default overlay config: $rel (from $rel.example)" || true
+            fi
+        done
+    fi
+
     # Already running? Just report and exit.
     pid="$(_web_server_pid)"
     if [ -n "$pid" ]; then

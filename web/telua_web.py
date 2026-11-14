@@ -124,8 +124,24 @@ def is_editable_name(name: str) -> bool:
     return True
 
 
+def ensure_overlay_configs():
+    """Auto-create missing personal configs in config/overlay/ from .example templates (never overwrites)."""
+    overlay_dir = ROOT / "config" / "overlay"
+    if not overlay_dir.is_dir():
+        return
+    for base in ("apk_overlays.config", "const_my_cli.config"):
+        dst = overlay_dir / base
+        src = overlay_dir / (base + ".example")
+        if not dst.exists() and src.is_file():
+            try:
+                shutil.copyfile(str(src), str(dst))
+            except OSError:
+                pass
+
+
 def scan_files():
     """Scan toolkit root + config/ for editable config files."""
+    ensure_overlay_configs()
     entries = []
     seen = set()
 
@@ -1229,6 +1245,8 @@ def main():
     if not STATIC_DIR.is_dir():
         sys.stderr.write("[ERROR] Static assets directory not found: %s\n" % STATIC_DIR)
         sys.exit(1)
+
+    ensure_overlay_configs()
 
     if args.open_browser:
         url = "http://127.0.0.1:%d" % args.port
