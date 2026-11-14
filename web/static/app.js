@@ -1381,6 +1381,46 @@ function clearTerminalOutput() {
   }
 }
 
+async function newTerminalSession() {
+  if (_termRunning) {
+    await stopTerminalCommand();
+  }
+  try { localStorage.removeItem(TERM_CWD_KEY); } catch { /* ignore */ }
+  const rootDir = (state.status && state.status.root) || "";
+  if (rootDir) {
+    _setTermCwd(rootDir);
+  } else {
+    _termCwd = "";
+    const cwdEl = $("#term-cwd");
+    if (cwdEl) cwdEl.textContent = "cwd: —";
+    const promptEl = document.querySelector(".term-prompt");
+    if (promptEl) {
+      promptEl.textContent = "tel $";
+      promptEl.title = "";
+    }
+  }
+  const outEl = $("#term-output");
+  if (outEl) {
+    const cwdHint = _termCwd ? ` (cwd: ${_termCwd})` : "";
+    outEl.innerHTML = ansiToHtml(
+      `💻 Telua Web CLI Terminal — new session started${cwdHint}.\n` +
+      `• Type any CLI command below (e.g. tel system ram, tel --git-help, git status -s, free -h, df -h, adb devices…) and press Enter.\n` +
+      `• Shortcuts: ↑ / ↓ for command history · Ctrl+C (or ⏹ Stop) to abort a running command · type 'clear' to clear the screen.\n`
+    );
+  }
+  const badge = $("#term-status-badge");
+  if (badge) {
+    badge.textContent = "Ready";
+    badge.className = "run-badge";
+  }
+  const input = $("#term-input");
+  if (input) {
+    input.value = "";
+    input.focus();
+  }
+  toast("New session started 🔄", `Terminal reset${_termCwd ? ` to ${_termCwd}` : ""}.`, "info", 2200);
+}
+
 function _stripPipelineWrapperOutput(raw) {
   if (!raw) return "";
   const lines = String(raw).split("\n");
@@ -1561,18 +1601,15 @@ async function runTerminalCommand(explicitCmd = null) {
   const badge = $("#term-status-badge");
   const runBtn = $("#btn-term-run");
   const stopBtn = $("#btn-term-stop");
-  const stopTopBtn = $("#btn-term-stop-top");
   _termRunning = true;
   _termStoppedByUser = false;
   _termAbortController = new AbortController();
   const signal = _termAbortController.signal;
   if (runBtn) runBtn.disabled = true;
-  [stopBtn, stopTopBtn].forEach(b => {
-    if (b) {
-      b.disabled = false;
-      b.classList.add("danger-solid");
-    }
-  });
+  if (stopBtn) {
+    stopBtn.disabled = false;
+    stopBtn.classList.add("danger-solid");
+  }
 
   const separator = outEl && outEl.innerHTML.trim() ? "\n" : "";
   const shortDir = _termCwd ? (_termCwd === "/" ? "/" : (_termCwd.split(/[\\/]/).filter(Boolean).pop() || _termCwd)) : "";
@@ -1725,12 +1762,10 @@ async function runTerminalCommand(explicitCmd = null) {
     _termRunning = false;
     _termAbortController = null;
     if (runBtn) runBtn.disabled = false;
-    [stopBtn, stopTopBtn].forEach(b => {
-      if (b) {
-        b.disabled = true;
-        b.classList.remove("danger-solid");
-      }
-    });
+    if (stopBtn) {
+      stopBtn.disabled = true;
+      stopBtn.classList.remove("danger-solid");
+    }
     input?.focus();
   }
 }
@@ -1836,7 +1871,7 @@ function wire() {
   // Terminal wiring
   $("#btn-term-run")?.addEventListener("click", () => runTerminalCommand());
   $("#btn-term-stop")?.addEventListener("click", () => stopTerminalCommand());
-  $("#btn-term-stop-top")?.addEventListener("click", () => stopTerminalCommand());
+  $("#btn-term-new-session")?.addEventListener("click", () => newTerminalSession());
   $("#btn-run-stop")?.addEventListener("click", () => stopPipelineRun());
   $("#btn-term-clear")?.addEventListener("click", clearTerminalOutput);
   $("#btn-term-copy")?.addEventListener("click", async () => {
