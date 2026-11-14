@@ -530,7 +530,18 @@ function pipelineCard(p) {
     : "Locked — click '✎ Edit' to modify pipeline name";
   name.addEventListener("input", () => {
     if (!p._editing) return;
-    p.name = name.value;
+    const lower = name.value.toLowerCase();
+    if (name.value !== lower) {
+      const pos = name.selectionStart;
+      name.value = lower;
+      if (pos != null) name.setSelectionRange(pos, pos);
+    }
+    p.name = lower;
+    card.dataset.name = lower;
+    const prefixMap = { my: "MY_CMD_", multi: "MULTI_CMD_", car: "ADB_SHELL_CAR_", dump: "ADB_SHELL_DUMP_" };
+    const prefix = prefixMap[state.plSource] || "MY_CMD_";
+    p.array = prefix + lower.replace(/-/g, "_").toUpperCase();
+    if (!p.orphan) tag.textContent = p.array;
     setPlDirty(true);
   });
   head.appendChild(name);
@@ -728,10 +739,10 @@ function rerenderSteps(p, stepsBox) {
 }
 
 async function savePipelines() {
-  // Drop empty-named pipelines before saving.
+  // Drop empty-named pipelines before saving; normalize names to lowercase.
   const payload = state.pipelines
     .filter(p => p.name && p.name.trim())
-    .map(p => ({ name: p.name.trim(), description: p.description || "", steps: p.steps }));
+    .map(p => ({ name: p.name.trim().toLowerCase(), description: p.description || "", steps: p.steps }));
   try {
     const data = await api("/api/pipelines", {
       method: "POST",

@@ -1062,7 +1062,7 @@ def api_pipelines_save():
     for p in pipelines:
         if not isinstance(p, dict):
             abort(400, description="Each pipeline must be an object.")
-        name = str(p.get("name", "")).strip()
+        name = str(p.get("name", "")).strip().lower()
         if not name or not re.fullmatch(r"[A-Za-z0-9_-]+", name):
             abort(400, description="Invalid pipeline name '%s' (use letters, digits, - _)." % name)
         if name in names:

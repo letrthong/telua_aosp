@@ -119,6 +119,14 @@ code, .mono { font-family: var(--mono); }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn.primary { background: #1f6feb; border-color: #1f6feb; font-weight: 600; }
 .btn.primary:hover:not(:disabled) { background: #388bfd; }
+#btn-pl-save:not(:disabled), #btn-save:not(:disabled) {
+  background: #238636;
+  border-color: #3fb950;
+  box-shadow: 0 0 0 2px rgba(63, 185, 80, .35);
+}
+#btn-pl-save:hover:not(:disabled), #btn-save:hover:not(:disabled) {
+  background: #2ea043;
+}
 .btn.ghost { background: transparent; }
 .btn.wide { width: 100%; }
 .btn.danger { border-color: var(--red); color: var(--red); }
