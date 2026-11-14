@@ -228,7 +228,9 @@ function renderStatus(s) {
     chipRam.className = "chip";
   }
   const termCwd = $("#term-cwd");
-  if (termCwd && s.root) termCwd.textContent = `cwd: ${s.root}`;
+  if (termCwd && s.root && !_termCwd) {
+    _setTermCwd(s.root);
+  }
 }
 
 function esc(text) {
@@ -1291,14 +1293,42 @@ async function runCryptoAction(action, force = false) {
 
 /* ---------------- Terminal Tab ---------------- */
 const TERM_HISTORY_KEY = "telua_web_term_history";
+const TERM_CWD_KEY = "telua_web_term_cwd";
 let _termHistory = [];
 let _termHistoryIdx = -1;
 let _termRunning = false;
+let _termCwd = "";
 
 try {
   const savedHist = JSON.parse(localStorage.getItem(TERM_HISTORY_KEY) || "[]");
   if (Array.isArray(savedHist)) _termHistory = savedHist.slice(-50);
+  _termCwd = localStorage.getItem(TERM_CWD_KEY) || "";
 } catch { /* ignore */ }
+
+function _setTermCwd(newCwd) {
+  if (!newCwd) return;
+  _termCwd = newCwd.trim();
+  try { localStorage.setItem(TERM_CWD_KEY, _termCwd); } catch { /* ignore */ }
+  const cwdEl = $("#term-cwd");
+  if (cwdEl) cwdEl.textContent = `cwd: ${_termCwd}`;
+  const promptEl = document.querySelector(".term-prompt");
+  if (promptEl) {
+    const shortDir = _termCwd === "/" ? "/" : (_termCwd.split(/[\\/]/).filter(Boolean).pop() || _termCwd);
+    promptEl.textContent = `tel:${shortDir} $`;
+    promptEl.title = `Working directory: ${_termCwd}`;
+  }
+}
+
+function _extractAndApplyTermPwd(rawText) {
+  if (!rawText) return "";
+  let updatedPwd = null;
+  const cleaned = String(rawText).replace(/\n?__TELUA_PWD__:([^\r\n]+)\r?\n?/g, (_, pwd) => {
+    updatedPwd = pwd.trim();
+    return "\n";
+  });
+  if (updatedPwd) _setTermCwd(updatedPwd);
+  return cleaned.replace(/^\n+|\n+$/g, "") ? cleaned.replace(/\n+$/, "\n") : "";
+}
 
 function clearTerminalOutput() {
   const outEl = $("#term-output");
@@ -1310,6 +1340,25 @@ function clearTerminalOutput() {
     badge.textContent = "Ready";
     badge.className = "run-badge";
   }
+}
+
+function _stripPipelineWrapperOutput(raw) {
+  if (!raw) return "";
+  const lines = String(raw).split("\n");
+  const filtered = lines.filter(line => {
+    const plain = line.replace(/\x1b\[[0-9;]*m/g, "").trim();
+    if (plain.startsWith("[INFO] ============================================================")) return false;
+    if (plain.startsWith("[INFO]  Executing Pipeline: '_term_exec'")) return false;
+    if (plain.startsWith("[INFO]  Description: Web Terminal")) return false;
+    if (plain.startsWith("[INFO]  Total Steps:")) return false;
+    if (plain.startsWith("[STEP 1/1]")) return false;
+    if (plain.startsWith("[SUCCESS] Step 1/1 finished")) return false;
+    if (plain.startsWith("[SUCCESS] All 1 steps of pipeline '_term_exec' completed")) return false;
+    if (plain.startsWith("[ERROR] Step 1 failed with exit code")) return false;
+    return true;
+  });
+  const stripped = filtered.join("\n").replace(/^\n+|\n+$/g, "");
+  return stripped ? stripped + "\n" : "";
 }
 
 async function _fallbackTerminalViaExistingApis(cmd) {
@@ -1351,7 +1400,44 @@ async function _fallbackTerminalViaExistingApis(cmd) {
     });
     return { ok: data.ok, exit_code: data.exit_code ?? 0, output: data.output || "" };
   }
-  return null;
+
+  // Universal fallback for ANY Linux/shell command (cd /opt, pwd, ls, git status, free -h, etc.)
+  // Preserves working directory (_termCwd) across commands!
+  const cdPrefix = _termCwd ? `cd ${JSON.stringify(_termCwd)} >/dev/null 2>&1 || true; ` : "";
+  const wrappedCmd = `${cdPrefix}${cmd}; __telua_rc=$?; printf "\\n__TELUA_PWD__:%s\\n" "$(pwd)"; (exit $__telua_rc)`;
+
+  const origData = await api("/api/pipelines?source=multi");
+  const origList = (origData.pipelines || [])
+    .filter(p => p.name && p.name !== "_term_exec")
+    .map(p => ({ name: p.name, description: p.description || "", steps: p.steps || [] }));
+  const tempList = [
+    ...origList,
+    { name: "_term_exec", description: "Web Terminal Ad-hoc Command", steps: [`eval ${JSON.stringify(wrappedCmd)}`] },
+  ];
+  try {
+    await api("/api/pipelines", {
+      method: "POST",
+      body: JSON.stringify({ source: "multi", pipelines: tempList }),
+    });
+    const runData = await api("/api/pipeline/run", {
+      method: "POST",
+      body: JSON.stringify({ source: "multi", name: "_term_exec" }),
+    });
+    const stripped = _stripPipelineWrapperOutput(runData.output || "");
+    const finalOut = _extractAndApplyTermPwd(stripped);
+    return {
+      ok: runData.ok,
+      exit_code: runData.exit_code ?? 0,
+      output: finalOut || (/^cd(\s|$)/.test(norm) && runData.ok ? `📂 cwd → ${_termCwd}\n` : ""),
+    };
+  } finally {
+    try {
+      await api("/api/pipelines", {
+        method: "POST",
+        body: JSON.stringify({ source: "multi", pipelines: origList }),
+      });
+    } catch { /* ignore */ }
+  }
 }
 
 async function runTerminalCommand(explicitCmd = null) {

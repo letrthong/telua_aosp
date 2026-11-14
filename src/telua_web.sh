@@ -127,21 +127,29 @@ _web_ensure_flask() {
     return 1
 }
 
-# Read the stored server PID (empty when no valid pid file).
+# Read the stored server PID (or discover running telua_web.py process if pid file is stale).
 _web_server_pid() {
     local root
     root="$(_web_toolkit_root)"
     local pid_file="$root/$WEB_PID_FILE"
-    [ -f "$pid_file" ] || { echo ""; return 0; }
-    local pid
-    pid="$(cat "$pid_file" 2>/dev/null | tr -d '[:space:]')"
-    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-        echo "$pid"
-    else
-        # Stale pid file: clean it up.
+    local pid=""
+    if [ -f "$pid_file" ]; then
+        pid="$(cat "$pid_file" 2>/dev/null | tr -d '[:space:]')"
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            echo "$pid"
+            return 0
+        fi
         rm -f "$pid_file" 2>/dev/null || true
-        echo ""
     fi
+    if command -v pgrep >/dev/null 2>&1; then
+        pid="$(pgrep -f "telua_web\.py" 2>/dev/null | head -n1 | tr -d '[:space:]')"
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            echo "$pid" > "$pid_file" 2>/dev/null || true
+            echo "$pid"
+            return 0
+        fi
+    fi
+    echo ""
 }
 
 # Extract the bound port from the server log (fallback: default port).
@@ -264,17 +272,32 @@ web_cmd_start() {
 
 # Action: stop (terminate the background server)
 web_cmd_stop() {
-    local pid
+    local pid port
     pid="$(_web_server_pid)"
+    port="$(_web_server_port)"
     if [ -z "$pid" ]; then
+        if command -v pkill >/dev/null 2>&1 && pkill -f "telua_web\.py" 2>/dev/null; then
+            sleep 1
+            log_success "Stopped orphan Telua Web UI process."
+            return 0
+        fi
         log_info "Web UI server is not running."
         return 0
     fi
     log_info "Stopping Telua Web UI (PID: $pid)..."
     kill "$pid" 2>/dev/null || true
+    if command -v pkill >/dev/null 2>&1; then
+        pkill -f "telua_web\.py" 2>/dev/null || true
+    fi
     sleep 1
     if kill -0 "$pid" 2>/dev/null; then
         kill -9 "$pid" 2>/dev/null || true
+    fi
+    if command -v pkill >/dev/null 2>&1; then
+        pkill -9 -f "telua_web\.py" 2>/dev/null || true
+    fi
+    if command -v fuser >/dev/null 2>&1; then
+        fuser -k "${port}/tcp" >/dev/null 2>&1 || true
     fi
     rm -f "$(_web_toolkit_root)/$WEB_PID_FILE" 2>/dev/null || true
     log_success "Web UI server stopped."

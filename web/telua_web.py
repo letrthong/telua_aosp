@@ -691,17 +691,25 @@ def api_pipeline_stream():
     )
 
 
-def _build_terminal_bash_script(cmd: str) -> str:
-    """Wrap a user command with tel/telua shell functions so 'tel ...' works in non-interactive bash."""
+def _build_terminal_bash_script(cmd: str, cwd: str = "") -> str:
+    """Wrap a user command with tel/telua shell functions and persistent cwd tracking."""
     script_path = str(BUILD_APK_SH).replace("\\", "/")
+    cd_line = ""
+    if cwd:
+        safe_cwd = cwd.replace('"', '\\"')
+        cd_line = 'cd "%s" >/dev/null 2>&1 || true\n' % safe_cwd
     return (
         'tel() { bash "%s" "$@"; }\n'
         'telua() { bash "%s" "$@"; }\n'
+        "%s"
         "%s\n"
-    ) % (script_path, script_path, cmd)
+        "__telua_rc=$?\n"
+        'printf "\\n__TELUA_PWD__:%%s\\n" "$(pwd)"\n'
+        "exit $__telua_rc\n"
+    ) % (script_path, script_path, cd_line, cmd)
 
 
-def _resolve_terminal_exec(cmd: str):
+def _resolve_terminal_exec(cmd: str, cwd: str = ""):
     """Return (args, use_shell) using bash when available, or native shell fallback."""
     bash_bin = shutil.which("bash")
     if not bash_bin and os.name == "nt":
@@ -710,7 +718,7 @@ def _resolve_terminal_exec(cmd: str):
                 bash_bin = candidate
                 break
     if bash_bin:
-        return [bash_bin, "-c", _build_terminal_bash_script(cmd)], False
+        return [bash_bin, "-c", _build_terminal_bash_script(cmd, cwd)], False
     return cmd, True
 
 
@@ -719,11 +727,12 @@ def api_terminal_run():
     """Execute an ad-hoc shell / telua CLI command from the Web UI Terminal tab."""
     data = request.get_json(silent=True) or {}
     cmd = str(data.get("command", "")).strip()
+    cwd = str(data.get("cwd", "")).strip()
     if not cmd:
         abort(400, description="Missing 'command' in request body.")
     env = dict(os.environ)
     env["PYTHONUNBUFFERED"] = "1"
-    exec_args, use_shell = _resolve_terminal_exec(cmd)
+    exec_args, use_shell = _resolve_terminal_exec(cmd, cwd)
     try:
         proc = subprocess.run(
             exec_args,
@@ -749,9 +758,10 @@ def api_terminal_stream():
     """Stream ad-hoc shell / telua CLI command output line-by-line in real time."""
     data = request.get_json(silent=True) or {}
     cmd = str(data.get("command", "")).strip()
+    cwd = str(data.get("cwd", "")).strip()
     if not cmd:
         abort(400, description="Missing 'command' in request body.")
-    exec_args, use_shell = _resolve_terminal_exec(cmd)
+    exec_args, use_shell = _resolve_terminal_exec(cmd, cwd)
 
     def generate():
         env = dict(os.environ)
