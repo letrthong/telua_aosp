@@ -167,6 +167,8 @@ const PIPELINE_GUI_FILES = {
   "config/const_my_cli.config.example": "my",
   "config/const_multi_cli.config": "multi",
   "config/const_multi_cli.config.example": "multi",
+  "config/const_car.config": "car",
+  "config/overlay/const_car.config": "car",
 };
 
 function renderFiles(filter = "") {
@@ -469,10 +471,11 @@ function pipelineCard(p) {
   const foot = document.createElement("div");
   foot.className = "pl-card-foot";
 
+  const runCmdPrefix = state.plSource === "multi" ? "telua run " : state.plSource === "car" ? "telua car " : "telua my ";
   const runBtn = document.createElement("button");
   runBtn.className = "btn";
   runBtn.textContent = "▶ Run";
-  runBtn.title = "Execute: telua my " + p.name;
+  runBtn.title = "Execute: " + runCmdPrefix + p.name;
   runBtn.addEventListener("click", () => runPipeline(p.name));
   foot.appendChild(runBtn);
 
@@ -626,7 +629,7 @@ async function savePipelines() {
 }
 
 async function runPipeline(name) {
-  const cmd = state.plSource === "multi" ? "telua run" : "telua my";
+  const cmd = state.plSource === "multi" ? "telua run" : state.plSource === "car" ? "telua car" : "telua my";
   $("#run-title").textContent = `${cmd} ${name}`;
   $("#run-output").textContent = "Running…";
   $("#modal-run").classList.remove("hidden");
@@ -648,11 +651,11 @@ function addPipeline() {
   const existing = new Set(state.pipelines.map(p => p.name));
   let name = "new_pipeline";
   while (existing.has(name)) { name = `new_pipeline_${++i}`; }
-  const prefix = state.plSource === "multi" ? "MULTI" : "MY";
+  const prefix = state.plSource === "multi" ? "MULTI_CMD_" : state.plSource === "car" ? "ADB_SHELL_CAR_" : "MY_CMD_";
   state.pipelines.push({
     name,
     description: "",
-    array: `${prefix}_CMD_` + name.toUpperCase(),
+    array: `${prefix}` + name.toUpperCase(),
     steps: [""],
     _editing: true,
     _editingStep: 0,
