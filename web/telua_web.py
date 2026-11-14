@@ -690,6 +690,99 @@ def api_pipeline_stream():
     )
 
 
+def _build_terminal_bash_script(cmd: str) -> str:
+    """Wrap a user command with tel/telua shell functions so 'tel ...' works in non-interactive bash."""
+    script_path = str(BUILD_APK_SH).replace("\\", "/")
+    return (
+        'tel() { bash "%s" "$@"; }\n'
+        'telua() { bash "%s" "$@"; }\n'
+        "%s\n"
+    ) % (script_path, script_path, cmd)
+
+
+def _resolve_terminal_exec(cmd: str):
+    """Return (args, use_shell) using bash when available, or native shell fallback."""
+    bash_bin = shutil.which("bash")
+    if not bash_bin and os.name == "nt":
+        for candidate in (r"C:\Program Files\Git\bin\bash.exe", r"C:\Program Files (x86)\Git\bin\bash.exe"):
+            if os.path.isfile(candidate):
+                bash_bin = candidate
+                break
+    if bash_bin:
+        return [bash_bin, "-c", _build_terminal_bash_script(cmd)], False
+    return cmd, True
+
+
+@app.post("/api/terminal/run")
+def api_terminal_run():
+    """Execute an ad-hoc shell / telua CLI command from the Web UI Terminal tab."""
+    data = request.get_json(silent=True) or {}
+    cmd = str(data.get("command", "")).strip()
+    if not cmd:
+        abort(400, description="Missing 'command' in request body.")
+    env = dict(os.environ)
+    env["PYTHONUNBUFFERED"] = "1"
+    exec_args, use_shell = _resolve_terminal_exec(cmd)
+    try:
+        proc = subprocess.run(
+            exec_args,
+            shell=use_shell,
+            cwd=str(ROOT),
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            env=env,
+        )
+        output = (proc.stdout or "") + (proc.stderr or "")
+        code = proc.returncode
+    except subprocess.TimeoutExpired:
+        output, code = "[ERROR] Command timed out after 300s.", 124
+    except Exception as exc:  # pragma: no cover
+        output, code = "[ERROR] Failed to execute command: %s" % exc, 1
+    return jsonify({"ok": code == 0, "exit_code": code, "output": output, "cwd": str(ROOT)})
+
+
+@app.post("/api/terminal/stream")
+def api_terminal_stream():
+    """Stream ad-hoc shell / telua CLI command output line-by-line in real time."""
+    data = request.get_json(silent=True) or {}
+    cmd = str(data.get("command", "")).strip()
+    if not cmd:
+        abort(400, description="Missing 'command' in request body.")
+    exec_args, use_shell = _resolve_terminal_exec(cmd)
+
+    def generate():
+        env = dict(os.environ)
+        env["PYTHONUNBUFFERED"] = "1"
+        try:
+            proc = subprocess.Popen(
+                exec_args,
+                shell=use_shell,
+                cwd=str(ROOT),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                env=env,
+            )
+            if proc.stdout is not None:
+                for line in iter(proc.stdout.readline, ""):
+                    yield line
+            code = proc.wait(timeout=300)
+        except Exception as exc:  # pragma: no cover
+            yield "\n[ERROR] Failed to execute command: %s\n" % exc
+            code = 1
+        yield "\n__TELUA_EXIT_CODE__:%d\n" % code
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/plain; charset=utf-8",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+    )
+
+
 # ------------------------------------------------------------------------------
 # Static frontend & entry point
 # ------------------------------------------------------------------------------

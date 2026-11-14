@@ -196,6 +196,22 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertIn("docker-status", names)
         self.assertIn("ssh-pub", names)
 
+    def test_api_terminal_run_and_stream(self):
+        script = telua_web._build_terminal_bash_script("tel system")
+        self.assertIn("tel()", script)
+        self.assertIn("telua()", script)
+        res = self.client.post("/api/terminal/run", json={"command": "echo hello_terminal"})
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertTrue(data["ok"])
+        self.assertIn("hello_terminal", data["output"])
+
+        res_stream = self.client.post("/api/terminal/stream", json={"command": "echo stream_ok"})
+        self.assertEqual(res_stream.status_code, 200)
+        body = res_stream.get_data(as_text=True)
+        self.assertIn("stream_ok", body)
+        self.assertIn("__TELUA_EXIT_CODE__:0", body)
+
 
 if __name__ == "__main__":
     unittest.main()

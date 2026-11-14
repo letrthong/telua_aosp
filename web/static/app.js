@@ -227,6 +227,8 @@ function renderStatus(s) {
     chipRam.textContent = "ram: n/a";
     chipRam.className = "chip";
   }
+  const termCwd = $("#term-cwd");
+  if (termCwd && s.root) termCwd.textContent = `cwd: ${s.root}`;
 }
 
 function esc(text) {
@@ -579,13 +581,16 @@ let _lastNonSystemPlSource = "my";
 
 function syncTopTabs() {
   const isFiles = !$("#view-files").classList.contains("hidden");
-  const isSystem = !isFiles && (state.plSource === "system" || state.plSource === "docker");
-  const isPipelines = !isFiles && !isSystem;
+  const isTerminal = !$("#view-terminal")?.classList.contains("hidden");
+  const isSystem = !isFiles && !isTerminal && (state.plSource === "system" || state.plSource === "docker");
+  const isPipelines = !isFiles && !isTerminal && !isSystem;
   $("#tab-files")?.classList.toggle("active", isFiles);
   $("#tab-pipelines")?.classList.toggle("active", isPipelines);
   $("#tab-system")?.classList.toggle("active", isSystem);
+  $("#tab-terminal")?.classList.toggle("active", isTerminal);
   try {
-    localStorage.setItem(LAST_TAB_KEY, isFiles ? "files" : (isSystem ? "system" : "pipelines"));
+    const activeTabName = isFiles ? "files" : (isTerminal ? "terminal" : (isSystem ? "system" : "pipelines"));
+    localStorage.setItem(LAST_TAB_KEY, activeTabName);
     localStorage.setItem(LAST_SOURCE_KEY, state.plSource);
   } catch { /* ignore */ }
 }
@@ -593,6 +598,10 @@ function syncTopTabs() {
 function switchPipelineSource(source) {
   if (source === "docker") source = "system";
   if (source !== "system") _lastNonSystemPlSource = source;
+  // Ensure Pipelines view is visible if user clicks a source while in Terminal or Files
+  $("#view-files")?.classList.add("hidden");
+  $("#view-terminal")?.classList.add("hidden");
+  $("#view-pipelines")?.classList.remove("hidden");
   if (state.plSource === source) {
     syncTopTabs();
     return;
@@ -1280,11 +1289,164 @@ async function runCryptoAction(action, force = false) {
   }
 }
 
+/* ---------------- Terminal Tab ---------------- */
+const TERM_HISTORY_KEY = "telua_web_term_history";
+let _termHistory = [];
+let _termHistoryIdx = -1;
+let _termRunning = false;
+
+try {
+  const savedHist = JSON.parse(localStorage.getItem(TERM_HISTORY_KEY) || "[]");
+  if (Array.isArray(savedHist)) _termHistory = savedHist.slice(-50);
+} catch { /* ignore */ }
+
+function clearTerminalOutput() {
+  const outEl = $("#term-output");
+  if (outEl) {
+    outEl.innerHTML = ansiToHtml("💻 Telua Web CLI Terminal — màn hình đã được làm sạch.\n");
+  }
+  const badge = $("#term-status-badge");
+  if (badge) {
+    badge.textContent = "Ready";
+    badge.className = "run-badge";
+  }
+}
+
+async function runTerminalCommand(explicitCmd = null) {
+  const input = $("#term-input");
+  const cmd = (explicitCmd != null ? explicitCmd : (input?.value || "")).trim();
+  if (!cmd) {
+    input?.focus();
+    return;
+  }
+  if (_termRunning) {
+    toast("Terminal đang chạy", "Vui lòng đợi lệnh hiện tại hoàn tất.", "warn", 2500);
+    return;
+  }
+
+  if (input && explicitCmd == null) input.value = "";
+  if (_termHistory[_termHistory.length - 1] !== cmd) {
+    _termHistory.push(cmd);
+    if (_termHistory.length > 50) _termHistory = _termHistory.slice(-50);
+    try { localStorage.setItem(TERM_HISTORY_KEY, JSON.stringify(_termHistory)); } catch { /* ignore */ }
+  }
+  _termHistoryIdx = _termHistory.length;
+
+  if (cmd === "clear" || cmd === "cls") {
+    clearTerminalOutput();
+    input?.focus();
+    return;
+  }
+
+  const outEl = $("#term-output");
+  const badge = $("#term-status-badge");
+  const runBtn = $("#btn-term-run");
+  _termRunning = true;
+  if (runBtn) runBtn.disabled = true;
+
+  const separator = outEl && outEl.innerHTML.trim() ? "\n" : "";
+  const baseHtml = (outEl ? outEl.innerHTML : "") +
+    `${separator}<span style="color:#3fb950;font-weight:700">tel $</span> <span style="color:#58a6ff;font-weight:700">${esc(cmd)}</span>\n`;
+  if (outEl) {
+    outEl.innerHTML = baseHtml + `<span style="opacity:.7">⏳ Running…</span>\n`;
+    outEl.scrollTop = outEl.scrollHeight;
+  }
+
+  let elapsed = 0;
+  if (badge) {
+    badge.textContent = "⏳ Running… (0s)";
+    badge.className = "run-badge running";
+  }
+  const timerId = setInterval(() => {
+    elapsed++;
+    if (badge) badge.textContent = `⏳ Running… (${elapsed}s)`;
+  }, 1000);
+
+  try {
+    const res = await fetch("/api/terminal/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command: cmd }),
+    });
+
+    if (res.ok && res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let rawBuffer = "";
+      let exitCode = 0;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) {
+          rawBuffer += decoder.decode(value, { stream: true });
+          const cleanPreview = rawBuffer.replace(/\n?__TELUA_EXIT_CODE__:\s*-?\d+\s*$/, "");
+          if (outEl) {
+            outEl.innerHTML = baseHtml + ansiToHtml(cleanPreview);
+            outEl.scrollTop = outEl.scrollHeight;
+          }
+        }
+      }
+
+      const m = rawBuffer.match(/__TELUA_EXIT_CODE__:(-?\d+)/);
+      if (m) exitCode = parseInt(m[1], 10);
+      const finalOutput = rawBuffer.replace(/\n?__TELUA_EXIT_CODE__:\s*-?\d+\s*$/, "");
+      const statusColor = exitCode === 0 ? "#3fb950" : "#f85149";
+      if (outEl) {
+        outEl.innerHTML = baseHtml +
+          ansiToHtml(finalOutput || "(no output)\n") +
+          `<span style="color:${statusColor};opacity:.85">[exit code: ${exitCode} · ${elapsed}s]</span>\n`;
+        outEl.scrollTop = outEl.scrollHeight;
+      }
+      if (badge) {
+        const ok = exitCode === 0;
+        badge.textContent = ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${exitCode} (${elapsed}s)`;
+        badge.className = "run-badge " + (ok ? "ok" : "err");
+      }
+      return;
+    }
+
+    const data = await api("/api/terminal/run", {
+      method: "POST",
+      body: JSON.stringify({ command: cmd }),
+    });
+    const ok = data.exit_code === 0;
+    const statusColor = ok ? "#3fb950" : "#f85149";
+    if (outEl) {
+      outEl.innerHTML = baseHtml +
+        ansiToHtml(data.output || "(no output)\n") +
+        `<span style="color:${statusColor};opacity:.85">[exit code: ${data.exit_code} · ${elapsed}s]</span>\n`;
+      outEl.scrollTop = outEl.scrollHeight;
+    }
+    if (badge) {
+      badge.textContent = ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${data.exit_code} (${elapsed}s)`;
+      badge.className = "run-badge " + (ok ? "ok" : "err");
+    }
+  } catch (err) {
+    if (outEl) {
+      outEl.innerHTML = baseHtml + `<span style="color:#f85149">[ERROR] ${esc(err.message)}</span>\n`;
+      outEl.scrollTop = outEl.scrollHeight;
+    }
+    if (badge) {
+      badge.textContent = "✖ Error";
+      badge.className = "run-badge err";
+    }
+  } finally {
+    clearInterval(timerId);
+    _termRunning = false;
+    if (runBtn) runBtn.disabled = false;
+    input?.focus();
+  }
+}
+
 /* ---------------- Wiring ---------------- */
 function switchTab(tab) {
   const isFiles = tab === "files";
+  const isTerminal = tab === "terminal";
+  const isPipelinesView = !isFiles && !isTerminal;
   $("#view-files").classList.toggle("hidden", !isFiles);
-  $("#view-pipelines").classList.toggle("hidden", isFiles);
+  $("#view-pipelines").classList.toggle("hidden", !isPipelinesView);
+  $("#view-terminal")?.classList.toggle("hidden", !isTerminal);
   if (tab === "system") {
     switchPipelineSource("system");
   } else if (tab === "pipelines" && (state.plSource === "system" || state.plSource === "docker")) {
@@ -1292,6 +1454,10 @@ function switchTab(tab) {
   }
   syncTopTabs();
   renderFiles($("#search").value);
+  if (isTerminal) {
+    setTimeout(() => $("#term-input")?.focus(), 40);
+    return;
+  }
   // Files tab is lazy: open the draft file (or apk.config) on first visit.
   if (isFiles && !state.current) {
     const fileDraft = draftLoadFile();
@@ -1369,6 +1535,49 @@ function wire() {
   $("#tab-files").addEventListener("click", () => switchTab("files"));
   $("#tab-pipelines").addEventListener("click", () => { switchTab("pipelines"); renderFiles($("#search").value); });
   $("#tab-system")?.addEventListener("click", () => { switchTab("system"); renderFiles($("#search").value); });
+  $("#tab-terminal")?.addEventListener("click", () => { switchTab("terminal"); renderFiles($("#search").value); });
+
+  // Terminal wiring
+  $("#btn-term-run")?.addEventListener("click", () => runTerminalCommand());
+  $("#btn-term-clear")?.addEventListener("click", clearTerminalOutput);
+  $("#btn-term-copy")?.addEventListener("click", async () => {
+    const text = $("#term-output")?.innerText || "";
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("Copied ✓", "Terminal output copied to clipboard.", "ok", 2200);
+    } catch {
+      toast("Copy failed", "Select text manually to copy.", "warn");
+    }
+  });
+  $("#term-input")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      runTerminalCommand();
+    } else if (e.key === "ArrowUp") {
+      if (_termHistory.length === 0) return;
+      e.preventDefault();
+      if (_termHistoryIdx > 0) _termHistoryIdx--;
+      else _termHistoryIdx = 0;
+      e.target.value = _termHistory[_termHistoryIdx] || "";
+    } else if (e.key === "ArrowDown") {
+      if (_termHistory.length === 0) return;
+      e.preventDefault();
+      if (_termHistoryIdx < _termHistory.length - 1) {
+        _termHistoryIdx++;
+        e.target.value = _termHistory[_termHistoryIdx] || "";
+      } else {
+        _termHistoryIdx = _termHistory.length;
+        e.target.value = "";
+      }
+    }
+  });
+  document.querySelectorAll("#term-quick-bar .term-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const cmd = chip.dataset.cmd || "";
+      if ($("#term-input")) $("#term-input").value = cmd;
+      runTerminalCommand(cmd);
+    });
+  });
   $("#btn-pl-raw")?.addEventListener("click", () => {
     const currentPlFile = $("#pl-file")?.textContent;
     if (currentPlFile && currentPlFile !== "—") openFile(currentPlFile);
@@ -1472,7 +1681,9 @@ async function boot() {
   await loadPipelines(pipeDraft);
   updateDraftChip();
 
-  if (savedTab === "files") {
+  if (savedTab === "terminal") {
+    switchTab("terminal");
+  } else if (savedTab === "files") {
     if (savedFile && state.files.some(f => f.name === savedFile)) {
       const fileDraft = draftLoadFile();
       const draftContent = (fileDraft && fileDraft.name === savedFile) ? fileDraft.content : null;

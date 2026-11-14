@@ -26,6 +26,7 @@
       <button class="tab" id="tab-files" title="Browse &amp; edit config files">📄 Files</button>
       <button class="tab active" id="tab-pipelines" title="Edit MY_CMD_* / MULTI / CAR / DUMP pipelines">⚡ Pipelines</button>
       <button class="tab" id="tab-system" title="System &amp; Docker CLI pipelines (config/const_system_cli.config — telua system <action>)">🖥 System</button>
+      <button class="tab" id="tab-terminal" title="Interactive Web CLI Terminal — gõ và thực thi trực tiếp lệnh tel / Linux / Git / ADB">💻 Terminal</button>
     </nav>
     <div class="chip hidden" id="chip-draft" title="Unsaved edits kept in browser draft (survives refresh). Click to discard.">✎ draft</div>
     <div class="chip" id="chip-version" title="Toolkit version">v—</div>
@@ -112,6 +113,44 @@
     <div class="editor-foot">
       <span id="pl-stats" class="meta">0 pipelines</span>
       <span id="pl-dirty" class="dirty hidden">● unsaved changes</span>
+    </div>
+  </section>
+
+  <!-- ============ Terminal pane (Interactive CLI runner) ============ -->
+  <section class="editor-pane hidden" id="view-terminal">
+    <div class="editor-head">
+      <div class="editor-title">
+        <span class="mono" style="color:var(--accent);font-weight:700">💻 Web CLI Terminal</span>
+        <span id="term-cwd" class="meta">cwd: —</span>
+        <span id="term-status-badge" class="run-badge">Ready</span>
+      </div>
+      <div class="editor-actions">
+        <button class="btn" id="btn-term-copy" title="Copy terminal log to clipboard">📋 Copy</button>
+        <button class="btn" id="btn-term-clear" title="Clear terminal output (or type 'clear')">🧹 Clear</button>
+      </div>
+    </div>
+    <div class="term-quick-bar" id="term-quick-bar">
+      <span class="meta">⚡ Gợi ý nhanh:</span>
+      <button class="term-chip" data-cmd="tel --info">tel --info</button>
+      <button class="term-chip" data-cmd="tel system">tel system</button>
+      <button class="term-chip" data-cmd="tel system ram">tel system ram</button>
+      <button class="term-chip" data-cmd="tel system os">tel system os</button>
+      <button class="term-chip" data-cmd="tel --git-help">tel --git-help</button>
+      <button class="term-chip" data-cmd="tel --docker-help">tel --docker-help</button>
+      <button class="term-chip" data-cmd="tel --network-help">tel --network-help</button>
+      <button class="term-chip" data-cmd="git status -s">git status -s</button>
+      <button class="term-chip" data-cmd="adb devices -l">adb devices -l</button>
+    </div>
+    <pre id="term-output" class="info-out run-terminal term-screen">💻 Telua Web CLI Terminal sẵn sàng.
+• Gõ lệnh bất kỳ bên dưới (vd: tel system ram, tel --git-help, git status -s, free -h, df -h, adb devices…) và nhấn Enter.
+• Phím tắt: ↑ / ↓ để gọi lại lịch sử lệnh · gõ 'clear' để xóa màn hình.
+</pre>
+    <div class="term-input-bar">
+      <span class="term-prompt mono">tel $</span>
+      <input id="term-input" type="text" class="term-input mono"
+             placeholder="Gõ lệnh CLI tại đây (vd: tel system ram, git status -s, df -h, tel --network-help)… Nhấn Enter để chạy"
+             autocomplete="off" spellcheck="false">
+      <button class="btn primary" id="btn-term-run">▶ Run</button>
     </div>
   </section>
 </main>
