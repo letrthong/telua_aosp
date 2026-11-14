@@ -150,6 +150,44 @@ function esc(text) {
   return div.innerHTML;
 }
 
+const ANSI_COLOR_MAP = {
+  30: "#8b949e", 90: "#8b949e",
+  31: "#f85149", 91: "#ff7b72",
+  32: "#3fb950", 92: "#56d364",
+  33: "#d29922", 93: "#e3b341",
+  34: "#58a6ff", 94: "#79c0ff",
+  35: "#bc8cff", 95: "#d2a8ff",
+  36: "#39c5cf", 96: "#56d4dd",
+  37: "#e6edf3", 97: "#ffffff",
+};
+
+function ansiToHtml(text) {
+  const cleaned = String(text == null ? "" : text).replace(/\x1b\[[0-9;?]*[A-LN-Za-ln-z]/g, "");
+  const safe = esc(cleaned);
+  let openSpans = 0;
+  const html = safe.replace(/(?:\x1b\[|\[(?=(?:0|[012];[39][0-7])m))([0-9;]*)m/g, (_, codesStr) => {
+    const codes = (codesStr || "0").split(";").map(Number);
+    let out = "";
+    if (openSpans > 0) {
+      out += "</span>".repeat(openSpans);
+      openSpans = 0;
+    }
+    if (codes.length === 1 && codes[0] === 0) return out;
+    const styles = [];
+    for (const c of codes) {
+      if (c === 1) styles.push("font-weight:700");
+      else if (c === 2) styles.push("opacity:.75");
+      else if (ANSI_COLOR_MAP[c]) styles.push(`color:${ANSI_COLOR_MAP[c]}`);
+    }
+    if (styles.length > 0) {
+      openSpans++;
+      out += `<span style="${styles.join(";")}">`;
+    }
+    return out;
+  });
+  return html + (openSpans > 0 ? "</span>".repeat(openSpans) : "");
+}
+
 async function refreshStatus() {
   try {
     renderStatus(await api("/api/status"));
@@ -677,9 +715,10 @@ async function runPipeline(name) {
       method: "POST",
       body: JSON.stringify({ name, source: state.plSource }),
     });
-    $("#run-output").textContent =
+    $("#run-output").innerHTML = ansiToHtml(
       (data.output || "(no output)") +
-      `\n\n[exit code: ${data.exit_code}]`;
+      `\n\n[exit code: ${data.exit_code}]`
+    );
   } catch (err) {
     $("#run-output").textContent = `[ERROR] ${err.message}`;
   }
@@ -745,7 +784,7 @@ async function showInfo() {
   $("#modal-info").classList.remove("hidden");
   try {
     const data = await api("/api/info");
-    $("#info-output").textContent = data.output || "(no output)";
+    $("#info-output").innerHTML = ansiToHtml(data.output || "(no output)");
   } catch (err) {
     $("#info-output").textContent = `[ERROR] ${err.message}`;
   }
