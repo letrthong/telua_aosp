@@ -946,36 +946,100 @@ async function runPipeline(name, explicitSource = null) {
   const cmdMap = { my: "telua my", multi: "telua run", system: "telua system", docker: "telua system", car: "telua car", dump: "telua dump" };
   const cmd = cmdMap[source] || "telua my";
   $("#run-title").textContent = `${cmd} ${name}`;
-  $("#run-output").textContent = "Running…";
+  const outEl = $("#run-output");
+  const matchedPl = state.pipelines.find(p => p.name === name);
+  const stepsHint = matchedPl && matchedPl.steps?.length
+    ? matchedPl.steps.map((s, i) => `  [${i + 1}/${matchedPl.steps.length}] ${s}`).join("\n")
+    : `  $ ${cmd} ${name}`;
+  outEl.textContent = `⏳ Đang khởi chạy: ${cmd} ${name}…\n${stepsHint}\n`;
+
   const badge = $("#run-status-badge");
+  let elapsed = 0;
   if (badge) {
-    badge.textContent = "⏳ Running…";
+    badge.textContent = "⏳ Running… (0s)";
     badge.className = "run-badge running";
   }
+  let receivedStreamChunk = false;
+  const timerId = setInterval(() => {
+    elapsed++;
+    if (badge) badge.textContent = `⏳ Running… (${elapsed}s)`;
+    if (!receivedStreamChunk && outEl) {
+      outEl.textContent =
+        `⏳ Đang thực thi '${cmd} ${name}'… (${elapsed}s đã trôi qua)\n` +
+        `${stepsHint}\n\n` +
+        `[Đang chạy tiến trình trên máy chủ — kết quả sẽ hiển thị ngay bên dưới…]`;
+    }
+  }, 1000);
+
   const rerunBtn = $("#btn-run-again");
   if (rerunBtn) rerunBtn.disabled = true;
   $("#modal-run").classList.remove("hidden");
+
   try {
+    // Try live streaming endpoint first so output lines appear in real time
+    const res = await fetch("/api/pipeline/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, source }),
+    });
+
+    if (res.ok && res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let rawBuffer = "";
+      let exitCode = 0;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) {
+          receivedStreamChunk = true;
+          rawBuffer += decoder.decode(value, { stream: true });
+          const cleanPreview = rawBuffer.replace(/\n?__TELUA_EXIT_CODE__:\s*-?\d+\s*$/, "");
+          outEl.innerHTML = ansiToHtml(cleanPreview || "Running…");
+          outEl.scrollTop = outEl.scrollHeight;
+        }
+      }
+
+      const m = rawBuffer.match(/__TELUA_EXIT_CODE__:(-?\d+)/);
+      if (m) exitCode = parseInt(m[1], 10);
+      const finalOutput = rawBuffer.replace(/\n?__TELUA_EXIT_CODE__:\s*-?\d+\s*$/, "");
+      outEl.innerHTML = ansiToHtml(
+        (finalOutput || "(no output)") +
+        `\n\n[exit code: ${exitCode} · elapsed: ${elapsed}s]`
+      );
+      outEl.scrollTop = outEl.scrollHeight;
+      if (badge) {
+        const ok = exitCode === 0;
+        badge.textContent = ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${exitCode} (${elapsed}s)`;
+        badge.className = "run-badge " + (ok ? "ok" : "err");
+      }
+      return;
+    }
+
+    // Fallback to batch /api/pipeline/run if server hasn't restarted with /stream yet
     const data = await api("/api/pipeline/run", {
       method: "POST",
       body: JSON.stringify({ name, source }),
     });
-    $("#run-output").innerHTML = ansiToHtml(
+    receivedStreamChunk = true;
+    outEl.innerHTML = ansiToHtml(
       (data.output || "(no output)") +
-      `\n\n[exit code: ${data.exit_code}]`
+      `\n\n[exit code: ${data.exit_code} · elapsed: ${elapsed}s]`
     );
     if (badge) {
       const ok = data.exit_code === 0;
-      badge.textContent = ok ? "✔ Exit 0 (Success)" : `✖ Exit ${data.exit_code}`;
+      badge.textContent = ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${data.exit_code} (${elapsed}s)`;
       badge.className = "run-badge " + (ok ? "ok" : "err");
     }
   } catch (err) {
-    $("#run-output").textContent = `[ERROR] ${err.message}`;
+    outEl.textContent = `[ERROR] ${err.message}`;
     if (badge) {
       badge.textContent = "✖ Error";
       badge.className = "run-badge err";
     }
   } finally {
+    clearInterval(timerId);
     if (rerunBtn) rerunBtn.disabled = false;
   }
 }

@@ -58,7 +58,7 @@ from telua_web_pipelines import (  # noqa: E402
 )
 
 try:
-    from flask import Flask, abort, jsonify, request, send_from_directory
+    from flask import Flask, Response, abort, jsonify, request, send_from_directory, stream_with_context
     from werkzeug.exceptions import HTTPException
 except ImportError:  # pragma: no cover
     sys.stderr.write(
@@ -633,6 +633,61 @@ def api_pipeline_run():
     except Exception as exc:  # pragma: no cover
         output, code = "[ERROR] Failed to run pipeline: %s" % exc, 1
     return jsonify({"ok": code == 0, "exit_code": code, "output": output})
+
+
+@app.post("/api/pipeline/stream")
+def api_pipeline_stream():
+    """Stream pipeline execution output line-by-line in real time."""
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("name", "")).strip()
+    source = data.get("source", "my")
+    if not name or not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+        abort(400, description="Invalid pipeline name.")
+    key, _ = _pipeline_source(source)
+    known = {p["name"] for p in parse_pipelines(key)}
+    if name not in known:
+        group_var = {
+            "my": "MY_GROUP_LIST",
+            "multi": "MULTI_GROUP_LIST",
+            "docker": "SYSTEM_GROUP_LIST",
+            "system": "SYSTEM_GROUP_LIST",
+            "car": "CAR_CLI_LIST",
+            "dump": "DUMP_CLI_LIST",
+        }[key]
+        abort(404, description="Pipeline '%s' not found in %s." % (name, group_var))
+    script = BUILD_APK_SH
+    if not script.is_file():
+        abort(404, description="build_apk.sh not found in %s" % ROOT)
+    subcommand = {"my": "my", "multi": "run", "docker": "system", "system": "system", "car": "car", "dump": "dump"}[key]
+
+    def generate():
+        env = dict(os.environ)
+        env["PYTHONUNBUFFERED"] = "1"
+        try:
+            proc = subprocess.Popen(
+                ["bash", str(script), subcommand, name],
+                cwd=str(ROOT),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                env=env,
+            )
+            if proc.stdout is not None:
+                for line in iter(proc.stdout.readline, ""):
+                    yield line
+            code = proc.wait(timeout=300)
+        except Exception as exc:  # pragma: no cover
+            yield "\n[ERROR] Failed to stream pipeline: %s\n" % exc
+            code = 1
+        yield "\n__TELUA_EXIT_CODE__:%d\n" % code
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/plain; charset=utf-8",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+    )
 
 
 # ------------------------------------------------------------------------------
