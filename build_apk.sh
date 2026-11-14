@@ -865,6 +865,11 @@ parse_arguments() {
                 handle_run_command "$RUN_GROUP"
                 exit 0
                 ;;
+            --unittest|unittest|--unttest|unttest|--unit-test|unit-test)
+                shift 1
+                handle_run_command "unittest"
+                exit 0
+                ;;
             --my|my|--proj|proj|--project|project)
                 if [ -n "$2" ] && [[ "$2" != --* ]]; then
                     PROJ_ACTION="$2"

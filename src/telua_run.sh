@@ -162,6 +162,9 @@ handle_run_command() {
 
     local group_normalized
     group_normalized=$(echo "$group" | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+    if [ "$group_normalized" = "unttest" ] || [ "$group_normalized" = "unit-test" ]; then
+        group_normalized="unittest"
+    fi
 
     local group_label=""
     if [ -n "${MULTI_GROUP_LIST[*]}" ]; then

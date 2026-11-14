@@ -937,11 +937,14 @@ async function savePipelines() {
 }
 
 let _lastRunPipelineName = null;
+let _lastRunPipelineSource = null;
 
-async function runPipeline(name) {
+async function runPipeline(name, explicitSource = null) {
+  const source = explicitSource || state.plSource;
   _lastRunPipelineName = name;
+  _lastRunPipelineSource = source;
   const cmdMap = { my: "telua my", multi: "telua run", system: "telua system", docker: "telua system", car: "telua car", dump: "telua dump" };
-  const cmd = cmdMap[state.plSource] || "telua my";
+  const cmd = cmdMap[source] || "telua my";
   $("#run-title").textContent = `${cmd} ${name}`;
   $("#run-output").textContent = "Running…";
   const badge = $("#run-status-badge");
@@ -955,7 +958,7 @@ async function runPipeline(name) {
   try {
     const data = await api("/api/pipeline/run", {
       method: "POST",
-      body: JSON.stringify({ name, source: state.plSource }),
+      body: JSON.stringify({ name, source }),
     });
     $("#run-output").innerHTML = ansiToHtml(
       (data.output || "(no output)") +
@@ -1254,11 +1257,12 @@ function wire() {
   $("#btn-reload").addEventListener("click", () => state.current && openFile(state.current.name));
   $("#btn-save").addEventListener("click", saveFile);
   $("#btn-info").addEventListener("click", showInfo);
+  $("#btn-unittest")?.addEventListener("click", () => runPipeline("unittest", "multi"));
   $("#btn-info-close").addEventListener("click", () => $("#modal-info").classList.add("hidden"));
   $("#btn-profile-close").addEventListener("click", () => $("#modal-profile").classList.add("hidden"));
   $("#btn-run-close").addEventListener("click", () => $("#modal-run").classList.add("hidden"));
   $("#btn-run-again")?.addEventListener("click", () => {
-    if (_lastRunPipelineName) runPipeline(_lastRunPipelineName);
+    if (_lastRunPipelineName) runPipeline(_lastRunPipelineName, _lastRunPipelineSource);
   });
   $("#btn-run-copy")?.addEventListener("click", async () => {
     const text = $("#run-output")?.innerText || "";
