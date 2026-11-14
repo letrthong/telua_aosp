@@ -125,6 +125,7 @@
         <span id="term-status-badge" class="run-badge">Ready</span>
       </div>
       <div class="editor-actions">
+        <button class="btn danger" id="btn-term-stop-top" disabled title="Stop running command (Ctrl+C)">⏹ Stop</button>
         <button class="btn" id="btn-term-copy" title="Copy terminal log to clipboard">📋 Copy</button>
         <button class="btn" id="btn-term-clear" title="Clear terminal output (or type 'clear')">🧹 Clear</button>
       </div>
@@ -150,8 +151,8 @@
       <input id="term-input" type="text" class="term-input mono"
              placeholder="Gõ lệnh CLI tại đây (vd: tel system ram, git status -s, df -h, tel --network-help)… Enter để chạy, Ctrl+C để dừng"
              autocomplete="off" spellcheck="false">
-      <button class="btn danger hidden" id="btn-term-stop" title="Stop running command (Ctrl+C / SIGINT)">⏹ Stop (Ctrl+C)</button>
       <button class="btn primary" id="btn-term-run">▶ Run</button>
+      <button class="btn danger" id="btn-term-stop" disabled title="Stop running command (Ctrl+C / SIGINT)">⏹ Stop</button>
     </div>
   </section>
 </main>
@@ -192,6 +193,7 @@
     </div>
     <pre id="run-output" class="info-out run-terminal">Running…</pre>
     <div class="modal-actions run-modal-foot">
+      <button class="btn danger" id="btn-run-stop" disabled title="Stop running pipeline">⏹ Stop</button>
       <button class="btn jade-btn" id="btn-run-again" title="Execute this pipeline again">↻ Re-run</button>
       <button class="btn jade-btn" id="btn-run-copy" title="Copy command output to clipboard">📋 Copy output</button>
       <button class="btn jade-btn primary" id="btn-run-close">Close</button>
