@@ -583,24 +583,31 @@ function pipelineCard(p) {
   card.appendChild(head);
 
   // --- steps ---
+  const isSingleStep = (state.plSource === "car" || state.plSource === "dump");
+  if (isSingleStep) {
+    if (p.steps.length === 0) p.steps = [""];
+    else if (p.steps.length > 1) p.steps = [p.steps[0]];
+  }
   const stepsBox = document.createElement("div");
   stepsBox.className = "pl-steps";
   p.steps.forEach((step, idx) => stepsBox.appendChild(stepRow(p, step, idx, stepsBox)));
   card.appendChild(stepsBox);
 
-  const addStep = document.createElement("button");
-  addStep.className = "pl-add-step" + (isCardEditing ? "" : " hidden");
-  addStep.textContent = "＋ Add step";
-  addStep.addEventListener("click", () => {
-    if (!p._editing) p._editing = true;
-    p.steps.push("");
-    p._editingStep = p.steps.length - 1;
-    stepsBox.appendChild(stepRow(p, "", p.steps.length - 1, stepsBox));
-    setPlDirty(true);
-    const inputs = stepsBox.querySelectorAll(".pl-step-cmd");
-    inputs[inputs.length - 1]?.focus();
-  });
-  card.appendChild(addStep);
+  if (!isSingleStep) {
+    const addStep = document.createElement("button");
+    addStep.className = "pl-add-step" + (isCardEditing ? "" : " hidden");
+    addStep.textContent = "＋ Add step";
+    addStep.addEventListener("click", () => {
+      if (!p._editing) p._editing = true;
+      p.steps.push("");
+      p._editingStep = p.steps.length - 1;
+      stepsBox.appendChild(stepRow(p, "", p.steps.length - 1, stepsBox));
+      setPlDirty(true);
+      const inputs = stepsBox.querySelectorAll(".pl-step-cmd");
+      inputs[inputs.length - 1]?.focus();
+    });
+    card.appendChild(addStep);
+  }
 
   // --- footer: run (left / start of row) --- delete + edit (right / end of row) ---
   const foot = document.createElement("div");
@@ -616,7 +623,7 @@ function pipelineCard(p) {
   foot.appendChild(runBtn);
 
   const delBtn = document.createElement("button");
-  delBtn.className = "btn danger";
+  delBtn.className = "btn danger" + (isCardEditing ? "" : " hidden");
   delBtn.textContent = "🗑 Delete";
   delBtn.title = "Delete pipeline '" + p.name + "'";
   delBtn.addEventListener("click", () => {
@@ -624,7 +631,7 @@ function pipelineCard(p) {
     state.pipelines = state.pipelines.filter(x => x !== p);
     setPlDirty(true);
     renderPipelines();
-    toast("Chưa lưu (Unsaved)", "Đã xóa pipeline — hãy nhấp '💾 Save all' (hoặc Ctrl+S) để lưu lại!", "warn", 5000);
+    toast("Nhắc lưu thay đổi 💾", `Đã xóa pipeline '${p.name}' — hãy nhấp nút '💾 Save all' (hoặc Ctrl+S) để xác nhận lưu xuống file!`, "warn", 5000);
   });
   foot.appendChild(delBtn);
 
@@ -655,23 +662,26 @@ function pipelineCard(p) {
 }
 
 function stepRow(p, step, idx, stepsBox) {
+  const isSingleStep = (state.plSource === "car" || state.plSource === "dump");
   const isStepEditing = !!(p._editing || p._editingStep === idx);
   const row = document.createElement("div");
   row.className = "pl-step";
 
   const no = document.createElement("span");
   no.className = "pl-step-no";
-  no.textContent = `${idx + 1}.`;
+  no.textContent = isSingleStep ? "cmd:" : `${idx + 1}.`;
   row.appendChild(no);
 
   const input = document.createElement("input");
   input.className = "pl-step-cmd";
   input.value = step;
   input.readOnly = !isStepEditing;
-  input.placeholder = "adb shell … | git … | sleep 1 | echo …";
+  input.placeholder = isSingleStep
+    ? "dumpsys car_service … | cmd car_service …"
+    : "adb shell … | git … | sleep 1 | echo …";
   input.title = isStepEditing
-    ? "Edit step command"
-    : "Locked — click '✎' on this step (or '✎ Edit' on the pipeline) to edit";
+    ? "Edit command"
+    : "Locked — click '✎' on this line (or '✎ Edit' on the card) to edit";
   input.addEventListener("input", () => {
     if (!isStepEditing) return;
     p.steps[idx] = input.value;
@@ -683,8 +693,8 @@ function stepRow(p, step, idx, stepsBox) {
   editStepBtn.className = "pl-icon-btn edit" + (isStepEditing ? " active" : "");
   editStepBtn.textContent = isStepEditing && !p._editing ? "✓" : "✎";
   editStepBtn.title = isStepEditing
-    ? (p._editing ? "Editing enabled (click to focus step)" : "Lock this step")
-    : "Click to edit this step";
+    ? (p._editing ? "Editing enabled (click to focus)" : "Lock this command")
+    : "Click to edit this command";
   editStepBtn.addEventListener("click", () => {
     if (p._editing) {
       input.focus();
@@ -702,46 +712,47 @@ function stepRow(p, step, idx, stepsBox) {
   });
   row.appendChild(editStepBtn);
 
-  const up = document.createElement("button");
-  up.className = "pl-icon-btn";
-  up.textContent = "↑";
-  up.title = "Move up";
-  up.disabled = !isStepEditing || idx === 0;
-  up.addEventListener("click", () => {
-    if (!isStepEditing || idx === 0) return;
-    [p.steps[idx - 1], p.steps[idx]] = [p.steps[idx], p.steps[idx - 1]];
-    if (p._editingStep === idx) p._editingStep = idx - 1;
-    setPlDirty(true);
-    rerenderSteps(p, stepsBox);
-  });
-  row.appendChild(up);
+  if (!isSingleStep && isStepEditing) {
+    const up = document.createElement("button");
+    up.className = "pl-icon-btn";
+    up.textContent = "↑";
+    up.title = "Move up";
+    up.disabled = idx === 0;
+    up.addEventListener("click", () => {
+      if (idx === 0) return;
+      [p.steps[idx - 1], p.steps[idx]] = [p.steps[idx], p.steps[idx - 1]];
+      if (p._editingStep === idx) p._editingStep = idx - 1;
+      setPlDirty(true);
+      rerenderSteps(p, stepsBox);
+    });
+    row.appendChild(up);
 
-  const down = document.createElement("button");
-  down.className = "pl-icon-btn";
-  down.textContent = "↓";
-  down.title = "Move down";
-  down.disabled = !isStepEditing || idx >= p.steps.length - 1;
-  down.addEventListener("click", () => {
-    if (!isStepEditing || idx >= p.steps.length - 1) return;
-    [p.steps[idx + 1], p.steps[idx]] = [p.steps[idx], p.steps[idx + 1]];
-    if (p._editingStep === idx) p._editingStep = idx + 1;
-    setPlDirty(true);
-    rerenderSteps(p, stepsBox);
-  });
-  row.appendChild(down);
+    const down = document.createElement("button");
+    down.className = "pl-icon-btn";
+    down.textContent = "↓";
+    down.title = "Move down";
+    down.disabled = idx >= p.steps.length - 1;
+    down.addEventListener("click", () => {
+      if (idx >= p.steps.length - 1) return;
+      [p.steps[idx + 1], p.steps[idx]] = [p.steps[idx], p.steps[idx + 1]];
+      if (p._editingStep === idx) p._editingStep = idx + 1;
+      setPlDirty(true);
+      rerenderSteps(p, stepsBox);
+    });
+    row.appendChild(down);
 
-  const del = document.createElement("button");
-  del.className = "pl-icon-btn del";
-  del.textContent = "🗑";
-  del.title = "Delete step";
-  del.addEventListener("click", () => {
-    if (!isStepEditing && !confirm(`Delete step #${idx + 1} from '${p.name}'?\n\n${step}`)) return;
-    p.steps.splice(idx, 1);
-    if (p._editingStep === idx) p._editingStep = null;
-    setPlDirty(true);
-    rerenderSteps(p, stepsBox);
-  });
-  row.appendChild(del);
+    const del = document.createElement("button");
+    del.className = "pl-icon-btn del";
+    del.textContent = "🗑";
+    del.title = "Delete step";
+    del.addEventListener("click", () => {
+      p.steps.splice(idx, 1);
+      if (p._editingStep === idx) p._editingStep = null;
+      setPlDirty(true);
+      rerenderSteps(p, stepsBox);
+    });
+    row.appendChild(del);
+  }
 
   return row;
 }
