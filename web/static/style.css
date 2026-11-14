@@ -263,6 +263,31 @@ code, .mono { font-family: var(--mono); }
 .profile-item:hover { border-color: var(--accent); }
 .profile-item.active { border-color: var(--green); color: var(--green); }
 
+.crypto-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+.crypto-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.crypto-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 8px 10px;
+}
+.crypto-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .info-out {
   background: var(--bg);
   border: 1px solid var(--border);

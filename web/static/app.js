@@ -291,9 +291,13 @@ function setFileEditing(editing) {
 
 function setCurrentMeta() {
   const c = state.current;
+  const applyBtn = $("#btn-apply-overlay");
+  const cryptoBtn = $("#btn-file-crypto");
   if (!c) {
     $("#editor-name").textContent = "—";
     $("#editor-meta").textContent = "";
+    applyBtn?.classList.add("hidden");
+    cryptoBtn?.classList.add("hidden");
     setFileEditing(false);
     return;
   }
@@ -302,6 +306,10 @@ function setCurrentMeta() {
     `${c.kind} · ${c.readonly ? "read-only" : (state.fileEditing ? "editing" : "locked (click ✎ Edit)")} · ${c.size} bytes · ${c.mtime_str || ""}`;
   $("#btn-reload").disabled = false;
   $("#btn-save").disabled = !state.dirty || c.readonly;
+  const isOverlayFile = c.name === "config/overlay/apk_overlays.config" || c.name === "apk_overlays.config";
+  const isPrivateFile = isOverlayFile || c.name === "config/overlay/const_my_cli.config" || c.name === "config/const_my_cli.config";
+  applyBtn?.classList.toggle("hidden", !isOverlayFile);
+  cryptoBtn?.classList.toggle("hidden", !isPrivateFile);
   setFileEditing(state.fileEditing);
 }
 
@@ -400,6 +408,7 @@ async function loadPipelines(draft = null) {
     }
     renderPipelines();
     renderFiles($("#search").value);
+    $("#btn-pl-crypto")?.classList.toggle("hidden", state.plSource !== "my");
   } catch (err) {
     toast("Pipelines load failed", err.message, "err");
   }
@@ -741,6 +750,107 @@ async function showInfo() {
   }
 }
 
+/* ---------------- Crypto & Overlay modal ---------------- */
+function renderCryptoItems(items = []) {
+  const list = $("#crypto-status-list");
+  if (!list) return;
+  list.innerHTML = "";
+  let encCount = 0;
+  for (const it of items) {
+    if (it.enc_exists) encCount++;
+    const row = document.createElement("div");
+    row.className = "profile-item";
+    row.style.cursor = "default";
+    const plainBadge = it.plain_exists
+      ? `✔ plain (${it.plain_size}B · ${it.plain_mtime || ""})`
+      : "— missing plain";
+    const encBadge = it.enc_exists
+      ? `🔐 enc (${it.enc_size}B · ${it.enc_mtime || ""})`
+      : "⚠ not encrypted";
+    const syncBadge = it.plain_exists && it.enc_exists
+      ? (it.synced ? " · ✓ synced" : " · ⚠ plain newer")
+      : "";
+    row.innerHTML = `
+      <div>
+        <div><b>${esc(it.plain_rel)}</b></div>
+        <div class="meta">${esc(it.enc_rel)}</div>
+      </div>
+      <div class="meta" style="text-align:right">
+        <div>${esc(plainBadge)}</div>
+        <div>${esc(encBadge + syncBadge)}</div>
+      </div>
+    `;
+    list.appendChild(row);
+  }
+  const chip = $("#chip-crypto");
+  if (chip) {
+    chip.textContent = `🔐 enc: ${encCount}/${items.length}`;
+    chip.className = "chip " + (encCount === items.length ? "ok" : encCount > 0 ? "warn" : "");
+  }
+}
+
+async function refreshCryptoStatus() {
+  try {
+    const data = await api("/api/crypto/status");
+    renderCryptoItems(data.items || []);
+  } catch { /* ignore */ }
+}
+
+async function openCryptoModal(defaultTarget = "all") {
+  const targetSel = $("#crypto-target");
+  if (targetSel) targetSel.value = defaultTarget;
+  const out = $("#crypto-output");
+  if (out) {
+    out.textContent = "";
+    out.classList.add("hidden");
+  }
+  $("#modal-crypto").classList.remove("hidden");
+  await refreshCryptoStatus();
+  $("#crypto-password")?.focus();
+}
+
+async function runCryptoAction(action) {
+  const target = $("#crypto-target")?.value || "all";
+  const password = $("#crypto-password")?.value || "";
+  const applyOverlay = !!$("#crypto-apply-after-dec")?.checked;
+  const out = $("#crypto-output");
+
+  if ((action === "encrypt" || action === "decrypt") && !password) {
+    toast("Password required", "Please enter the password for " + action + ".", "warn");
+    $("#crypto-password")?.focus();
+    return;
+  }
+
+  if (out) {
+    out.textContent = `Running ${action}…`;
+    out.classList.remove("hidden");
+  }
+  try {
+    const data = await api("/api/crypto/action", {
+      method: "POST",
+      body: JSON.stringify({ action, target, password, apply_overlay: applyOverlay }),
+    });
+    if ($("#crypto-password")) $("#crypto-password").value = "";
+    if (out) {
+      out.textContent = data.output || `${action} completed successfully.`;
+      out.classList.remove("hidden");
+    }
+    renderCryptoItems(data.items || []);
+    toast(`Crypto ${action} ✓`, data.output || "Success", "ok");
+    await Promise.all([refreshFiles(), refreshStatus()]);
+    if (action === "decrypt" || action === "apply_overlay") {
+      await loadPipelines(draftLoadPipelines());
+      if (state.current) openFile(state.current.name);
+    }
+  } catch (err) {
+    if (out) {
+      out.textContent = `[ERROR] ${err.message}`;
+      out.classList.remove("hidden");
+    }
+    toast(`Crypto ${action} failed`, err.message, "err");
+  }
+}
+
 /* ---------------- Wiring ---------------- */
 function switchTab(tab) {
   const isFiles = tab === "files";
@@ -778,6 +888,26 @@ function wire() {
   $("#btn-info-close").addEventListener("click", () => $("#modal-info").classList.add("hidden"));
   $("#btn-profile-close").addEventListener("click", () => $("#modal-profile").classList.add("hidden"));
   $("#btn-run-close").addEventListener("click", () => $("#modal-run").classList.add("hidden"));
+  $("#btn-crypto-close")?.addEventListener("click", () => $("#modal-crypto").classList.add("hidden"));
+
+  // Crypto & Overlay actions
+  $("#chip-crypto")?.addEventListener("click", () => openCryptoModal("all"));
+  if ($("#chip-crypto")) $("#chip-crypto").style.cursor = "pointer";
+  $("#btn-pl-crypto")?.addEventListener("click", () => openCryptoModal("const_my_cli.config"));
+  $("#btn-file-crypto")?.addEventListener("click", () => {
+    const cur = state.current?.name || "";
+    const defTarget = cur.endsWith("apk_overlays.config")
+      ? "apk_overlays.config"
+      : cur.endsWith("const_my_cli.config") ? "const_my_cli.config" : "all";
+    openCryptoModal(defTarget);
+  });
+  $("#btn-apply-overlay")?.addEventListener("click", async () => {
+    if (state.dirty) await saveFile();
+    await runCryptoAction("apply_overlay");
+  });
+  $("#btn-crypto-encrypt")?.addEventListener("click", () => runCryptoAction("encrypt"));
+  $("#btn-crypto-decrypt")?.addEventListener("click", () => runCryptoAction("decrypt"));
+  $("#btn-crypto-apply")?.addEventListener("click", () => runCryptoAction("apply_overlay"));
 
   // Tab switching
   $("#tab-files").addEventListener("click", () => switchTab("files"));
@@ -833,6 +963,7 @@ function wire() {
       $("#modal-profile").classList.add("hidden");
       $("#modal-info").classList.add("hidden");
       $("#modal-run").classList.add("hidden");
+      $("#modal-crypto")?.classList.add("hidden");
     }
   });
 
@@ -845,7 +976,7 @@ function wire() {
 /* ---------------- Boot ---------------- */
 async function boot() {
   wire();
-  await Promise.all([refreshStatus(), refreshFiles()]);
+  await Promise.all([refreshStatus(), refreshFiles(), refreshCryptoStatus()]);
 
   // Pipelines is the default tab: load it (with draft) immediately.
   // Restore the last-used source from the draft if present.

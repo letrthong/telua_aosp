@@ -23,6 +23,7 @@
     <div class="chip hidden" id="chip-draft" title="Unsaved edits kept in browser draft (survives refresh). Click to discard.">✎ draft</div>
     <div class="chip" id="chip-version" title="Toolkit version">v—</div>
     <div class="chip" id="chip-project" title="Active project (apk.config)">project: —</div>
+    <div class="chip" id="chip-crypto" title="Private overlay encryption &amp; apply (config/overlay/)">🔐 crypto</div>
     <div class="chip" id="chip-adb" title="Connected ADB devices">adb: —</div>
     <div class="chip" id="chip-ram" title="System RAM">ram: —</div>
     <button class="btn ghost" id="btn-refresh" title="Reload status &amp; file list">⟳ Refresh</button>
@@ -53,6 +54,8 @@
         <label class="chk" title="Skip syntax validation on save">
           <input type="checkbox" id="force-save"> force
         </label>
+        <button class="btn hidden" id="btn-apply-overlay" title="Apply config/overlay/apk_overlays.config into config/apk.config">⚡ Apply Overlay</button>
+        <button class="btn hidden" id="btn-file-crypto" title="Encrypt or decrypt this private overlay config">🔐 Crypto</button>
         <button class="btn" id="btn-edit" disabled title="Click to unlock and edit this file">✎ Edit</button>
         <button class="btn" id="btn-reload" disabled>↺ Reload</button>
         <button class="btn primary" id="btn-save" disabled>💾 Save</button>
@@ -80,6 +83,7 @@
         <span class="meta" id="pl-label">personal pipelines · <code>telua my &lt;name&gt;</code></span>
       </div>
       <div class="editor-actions">
+        <button class="btn" id="btn-pl-crypto" title="Encrypt or decrypt private overlay configs (const_my_cli.config / apk_overlays.config)">🔐 Crypto</button>
         <button class="btn" id="btn-pl-raw" title="Open raw config file in text editor">📄 Raw file</button>
         <button class="btn" id="btn-pl-refresh">⟳ Refresh</button>
         <button class="btn" id="btn-pl-add">＋ New pipeline</button>
@@ -125,6 +129,42 @@
     <pre id="run-output" class="info-out">Running…</pre>
     <div class="modal-actions">
       <button class="btn" id="btn-run-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Crypto & Overlay modal ============ -->
+<div class="modal hidden" id="modal-crypto">
+  <div class="modal-box wide">
+    <h3>🔐 Private Overlay Crypto &amp; Apply (<code>config/overlay/</code>)</h3>
+    <p class="meta">Encrypt / decrypt <code>apk_overlays.config</code> and <code>const_my_cli.config</code> using
+       <code>python/config_crypto.py</code> (PBKDF2-HMAC-SHA256 + Fernet AES-128), or apply
+       <code>apk_overlays.config</code> into <code>config/apk.config</code>.</p>
+    <div id="crypto-status-list" class="profile-list"></div>
+    <div class="crypto-form">
+      <label class="crypto-field">
+        <span class="meta">Target file:</span>
+        <select id="crypto-target" class="crypto-input">
+          <option value="all">All private configs (apk_overlays.config + const_my_cli.config)</option>
+          <option value="apk_overlays.config">config/overlay/apk_overlays.config</option>
+          <option value="const_my_cli.config">config/overlay/const_my_cli.config</option>
+        </select>
+      </label>
+      <label class="crypto-field">
+        <span class="meta">Password (required for Encrypt / Decrypt, never stored):</span>
+        <input id="crypto-password" type="password" class="crypto-input" placeholder="Enter encryption / decryption password…" autocomplete="off">
+      </label>
+      <label class="chk" style="margin-top:4px">
+        <input type="checkbox" id="crypto-apply-after-dec" checked>
+        Auto-apply <code>apk_overlays.config → config/apk.config</code> after Decrypt
+      </label>
+    </div>
+    <pre id="crypto-output" class="info-out hidden"></pre>
+    <div class="modal-actions">
+      <button class="btn" id="btn-crypto-apply" title="Merge config/overlay/apk_overlays.config into config/apk.config (no password needed)">⚡ Apply apk_overlays → apk.config</button>
+      <button class="btn primary" id="btn-crypto-encrypt">🔐 Encrypt</button>
+      <button class="btn primary" id="btn-crypto-decrypt">🔓 Decrypt</button>
+      <button class="btn" id="btn-crypto-close">Close</button>
     </div>
   </div>
 </div>

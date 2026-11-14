@@ -447,6 +447,131 @@ def api_info():
 
 
 # ------------------------------------------------------------------------------
+# Crypto & Overlay API (python/config_crypto.py + python/config_overlay.py)
+# ------------------------------------------------------------------------------
+PRIVATE_OVERLAY_NAMES = ("apk_overlays.config", "const_my_cli.config")
+
+
+def _crypto_items():
+    overlay_dir = ROOT / "config" / "overlay"
+    items = []
+    for name in PRIVATE_OVERLAY_NAMES:
+        plain_path = overlay_dir / name
+        enc_path = overlay_dir / ("enc_" + name)
+        p_exists = plain_path.is_file()
+        e_exists = enc_path.is_file()
+        p_stat = plain_path.stat() if p_exists else None
+        e_stat = enc_path.stat() if e_exists else None
+        items.append({
+            "name": name,
+            "plain_rel": "config/overlay/%s" % name,
+            "enc_rel": "config/overlay/enc_%s" % name,
+            "plain_exists": p_exists,
+            "plain_size": p_stat.st_size if p_stat else 0,
+            "plain_mtime": datetime.fromtimestamp(p_stat.st_mtime).strftime("%Y-%m-%d %H:%M") if p_stat else None,
+            "enc_exists": e_exists,
+            "enc_size": e_stat.st_size if e_stat else 0,
+            "enc_mtime": datetime.fromtimestamp(e_stat.st_mtime).strftime("%Y-%m-%d %H:%M") if e_stat else None,
+            "synced": bool(p_stat and e_stat and int(e_stat.st_mtime) >= int(p_stat.st_mtime)),
+        })
+    return items
+
+
+@app.get("/api/crypto/status")
+def api_crypto_status():
+    items = _crypto_items()
+    return jsonify({
+        "ok": True,
+        "overlay_dir": "config/overlay",
+        "items": items,
+    })
+
+
+@app.post("/api/crypto/action")
+def api_crypto_action():
+    """Encrypt/decrypt private overlay configs or apply apk_overlays.config -> apk.config."""
+    data = request.get_json(silent=True) or {}
+    action = str(data.get("action", "")).strip().lower()
+    target = str(data.get("target", "all")).strip()
+    password = str(data.get("password", ""))
+    apply_overlay = bool(data.get("apply_overlay", False))
+
+    if action not in ("encrypt", "decrypt", "apply_overlay"):
+        abort(400, description="Invalid action '%s' (use 'encrypt', 'decrypt', or 'apply_overlay')." % action)
+    if target not in ("all", "apk_overlays.config", "const_my_cli.config"):
+        abort(400, description="Invalid target '%s'." % target)
+
+    overlay_dir = ROOT / "config" / "overlay"
+    crypto_script = ROOT / "python" / "config_crypto.py"
+    overlay_script = ROOT / "python" / "config_overlay.py"
+    logs = []
+
+    if action in ("encrypt", "decrypt"):
+        if not password:
+            abort(400, description="Password must not be empty.")
+        if not crypto_script.is_file():
+            abort(404, description="python/config_crypto.py not found.")
+
+        if target == "all":
+            cmd = [sys.executable, str(crypto_script), action, "-d", str(overlay_dir), "-p", "-"]
+        else:
+            plain_file = overlay_dir / target
+            enc_file = overlay_dir / ("enc_" + target)
+            if action == "encrypt":
+                if not plain_file.is_file():
+                    abort(404, description="config/overlay/%s does not exist." % target)
+                cmd = [sys.executable, str(crypto_script), "encrypt", "-i", str(plain_file), "-o", str(enc_file), "-p", "-"]
+            else:
+                if not enc_file.is_file():
+                    abort(404, description="config/overlay/enc_%s does not exist." % target)
+                cmd = [sys.executable, str(crypto_script), "decrypt", "-i", str(enc_file), "-o", str(plain_file), "-p", "-"]
+
+        try:
+            proc = subprocess.run(
+                cmd,
+                input=password + "\n",
+                cwd=str(ROOT),
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            out = ((proc.stdout or "") + (proc.stderr or "")).strip()
+            if proc.returncode != 0:
+                abort(400, description=out or ("Crypto %s failed (exit %d)." % (action, proc.returncode)))
+            if out:
+                logs.append(out)
+        except subprocess.TimeoutExpired:
+            abort(504, description="Crypto command timed out.")
+
+    if action == "apply_overlay" or (action == "decrypt" and apply_overlay):
+        ov_file = overlay_dir / "apk_overlays.config"
+        if not ov_file.is_file():
+            if action == "apply_overlay":
+                abort(404, description="config/overlay/apk_overlays.config not found (decrypt or create it first).")
+        elif APK_CONFIG.is_file() and overlay_script.is_file():
+            proc = subprocess.run(
+                [sys.executable, str(overlay_script), str(APK_CONFIG), str(ov_file)],
+                cwd=str(ROOT),
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            out = ((proc.stdout or "") + (proc.stderr or "")).strip()
+            if proc.returncode != 0:
+                abort(400, description=out or "Failed to apply apk_overlays.config.")
+            if out:
+                logs.append(out)
+
+    return jsonify({
+        "ok": True,
+        "action": action,
+        "target": target,
+        "output": "\n".join(logs),
+        "items": _crypto_items(),
+    })
+
+
+# ------------------------------------------------------------------------------
 # Pipelines API (MY_GROUP_LIST/MY_CMD_* in const_my_cli.config AND
 #                MULTI_GROUP_LIST/MULTI_CMD_* in const_multi_cli.config)
 # ------------------------------------------------------------------------------
