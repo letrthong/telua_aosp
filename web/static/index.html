@@ -171,6 +171,23 @@
   </div>
 </div>
 
+<!-- ============ Confirm modal ============ -->
+<div class="modal hidden" id="modal-confirm">
+  <div class="modal-box confirm-modal">
+    <div class="confirm-head">
+      <span class="confirm-icon" id="confirm-icon">🗑</span>
+      <h3 id="confirm-title">Xác nhận xóa</h3>
+    </div>
+    <p class="confirm-msg" id="confirm-msg"></p>
+    <pre class="confirm-detail hidden" id="confirm-detail"></pre>
+    <p class="confirm-hint" id="confirm-hint">💡 Sau khi xóa, bạn vẫn cần bấm <b>💾 Save all</b> để ghi chính thức xuống file.</p>
+    <div class="modal-actions confirm-foot">
+      <button class="btn" id="btn-confirm-cancel">Hủy (Cancel)</button>
+      <button class="btn danger-solid" id="btn-confirm-ok">🗑 Xác nhận xóa</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ Toast notifications ============ -->
 <div id="toasts" class="toasts"></div>
 

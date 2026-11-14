@@ -119,6 +119,55 @@ function toast(title, body, kind = "info", timeout = 5000) {
   $("#toasts").appendChild(el);
 }
 
+/* ---------------- Styled Confirm Modal ---------------- */
+let _confirmResolver = null;
+
+function confirmDialog({
+  title = "Xác nhận xóa",
+  message = "Bạn có chắc chắn muốn xóa mục này?",
+  detail = "",
+  hint = "💡 Sau khi xóa, bạn vẫn cần bấm '💾 Save all' để ghi chính thức xuống file.",
+  confirmText = "🗑 Xác nhận xóa",
+  icon = "🗑",
+} = {}) {
+  const modal = $("#modal-confirm");
+  if (!modal) return Promise.resolve(window.confirm(message));
+  $("#confirm-icon").textContent = icon;
+  $("#confirm-title").textContent = title;
+  $("#confirm-msg").textContent = message;
+  const detailEl = $("#confirm-detail");
+  if (detail) {
+    detailEl.textContent = detail;
+    detailEl.classList.remove("hidden");
+  } else {
+    detailEl.textContent = "";
+    detailEl.classList.add("hidden");
+  }
+  const hintEl = $("#confirm-hint");
+  if (hint) {
+    hintEl.textContent = hint;
+    hintEl.classList.remove("hidden");
+  } else {
+    hintEl.classList.add("hidden");
+  }
+  $("#btn-confirm-ok").textContent = confirmText;
+  modal.classList.remove("hidden");
+  $("#btn-confirm-ok").focus();
+
+  return new Promise((resolve) => {
+    _confirmResolver = resolve;
+  });
+}
+
+function resolveConfirm(result) {
+  $("#modal-confirm")?.classList.add("hidden");
+  if (_confirmResolver) {
+    const fn = _confirmResolver;
+    _confirmResolver = null;
+    fn(result);
+  }
+}
+
 /* ---------------- API helpers ---------------- */
 async function api(path, options = {}) {
   const res = await fetch(path, {
@@ -626,8 +675,17 @@ function pipelineCard(p) {
   delBtn.className = "btn danger" + (isCardEditing ? "" : " hidden");
   delBtn.textContent = "🗑 Delete";
   delBtn.title = "Delete pipeline '" + p.name + "'";
-  delBtn.addEventListener("click", () => {
-    if (!confirm(`Delete pipeline '${p.name}' (${p.steps.length} steps)?`)) return;
+  delBtn.addEventListener("click", async () => {
+    const stepPreview = p.steps.filter(Boolean).map((s, i) => `${i + 1}. ${s}`).join("\n");
+    const ok = await confirmDialog({
+      title: `Xóa Pipeline '${p.name}'?`,
+      message: `Bạn có chắc muốn xóa khối lệnh '${p.name}' (${p.steps.length} bước)${p.description ? " — " + p.description : ""}?`,
+      detail: stepPreview || "(empty pipeline)",
+      hint: "💡 Sau khi xóa trên giao diện, hãy bấm '💾 Save all' (hoặc Ctrl+S) để lưu chính thức xuống file.",
+      confirmText: "🗑 Xóa Pipeline",
+      icon: "🗑",
+    });
+    if (!ok) return;
     state.pipelines = state.pipelines.filter(x => x !== p);
     setPlDirty(true);
     renderPipelines();
@@ -745,11 +803,23 @@ function stepRow(p, step, idx, stepsBox) {
     del.className = "pl-icon-btn del";
     del.textContent = "🗑";
     del.title = "Delete step";
-    del.addEventListener("click", () => {
+    del.addEventListener("click", async () => {
+      if (step && step.trim()) {
+        const ok = await confirmDialog({
+          title: `Xóa bước #${idx + 1} trong '${p.name}'?`,
+          message: `Bạn có chắc muốn xóa dòng lệnh #${idx + 1} khỏi pipeline '${p.name}'?`,
+          detail: step,
+          hint: "💡 Sau khi xóa, hãy bấm '💾 Save all' (hoặc Ctrl+S) để xác nhận lưu xuống file.",
+          confirmText: "🗑 Xóa bước này",
+          icon: "🗑",
+        });
+        if (!ok) return;
+      }
       p.steps.splice(idx, 1);
       if (p._editingStep === idx) p._editingStep = null;
       setPlDirty(true);
       rerenderSteps(p, stepsBox);
+      toast("Nhắc lưu thay đổi 💾", `Đã xóa bước #${idx + 1} — hãy nhấp '💾 Save all' (hoặc Ctrl+S) để xác nhận lưu xuống file!`, "warn", 5000);
     });
     row.appendChild(del);
   }
@@ -998,10 +1068,18 @@ async function runCryptoAction(action, force = false) {
   }
 
   if (action === "decrypt" && force) {
-    const targetDesc = target === "all" ? "all private overlay configs" : `config/overlay/${target}`;
-    if (!confirm(`Decrypt & Override ${targetDesc}?\n\nThis will overwrite the current plain .config file(s) on disk with the encrypted version.`)) {
-      return;
-    }
+    const targetDesc = target === "all" ? "tất cả file cấu hình trong config/overlay/" : `config/overlay/${target}`;
+    const ok = await confirmDialog({
+      title: "⚠️ Giải mã & Ghi đè (Decrypt & Override)",
+      message: `Bạn có chắc muốn giải mã từ enc_*.config và GHI ĐÈ trực tiếp lên ${targetDesc}?`,
+      detail: target === "all"
+        ? "enc_apk_overlays.config → apk_overlays.config\nenc_const_my_cli.config → const_my_cli.config"
+        : `enc_${target} → ${target}`,
+      hint: "💡 Nếu chỉ muốn kiểm tra nội dung mà không ghi đè, hãy bấm nút '🔓 Decrypt' (sẽ tạo file dec_*.config).",
+      confirmText: "⚠️ Xác nhận Ghi đè",
+      icon: "⚠️",
+    });
+    if (!ok) return;
   }
 
   const label = (action === "decrypt" && force) ? "decrypt (override)" : action;
@@ -1095,6 +1173,8 @@ function wire() {
     }
   });
   $("#btn-crypto-close")?.addEventListener("click", () => $("#modal-crypto").classList.add("hidden"));
+  $("#btn-confirm-cancel")?.addEventListener("click", () => resolveConfirm(false));
+  $("#btn-confirm-ok")?.addEventListener("click", () => resolveConfirm(true));
 
   // Crypto & Overlay actions
   $("#chip-crypto")?.addEventListener("click", () => openCryptoModal("all"));
@@ -1133,8 +1213,16 @@ function wire() {
   $("#chip-project").title = "Click to switch ACTIVE_PROJECT";
 
   // Click on the draft chip discards the browser draft (keeps server files intact)
-  $("#chip-draft").addEventListener("click", () => {
-    if (!confirm("Discard the browser draft?\n\nUnsaved edits will be lost (files on disk are NOT affected).")) return;
+  $("#chip-draft").addEventListener("click", async () => {
+    const ok = await confirmDialog({
+      title: "Hủy bản nháp chưa lưu (Discard Draft)?",
+      message: "Bạn có muốn hủy các chỉnh sửa chưa lưu trên trình duyệt và khôi phục lại nội dung gốc trên đĩa?",
+      detail: "",
+      hint: "💡 Các file cấu hình trên đĩa không bị ảnh hưởng.",
+      confirmText: "↺ Khôi phục bản gốc",
+      icon: "↺",
+    });
+    if (!ok) return;
     draftClearFile();
     draftClearPipelines();
     state.dirty = false;
@@ -1146,7 +1234,7 @@ function wire() {
     if (state.current) openFile(state.current.name);
     loadPipelines();
     updateDraftChip();
-    toast("Draft discarded", "Unsaved edits removed from browser storage.", "info");
+    toast("Đã khôi phục bản gốc", "Các thay đổi chưa lưu đã được hủy bỏ.", "info", 5000);
   });
   $("#chip-draft").style.cursor = "pointer";
 
@@ -1163,6 +1251,10 @@ function wire() {
       }
     }
     if (e.key === "Escape") {
+      if (_confirmResolver) {
+        resolveConfirm(false);
+        return;
+      }
       $("#modal-profile").classList.add("hidden");
       $("#modal-info").classList.add("hidden");
       $("#modal-run").classList.add("hidden");
