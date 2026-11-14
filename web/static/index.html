@@ -1,27 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Telua Web — Config Manager</title>
-  <script>
-    try {
-      const t = localStorage.getItem("telua_web_theme") || "dark";
-      document.documentElement.setAttribute("data-theme", t);
-    } catch (e) { }
-  </script>
-  <link rel="stylesheet" href="/static/style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Telua Web — Config Manager</title>
+<script>
+  try {
+    const t = localStorage.getItem("telua_web_theme") || "dark";
+    document.documentElement.setAttribute("data-theme", t);
+  } catch (e) {}
+</script>
+<link rel="stylesheet" href="/static/style.css">
 </head>
-
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="logo">⚙</span>
-      <div>
-        <h1>Telua Web <span class="tag">Config Manager</span></h1>
-        <p class="sub">AOSP &amp; Automotive Toolkit</p>
-      </div>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">⚙</span>
+    <div>
+      <h1>Telua Web <span class="tag">Config Manager</span></h1>
+      <p class="sub">AOSP &amp; Automotive Toolkit</p>
     </div>
   </div>
   <div class="statusbar">
@@ -55,92 +52,82 @@
       <h2>Config Files</h2>
       <input id="search" type="search" placeholder="Filter files…" autocomplete="off">
     </div>
-  </header>
+    <ul id="file-list" class="file-list"></ul>
+    <div class="side-foot">
+      <button class="btn wide" id="btn-info">Run <code>build_apk.sh --info</code></button>
+      <button class="btn wide" id="btn-unittest" style="margin-top:6px" title="Execute: telua run unittest (Python + Shell test suites)">🧪 Run <code>tel run unittest</code></button>
+    </div>
+  </aside>
 
-  <main class="layout">
-    <!-- ============ Sidebar: file registry ============ -->
-    <aside class="sidebar">
-      <div class="side-head">
-        <h2>Config Files</h2>
-        <input id="search" type="search" placeholder="Filter files…" autocomplete="off">
+  <!-- ============ Editor pane (Files tab) ============ -->
+  <section class="editor-pane hidden" id="view-files">
+    <div class="editor-head">
+      <div class="editor-title">
+        <span id="editor-name" class="mono">—</span>
+        <span id="editor-meta" class="meta"></span>
       </div>
-      <ul id="file-list" class="file-list"></ul>
-      <div class="side-foot">
-        <button class="btn wide" id="btn-info">Run <code>build_apk.sh --info</code></button>
-        <button class="btn wide" id="btn-unittest" style="margin-top:6px"
-          title="Execute: telua run unittest (Python + Shell test suites)">🧪 Run <code>tel run unittest</code></button>
+      <div class="editor-actions">
+        <label class="chk" title="Skip syntax validation on save">
+          <input type="checkbox" id="force-save"> force
+        </label>
+        <button class="btn hidden" id="btn-file-crypto" title="Encrypt or decrypt this private overlay config">🔐 Crypto</button>
+        <button class="btn" id="btn-edit" disabled title="Click to unlock and edit this file">✎ Edit</button>
+        <button class="btn" id="btn-reload" disabled>↺ Reload</button>
+        <button class="btn primary" id="btn-save" disabled>💾 Save</button>
       </div>
-    </aside>
+    </div>
+    <textarea id="editor" class="editor" spellcheck="false" disabled
+              placeholder="Select a config file on the left to edit it…"></textarea>
+    <div class="editor-foot">
+      <span id="editor-stats" class="meta">0 lines · 0 bytes</span>
+      <span id="editor-dirty" class="dirty hidden">● unsaved changes</span>
+    </div>
+  </section>
 
-    <!-- ============ Editor pane (Files tab) ============ -->
-    <section class="editor-pane hidden" id="view-files">
-      <div class="editor-head">
-        <div class="editor-title">
-          <span id="editor-name" class="mono">—</span>
-          <span id="editor-meta" class="meta"></span>
+  <!-- ============ Pipelines pane (MY_CMD_* / MULTI_CMD_* editor, default tab) ============ -->
+  <section class="editor-pane" id="view-pipelines">
+    <div class="editor-head">
+      <div class="editor-title">
+        <div class="src-switch" id="pl-source-switch">
+          <button class="src-btn active" data-source="my" title="config/overlay/const_my_cli.config — personal pipelines (telua my <name>)">my</button>
+          <button class="src-btn" data-source="multi" title="config/const_multi_cli.config — multi-CLI pipelines (telua run <group>)">multi</button>
+          <button class="src-btn" data-source="car" title="config/const_car.config — AAOS Car control (telua car <action>)">car</button>
+          <button class="src-btn" data-source="dump" title="config/const_dumpsys.config — Dumpsys diagnostics (telua dump <target>)">dump</button>
+          <button class="src-btn" data-source="system" title="config/const_system_cli.config — System &amp; Docker CLI pipelines (telua system <action>)">🖥 system</button>
         </div>
-        <div class="editor-actions">
-          <label class="chk" title="Skip syntax validation on save">
-            <input type="checkbox" id="force-save"> force
-          </label>
-          <button class="btn hidden" id="btn-file-crypto" title="Encrypt or decrypt this private overlay config">🔐
-            Crypto</button>
-          <button class="btn" id="btn-edit" disabled title="Click to unlock and edit this file">✎ Edit</button>
-          <button class="btn" id="btn-reload" disabled>↺ Reload</button>
-          <button class="btn primary" id="btn-save" disabled>💾 Save</button>
-        </div>
+        <span class="hidden" id="pl-file">config/overlay/const_my_cli.config</span>
+        <span class="hidden" id="pl-label"></span>
       </div>
       <div class="editor-actions">
         <div class="pl-filter-box">
           <input id="pl-filter" type="search" placeholder="🔍 Filter CLI (e.g. ks, vol, diag…)" autocomplete="off" title="Quickly filter CLI by name, description, or command">
         </div>
-        <div class="editor-actions">
-          <div class="pl-filter-box">
-            <input id="pl-filter" type="search" placeholder="🔍 Tìm CLI (vd: ks, vol, diag…)" autocomplete="off"
-              title="Lọc nhanh CLI theo tên, mô tả hoặc câu lệnh">
-          </div>
-          <button class="btn" id="btn-pl-crypto"
-            title="Encrypt or decrypt private overlay configs (const_my_cli.config / apk_overlays.config)">🔐
-            Crypto</button>
-          <button class="btn" id="btn-pl-raw" title="Open raw config file in text editor">📄 Raw file</button>
-          <button class="btn" id="btn-pl-refresh">⟳ Refresh</button>
-          <button class="btn" id="btn-pl-add">＋ New pipeline</button>
-          <button class="btn primary" id="btn-pl-save" disabled>💾 Save all</button>
-        </div>
+        <button class="btn" id="btn-pl-crypto" title="Encrypt or decrypt private overlay configs (const_my_cli.config / apk_overlays.config)">🔐 Crypto</button>
+        <button class="btn" id="btn-pl-raw" title="Open raw config file in text editor">📄 Raw file</button>
+        <button class="btn" id="btn-pl-refresh">⟳ Refresh</button>
+        <button class="btn" id="btn-pl-add">＋ New pipeline</button>
+        <button class="btn primary" id="btn-pl-save" disabled>💾 Save all</button>
       </div>
-      <div id="pipeline-list" class="pipeline-list"></div>
-      <div class="editor-foot">
-        <span id="pl-stats" class="meta">0 pipelines</span>
-        <span id="pl-dirty" class="dirty hidden">● unsaved changes</span>
-      </div>
-    </section>
+    </div>
+    <div id="pipeline-list" class="pipeline-list"></div>
+    <div class="editor-foot">
+      <span id="pl-stats" class="meta">0 pipelines</span>
+      <span id="pl-dirty" class="dirty hidden">● unsaved changes</span>
+    </div>
+  </section>
 
-    <!-- ============ Terminal pane (Interactive CLI runner) ============ -->
-    <section class="editor-pane hidden" id="view-terminal">
-      <div class="editor-head">
-        <div class="editor-title">
-          <span class="mono" style="color:var(--accent);font-weight:700">💻 Web CLI Terminal</span>
-          <span id="term-cwd" class="meta">cwd: —</span>
-          <span id="term-status-badge" class="run-badge">Ready</span>
-        </div>
-        <div class="editor-actions">
-          <button class="btn danger" id="btn-term-stop-top" disabled title="Stop running command (Ctrl+C)">⏹
-            Stop</button>
-          <button class="btn" id="btn-term-copy" title="Copy terminal log to clipboard">📋 Copy</button>
-          <button class="btn" id="btn-term-clear" title="Clear terminal output (or type 'clear')">🧹 Clear</button>
-        </div>
+  <!-- ============ Terminal pane (Interactive CLI runner) ============ -->
+  <section class="editor-pane hidden" id="view-terminal">
+    <div class="editor-head">
+      <div class="editor-title">
+        <span class="mono" style="color:var(--accent);font-weight:700">💻 Web CLI Terminal</span>
+        <span id="term-cwd" class="meta">cwd: —</span>
+        <span id="term-status-badge" class="run-badge">Ready</span>
       </div>
-      <div class="term-quick-bar" id="term-quick-bar">
-        <span class="meta">⚡ Gợi ý nhanh:</span>
-        <button class="term-chip" data-cmd="tel --info">tel --info</button>
-        <button class="term-chip" data-cmd="tel system">tel system</button>
-        <button class="term-chip" data-cmd="tel system ram">tel system ram</button>
-        <button class="term-chip" data-cmd="tel system os">tel system os</button>
-        <button class="term-chip" data-cmd="tel --git-help">tel --git-help</button>
-        <button class="term-chip" data-cmd="tel --docker-help">tel --docker-help</button>
-        <button class="term-chip" data-cmd="tel --network-help">tel --network-help</button>
-        <button class="term-chip" data-cmd="git status -s">git status -s</button>
-        <button class="term-chip" data-cmd="adb devices -l">adb devices -l</button>
+      <div class="editor-actions">
+        <button class="btn" id="btn-term-new-session" title="Start a fresh terminal session (stop running command, reset working directory to toolkit root &amp; clear screen)">🔄 New session</button>
+        <button class="btn" id="btn-term-copy" title="Copy terminal log to clipboard">📋 Copy</button>
+        <button class="btn" id="btn-term-clear" title="Clear terminal output (or type 'clear')">🧹 Clear</button>
       </div>
     </div>
     <div class="term-quick-bar" id="term-quick-bar">
@@ -170,86 +157,80 @@
   </section>
 </main>
 
-  <!-- ============ Profile switcher modal ============ -->
-  <div class="modal hidden" id="modal-profile">
-    <div class="modal-box">
-      <h3>Switch ACTIVE_PROJECT</h3>
-      <p class="meta">Updates <code>ACTIVE_PROJECT="…"</code> in <code>apk.config</code>
-        (same as <code>telua -p &lt;name&gt;</code>). A <code>.bak</code> backup is created.</p>
-      <div id="profile-list" class="profile-list"></div>
-      <div class="modal-actions">
-        <button class="btn" id="btn-profile-close">Close</button>
-      </div>
+<!-- ============ Profile switcher modal ============ -->
+<div class="modal hidden" id="modal-profile">
+  <div class="modal-box">
+    <h3>Switch ACTIVE_PROJECT</h3>
+    <p class="meta">Updates <code>ACTIVE_PROJECT="…"</code> in <code>apk.config</code>
+       (same as <code>telua -p &lt;name&gt;</code>). A <code>.bak</code> backup is created.</p>
+    <div id="profile-list" class="profile-list"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btn-profile-close">Close</button>
     </div>
   </div>
+</div>
 
-  <!-- ============ Info output modal ============ -->
-  <div class="modal hidden" id="modal-info">
-    <div class="modal-box wide">
-      <h3>build_apk.sh --info</h3>
-      <pre id="info-output" class="info-out">Loading…</pre>
-      <div class="modal-actions">
-        <button class="btn" id="btn-info-close">Close</button>
-      </div>
+<!-- ============ Info output modal ============ -->
+<div class="modal hidden" id="modal-info">
+  <div class="modal-box wide">
+    <h3>build_apk.sh --info</h3>
+    <pre id="info-output" class="info-out">Loading…</pre>
+    <div class="modal-actions">
+      <button class="btn" id="btn-info-close">Close</button>
     </div>
   </div>
+</div>
 
-  <!-- ============ Run output modal ============ -->
-  <div class="modal hidden" id="modal-run">
-    <div class="modal-box wide jade-modal">
-      <div class="run-modal-head">
-        <div class="run-title-wrap">
-          <span class="run-icon">▶</span>
-          <h3 id="run-title">Pipeline output</h3>
-        </div>
-        <span id="run-status-badge" class="run-badge running">⏳ Running…</span>
+<!-- ============ Run output modal ============ -->
+<div class="modal hidden" id="modal-run">
+  <div class="modal-box wide jade-modal">
+    <div class="run-modal-head">
+      <div class="run-title-wrap">
+        <span class="run-icon">▶</span>
+        <h3 id="run-title">Pipeline output</h3>
       </div>
-      <pre id="run-output" class="info-out run-terminal">Running…</pre>
-      <div class="modal-actions run-modal-foot">
-        <button class="btn danger" id="btn-run-stop" disabled title="Stop running pipeline">⏹ Stop</button>
-        <button class="btn jade-btn" id="btn-run-again" title="Execute this pipeline again">↻ Re-run</button>
-        <button class="btn jade-btn" id="btn-run-copy" title="Copy command output to clipboard">📋 Copy output</button>
-        <button class="btn jade-btn primary" id="btn-run-close">Close</button>
-      </div>
+      <span id="run-status-badge" class="run-badge running">⏳ Running…</span>
+    </div>
+    <pre id="run-output" class="info-out run-terminal">Running…</pre>
+    <div class="modal-actions run-modal-foot">
+      <button class="btn danger" id="btn-run-stop" disabled title="Stop running pipeline">⏹ Stop</button>
+      <button class="btn jade-btn" id="btn-run-again" title="Execute this pipeline again">↻ Re-run</button>
+      <button class="btn jade-btn" id="btn-run-copy" title="Copy command output to clipboard">📋 Copy output</button>
+      <button class="btn jade-btn primary" id="btn-run-close">Close</button>
     </div>
   </div>
+</div>
 
-  <!-- ============ Crypto modal ============ -->
-  <div class="modal hidden" id="modal-crypto">
-    <div class="modal-box wide">
-      <h3>🔐 Private Overlay Crypto (<code>config/overlay/</code>)</h3>
-      <p class="meta">Encrypt / decrypt <code>apk_overlays.config</code> and <code>const_my_cli.config</code> using
-        <code>python/config_crypto.py</code> (PBKDF2-HMAC-SHA256 + Fernet AES-128).
-      </p>
-      <div id="crypto-status-list" class="profile-list"></div>
-      <div class="crypto-form">
-        <label class="crypto-field">
-          <span class="meta">Target file:</span>
-          <select id="crypto-target" class="crypto-input">
-            <option value="all">All private configs (apk_overlays.config + const_my_cli.config)</option>
-            <option value="apk_overlays.config">config/overlay/apk_overlays.config</option>
-            <option value="const_my_cli.config">config/overlay/const_my_cli.config</option>
-          </select>
-        </label>
-        <label class="crypto-field">
-          <span class="meta">Password (required for Encrypt / Decrypt, never stored):</span>
-          <input id="crypto-password" type="password" class="crypto-input"
-            placeholder="Enter encryption / decryption password…" autocomplete="off">
-        </label>
-      </div>
-      <pre id="crypto-output" class="info-out hidden"></pre>
-      <div class="modal-actions">
-        <button class="btn primary" id="btn-crypto-encrypt" title="Encrypt plain .config → enc_*.config">🔐
-          Encrypt</button>
-        <button class="btn primary" id="btn-crypto-decrypt"
-          title="Decrypt enc_*.config → dec_*.config for inspection (does not touch active config)">🔓 Decrypt</button>
-        <button class="btn danger" id="btn-crypto-decrypt-force"
-          title="Decrypt enc_*.config → *.config and OVERWRITE existing active config">⚠️ Decrypt &amp;
-          Override</button>
-        <button class="btn" id="btn-crypto-close">Close</button>
-      </div>
+<!-- ============ Crypto modal ============ -->
+<div class="modal hidden" id="modal-crypto">
+  <div class="modal-box wide">
+    <h3>🔐 Private Overlay Crypto (<code>config/overlay/</code>)</h3>
+    <p class="meta">Encrypt / decrypt <code>apk_overlays.config</code> and <code>const_my_cli.config</code> using
+       <code>python/config_crypto.py</code> (PBKDF2-HMAC-SHA256 + Fernet AES-128).</p>
+    <div id="crypto-status-list" class="profile-list"></div>
+    <div class="crypto-form">
+      <label class="crypto-field">
+        <span class="meta">Target file:</span>
+        <select id="crypto-target" class="crypto-input">
+          <option value="all">All private configs (apk_overlays.config + const_my_cli.config)</option>
+          <option value="apk_overlays.config">config/overlay/apk_overlays.config</option>
+          <option value="const_my_cli.config">config/overlay/const_my_cli.config</option>
+        </select>
+      </label>
+      <label class="crypto-field">
+        <span class="meta">Password (required for Encrypt / Decrypt, never stored):</span>
+        <input id="crypto-password" type="password" class="crypto-input" placeholder="Enter encryption / decryption password…" autocomplete="off">
+      </label>
+    </div>
+    <pre id="crypto-output" class="info-out hidden"></pre>
+    <div class="modal-actions">
+      <button class="btn primary" id="btn-crypto-encrypt" title="Encrypt plain .config → enc_*.config">🔐 Encrypt</button>
+      <button class="btn primary" id="btn-crypto-decrypt" title="Decrypt enc_*.config → dec_*.config for inspection (does not touch active config)">🔓 Decrypt</button>
+      <button class="btn danger" id="btn-crypto-decrypt-force" title="Decrypt enc_*.config → *.config and OVERWRITE existing active config">⚠️ Decrypt &amp; Override</button>
+      <button class="btn" id="btn-crypto-close">Close</button>
     </div>
   </div>
+</div>
 
 <!-- ============ Confirm modal ============ -->
 <div class="modal hidden" id="modal-confirm">
@@ -266,11 +247,11 @@
       <button class="btn danger-solid" id="btn-confirm-ok">🗑 Confirm Delete</button>
     </div>
   </div>
+</div>
 
-  <!-- ============ Toast notifications ============ -->
-  <div id="toasts" class="toasts"></div>
+<!-- ============ Toast notifications ============ -->
+<div id="toasts" class="toasts"></div>
 
-  <script src="/static/app.js"></script>
+<script src="/static/app.js"></script>
 </body>
-
 </html>
