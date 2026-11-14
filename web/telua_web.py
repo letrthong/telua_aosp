@@ -691,6 +691,41 @@ def api_pipeline_stream():
     )
 
 
+import signal
+
+_ACTIVE_TERM_LOCK = threading.Lock()
+_ACTIVE_TERM_PROCS = set()
+
+
+def _kill_term_proc(proc):
+    """Terminate a running terminal Popen process and its entire process group."""
+    if proc is None:
+        return
+    try:
+        if proc.poll() is None:
+            if os.name != "nt" and hasattr(os, "killpg"):
+                try:
+                    os.killpg(proc.pid, signal.SIGINT)
+                except OSError:
+                    pass
+                try:
+                    os.killpg(proc.pid, signal.SIGTERM)
+                except OSError:
+                    pass
+            proc.terminate()
+            try:
+                proc.wait(timeout=1.0)
+            except subprocess.TimeoutExpired:
+                if os.name != "nt" and hasattr(os, "killpg"):
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except OSError:
+                        pass
+                proc.kill()
+    except Exception:
+        pass
+
+
 def _build_terminal_bash_script(cmd: str, cwd: str = "") -> str:
     """Wrap a user command with tel/telua shell functions and persistent cwd tracking."""
     script_path = str(BUILD_APK_SH).replace("\\", "/")
@@ -766,6 +801,7 @@ def api_terminal_stream():
     def generate():
         env = dict(os.environ)
         env["PYTHONUNBUFFERED"] = "1"
+        proc = None
         try:
             proc = subprocess.Popen(
                 exec_args,
@@ -777,7 +813,10 @@ def api_terminal_stream():
                 text=True,
                 bufsize=1,
                 env=env,
+                start_new_session=(os.name != "nt"),
             )
+            with _ACTIVE_TERM_LOCK:
+                _ACTIVE_TERM_PROCS.add(proc)
             if proc.stdout is not None:
                 for line in iter(proc.stdout.readline, ""):
                     yield line
@@ -786,6 +825,12 @@ def api_terminal_stream():
         except Exception as exc:  # pragma: no cover
             yield "\n[ERROR] Failed to execute command: %s\n" % exc
             code = 1
+        finally:
+            if proc is not None:
+                with _ACTIVE_TERM_LOCK:
+                    _ACTIVE_TERM_PROCS.discard(proc)
+                if proc.poll() is None:
+                    _kill_term_proc(proc)
         yield "\n__TELUA_EXIT_CODE__:%d\n" % code
 
     return Response(
@@ -793,6 +838,17 @@ def api_terminal_stream():
         mimetype="text/plain; charset=utf-8",
         headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
     )
+
+
+@app.post("/api/terminal/stop")
+def api_terminal_stop():
+    """Stop (SIGINT/SIGTERM) any currently running terminal command."""
+    with _ACTIVE_TERM_LOCK:
+        procs = list(_ACTIVE_TERM_PROCS)
+        _ACTIVE_TERM_PROCS.clear()
+    for p in procs:
+        _kill_term_proc(p)
+    return jsonify({"ok": True, "stopped": len(procs)})
 
 
 # ------------------------------------------------------------------------------

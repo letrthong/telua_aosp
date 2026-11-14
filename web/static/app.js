@@ -1298,6 +1298,8 @@ let _termHistory = [];
 let _termHistoryIdx = -1;
 let _termRunning = false;
 let _termCwd = "";
+let _termAbortController = null;
+let _termStoppedByUser = false;
 
 try {
   const savedHist = JSON.parse(localStorage.getItem(TERM_HISTORY_KEY) || "[]");
@@ -1361,10 +1363,10 @@ function _stripPipelineWrapperOutput(raw) {
   return stripped ? stripped + "\n" : "";
 }
 
-async function _fallbackTerminalViaExistingApis(cmd) {
+async function _fallbackTerminalViaExistingApis(cmd, signal = null) {
   const norm = cmd.trim().replace(/\s+/g, " ");
   if (norm === "tel --info" || norm === "telua --info" || norm === "./build_apk.sh --info") {
-    const data = await api("/api/info");
+    const data = await api("/api/info", signal ? { signal } : {});
     return { ok: data.ok, exit_code: data.exit_code ?? 0, output: data.output || "" };
   }
   const helpMap = {
@@ -1376,14 +1378,14 @@ async function _fallbackTerminalViaExistingApis(cmd) {
     "telua --network-help": "config/const_network.config",
   };
   if (helpMap[norm]) {
-    const data = await api(`/api/file?name=${encodeURIComponent(helpMap[norm])}`);
+    const data = await api(`/api/file?name=${encodeURIComponent(helpMap[norm])}`, signal ? { signal } : {});
     return { ok: true, exit_code: 0, output: data.content || "" };
   }
   const listMatch = norm.match(/^(?:tel|telua)\s+(system|docker|my|run|multi|car|dump)$/);
   if (listMatch) {
     const srcMap = { system: "system", docker: "system", my: "my", run: "multi", multi: "multi", car: "car", dump: "dump" };
     const src = srcMap[listMatch[1]];
-    const data = await api(`/api/pipelines?source=${encodeURIComponent(src)}`);
+    const data = await api(`/api/pipelines?source=${encodeURIComponent(src)}`, signal ? { signal } : {});
     const lines = (data.pipelines || []).map(p => `  • ${p.name.padEnd(18)} → ${p.description || ""}`);
     return {
       ok: true,
@@ -1397,6 +1399,7 @@ async function _fallbackTerminalViaExistingApis(cmd) {
     const data = await api("/api/pipeline/run", {
       method: "POST",
       body: JSON.stringify({ source: srcMap[runMatch[1]], name: runMatch[2] }),
+      ...(signal ? { signal } : {}),
     });
     return { ok: data.ok, exit_code: data.exit_code ?? 0, output: data.output || "" };
   }
@@ -1422,6 +1425,7 @@ async function _fallbackTerminalViaExistingApis(cmd) {
     const runData = await api("/api/pipeline/run", {
       method: "POST",
       body: JSON.stringify({ source: "multi", name: "_term_exec" }),
+      ...(signal ? { signal } : {}),
     });
     const stripped = _stripPipelineWrapperOutput(runData.output || "");
     const finalOut = _extractAndApplyTermPwd(stripped);
@@ -1437,6 +1441,56 @@ async function _fallbackTerminalViaExistingApis(cmd) {
         body: JSON.stringify({ source: "multi", pipelines: origList }),
       });
     } catch { /* ignore */ }
+  }
+}
+
+async function stopTerminalCommand() {
+  if (!_termRunning) return;
+  _termStoppedByUser = true;
+  const badge = $("#term-status-badge");
+  if (badge) {
+    badge.textContent = "⏹ Stopping (Ctrl+C)…";
+    badge.className = "run-badge err";
+  }
+
+  // Fallback abort if process does not exit after SIGINT within 900ms
+  const abortTimer = setTimeout(() => {
+    try { _termAbortController?.abort(); } catch { /* ignore */ }
+  }, 900);
+
+  try {
+    const res = await fetch("/api/terminal/stop", { method: "POST" });
+    if (res.status === 404) {
+      // Old server fallback: send SIGINT via 'my' pipeline so running 'ping' / '_term_exec' exits cleanly
+      const origMy = await api("/api/pipelines?source=my");
+      const origMyList = (origMy.pipelines || [])
+        .filter(p => p.name && p.name !== "_term_stop")
+        .map(p => ({ name: p.name, description: p.description || "", steps: p.steps || [] }));
+      const killCmd = "eval \"pkill -INT ping 2>/dev/null; pkill -INT -f '_term_exec' 2>/dev/null; true\"";
+      try {
+        await api("/api/pipelines", {
+          method: "POST",
+          body: JSON.stringify({
+            source: "my",
+            pipelines: [...origMyList, { name: "_term_stop", description: "Ctrl+C Stop", steps: [killCmd] }],
+          }),
+        });
+        await api("/api/pipeline/run", {
+          method: "POST",
+          body: JSON.stringify({ source: "my", name: "_term_stop" }),
+        });
+      } finally {
+        try {
+          await api("/api/pipelines", {
+            method: "POST",
+            body: JSON.stringify({ source: "my", pipelines: origMyList }),
+          });
+        } catch { /* ignore */ }
+      }
+    }
+  } catch { /* ignore */ } finally {
+    clearTimeout(abortTimer);
+    try { _termAbortController?.abort(); } catch { /* ignore */ }
   }
 }
 
@@ -1469,8 +1523,13 @@ async function runTerminalCommand(explicitCmd = null) {
   const outEl = $("#term-output");
   const badge = $("#term-status-badge");
   const runBtn = $("#btn-term-run");
+  const stopBtn = $("#btn-term-stop");
   _termRunning = true;
+  _termStoppedByUser = false;
+  _termAbortController = new AbortController();
+  const signal = _termAbortController.signal;
   if (runBtn) runBtn.disabled = true;
+  stopBtn?.classList.remove("hidden");
 
   const separator = outEl && outEl.innerHTML.trim() ? "\n" : "";
   const shortDir = _termCwd ? (_termCwd === "/" ? "/" : (_termCwd.split(/[\\/]/).filter(Boolean).pop() || _termCwd)) : "";
@@ -1478,7 +1537,7 @@ async function runTerminalCommand(explicitCmd = null) {
   const baseHtml = (outEl ? outEl.innerHTML : "") +
     `${separator}<span style="color:#3fb950;font-weight:700">${esc(promptLabel)}</span> <span style="color:#58a6ff;font-weight:700">${esc(cmd)}</span>\n`;
   if (outEl) {
-    outEl.innerHTML = baseHtml + `<span style="opacity:.7">⏳ Running…</span>\n`;
+    outEl.innerHTML = baseHtml + `<span style="opacity:.7">⏳ Running… (nhấn Ctrl+C hoặc nút ⏹ Stop để dừng)</span>\n`;
     outEl.scrollTop = outEl.scrollHeight;
   }
 
@@ -1489,14 +1548,16 @@ async function runTerminalCommand(explicitCmd = null) {
   }
   const timerId = setInterval(() => {
     elapsed++;
-    if (badge) badge.textContent = `⏳ Running… (${elapsed}s)`;
+    if (badge && !_termStoppedByUser) badge.textContent = `⏳ Running… (${elapsed}s)`;
   }, 1000);
 
+  let streamedPreview = "";
   try {
     const res = await fetch("/api/terminal/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ command: cmd, cwd: _termCwd }),
+      signal,
     });
 
     if (res.ok && res.body) {
@@ -1513,6 +1574,7 @@ async function runTerminalCommand(explicitCmd = null) {
           const cleanPreview = rawBuffer
             .replace(/\n?__TELUA_EXIT_CODE__:\s*-?\d+\s*$/, "")
             .replace(/\n?__TELUA_PWD__:[^\r\n]+\r?\n?/g, "\n");
+          streamedPreview = cleanPreview;
           if (outEl) {
             outEl.innerHTML = baseHtml + ansiToHtml(cleanPreview);
             outEl.scrollTop = outEl.scrollHeight;
@@ -1525,34 +1587,46 @@ async function runTerminalCommand(explicitCmd = null) {
       const withoutExit = rawBuffer.replace(/\n?__TELUA_EXIT_CODE__:\s*-?\d+\s*$/, "");
       const finalOutput = _extractAndApplyTermPwd(withoutExit) ||
         (/^cd(\s|$)/.test(cmd) && exitCode === 0 ? `📂 cwd → ${_termCwd}\n` : "(no output)\n");
+      const stoppedSuffix = _termStoppedByUser ? `\n<span style="color:#d29922;font-weight:700">^C [Stopped by Ctrl+C · ${elapsed}s]</span>\n` : "";
       const statusColor = exitCode === 0 ? "#3fb950" : "#f85149";
       if (outEl) {
         outEl.innerHTML = baseHtml +
           ansiToHtml(finalOutput) +
-          `<span style="color:${statusColor};opacity:.85">[exit code: ${exitCode} · ${elapsed}s]</span>\n`;
+          (stoppedSuffix || `<span style="color:${statusColor};opacity:.85">[exit code: ${exitCode} · ${elapsed}s]</span>\n`);
         outEl.scrollTop = outEl.scrollHeight;
       }
       if (badge) {
-        const ok = exitCode === 0;
-        badge.textContent = ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${exitCode} (${elapsed}s)`;
-        badge.className = "run-badge " + (ok ? "ok" : "err");
+        if (_termStoppedByUser) {
+          badge.textContent = `⏹ Stopped (Ctrl+C · ${elapsed}s)`;
+          badge.className = "run-badge err";
+        } else {
+          const ok = exitCode === 0;
+          badge.textContent = ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${exitCode} (${elapsed}s)`;
+          badge.className = "run-badge " + (ok ? "ok" : "err");
+        }
       }
       return;
     }
 
     if (res.status === 404) {
-      const fb = await _fallbackTerminalViaExistingApis(cmd);
+      const fb = await _fallbackTerminalViaExistingApis(cmd, signal);
       if (fb) {
         const statusColor = fb.ok ? "#3fb950" : "#f85149";
+        const stoppedSuffix = _termStoppedByUser ? `<span style="color:#d29922;font-weight:700">^C [Stopped by Ctrl+C · ${elapsed}s]</span>\n` : "";
         if (outEl) {
           outEl.innerHTML = baseHtml +
             ansiToHtml(fb.output || "(no output)\n") +
-            `<span style="color:${statusColor};opacity:.85">[exit code: ${fb.exit_code} · ${elapsed}s]</span>\n`;
+            (stoppedSuffix || `<span style="color:${statusColor};opacity:.85">[exit code: ${fb.exit_code} · ${elapsed}s]</span>\n`);
           outEl.scrollTop = outEl.scrollHeight;
         }
         if (badge) {
-          badge.textContent = fb.ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${fb.exit_code} (${elapsed}s)`;
-          badge.className = "run-badge " + (fb.ok ? "ok" : "err");
+          if (_termStoppedByUser) {
+            badge.textContent = `⏹ Stopped (Ctrl+C · ${elapsed}s)`;
+            badge.className = "run-badge err";
+          } else {
+            badge.textContent = fb.ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${fb.exit_code} (${elapsed}s)`;
+            badge.className = "run-badge " + (fb.ok ? "ok" : "err");
+          }
         }
         return;
       }
@@ -1565,6 +1639,7 @@ async function runTerminalCommand(explicitCmd = null) {
     const data = await api("/api/terminal/run", {
       method: "POST",
       body: JSON.stringify({ command: cmd, cwd: _termCwd }),
+      signal,
     });
     const ok = data.exit_code === 0;
     const statusColor = ok ? "#3fb950" : "#f85149";
@@ -1581,18 +1656,33 @@ async function runTerminalCommand(explicitCmd = null) {
       badge.className = "run-badge " + (ok ? "ok" : "err");
     }
   } catch (err) {
-    if (outEl) {
-      outEl.innerHTML = baseHtml + `<span style="color:#f85149">[ERROR] ${esc(err.message)}</span>\n`;
-      outEl.scrollTop = outEl.scrollHeight;
-    }
-    if (badge) {
-      badge.textContent = "✖ Error";
-      badge.className = "run-badge err";
+    if (_termStoppedByUser || err.name === "AbortError") {
+      if (outEl) {
+        outEl.innerHTML = baseHtml +
+          (streamedPreview ? ansiToHtml(streamedPreview) : "") +
+          `<span style="color:#d29922;font-weight:700">^C [Stopped by Ctrl+C · ${elapsed}s]</span>\n`;
+        outEl.scrollTop = outEl.scrollHeight;
+      }
+      if (badge) {
+        badge.textContent = `⏹ Stopped (Ctrl+C · ${elapsed}s)`;
+        badge.className = "run-badge err";
+      }
+    } else {
+      if (outEl) {
+        outEl.innerHTML = baseHtml + `<span style="color:#f85149">[ERROR] ${esc(err.message)}</span>\n`;
+        outEl.scrollTop = outEl.scrollHeight;
+      }
+      if (badge) {
+        badge.textContent = "✖ Error";
+        badge.className = "run-badge err";
+      }
     }
   } finally {
     clearInterval(timerId);
     _termRunning = false;
+    _termAbortController = null;
     if (runBtn) runBtn.disabled = false;
+    stopBtn?.classList.add("hidden");
     input?.focus();
   }
 }
@@ -1697,6 +1787,7 @@ function wire() {
 
   // Terminal wiring
   $("#btn-term-run")?.addEventListener("click", () => runTerminalCommand());
+  $("#btn-term-stop")?.addEventListener("click", () => stopTerminalCommand());
   $("#btn-term-clear")?.addEventListener("click", clearTerminalOutput);
   $("#btn-term-copy")?.addEventListener("click", async () => {
     const text = $("#term-output")?.innerText || "";
@@ -1708,6 +1799,14 @@ function wire() {
     }
   });
   $("#term-input")?.addEventListener("keydown", (e) => {
+    if (e.ctrlKey && e.key.toLowerCase() === "c" && _termRunning) {
+      const hasSel = e.target.selectionStart !== e.target.selectionEnd;
+      if (!hasSel) {
+        e.preventDefault();
+        stopTerminalCommand();
+        return;
+      }
+    }
     if (e.key === "Enter") {
       e.preventDefault();
       runTerminalCommand();
@@ -1782,8 +1881,16 @@ function wire() {
 
   $("#editor").addEventListener("input", () => { setDirty(true); updateStats(); });
 
-  // Ctrl+S / Cmd+S to save (works in both tabs)
+  // Ctrl+S / Cmd+S to save (works in both tabs); Ctrl+C to stop running Terminal command
   document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey && e.key.toLowerCase() === "c" && _termRunning && !$("#view-terminal")?.classList.contains("hidden")) {
+      const sel = window.getSelection ? String(window.getSelection()) : "";
+      if (!sel) {
+        e.preventDefault();
+        stopTerminalCommand();
+        return;
+      }
+    }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
       e.preventDefault();
       if (!$("#view-pipelines").classList.contains("hidden")) {

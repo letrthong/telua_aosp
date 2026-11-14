@@ -212,6 +212,10 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertIn("stream_ok", body)
         self.assertIn("__TELUA_EXIT_CODE__:0", body)
 
+        res_stop = self.client.post("/api/terminal/stop")
+        self.assertEqual(res_stop.status_code, 200)
+        self.assertTrue(res_stop.get_json()["ok"])
+
 
 if __name__ == "__main__":
     unittest.main()

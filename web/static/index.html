@@ -143,13 +143,14 @@
     </div>
     <pre id="term-output" class="info-out run-terminal term-screen">💻 Telua Web CLI Terminal sẵn sàng.
 • Gõ lệnh bất kỳ bên dưới (vd: tel system ram, tel --git-help, git status -s, free -h, df -h, adb devices…) và nhấn Enter.
-• Phím tắt: ↑ / ↓ để gọi lại lịch sử lệnh · gõ 'clear' để xóa màn hình.
+• Phím tắt: ↑ / ↓ để gọi lại lịch sử lệnh · Ctrl+C (hoặc nút ⏹ Stop) để dừng lệnh đang chạy · gõ 'clear' để xóa màn hình.
 </pre>
     <div class="term-input-bar">
       <span class="term-prompt mono">tel $</span>
       <input id="term-input" type="text" class="term-input mono"
-             placeholder="Gõ lệnh CLI tại đây (vd: tel system ram, git status -s, df -h, tel --network-help)… Nhấn Enter để chạy"
+             placeholder="Gõ lệnh CLI tại đây (vd: tel system ram, git status -s, df -h, tel --network-help)… Enter để chạy, Ctrl+C để dừng"
              autocomplete="off" spellcheck="false">
+      <button class="btn danger hidden" id="btn-term-stop" title="Stop running command (Ctrl+C / SIGINT)">⏹ Stop (Ctrl+C)</button>
       <button class="btn primary" id="btn-term-run">▶ Run</button>
     </div>
   </section>
