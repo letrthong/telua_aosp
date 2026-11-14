@@ -1775,8 +1775,8 @@ function switchTab(tab) {
   const isFiles = tab === "files";
   const isTerminal = tab === "terminal";
   const isPipelinesView = !isFiles && !isTerminal;
-  $("#view-files").classList.toggle("hidden", !isFiles);
-  $("#view-pipelines").classList.toggle("hidden", !isPipelinesView);
+  $("#view-files")?.classList.toggle("hidden", !isFiles);
+  $("#view-pipelines")?.classList.toggle("hidden", !isPipelinesView);
   $("#view-terminal")?.classList.toggle("hidden", !isTerminal);
   if (tab === "system") {
     switchPipelineSource("system");
@@ -1784,7 +1784,7 @@ function switchTab(tab) {
     switchPipelineSource(_lastNonSystemPlSource || "my");
   }
   syncTopTabs();
-  renderFiles($("#search").value);
+  renderFiles($("#search")?.value || "");
   if (isTerminal) {
     setTimeout(() => $("#term-input")?.focus(), 40);
     return;
@@ -1810,26 +1810,26 @@ function wire() {
     applyTheme(val);
     toast("Theme updated 🎨", `${THEME_LABELS[val] || val} — saved in browser.`, "info", 5000);
   });
-  $("#search").addEventListener("input", (e) => renderFiles(e.target.value));
-  $("#btn-refresh").addEventListener("click", () => { refreshStatus(); refreshFiles(); });
-  $("#btn-edit").addEventListener("click", () => {
+  $("#search")?.addEventListener("input", (e) => renderFiles(e.target.value));
+  $("#btn-refresh")?.addEventListener("click", () => { refreshStatus(); refreshFiles(); });
+  $("#btn-edit")?.addEventListener("click", () => {
     if (!state.current || state.current.readonly) return;
     const wasEditing = state.fileEditing;
     setFileEditing(!state.fileEditing);
     setCurrentMeta();
     if (state.fileEditing) {
-      $("#editor").focus();
+      $("#editor")?.focus();
     } else if (wasEditing && state.dirty) {
       toast("Unsaved changes 💾", "Finished editing — click '💾 Save' (or Ctrl+S) to save the file!", "warn", 5000);
     }
   });
-  $("#btn-reload").addEventListener("click", () => state.current && openFile(state.current.name));
-  $("#btn-save").addEventListener("click", saveFile);
-  $("#btn-info").addEventListener("click", showInfo);
+  $("#btn-reload")?.addEventListener("click", () => state.current && openFile(state.current.name));
+  $("#btn-save")?.addEventListener("click", saveFile);
+  $("#btn-info")?.addEventListener("click", showInfo);
   $("#btn-unittest")?.addEventListener("click", () => runPipeline("unittest", "multi"));
-  $("#btn-info-close").addEventListener("click", () => $("#modal-info").classList.add("hidden"));
-  $("#btn-profile-close").addEventListener("click", () => $("#modal-profile").classList.add("hidden"));
-  $("#btn-run-close").addEventListener("click", () => $("#modal-run").classList.add("hidden"));
+  $("#btn-info-close")?.addEventListener("click", () => $("#modal-info")?.classList.add("hidden"));
+  $("#btn-profile-close")?.addEventListener("click", () => $("#modal-profile")?.classList.add("hidden"));
+  $("#btn-run-close")?.addEventListener("click", () => $("#modal-run")?.classList.add("hidden"));
   $("#btn-run-again")?.addEventListener("click", () => {
     if (_lastRunPipelineName) runPipeline(_lastRunPipelineName, _lastRunPipelineSource);
   });
@@ -1842,7 +1842,7 @@ function wire() {
       toast("Copy failed", "Select text manually to copy.", "warn");
     }
   });
-  $("#btn-crypto-close")?.addEventListener("click", () => $("#modal-crypto").classList.add("hidden"));
+  $("#btn-crypto-close")?.addEventListener("click", () => $("#modal-crypto")?.classList.add("hidden"));
   $("#btn-confirm-cancel")?.addEventListener("click", () => resolveConfirm(false));
   $("#btn-confirm-ok")?.addEventListener("click", () => resolveConfirm(true));
 
@@ -1863,10 +1863,10 @@ function wire() {
   $("#btn-crypto-decrypt-force")?.addEventListener("click", () => runCryptoAction("decrypt", true));
 
   // Tab switching
-  $("#tab-files").addEventListener("click", () => switchTab("files"));
-  $("#tab-pipelines").addEventListener("click", () => { switchTab("pipelines"); renderFiles($("#search").value); });
-  $("#tab-system")?.addEventListener("click", () => { switchTab("system"); renderFiles($("#search").value); });
-  $("#tab-terminal")?.addEventListener("click", () => { switchTab("terminal"); renderFiles($("#search").value); });
+  $("#tab-files")?.addEventListener("click", () => switchTab("files"));
+  $("#tab-pipelines")?.addEventListener("click", () => { switchTab("pipelines"); renderFiles($("#search")?.value || ""); });
+  $("#tab-system")?.addEventListener("click", () => { switchTab("system"); renderFiles($("#search")?.value || ""); });
+  $("#tab-terminal")?.addEventListener("click", () => { switchTab("terminal"); renderFiles($("#search")?.value || ""); });
 
   // Terminal wiring
   $("#btn-term-run")?.addEventListener("click", () => runTerminalCommand());
@@ -1925,21 +1925,23 @@ function wire() {
     if (currentPlFile && currentPlFile !== "—") openFile(currentPlFile);
   });
   $("#pl-filter")?.addEventListener("input", () => renderPipelines());
-  $("#btn-pl-refresh").addEventListener("click", () => loadPipelines(draftLoadPipelines()));
-  $("#btn-pl-add").addEventListener("click", addPipeline);
-  $("#btn-pl-save").addEventListener("click", savePipelines);
+  $("#btn-pl-refresh")?.addEventListener("click", () => loadPipelines(draftLoadPipelines()));
+  $("#btn-pl-add")?.addEventListener("click", addPipeline);
+  $("#btn-pl-save")?.addEventListener("click", savePipelines);
 
   // Pipeline source switch (my <-> multi)
   document.querySelectorAll("#pl-source-switch .src-btn").forEach(btn =>
     btn.addEventListener("click", () => switchPipelineSource(btn.dataset.source)));
 
   // Click on the project chip opens the profile switcher
-  $("#chip-project").addEventListener("click", openProfileModal);
-  $("#chip-project").style.cursor = "pointer";
-  $("#chip-project").title = "Click to switch ACTIVE_PROJECT";
+  $("#chip-project")?.addEventListener("click", openProfileModal);
+  if ($("#chip-project")) {
+    $("#chip-project").style.cursor = "pointer";
+    $("#chip-project").title = "Click to switch ACTIVE_PROJECT";
+  }
 
   // Click on the draft chip discards the browser draft (keeps server files intact)
-  $("#chip-draft").addEventListener("click", async () => {
+  $("#chip-draft")?.addEventListener("click", async () => {
     const ok = await confirmDialog({
       title: "Discard Unsaved Draft?",
       message: "Are you sure you want to discard unsaved browser edits and restore the original file content from disk?",
@@ -1953,18 +1955,18 @@ function wire() {
     draftClearPipelines();
     state.dirty = false;
     state.plDirty = false;
-    $("#editor-dirty").classList.add("hidden");
-    $("#pl-dirty").classList.add("hidden");
-    $("#btn-save").disabled = true;
-    $("#btn-pl-save").disabled = true;
+    $("#editor-dirty")?.classList.add("hidden");
+    $("#pl-dirty")?.classList.add("hidden");
+    if ($("#btn-save")) $("#btn-save").disabled = true;
+    if ($("#btn-pl-save")) $("#btn-pl-save").disabled = true;
     if (state.current) openFile(state.current.name);
     loadPipelines();
     updateDraftChip();
     toast("Original restored", "Unsaved draft changes have been discarded.", "info", 5000);
   });
-  $("#chip-draft").style.cursor = "pointer";
+  if ($("#chip-draft")) $("#chip-draft").style.cursor = "pointer";
 
-  $("#editor").addEventListener("input", () => { setDirty(true); updateStats(); });
+  $("#editor")?.addEventListener("input", () => { setDirty(true); updateStats(); });
 
   // Ctrl+S / Cmd+S to save (works in both tabs); Ctrl+C to stop running Terminal command
   document.addEventListener("keydown", (e) => {
@@ -1978,7 +1980,7 @@ function wire() {
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
       e.preventDefault();
-      if (!$("#view-pipelines").classList.contains("hidden")) {
+      if (!$("#view-pipelines")?.classList.contains("hidden")) {
         if (state.plDirty) savePipelines();
       } else if (state.dirty && state.current && !state.current.readonly) {
         saveFile();
@@ -1989,9 +1991,9 @@ function wire() {
         resolveConfirm(false);
         return;
       }
-      $("#modal-profile").classList.add("hidden");
-      $("#modal-info").classList.add("hidden");
-      $("#modal-run").classList.add("hidden");
+      $("#modal-profile")?.classList.add("hidden");
+      $("#modal-info")?.classList.add("hidden");
+      $("#modal-run")?.classList.add("hidden");
       $("#modal-crypto")?.classList.add("hidden");
     }
   });
