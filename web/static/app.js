@@ -94,14 +94,29 @@ function updateDraftChip() {
 }
 
 /* ---------------- Toast notifications ---------------- */
-function toast(title, body, kind = "info", timeout = 4200) {
+function toast(title, body, kind = "info", timeout = 5000) {
   const el = document.createElement("div");
   el.className = `toast ${kind}`;
-  el.innerHTML = `<div class="t-title"></div><div class="t-body"></div>`;
+  el.style.setProperty("--toast-ms", `${timeout}ms`);
+  el.innerHTML = `
+    <div class="t-head">
+      <div class="t-title"></div>
+      <button class="t-close" title="Close">✕</button>
+    </div>
+    <div class="t-body"></div>
+    <div class="t-bar"></div>
+  `;
   el.querySelector(".t-title").textContent = title;
   el.querySelector(".t-body").textContent = body || "";
+  const timer = setTimeout(() => {
+    el.classList.add("closing");
+    setTimeout(() => el.remove(), 200);
+  }, timeout);
+  el.querySelector(".t-close").addEventListener("click", () => {
+    clearTimeout(timer);
+    el.remove();
+  });
   $("#toasts").appendChild(el);
-  setTimeout(() => el.remove(), timeout);
 }
 
 /* ---------------- API helpers ---------------- */
@@ -434,7 +449,7 @@ async function saveFile() {
     c.mtime_str = data.saved_at;
     setCurrentMeta();
     toast("Đã lưu xong ✓ (Saved)", `${data.name} (${data.bytes} bytes)` +
-          (data.backup ? ` · backup: ${data.backup}` : ""), "ok", 4500);
+          (data.backup ? ` · backup: ${data.backup}` : ""), "ok", 5000);
     refreshFiles();
     if (data.name === "config/apk.config" || data.name === "apk.config") refreshStatus();
   } catch (err) {
@@ -629,7 +644,7 @@ function pipelineCard(p) {
         .find(el => el.dataset.name === p.name);
       targetCard?.querySelector(".pl-name")?.focus();
     } else if (wasEditing && state.plDirty) {
-      toast("Nhắc lưu thay đổi 💾", "Bạn đã chỉnh sửa xong — hãy nhấp nút '💾 Save all' (hoặc Ctrl+S) để lưu vào file!", "warn", 5500);
+      toast("Nhắc lưu thay đổi 💾", "Bạn đã chỉnh sửa xong — hãy nhấp nút '💾 Save all' (hoặc Ctrl+S) để lưu vào file!", "warn", 5000);
     }
   });
   foot.appendChild(editBtn);
@@ -682,7 +697,7 @@ function stepRow(p, step, idx, stepsBox) {
       const inputs = stepsBox.querySelectorAll(".pl-step-cmd");
       inputs[idx]?.focus();
     } else if (wasStepEditing && state.plDirty) {
-      toast("Nhắc lưu thay đổi 💾", "Bạn đã sửa xong bước này — hãy nhấp nút '💾 Save all' (hoặc Ctrl+S) để lưu vào file!", "warn", 5500);
+      toast("Nhắc lưu thay đổi 💾", "Bạn đã sửa xong bước này — hãy nhấp nút '💾 Save all' (hoặc Ctrl+S) để lưu vào file!", "warn", 5000);
     }
   });
   row.appendChild(editStepBtn);
@@ -750,7 +765,7 @@ async function savePipelines() {
     });
     setPlDirty(false);
     draftClearPipelines();             // server save succeeded -> drop the draft
-    toast("Đã lưu xong ✓ (Saved all)", `${data.source}: đã lưu ${data.count} pipelines thành công · backup: ${data.backup || "none"}`, "ok", 4500);
+    toast("Đã lưu xong ✓ (Saved all)", `${data.source}: đã lưu ${data.count} pipelines thành công · backup: ${data.backup || "none"}`, "ok", 5000);
     await loadPipelines();
   } catch (err) {
     toast("Save failed", err.message, "err");
@@ -1047,7 +1062,7 @@ function wire() {
     if (state.fileEditing) {
       $("#editor").focus();
     } else if (wasEditing && state.dirty) {
-      toast("Nhắc lưu thay đổi 💾", "Bạn đã chỉnh sửa xong — hãy nhấp nút '💾 Save' (hoặc Ctrl+S) để lưu file!", "warn", 5500);
+      toast("Nhắc lưu thay đổi 💾", "Bạn đã chỉnh sửa xong — hãy nhấp nút '💾 Save' (hoặc Ctrl+S) để lưu file!", "warn", 5000);
     }
   });
   $("#btn-reload").addEventListener("click", () => state.current && openFile(state.current.name));
