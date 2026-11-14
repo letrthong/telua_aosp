@@ -1312,6 +1312,48 @@ function clearTerminalOutput() {
   }
 }
 
+async function _fallbackTerminalViaExistingApis(cmd) {
+  const norm = cmd.trim().replace(/\s+/g, " ");
+  if (norm === "tel --info" || norm === "telua --info" || norm === "./build_apk.sh --info") {
+    const data = await api("/api/info");
+    return { ok: data.ok, exit_code: data.exit_code ?? 0, output: data.output || "" };
+  }
+  const helpMap = {
+    "tel --git-help": "config/const_git.config",
+    "telua --git-help": "config/const_git.config",
+    "tel --docker-help": "config/const_docker.config",
+    "telua --docker-help": "config/const_docker.config",
+    "tel --network-help": "config/const_network.config",
+    "telua --network-help": "config/const_network.config",
+  };
+  if (helpMap[norm]) {
+    const data = await api(`/api/file?name=${encodeURIComponent(helpMap[norm])}`);
+    return { ok: true, exit_code: 0, output: data.content || "" };
+  }
+  const listMatch = norm.match(/^(?:tel|telua)\s+(system|docker|my|run|multi|car|dump)$/);
+  if (listMatch) {
+    const srcMap = { system: "system", docker: "system", my: "my", run: "multi", multi: "multi", car: "car", dump: "dump" };
+    const src = srcMap[listMatch[1]];
+    const data = await api(`/api/pipelines?source=${encodeURIComponent(src)}`);
+    const lines = (data.pipelines || []).map(p => `  • ${p.name.padEnd(18)} → ${p.description || ""}`);
+    return {
+      ok: true,
+      exit_code: 0,
+      output: `[DANH SÁCH LỆNH '${listMatch[1].toUpperCase()}' (${data.file || src})]\n` + lines.join("\n") + "\n",
+    };
+  }
+  const runMatch = norm.match(/^(?:tel|telua)\s+(system|docker|my|run|car|dump)\s+([A-Za-z0-9_-]+)$/);
+  if (runMatch) {
+    const srcMap = { system: "system", docker: "system", my: "my", run: "multi", car: "car", dump: "dump" };
+    const data = await api("/api/pipeline/run", {
+      method: "POST",
+      body: JSON.stringify({ source: srcMap[runMatch[1]], name: runMatch[2] }),
+    });
+    return { ok: data.ok, exit_code: data.exit_code ?? 0, output: data.output || "" };
+  }
+  return null;
+}
+
 async function runTerminalCommand(explicitCmd = null) {
   const input = $("#term-input");
   const cmd = (explicitCmd != null ? explicitCmd : (input?.value || "")).trim();
@@ -1404,6 +1446,28 @@ async function runTerminalCommand(explicitCmd = null) {
         badge.className = "run-badge " + (ok ? "ok" : "err");
       }
       return;
+    }
+
+    if (res.status === 404) {
+      const fb = await _fallbackTerminalViaExistingApis(cmd);
+      if (fb) {
+        const statusColor = fb.ok ? "#3fb950" : "#f85149";
+        if (outEl) {
+          outEl.innerHTML = baseHtml +
+            ansiToHtml(fb.output || "(no output)\n") +
+            `<span style="color:${statusColor};opacity:.85">[exit code: ${fb.exit_code} · ${elapsed}s]</span>\n`;
+          outEl.scrollTop = outEl.scrollHeight;
+        }
+        if (badge) {
+          badge.textContent = fb.ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${fb.exit_code} (${elapsed}s)`;
+          badge.className = "run-badge " + (fb.ok ? "ok" : "err");
+        }
+        return;
+      }
+      throw new Error(
+        "Server Web đang chạy tiến trình cũ trong bộ nhớ (chưa nạp API /api/terminal/*).\n" +
+        "👉 Hãy chạy lệnh 'tel web restart' trên máy Linux để kích hoạt thực thi mọi lệnh shell (ls, git, free, df...)!"
+      );
     }
 
     const data = await api("/api/terminal/run", {
