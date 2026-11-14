@@ -470,20 +470,27 @@ def _crypto_items():
     for name in PRIVATE_OVERLAY_NAMES:
         plain_path = overlay_dir / name
         enc_path = overlay_dir / ("enc_" + name)
+        dec_path = overlay_dir / ("dec_" + name)
         p_exists = plain_path.is_file()
         e_exists = enc_path.is_file()
+        d_exists = dec_path.is_file()
         p_stat = plain_path.stat() if p_exists else None
         e_stat = enc_path.stat() if e_exists else None
+        d_stat = dec_path.stat() if d_exists else None
         items.append({
             "name": name,
             "plain_rel": "config/overlay/%s" % name,
             "enc_rel": "config/overlay/enc_%s" % name,
+            "dec_rel": "config/overlay/dec_%s" % name,
             "plain_exists": p_exists,
             "plain_size": p_stat.st_size if p_stat else 0,
             "plain_mtime": datetime.fromtimestamp(p_stat.st_mtime).strftime("%Y-%m-%d %H:%M") if p_stat else None,
             "enc_exists": e_exists,
             "enc_size": e_stat.st_size if e_stat else 0,
             "enc_mtime": datetime.fromtimestamp(e_stat.st_mtime).strftime("%Y-%m-%d %H:%M") if e_stat else None,
+            "dec_exists": d_exists,
+            "dec_size": d_stat.st_size if d_stat else 0,
+            "dec_mtime": datetime.fromtimestamp(d_stat.st_mtime).strftime("%Y-%m-%d %H:%M") if d_stat else None,
             "synced": bool(p_stat and e_stat and int(e_stat.st_mtime) >= int(p_stat.st_mtime)),
         })
     return items
@@ -548,6 +555,7 @@ def api_crypto_action():
         else:
             plain_file = overlay_dir / target
             enc_file = overlay_dir / ("enc_" + target)
+            dec_file = overlay_dir / ("dec_" + target)
             if action == "encrypt":
                 if not plain_file.is_file():
                     abort(404, description="config/overlay/%s does not exist." % target)
@@ -555,7 +563,8 @@ def api_crypto_action():
             else:
                 if not enc_file.is_file():
                     abort(404, description="config/overlay/enc_%s does not exist yet (click '🔐 Encrypt' first)." % target)
-                cmd = [sys.executable, str(crypto_script), "decrypt", "-", "-i", str(enc_file), "-o", str(plain_file)] + force_args
+                out_file = plain_file if force else dec_file
+                cmd = [sys.executable, str(crypto_script), "decrypt", "-", "-i", str(enc_file), "-o", str(out_file)] + force_args
 
         try:
             proc = subprocess.run(
@@ -574,7 +583,7 @@ def api_crypto_action():
         except subprocess.TimeoutExpired:
             abort(504, description="Crypto command timed out.")
 
-    if action == "apply_overlay" or (action == "decrypt" and apply_overlay):
+    if action == "apply_overlay" or (action == "decrypt" and force and apply_overlay):
         ov_file = overlay_dir / "apk_overlays.config"
         if not ov_file.is_file():
             if action == "apply_overlay":

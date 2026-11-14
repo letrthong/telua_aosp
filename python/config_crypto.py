@@ -174,8 +174,12 @@ def resolve_encrypt_targets(overlay_dir: str | None = None) -> list[tuple[str, s
     return targets
 
 
-def resolve_decrypt_targets(overlay_dir: str | None = None) -> list[tuple[str, str]]:
-    """Find existing encrypted private config files (enc_apk_overlays.config, enc_const_my_cli.config) to decrypt."""
+def resolve_decrypt_targets(overlay_dir: str | None = None, force: bool = False) -> list[tuple[str, str]]:
+    """Find existing encrypted private config files (enc_apk_overlays.config, enc_const_my_cli.config) to decrypt.
+
+    - Without --force (force=False): outputs to dec_<name> (e.g., dec_apk_overlays.config) for safe inspection.
+    - With --force (force=True): outputs to <name> (e.g., apk_overlays.config), overwriting active config.
+    """
     base_overlay = overlay_dir or OVERLAY_DIR
     search_dirs = [base_overlay]
     if overlay_dir is None:
@@ -184,10 +188,11 @@ def resolve_decrypt_targets(overlay_dir: str | None = None) -> list[tuple[str, s
     targets: list[tuple[str, str]] = []
     for name in PRIVATE_CONFIG_NAMES:
         enc_name = f"enc_{name}"
+        out_name = name if force else f"dec_{name}"
         for d in search_dirs:
             candidate = os.path.join(d, enc_name)
             if os.path.isfile(candidate):
-                targets.append((candidate, os.path.join(d, name)))
+                targets.append((candidate, os.path.join(d, out_name)))
                 break
     return targets
 
@@ -222,23 +227,27 @@ def decrypt(args: argparse.Namespace) -> None:
         src = args.input
         if args.output:
             dst = args.output
+            allow_overwrite = force or os.path.basename(dst).startswith("dec_")
         else:
             base = os.path.basename(src)
-            plain_name = base[4:] if base.startswith("enc_") else f"dec_{base}"
-            dst = os.path.join(os.path.dirname(src) or ".", plain_name)
-        check_paths(src, dst, force)
+            core_name = base[4:] if base.startswith("enc_") else base
+            out_name = core_name if force else f"dec_{core_name}"
+            dst = os.path.join(os.path.dirname(src) or ".", out_name)
+            allow_overwrite = True
+        check_paths(src, dst, allow_overwrite)
         password = get_password(args.password, confirm=False)
         decrypt_single_file(src, dst, password)
         return
 
-    targets = resolve_decrypt_targets(getattr(args, "dir", None))
+    targets = resolve_decrypt_targets(getattr(args, "dir", None), force=force)
     if not targets:
         target_dir = getattr(args, "dir", None) or OVERLAY_DIR
         enc_names = ", ".join(f"enc_{n}" for n in PRIVATE_CONFIG_NAMES)
         sys.exit(f"ERROR: no encrypted private config files ({enc_names}) found in {target_dir}")
 
     for src, dst in targets:
-        check_paths(src, dst, force)
+        # Preview files (dec_*.config) can always be refreshed; active files require --force
+        check_paths(src, dst, force or os.path.basename(dst).startswith("dec_"))
 
     password = get_password(args.password, confirm=False)
     for src, dst in targets:

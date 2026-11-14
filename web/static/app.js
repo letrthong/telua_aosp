@@ -329,12 +329,10 @@ function setFileEditing(editing) {
 
 function setCurrentMeta() {
   const c = state.current;
-  const applyBtn = $("#btn-apply-overlay");
   const cryptoBtn = $("#btn-file-crypto");
   if (!c) {
     $("#editor-name").textContent = "—";
     $("#editor-meta").textContent = "";
-    applyBtn?.classList.add("hidden");
     cryptoBtn?.classList.add("hidden");
     setFileEditing(false);
     return;
@@ -346,7 +344,6 @@ function setCurrentMeta() {
   $("#btn-save").disabled = !state.dirty || c.readonly;
   const isOverlayFile = c.name === "config/overlay/apk_overlays.config" || c.name === "apk_overlays.config";
   const isPrivateFile = isOverlayFile || c.name === "config/overlay/const_my_cli.config" || c.name === "config/const_my_cli.config";
-  applyBtn?.classList.toggle("hidden", !isOverlayFile);
   cryptoBtn?.classList.toggle("hidden", !isPrivateFile);
   setFileEditing(state.fileEditing);
 }
@@ -812,13 +809,13 @@ function updateCryptoButtons() {
   if (decBtn) {
     decBtn.disabled = !canDecrypt;
     decBtn.title = canDecrypt
-      ? "Decrypt enc_*.config -> plain .config (safe mode: does not overwrite existing files)"
+      ? "Decrypt enc_*.config -> dec_*.config for inspection (does not overwrite active config)"
       : "No enc_*.config file exists yet — click '🔐 Encrypt' first";
   }
   if (decForceBtn) {
     decForceBtn.disabled = !canDecrypt;
     decForceBtn.title = canDecrypt
-      ? "Decrypt enc_*.config and OVERWRITE existing plain .config files"
+      ? "Decrypt enc_*.config -> *.config and OVERWRITE active config files"
       : "No enc_*.config file exists yet — click '🔐 Encrypt' first";
   }
 }
@@ -840,16 +837,19 @@ function renderCryptoItems(items = []) {
     const encBadge = it.enc_exists
       ? `🔐 enc (${it.enc_size}B · ${it.enc_mtime || ""})`
       : "⚠ not encrypted";
+    const decBadge = it.dec_exists
+      ? ` · 👁 dec (${it.dec_size}B)`
+      : "";
     const syncBadge = it.plain_exists && it.enc_exists
       ? (it.synced ? " · ✓ synced" : " · ⚠ plain newer")
       : "";
     row.innerHTML = `
       <div>
         <div><b>${esc(it.plain_rel)}</b></div>
-        <div class="meta">${esc(it.enc_rel)}</div>
+        <div class="meta">${esc(it.enc_rel)}${it.dec_exists ? ` · <span style="color:var(--accent)">${esc(it.dec_rel)}</span>` : ""}</div>
       </div>
       <div class="meta" style="text-align:right">
-        <div>${esc(plainBadge)}</div>
+        <div>${esc(plainBadge + decBadge)}</div>
         <div>${esc(encBadge + syncBadge)}</div>
       </div>
     `;
@@ -886,7 +886,6 @@ async function openCryptoModal(defaultTarget = "all") {
 async function runCryptoAction(action, force = false) {
   const target = $("#crypto-target")?.value || "all";
   const password = $("#crypto-password")?.value || "";
-  const applyOverlay = !!$("#crypto-apply-after-dec")?.checked;
   const out = $("#crypto-output");
 
   if ((action === "encrypt" || action === "decrypt") && !password) {
@@ -910,7 +909,7 @@ async function runCryptoAction(action, force = false) {
   try {
     const data = await api("/api/crypto/action", {
       method: "POST",
-      body: JSON.stringify({ action, target, password, apply_overlay: applyOverlay, force }),
+      body: JSON.stringify({ action, target, password, force }),
     });
     if ($("#crypto-password")) $("#crypto-password").value = "";
     if (out) {
@@ -988,15 +987,10 @@ function wire() {
       : cur.endsWith("const_my_cli.config") ? "const_my_cli.config" : "all";
     openCryptoModal(defTarget);
   });
-  $("#btn-apply-overlay")?.addEventListener("click", async () => {
-    if (state.dirty) await saveFile();
-    await runCryptoAction("apply_overlay");
-  });
   $("#crypto-target")?.addEventListener("change", updateCryptoButtons);
   $("#btn-crypto-encrypt")?.addEventListener("click", () => runCryptoAction("encrypt", false));
   $("#btn-crypto-decrypt")?.addEventListener("click", () => runCryptoAction("decrypt", false));
   $("#btn-crypto-decrypt-force")?.addEventListener("click", () => runCryptoAction("decrypt", true));
-  $("#btn-crypto-apply")?.addEventListener("click", () => runCryptoAction("apply_overlay", false));
 
   // Tab switching
   $("#tab-files").addEventListener("click", () => switchTab("files"));
