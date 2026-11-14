@@ -1149,7 +1149,7 @@ def api_pipeline_run():
     try:
         proc = subprocess.run(
             ["bash", str(script), subcommand, name],
-            cwd=str(ROOT), capture_output=True, text=True, timeout=300)
+            cwd=str(ROOT), stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=300)
         output = (proc.stdout or "") + (proc.stderr or "")
         code = proc.returncode
     except subprocess.TimeoutExpired:
