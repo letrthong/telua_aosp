@@ -25,6 +25,32 @@ const state = {
 /* ---------------- Draft persistence (localStorage, survives refresh) ------- */
 const DRAFT_KEY_FILES = "telua_web_draft_file";      // { name, content, saved_at }
 const DRAFT_KEY_PIPES = "telua_web_draft_pipelines"; // { source, pipelines, saved_at }
+const THEME_KEY = "telua_web_theme";                 // "dark" | "light"
+
+function applyTheme(theme) {
+  const t = theme === "light" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", t);
+  try { localStorage.setItem(THEME_KEY, t); } catch { /* ignore */ }
+  const btn = $("#btn-theme");
+  if (btn) {
+    btn.textContent = t === "dark" ? "☀️ Light" : "🌙 Dark";
+    btn.title = t === "dark"
+      ? "Chuyển sang nền Sáng (Light mode — tự lưu vào trình duyệt)"
+      : "Chuyển sang nền Tối (Dark mode — tự lưu vào trình duyệt)";
+  }
+}
+
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute("data-theme") || "dark";
+  const next = cur === "dark" ? "light" : "dark";
+  applyTheme(next);
+  toast(
+    next === "light" ? "Giao diện Sáng ☀️" : "Giao diện Tối 🌙",
+    "Đã lưu lựa chọn giao diện vào trình duyệt.",
+    "info",
+    3000
+  );
+}
 
 function draftSaveFile() {
   try {
@@ -1191,6 +1217,8 @@ function switchTab(tab) {
 }
 
 function wire() {
+  try { applyTheme(localStorage.getItem(THEME_KEY) || "dark"); } catch { applyTheme("dark"); }
+  $("#btn-theme")?.addEventListener("click", toggleTheme);
   $("#search").addEventListener("input", (e) => renderFiles(e.target.value));
   $("#btn-refresh").addEventListener("click", () => { refreshStatus(); refreshFiles(); });
   $("#btn-edit").addEventListener("click", () => {

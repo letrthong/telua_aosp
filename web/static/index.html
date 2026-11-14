@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Telua Web — Config Manager</title>
+<script>
+  try {
+    const t = localStorage.getItem("telua_web_theme") || "dark";
+    document.documentElement.setAttribute("data-theme", t);
+  } catch (e) {}
+</script>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -26,6 +32,7 @@
     <div class="chip" id="chip-crypto" title="Private overlay encryption &amp; apply (config/overlay/)">🔐 crypto</div>
     <div class="chip" id="chip-adb" title="Connected ADB devices">adb: —</div>
     <div class="chip" id="chip-ram" title="System RAM">ram: —</div>
+    <button class="btn ghost" id="btn-theme" title="Chuyển đổi giao diện Sáng / Tối (tự động lưu vào trình duyệt)">☀️ Light</button>
     <button class="btn ghost" id="btn-refresh" title="Reload status &amp; file list">⟳ Refresh</button>
   </div>
 </header>
