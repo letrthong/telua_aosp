@@ -25,6 +25,9 @@ const state = {
 /* ---------------- Draft persistence (localStorage, survives refresh) ------- */
 const DRAFT_KEY_FILES = "telua_web_draft_file";      // { name, content, saved_at }
 const DRAFT_KEY_PIPES = "telua_web_draft_pipelines"; // { source, pipelines, saved_at }
+const LAST_TAB_KEY = "telua_web_last_tab";           // "files" | "pipelines" | "system"
+const LAST_SOURCE_KEY = "telua_web_last_source";     // "my" | "multi" | "car" | "dump" | "system"
+const LAST_FILE_KEY = "telua_web_last_file";         // last opened file name in Files tab
 const THEME_KEY = "telua_web_theme";                 // "dark" | "jade" | "ocean" | "amethyst" | "light"
 const THEME_LABELS = {
   dark: "🌙 Dark (Mặc định)",
@@ -479,6 +482,7 @@ async function openFile(name, draftContent = null) {
   try {
     const data = await api(`/api/file?name=${encodeURIComponent(name)}`);
     state.current = data;
+    try { localStorage.setItem(LAST_FILE_KEY, name); } catch { /* ignore */ }
     if (draftContent != null && draftContent !== data.content) {
       // Restore the unsaved draft on top of the freshly loaded file.
       $("#editor").value = draftContent;
@@ -580,6 +584,10 @@ function syncTopTabs() {
   $("#tab-files")?.classList.toggle("active", isFiles);
   $("#tab-pipelines")?.classList.toggle("active", isPipelines);
   $("#tab-system")?.classList.toggle("active", isSystem);
+  try {
+    localStorage.setItem(LAST_TAB_KEY, isFiles ? "files" : (isSystem ? "system" : "pipelines"));
+    localStorage.setItem(LAST_SOURCE_KEY, state.plSource);
+  } catch { /* ignore */ }
 }
 
 function switchPipelineSource(source) {
@@ -1440,20 +1448,41 @@ async function boot() {
   wire();
   await Promise.all([refreshStatus(), refreshFiles(), refreshCryptoStatus()]);
 
-  // Pipelines is the default tab: load it (with draft) immediately.
-  // Restore the last-used source from the draft if present.
+  // Restore the last-used source from draft or localStorage so F5 keeps the active tab/source.
   const pipeDraft = draftLoadPipelines();
-  if (pipeDraft && pipeDraft.source) {
-    state.plSource = pipeDraft.source === "docker" ? "system" : pipeDraft.source;
-    if (state.plSource !== "system") _lastNonSystemPlSource = state.plSource;
-    document.querySelectorAll("#pl-source-switch .src-btn").forEach(b =>
-      b.classList.toggle("active", b.dataset.source === state.plSource));
-  }
-  syncTopTabs();
+  let savedSource = null;
+  let savedTab = null;
+  let savedFile = null;
+  try {
+    savedSource = localStorage.getItem(LAST_SOURCE_KEY);
+    savedTab = localStorage.getItem(LAST_TAB_KEY);
+    savedFile = localStorage.getItem(LAST_FILE_KEY);
+  } catch { /* ignore */ }
+
+  const validSources = new Set(["my", "multi", "car", "dump", "system", "docker"]);
+  const initialSource = (pipeDraft && pipeDraft.source && validSources.has(pipeDraft.source))
+    ? pipeDraft.source
+    : (savedSource && validSources.has(savedSource) ? savedSource : "my");
+
+  state.plSource = initialSource === "docker" ? "system" : initialSource;
+  if (state.plSource !== "system") _lastNonSystemPlSource = state.plSource;
+  document.querySelectorAll("#pl-source-switch .src-btn").forEach(b =>
+    b.classList.toggle("active", b.dataset.source === state.plSource));
+
   await loadPipelines(pipeDraft);
   updateDraftChip();
 
-  // The Files tab is lazy-loaded on first switch (see switchTab).
+  if (savedTab === "files") {
+    if (savedFile && state.files.some(f => f.name === savedFile)) {
+      const fileDraft = draftLoadFile();
+      const draftContent = (fileDraft && fileDraft.name === savedFile) ? fileDraft.content : null;
+      await openFile(savedFile, draftContent);
+    } else {
+      switchTab("files");
+    }
+  } else {
+    syncTopTabs();
+  }
 }
 
 boot();
