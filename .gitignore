@@ -243,3 +243,4 @@ config/apk_overlays.config
 apk_overlays.config
 
 sphinx/templates/basic/_build
+sphinx/templates/architecture/_build
