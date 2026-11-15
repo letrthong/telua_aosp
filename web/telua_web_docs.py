@@ -169,11 +169,13 @@ def _protect_rst_directives(rst_text: str) -> str:
     def repl_mermaid(match):
         code = match.group(1).strip()
         escaped_code = code.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+        html_block = f'<div class="mermaid-block" data-mermaid="{escaped_code}"><div class="mermaid-label">📊 Mermaid Architecture Diagram</div><pre class="mermaid">{escaped_code}</pre></div>'
+        indented = "\n".join("   " + line for line in html_block.splitlines())
         raw_block = [
             "",
             ".. raw:: html",
             "",
-            f'   <div class="mermaid-block" data-mermaid="{escaped_code}"><div class="mermaid-label">📊 Mermaid Architecture Diagram</div><pre class="mermaid">{escaped_code}</pre></div>',
+            indented,
             "",
         ]
         return "\n".join(raw_block) + "\n"
@@ -183,11 +185,13 @@ def _protect_rst_directives(rst_text: str) -> str:
     def repl_plantuml(match):
         code = match.group(1).strip()
         escaped_code = code.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+        html_block = f'<div class="plantuml-block" data-plantuml="{escaped_code}"><div class="plantuml-label">📐 PlantUML Architecture Diagram</div><pre class="plantuml">{escaped_code}</pre></div>'
+        indented = "\n".join("   " + line for line in html_block.splitlines())
         raw_block = [
             "",
             ".. raw:: html",
             "",
-            f'   <div class="plantuml-block" data-plantuml="{escaped_code}"><div class="plantuml-label">📐 PlantUML Architecture Diagram</div><pre class="plantuml">{escaped_code}</pre></div>',
+            indented,
             "",
         ]
         return "\n".join(raw_block) + "\n"

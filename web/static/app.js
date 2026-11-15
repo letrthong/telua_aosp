@@ -1809,8 +1809,14 @@ function registerQuillDiagramBlots() {
           code = value.getAttribute ? (value.getAttribute("data-mermaid") || value.querySelector("pre")?.textContent || "") : (value.code || "");
         }
         node.setAttribute("data-mermaid", code);
+        const safeCode = (code || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+
         node.innerHTML = `
-          <div class="mermaid-header">
+          <div class="mermaid-header" contenteditable="false">
             <div class="mermaid-title-wrap">
               <span class="mermaid-label">📊 Mermaid Architecture Diagram</span>
               <span class="mermaid-chip">.. mermaid::</span>
@@ -1818,12 +1824,13 @@ function registerQuillDiagramBlots() {
             <div class="mermaid-actions">
               <button type="button" class="mermaid-btn btn-view-diag active" title="Show Rendered Diagram">👁 Diagram</button>
               <button type="button" class="mermaid-btn btn-view-code" title="View / Edit Diagram Code">📝 Code</button>
+              <button type="button" class="mermaid-btn btn-copy-code" title="Copy Diagram Syntax">📋 Copy</button>
             </div>
           </div>
-          <div class="mermaid-diagram-wrap">
+          <div class="mermaid-diagram-wrap" contenteditable="false">
             <span class="mermaid-loading" style="color:var(--text-dim);font-size:12px;">⏳ Rendering Mermaid diagram graphic…</span>
           </div>
-          <pre class="mermaid" contenteditable="true" style="display:none;" title="Click to edit diagram syntax">${code}</pre>
+          <pre class="mermaid mermaid-code" contenteditable="true" spellcheck="false" style="display:none;" title="Click to edit diagram syntax">${safeCode}</pre>
         `;
         return node;
       }
@@ -1848,14 +1855,23 @@ function registerQuillDiagramBlots() {
           code = value.getAttribute ? (value.getAttribute("data-plantuml") || value.querySelector("pre")?.textContent || "") : (value.code || "");
         }
         node.setAttribute("data-plantuml", code);
+        const safeCode = (code || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+
         node.innerHTML = `
-          <div class="plantuml-header">
+          <div class="plantuml-header" contenteditable="false">
             <div class="plantuml-title-wrap">
               <span class="plantuml-label">📐 PlantUML Architecture Diagram</span>
               <span class="plantuml-chip">.. uml::</span>
             </div>
+            <div class="plantuml-actions">
+              <button type="button" class="plantuml-btn btn-copy-uml" title="Copy PlantUML Syntax">📋 Copy</button>
+            </div>
           </div>
-          <pre class="plantuml" contenteditable="true" title="Click to edit diagram syntax">${code}</pre>
+          <pre class="plantuml plantuml-code" contenteditable="true" spellcheck="false" title="Click to edit diagram syntax">${safeCode}</pre>
         `;
         return node;
       }
@@ -1888,21 +1904,39 @@ async function renderAllMermaidBlocks(container) {
   } catch (e) {}
 
   for (const block of blocks) {
-    let pre = block.querySelector("pre.mermaid");
+    let pre = block.querySelector("pre.mermaid, pre.mermaid-code, pre");
     const rawCode = block.getAttribute("data-mermaid") || (pre ? pre.textContent : "");
     if (!rawCode || !rawCode.trim()) continue;
 
-    block.setAttribute("data-mermaid", rawCode.trim());
+    const trimmedCode = rawCode.trim();
+    block.setAttribute("data-mermaid", trimmedCode);
 
+    // Ensure pre element always exists and has the exact code
+    if (!pre) {
+      pre = document.createElement("pre");
+      pre.className = "mermaid mermaid-code";
+      pre.setAttribute("contenteditable", "true");
+      pre.setAttribute("spellcheck", "false");
+      pre.style.display = "none";
+      block.appendChild(pre);
+    } else {
+      pre.classList.add("mermaid-code");
+      pre.setAttribute("contenteditable", "true");
+      pre.setAttribute("spellcheck", "false");
+    }
+    // Always populate pre.textContent so it's NEVER blank or lost
+    pre.textContent = trimmedCode;
+
+    // Ensure diagWrap exists
     let diagWrap = block.querySelector(".mermaid-diagram-wrap");
     if (!diagWrap) {
       diagWrap = document.createElement("div");
       diagWrap.className = "mermaid-diagram-wrap";
       diagWrap.setAttribute("contenteditable", "false");
-      if (pre) block.insertBefore(diagWrap, pre);
-      else block.appendChild(diagWrap);
+      block.insertBefore(diagWrap, pre);
     }
 
+    // Ensure header exists
     let header = block.querySelector(".mermaid-header");
     if (!header) {
       const origLabel = block.querySelector(".mermaid-label");
@@ -1910,10 +1944,14 @@ async function renderAllMermaidBlocks(container) {
       header.className = "mermaid-header";
       header.setAttribute("contenteditable", "false");
       header.innerHTML = `
-        <span class="mermaid-label">📊 Mermaid Architecture Diagram</span>
+        <div class="mermaid-title-wrap">
+          <span class="mermaid-label">📊 Mermaid Architecture Diagram</span>
+          <span class="mermaid-chip">.. mermaid::</span>
+        </div>
         <div class="mermaid-actions">
-          <button type="button" class="mermaid-btn btn-view-diag active">👁 Diagram</button>
-          <button type="button" class="mermaid-btn btn-view-code">📝 Code</button>
+          <button type="button" class="mermaid-btn btn-view-diag active" title="Show Rendered Diagram">👁 Diagram</button>
+          <button type="button" class="mermaid-btn btn-view-code" title="View / Edit Diagram Code">📝 Code</button>
+          <button type="button" class="mermaid-btn btn-copy-code" title="Copy Diagram Syntax">📋 Copy</button>
         </div>
       `;
       if (origLabel) {
@@ -1925,57 +1963,118 @@ async function renderAllMermaidBlocks(container) {
 
     const btnDiag = header.querySelector(".btn-view-diag");
     const btnCode = header.querySelector(".btn-view-code");
+    const btnCopy = header.querySelector(".btn-copy-code");
+
+    if (btnCopy && !btnCopy.dataset.wired) {
+      btnCopy.dataset.wired = "true";
+      btnCopy.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const codeText = block.getAttribute("data-mermaid") || (pre ? pre.textContent : "");
+        try {
+          await navigator.clipboard.writeText(codeText);
+          btnCopy.textContent = "✓ Copied!";
+          setTimeout(() => { btnCopy.textContent = "📋 Copy"; }, 1500);
+        } catch {
+          if (typeof toast === "function") toast("Copied to clipboard", codeText, "ok");
+        }
+      });
+    }
+
     if (btnDiag && btnCode && !header.dataset.wired) {
       header.dataset.wired = "true";
-      btnDiag.addEventListener("click", (e) => {
+
+      btnDiag.addEventListener("click", async (e) => {
         e.preventDefault();
         e.stopPropagation();
         btnDiag.classList.add("active");
         btnCode.classList.remove("active");
-        diagWrap.style.display = "flex";
         if (pre) pre.style.display = "none";
+        diagWrap.style.display = "flex";
+
+        // If user edited code in pre, re-render the diagram
+        const currentCode = (pre ? pre.textContent.trim() : "") || block.getAttribute("data-mermaid") || "";
+        if (currentCode && currentCode !== block.getAttribute("data-mermaid-rendered")) {
+          block.setAttribute("data-mermaid", currentCode);
+          try {
+            _mermaidCounter++;
+            const id = `mermaid_dyn_${Date.now()}_${_mermaidCounter}`;
+            const { svg } = await mermaid.render(id, currentCode);
+            diagWrap.innerHTML = svg;
+            block.setAttribute("data-mermaid-rendered", currentCode);
+          } catch (renderErr) {
+            console.warn("Mermaid re-render error:", renderErr);
+            diagWrap.innerHTML = `<div style="color:var(--danger, #f87171); padding:10px; font-size:12px;">⚠️ Mermaid Render Error: ${renderErr.message || renderErr}</div>`;
+          }
+        }
       });
+
       btnCode.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
         btnCode.classList.add("active");
         btnDiag.classList.remove("active");
         diagWrap.style.display = "none";
-        if (pre) {
-          pre.style.display = "block";
-          pre.focus();
+
+        // Ensure pre exists, has the latest code, and is displayed
+        if (!pre) {
+          pre = document.createElement("pre");
+          pre.className = "mermaid mermaid-code";
+          pre.setAttribute("contenteditable", "true");
+          pre.setAttribute("spellcheck", "false");
+          block.appendChild(pre);
         }
+        pre.textContent = block.getAttribute("data-mermaid") || trimmedCode;
+        pre.style.display = "block";
+        setTimeout(() => {
+          try { pre.focus(); } catch (err) {}
+        }, 10);
       });
     }
 
+    // Keep pre text synchronized when user types
     if (pre && !pre.dataset.wired) {
       pre.dataset.wired = "true";
+      pre.addEventListener("input", () => {
+        const updated = pre.textContent.trim();
+        block.setAttribute("data-mermaid", updated);
+        setDocsDirty(true);
+      });
       pre.addEventListener("blur", async () => {
         const updated = pre.textContent.trim();
         block.setAttribute("data-mermaid", updated);
         setDocsDirty(true);
-        try {
-          _mermaidCounter++;
-          const { svg } = await mermaid.render(`mermaid_dyn_${Date.now()}_${_mermaidCounter}`, updated);
-          diagWrap.innerHTML = svg;
-        } catch (e) {
-          console.warn("Re-render failed:", e);
+        if (updated && updated !== block.getAttribute("data-mermaid-rendered")) {
+          try {
+            _mermaidCounter++;
+            const id = `mermaid_blur_${Date.now()}_${_mermaidCounter}`;
+            const { svg } = await mermaid.render(id, updated);
+            diagWrap.innerHTML = svg;
+            block.setAttribute("data-mermaid-rendered", updated);
+          } catch (e) {
+            console.warn("Re-render failed:", e);
+          }
         }
       });
     }
 
-    // Render SVG diagram
+    // Initial render of SVG diagram
     try {
       _mermaidCounter++;
       const id = `mermaid_diag_${Date.now()}_${_mermaidCounter}`;
-      const { svg } = await mermaid.render(id, rawCode.trim());
+      const { svg } = await mermaid.render(id, trimmedCode);
       diagWrap.innerHTML = svg;
+      block.setAttribute("data-mermaid-rendered", trimmedCode);
       if (pre) pre.style.display = "none";
       diagWrap.style.display = "flex";
     } catch (renderErr) {
       console.warn("Mermaid render error:", renderErr);
       diagWrap.innerHTML = `<div style="color:var(--danger, #f87171); padding:8px; font-size:12px;">⚠️ Mermaid Render Error: ${renderErr.message || renderErr}</div>`;
-      if (pre) pre.style.display = "block";
+      if (pre) {
+        pre.style.display = "block";
+        btnCode?.classList.add("active");
+        btnDiag?.classList.remove("active");
+      }
     }
   }
 }
