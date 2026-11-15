@@ -181,43 +181,86 @@
       </div>
     </section>
 
-  <!-- ============ View: Sphinx Docs Editor & Converter (Quill.js) ============ -->
-  <section class="editor-pane hidden" id="view-docs">
-    <div class="editor-head">
-      <div class="editor-title">
-        <span class="mono" style="color:var(--accent);font-weight:700">📚 Sphinx Docs</span>
-        <button class="btn ghost" id="btn-docs-change-dir" title="Change Docs Root Directory (select or enter custom folder path)" style="padding:4px 9px;font-size:12px;">📁 <span id="docs-dir-label">docs</span></button>
-        <select id="docs-file-select" class="theme-select" style="max-width:320px;" title="Select .rst documentation file">
-          <option value="">Loading .rst files…</option>
-        </select>
-        <span id="docs-status-badge" class="run-badge">Ready</span>
-      </div>
-      <div class="docs-workspace" id="docs-workspace">
-        <!-- WYSIWYG Pane (Quill.js) -->
-        <div class="docs-pane" id="docs-pane-wysiwyg">
-          <div id="quill-editor" class="quill-container"></div>
+    <!-- ============ View: Sphinx Docs Editor & Converter (Quill.js) ============ -->
+    <section class="editor-pane hidden" id="view-docs">
+      <div class="editor-head">
+        <div class="editor-title">
+          <span class="mono" style="color:var(--accent);font-weight:700">📚 Sphinx Docs</span>
+          <button class="btn ghost" id="btn-docs-change-dir"
+            title="Change Docs Root Directory (select or enter custom folder path)"
+            style="padding:4px 9px;font-size:12px;">📁 <span id="docs-dir-label">docs</span></button>
+          <span id="docs-active-dir-badge" class="meta mono" title="Active Docs Directory (click to change)"
+            style="display:none;cursor:pointer;"></span>
+          <select id="docs-file-select" class="theme-select" style="max-width:320px;"
+            title="Select .rst documentation file">
+            <option value="">Loading .rst files…</option>
+          </select>
+          <span id="docs-status-badge" class="run-badge">Ready</span>
         </div>
-        <!-- Raw RST Pane -->
-        <div class="docs-pane hidden" id="docs-pane-raw">
-          <textarea id="docs-raw-rst" class="editor mono" placeholder="Raw RST source code appears here…"
-            spellcheck="false"></textarea>
+        <div class="editor-actions">
+          <button class="btn active" id="btn-docs-mode-wysiwyg" title="Visual WYSIWYG Editor powered by Quill.js">🎨
+            Visual</button>
+          <button class="btn" id="btn-docs-mode-raw" title="Raw reStructuredText (RST) source editor">📝 Raw
+            RST</button>
+          <button class="btn" id="btn-docs-mode-split" title="Split view: Editor &amp; Live HTML Preview">👁 Split
+            View</button>
+          <button class="btn ghost" id="btn-docs-add-mermaid"
+            title="Insert a Mermaid Architecture Diagram into document">+ 📊 Mermaid</button>
+          <button class="btn ghost" id="btn-docs-add-plantuml"
+            title="Insert a PlantUML Architecture Diagram into document">+ 📐 PlantUML</button>
+          <button class="btn ghost" id="btn-docs-add-table"
+            title="Insert an editable Table into document (.. list-table::)">+ ▦ Table</button>
+          <button class="btn primary" id="btn-docs-save"
+            title="Save file (auto-converts HTML to RST if in WYSIWYG mode)">💾 Save RST</button>
+          <button class="btn jade-btn" id="btn-docs-build"
+            title="Build Sphinx documentation in background (telua docs build)">🔨 Build Docs</button>
+          <button class="btn jade-btn" id="btn-docs-start"
+            title="Launch HTTP preview server in background &amp; open in browser (telua docs start)">🚀 Start
+            Docs</button>
+          <button class="btn ghost danger" id="btn-docs-clean"
+            title="Clear Sphinx build cache &amp; artifacts (_build folder)">🧹 Clean Cache</button>
         </div>
-        <!-- Live Preview Pane -->
-        <div class="docs-pane hidden" id="docs-pane-preview">
-          <div class="docs-preview-head">
-            <span class="meta">👁 Live Rendered Preview</span>
-            <button class="btn btn-xs active" id="btn-docs-sync-scroll" type="button"
-              title="Synchronize scrolling between editor and preview">🔗 Sync Scroll</button>
-          </div>
-          <div id="docs-preview-content" class="docs-preview-body"></div>
-        </div>
-      </div>
-      <div class="editor-foot">
-        <div id="docs-file-meta" class="meta">No file selected.</div>
-        <div class="meta" id="docs-dirty-badge" style="display:none;color:var(--yellow);font-weight:600;">● Unsaved
-          changes</div>
-      </div>
-    </section>
+        <!-- ============ View: Sphinx Docs Editor & Converter (Quill.js) ============ -->
+        <section class="editor-pane hidden" id="view-docs">
+          <div class="editor-head">
+            <div class="editor-title">
+              <span class="mono" style="color:var(--accent);font-weight:700">📚 Sphinx Docs</span>
+              <button class="btn ghost" id="btn-docs-change-dir"
+                title="Change Docs Root Directory (select or enter custom folder path)"
+                style="padding:4px 9px;font-size:12px;">📁 <span id="docs-dir-label">docs</span></button>
+              <select id="docs-file-select" class="theme-select" style="max-width:320px;"
+                title="Select .rst documentation file">
+                <option value="">Loading .rst files…</option>
+              </select>
+              <span id="docs-status-badge" class="run-badge">Ready</span>
+            </div>
+            <div class="docs-workspace" id="docs-workspace">
+              <!-- WYSIWYG Pane (Quill.js) -->
+              <div class="docs-pane" id="docs-pane-wysiwyg">
+                <div id="quill-editor" class="quill-container"></div>
+              </div>
+              <!-- Raw RST Pane -->
+              <div class="docs-pane hidden" id="docs-pane-raw">
+                <textarea id="docs-raw-rst" class="editor mono" placeholder="Raw RST source code appears here…"
+                  spellcheck="false"></textarea>
+              </div>
+              <!-- Live Preview Pane -->
+              <div class="docs-pane hidden" id="docs-pane-preview">
+                <div class="docs-preview-head">
+                  <span class="meta">👁 Live Rendered Preview</span>
+                  <button class="btn btn-xs active" id="btn-docs-sync-scroll" type="button"
+                    title="Synchronize scrolling between editor and preview">🔗 Sync Scroll</button>
+                </div>
+                <div id="docs-preview-content" class="docs-preview-body"></div>
+              </div>
+            </div>
+            <div class="editor-foot">
+              <div id="docs-file-meta" class="meta">No file selected.</div>
+              <div class="meta" id="docs-dirty-badge" style="display:none;color:var(--yellow);font-weight:600;">●
+                Unsaved
+                changes</div>
+            </div>
+        </section>
   </main>
 
   <!-- ============ Docs Directory Modal ============ -->

@@ -3226,7 +3226,7 @@ async function buildSphinxDocs() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        dir: _docsCustomDir || "",
+        dir: _docsCustomDir || _docsActiveDir || "",
         current_file: _currentDoc?.name || "",
       }),
     });
@@ -3235,12 +3235,6 @@ async function buildSphinxDocs() {
       if (badge) {
         badge.textContent = "Build Success ✔";
         badge.title = `Built: ${data.target_dir}\nOutput: ${data.html_dir}`;
-      }
-      const dirBadge = $("#docs-active-dir-badge");
-      if (dirBadge && data.target_dir) {
-        dirBadge.style.display = "inline-flex";
-        dirBadge.textContent = data.target_dir;
-        dirBadge.title = `Active Docs Root: ${data.target_dir} (Click to change)`;
       }
       if (data.target_dir) _docsActiveDir = data.target_dir;
       toast("Sphinx Build Succeeded 🎉", `Source: ${data.target_dir}\nOutput: ${data.html_dir}`, "ok", 6000);
@@ -3268,7 +3262,7 @@ async function startSphinxDocs() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        dir: _docsCustomDir || "",
+        dir: _docsCustomDir || _docsActiveDir || "",
         current_file: _currentDoc?.name || "",
       }),
     });
@@ -3277,12 +3271,6 @@ async function startSphinxDocs() {
       if (badge) {
         badge.textContent = `Live :${data.port || 8789} ✔`;
         badge.title = `Directory: ${data.target_dir}\nServing: ${data.html_dir}\nURL: ${data.url}`;
-      }
-      const dirBadge = $("#docs-active-dir-badge");
-      if (dirBadge && data.target_dir) {
-        dirBadge.style.display = "inline-flex";
-        dirBadge.textContent = data.target_dir;
-        dirBadge.title = `Active Docs Root: ${data.target_dir} (Click to change)`;
       }
       if (data.target_dir) _docsActiveDir = data.target_dir;
       toast("Docs Server Live 🌐", `Source: ${data.target_dir}\nServing: ${data.html_dir}\nURL: ${data.url}`, "ok", 6000);
@@ -3299,15 +3287,6 @@ async function startSphinxDocs() {
     toast("Server Error", `Directory: ${targetDirHint}\n${String(err.message || err)}`, "danger");
   }
 }
-    } else {
-  if (badge) badge.textContent = "Server Error";
-  toast("Failed to start docs server", `Directory: ${data.target_dir || targetDirHint}\n${data.error || "Unknown error"}`, "danger");
-}
-  } catch (err) {
-  if (badge) badge.textContent = "Server Error";
-  toast("Server Error", `Directory: ${targetDirHint}\n${String(err.message || err)}`, "danger");
-}
-}
 
 async function cleanSphinxDocs() {
   const badge = $("#docs-status-badge");
@@ -3319,7 +3298,7 @@ async function cleanSphinxDocs() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        dir: _docsCustomDir || "",
+        dir: _docsCustomDir || _docsActiveDir || "",
         current_file: _currentDoc?.name || "",
       }),
     });
