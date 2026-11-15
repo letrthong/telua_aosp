@@ -151,9 +151,7 @@ def detect_docs_project_dir(current_file: Optional[str] = None, custom_dir: Opti
     # 1. Custom directory explicitly provided
     if custom_dir and custom_dir.strip():
         base = Path(custom_dir.strip())
-        target = base if base.is_absolute() else (root / base).resolve()
-        if target.is_dir():
-            return target
+        return base if base.is_absolute() else (root / base).resolve()
 
     # 2. Derive from active/current file path (e.g. sphinx/templates/basic/... or docs/...)
     if current_file and current_file.strip():

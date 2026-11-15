@@ -354,6 +354,12 @@ class TestTeluaWebDocsAPI(unittest.TestCase):
         self.assertTrue(data.get("ok"))
         self.assertEqual(data.get("port"), 8899)
         self.assertIn("http://localhost:8899", data.get("url", ""))
+        self.assertIn("target_dir", data)
+        self.assertIn("html_dir", data)
+
+        # Nonexistent custom dir returns 404
+        bad_res = self.client.post("/api/docs/start", json={"dir": "/path/to/nonexistent/docs", "port": 8899})
+        self.assertEqual(bad_res.status_code, 404)
 
         # Clean up any spawned process
         if tw._DOCS_SERVER_PROC is not None:

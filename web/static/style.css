@@ -931,6 +931,29 @@ code, .mono { font-family: var(--mono); }
   font-size: 13.5px;
   line-height: 1.45;
   word-break: break-word;
+  white-space: pre-wrap;
+}
+
+#docs-active-dir-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-surface-2, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 11px;
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim, #8b949e);
+  transition: all 0.15s ease;
+}
+#docs-active-dir-badge:hover {
+  background: var(--bg-surface-3, rgba(255, 255, 255, 0.1));
+  color: var(--text, #e6edf3);
+  border-color: var(--accent, #58a6ff);
 }
 .toast .t-bar {
   position: absolute;

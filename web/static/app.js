@@ -2781,15 +2781,26 @@ async function loadDocsFiles(customDir = _docsCustomDir) {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || "Failed to scan docs files");
     _docsFiles = data.files || [];
+    const activeDir = data.dir || _docsCustomDir || "";
     const dirLabel = $("#docs-dir-label");
     if (dirLabel) {
       if (data.dir) {
-        const parts = data.dir.replace(/\\/g, "/").split("/");
-        dirLabel.textContent = parts[parts.length - 1] || "docs";
+        const parts = data.dir.replace(/\\/g, "/").split("/").filter(Boolean);
+        dirLabel.textContent = parts.length > 1 ? parts.slice(-2).join("/") : (parts[0] || "docs");
         dirLabel.parentElement.title = `Docs Root: ${data.dir} (Click to change)`;
       } else {
         dirLabel.textContent = "docs";
         dirLabel.parentElement.title = "Default docs root (Click to change)";
+      }
+    }
+    const dirBadge = $("#docs-active-dir-badge");
+    if (dirBadge) {
+      if (activeDir) {
+        dirBadge.style.display = "inline-flex";
+        dirBadge.textContent = activeDir;
+        dirBadge.title = `Active Docs Root: ${activeDir} (Click to change)`;
+      } else {
+        dirBadge.style.display = "none";
       }
     }
     renderDocsFileSelect();
@@ -2862,7 +2873,9 @@ async function loadDocFile(name) {
 
     const meta = $("#docs-file-meta");
     if (meta) {
-      meta.textContent = `${data.name} · ${data.rst.length} chars · format: RST`;
+      const fullPath = data.full_path || data.name;
+      meta.textContent = `📄 ${fullPath} · ${data.rst.length} chars · format: RST`;
+      meta.title = `Full path: ${fullPath}`;
     }
     if (badge) badge.textContent = data.readonly ? "Read-only" : "Ready";
     renderDocsFileSelect();
@@ -3185,10 +3198,24 @@ async function saveCurrentDoc() {
   }
 }
 
+function getActiveDocsDirHint() {
+  if (_docsCustomDir) return _docsCustomDir;
+  const badgeText = $("#docs-active-dir-badge")?.textContent;
+  if (badgeText) return badgeText;
+  if (_currentDoc?.full_path) {
+    return _currentDoc.full_path.replace(/[\\/][^\\/]+$/, "");
+  }
+  return "sphinx/templates/architecture";
+}
+
 async function buildSphinxDocs() {
   const badge = $("#docs-status-badge");
-  if (badge) badge.textContent = "Building Sphinx…";
-  toast("Building Docs 🔨", "Compiling Sphinx HTML in background…", "info", 3000);
+  const targetDirHint = getActiveDocsDirHint();
+  if (badge) {
+    badge.textContent = "Building Sphinx…";
+    badge.title = `Building docs in: ${targetDirHint}`;
+  }
+  toast("Building Docs 🔨", `Directory: ${targetDirHint}\nCompiling Sphinx HTML in background…`, "info", 4000);
   try {
     const res = await fetch("/api/docs/build", {
       method: "POST",
@@ -3200,24 +3227,36 @@ async function buildSphinxDocs() {
     });
     const data = await res.json();
     if (data.ok) {
-      if (badge) badge.textContent = "Build Success ✔";
-      const targetTxt = data.html_dir || (_docsCustomDir ? `${_docsCustomDir}/_build/html` : "docs/_build/html");
-      toast("Sphinx Build Succeeded 🎉", `Documentation compiled successfully to ${targetTxt}.`, "ok", 5000);
+      if (badge) {
+        badge.textContent = "Build Success ✔";
+        badge.title = `Built: ${data.target_dir}\nOutput: ${data.html_dir}`;
+      }
+      const dirBadge = $("#docs-active-dir-badge");
+      if (dirBadge && data.target_dir) {
+        dirBadge.style.display = "inline-flex";
+        dirBadge.textContent = data.target_dir;
+        dirBadge.title = `Active Docs Root: ${data.target_dir} (Click to change)`;
+      }
+      toast("Sphinx Build Succeeded 🎉", `Source: ${data.target_dir}\nOutput: ${data.html_dir}`, "ok", 6000);
     } else {
       if (badge) badge.textContent = "Build Warning";
       const errDetail = data.stderr || data.error || "Build returned non-zero code";
-      toast("Sphinx Build Warning", errDetail.slice(0, 160), "warn", 6000);
+      toast("Sphinx Build Warning", `Directory: ${data.target_dir || targetDirHint}\n${errDetail.slice(0, 160)}`, "warn", 6000);
     }
   } catch (err) {
     if (badge) badge.textContent = "Build Error";
-    toast("Build Error", String(err.message || err), "danger");
+    toast("Build Error", `Directory: ${targetDirHint}\n${String(err.message || err)}`, "danger");
   }
 }
 
 async function startSphinxDocs() {
   const badge = $("#docs-status-badge");
-  if (badge) badge.textContent = "Starting Docs Server…";
-  toast("Launching Docs 🚀", "Starting HTTP preview server & opening browser…", "info", 3000);
+  const targetDirHint = getActiveDocsDirHint();
+  if (badge) {
+    badge.textContent = "Starting Docs Server…";
+    badge.title = `Starting HTTP preview server for: ${targetDirHint}`;
+  }
+  toast("Launching Docs 🚀", `Directory: ${targetDirHint}\nStarting HTTP preview server & opening browser…`, "info", 4000);
   try {
     const res = await fetch("/api/docs/start", {
       method: "POST",
@@ -3229,19 +3268,28 @@ async function startSphinxDocs() {
     });
     const data = await res.json();
     if (data.ok) {
-      if (badge) badge.textContent = `Live :${data.port || 8789} ✔`;
-      toast("Docs Server Live 🌐", `Preview opened at ${data.url}`, "ok", 4000);
+      if (badge) {
+        badge.textContent = `Live :${data.port || 8789} ✔`;
+        badge.title = `Directory: ${data.target_dir}\nServing: ${data.html_dir}\nURL: ${data.url}`;
+      }
+      const dirBadge = $("#docs-active-dir-badge");
+      if (dirBadge && data.target_dir) {
+        dirBadge.style.display = "inline-flex";
+        dirBadge.textContent = data.target_dir;
+        dirBadge.title = `Active Docs Root: ${data.target_dir} (Click to change)`;
+      }
+      toast("Docs Server Live 🌐", `Source: ${data.target_dir}\nServing: ${data.html_dir}\nURL: ${data.url}`, "ok", 6000);
       try {
         const previewUrl = data.cache_bust_url || `${data.url}/?_t=${Date.now()}`;
         window.open(previewUrl, "_blank");
       } catch { /* browser popup blocker */ }
     } else {
       if (badge) badge.textContent = "Server Error";
-      toast("Failed to start docs server", data.error || "Unknown error", "danger");
+      toast("Failed to start docs server", `Directory: ${data.target_dir || targetDirHint}\n${data.error || "Unknown error"}`, "danger");
     }
   } catch (err) {
     if (badge) badge.textContent = "Server Error";
-    toast("Server Error", String(err.message || err), "danger");
+    toast("Server Error", `Directory: ${targetDirHint}\n${String(err.message || err)}`, "danger");
   }
 }
 
@@ -3481,6 +3529,9 @@ function wire() {
   }
 
   // Change Docs Root Directory Modal wiring
+  $("#docs-active-dir-badge")?.addEventListener("click", () => {
+    $("#btn-docs-change-dir")?.click();
+  });
   $("#btn-docs-change-dir")?.addEventListener("click", () => {
     const modal = $("#modal-docs-dir");
     const input = $("#input-docs-dir");

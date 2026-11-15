@@ -1065,6 +1065,8 @@ def api_docs_start():
     port = int(payload.get("port", 8789))
 
     target_dir = detect_docs_project_dir(current_file=current_file, custom_dir=custom_dir, root=ROOT)
+    if not target_dir.is_dir():
+        return jsonify({"ok": False, "error": f"Documentation directory '{target_dir}' does not exist"}), 404
     html_dir = target_dir / "_build" / "html"
 
     # If _build/html/index.html does not exist, build first
