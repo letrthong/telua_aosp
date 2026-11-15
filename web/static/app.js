@@ -2856,7 +2856,7 @@ async function loadDocFile(name) {
   const badge = $("#docs-status-badge");
   if (badge) badge.textContent = "Loading…";
   try {
-    const url = `/api/docs/file?name=${encodeURIComponent(name)}&dir=${encodeURIComponent(_docsCustomDir || "")}`;
+    const url = `/api/docs/file?name=${encodeURIComponent(name)}&dir=${encodeURIComponent(_docsCustomDir || _docsActiveDir || "")}`;
     const res = await fetch(url);
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || "Failed to read file");
@@ -3183,7 +3183,7 @@ async function saveCurrentDoc() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: _currentDoc.name,
-        dir: _docsCustomDir || "",
+        dir: _docsCustomDir || _docsActiveDir || "",
         content: content,
         format: format,
       }),
@@ -3528,7 +3528,6 @@ function wire() {
   $("#btn-docs-save")?.addEventListener("click", () => saveCurrentDoc());
   $("#btn-docs-build")?.addEventListener("click", () => buildSphinxDocs());
   $("#btn-docs-start")?.addEventListener("click", () => startSphinxDocs());
-  $("#btn-docs-clean")?.addEventListener("click", () => cleanSphinxDocs());
   $("#docs-raw-rst")?.addEventListener("input", () => {
     setDocsDirty(true);
     if (_docsSplit) updateDocsPreview();
@@ -3595,7 +3594,6 @@ function wire() {
   $("#btn-docs-change-dir")?.addEventListener("click", () => {
     const modal = $("#modal-docs-dir");
     const input = $("#input-docs-dir");
-    const activeDir = _docsCustomDir || ($("#docs-active-dir-badge")?.textContent) || localStorage.getItem("telua_web_docs_dir") || "";
     const activeDir = _docsCustomDir || _docsActiveDir || localStorage.getItem("telua_web_docs_dir") || "";
     if (input) input.value = activeDir;
     renderRecentDocsChips();
