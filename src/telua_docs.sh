@@ -592,27 +592,29 @@ docs_cmd_build() {
         fi
     fi
 
-    # 1. Check sections (on staging_dir)
-    local script_sec
-    script_sec="$(_docs_find_script "check_sections.py" "$staging_dir")"
-    if [ -n "$script_sec" ]; then
-        log_info "Step 1/5: Checking chapter & section paths..."
-        if ! "$py_cmd" "$script_sec" "$staging_dir"; then
-            log_error "Section validation failed! Build aborted."
-            rm -rf "$staging_dir"
-            return 1
+    # 1. Check sections & merge chapters if metadata.json is present
+    if [ -f "$staging_dir/metadata.json" ]; then
+        local script_sec
+        script_sec="$(_docs_find_script "check_sections.py" "$staging_dir")"
+        if [ -n "$script_sec" ]; then
+            log_info "Step 1/5: Checking chapter & section paths..."
+            if ! "$py_cmd" "$script_sec" "$staging_dir"; then
+                log_error "Section validation failed! Build aborted."
+                rm -rf "$staging_dir"
+                return 1
+            fi
         fi
-    fi
 
-    # 2. Merge sections into chapters (in staging_dir ONLY, source files remain untouched!)
-    local script_merge
-    script_merge="$(_docs_find_script "merge_docs.py" "$staging_dir")"
-    if [ -n "$script_merge" ]; then
-        log_info "Step 2/5: Merging sections in staging directory (source files untouched)..."
-        if ! "$py_cmd" "$script_merge" "$staging_dir"; then
-            log_error "Merge docs failed! Build aborted."
-            rm -rf "$staging_dir"
-            return 1
+        # 2. Merge sections into chapters (in staging_dir ONLY, source files remain untouched!)
+        local script_merge
+        script_merge="$(_docs_find_script "merge_docs.py" "$staging_dir")"
+        if [ -n "$script_merge" ]; then
+            log_info "Step 2/5: Merging sections in staging directory (source files untouched)..."
+            if ! "$py_cmd" "$script_merge" "$staging_dir"; then
+                log_error "Merge docs failed! Build aborted."
+                rm -rf "$staging_dir"
+                return 1
+            fi
         fi
     fi
 
@@ -641,9 +643,9 @@ docs_cmd_build() {
         fi
     fi
 
-    # 4. Compile Sphinx HTML from staging_dir
-    log_info "Step 5/5: Compiling Sphinx HTML using '$sphinx_cmd'..."
-    if ! $sphinx_cmd -b html "$staging_dir" "$out_html"; then
+    # 4. Compile Sphinx HTML from staging_dir (always -E -a to avoid stale target skipping)
+    log_info "Step 5/5: Compiling Sphinx HTML using '$sphinx_cmd' (-E -a)..."
+    if ! $sphinx_cmd -E -a -b html "$staging_dir" "$out_html"; then
         log_error "Sphinx build failed!"
         rm -rf "$staging_dir"
         return 1
@@ -797,11 +799,10 @@ docs_cmd_start() {
     fi
 
     local html_dir="$target_dir/_build/html"
-    if [ ! -f "$html_dir/index.html" ]; then
-        log_warn "HTML documentation not found in '$html_dir'. Triggering build first..."
-        if ! docs_cmd_build "$target_dir"; then
-            return 1
-        fi
+    # Always ensure documentation is freshly compiled before starting/opening preview
+    log_info "Ensuring documentation is up-to-date in '$target_dir'..."
+    if ! docs_cmd_build "$target_dir"; then
+        return 1
     fi
 
     local py_cmd

@@ -2782,11 +2782,30 @@ async function loadDocsFiles(customDir = _docsCustomDir) {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || "Failed to scan docs files");
     _docsFiles = data.files || [];
+    const activeDir = data.dir || _docsCustomDir || "";
     _docsActiveDir = data.dir || _docsCustomDir || "";
     const dirLabel = $("#docs-dir-label");
     if (dirLabel) {
+      if (data.dir) {
+        const parts = data.dir.replace(/\\/g, "/").split("/").filter(Boolean);
+        dirLabel.textContent = parts.length > 1 ? parts.slice(-2).join("/") : (parts[0] || "docs");
+        dirLabel.parentElement.title = `Docs Root: ${data.dir} (Click to change)`;
+      } else {
+        dirLabel.textContent = "docs";
+        dirLabel.parentElement.title = "Default docs root (Click to change)";
+      }
       dirLabel.textContent = "docs";
       dirLabel.parentElement.title = data.dir ? `Docs Root: ${data.dir} (Click to change)` : "Default docs root (Click to change)";
+    }
+    const dirBadge = $("#docs-active-dir-badge");
+    if (dirBadge) {
+      if (activeDir) {
+        dirBadge.style.display = "inline-flex";
+        dirBadge.textContent = activeDir;
+        dirBadge.title = `Active Docs Root: ${activeDir} (Click to change)`;
+      } else {
+        dirBadge.style.display = "none";
+      }
     }
     renderDocsFileSelect();
     if (_docsFiles.length > 0 && (!_currentDoc || !_docsFiles.some(f => f.name === _currentDoc.name))) {
@@ -3185,6 +3204,8 @@ async function saveCurrentDoc() {
 
 function getActiveDocsDirHint() {
   if (_docsCustomDir) return _docsCustomDir;
+  const badgeText = $("#docs-active-dir-badge")?.textContent;
+  if (badgeText) return badgeText;
   if (_docsActiveDir) return _docsActiveDir;
   if (_currentDoc?.full_path) {
     return _currentDoc.full_path.replace(/[\\/][^\\/]+$/, "");
@@ -3214,6 +3235,12 @@ async function buildSphinxDocs() {
       if (badge) {
         badge.textContent = "Build Success ✔";
         badge.title = `Built: ${data.target_dir}\nOutput: ${data.html_dir}`;
+      }
+      const dirBadge = $("#docs-active-dir-badge");
+      if (dirBadge && data.target_dir) {
+        dirBadge.style.display = "inline-flex";
+        dirBadge.textContent = data.target_dir;
+        dirBadge.title = `Active Docs Root: ${data.target_dir} (Click to change)`;
       }
       if (data.target_dir) _docsActiveDir = data.target_dir;
       toast("Sphinx Build Succeeded 🎉", `Source: ${data.target_dir}\nOutput: ${data.html_dir}`, "ok", 6000);
@@ -3251,6 +3278,12 @@ async function startSphinxDocs() {
         badge.textContent = `Live :${data.port || 8789} ✔`;
         badge.title = `Directory: ${data.target_dir}\nServing: ${data.html_dir}\nURL: ${data.url}`;
       }
+      const dirBadge = $("#docs-active-dir-badge");
+      if (dirBadge && data.target_dir) {
+        dirBadge.style.display = "inline-flex";
+        dirBadge.textContent = data.target_dir;
+        dirBadge.title = `Active Docs Root: ${data.target_dir} (Click to change)`;
+      }
       if (data.target_dir) _docsActiveDir = data.target_dir;
       toast("Docs Server Live 🌐", `Source: ${data.target_dir}\nServing: ${data.html_dir}\nURL: ${data.url}`, "ok", 6000);
       try {
@@ -3267,13 +3300,13 @@ async function startSphinxDocs() {
   }
 }
     } else {
-      if (badge) badge.textContent = "Server Error";
-      toast("Failed to start docs server", `Directory: ${data.target_dir || targetDirHint}\n${data.error || "Unknown error"}`, "danger");
-    }
+  if (badge) badge.textContent = "Server Error";
+  toast("Failed to start docs server", `Directory: ${data.target_dir || targetDirHint}\n${data.error || "Unknown error"}`, "danger");
+}
   } catch (err) {
-    if (badge) badge.textContent = "Server Error";
-    toast("Server Error", `Directory: ${targetDirHint}\n${String(err.message || err)}`, "danger");
-  }
+  if (badge) badge.textContent = "Server Error";
+  toast("Server Error", `Directory: ${targetDirHint}\n${String(err.message || err)}`, "danger");
+}
 }
 
 async function cleanSphinxDocs() {
@@ -3540,46 +3573,50 @@ function wire() {
     });
   }
 
-function saveRecentDocsDir(dir) {
-  if (!dir) return;
-  try {
-    let recent = JSON.parse(localStorage.getItem("telua_web_docs_recent_dirs") || "[]");
-    recent = [dir, ...recent.filter(d => d !== dir)].slice(0, 6);
-    localStorage.setItem("telua_web_docs_recent_dirs", JSON.stringify(recent));
-  } catch { /* ignore */ }
-}
+  function saveRecentDocsDir(dir) {
+    if (!dir) return;
+    try {
+      let recent = JSON.parse(localStorage.getItem("telua_web_docs_recent_dirs") || "[]");
+      recent = [dir, ...recent.filter(d => d !== dir)].slice(0, 6);
+      localStorage.setItem("telua_web_docs_recent_dirs", JSON.stringify(recent));
+    } catch { /* ignore */ }
+  }
 
-function renderRecentDocsChips() {
-  const container = $("#docs-recent-dirs-container");
-  const listEl = $("#docs-recent-dirs-list");
-  if (!container || !listEl) return;
-  try {
-    const recent = JSON.parse(localStorage.getItem("telua_web_docs_recent_dirs") || "[]");
-    if (!recent || !recent.length) {
-      container.style.display = "none";
-      return;
-    }
-    container.style.display = "block";
-    listEl.innerHTML = "";
-    recent.forEach(dir => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "term-chip btn-docs-dir-chip";
-      btn.dataset.dir = dir;
-      btn.textContent = dir;
-      btn.addEventListener("click", () => {
-        const input = $("#input-docs-dir");
-        if (input) input.value = dir;
+  function renderRecentDocsChips() {
+    const container = $("#docs-recent-dirs-container");
+    const listEl = $("#docs-recent-dirs-list");
+    if (!container || !listEl) return;
+    try {
+      const recent = JSON.parse(localStorage.getItem("telua_web_docs_recent_dirs") || "[]");
+      if (!recent || !recent.length) {
+        container.style.display = "none";
+        return;
+      }
+      container.style.display = "block";
+      listEl.innerHTML = "";
+      recent.forEach(dir => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "term-chip btn-docs-dir-chip";
+        btn.dataset.dir = dir;
+        btn.textContent = dir;
+        btn.addEventListener("click", () => {
+          const input = $("#input-docs-dir");
+          if (input) input.value = dir;
+        });
+        listEl.appendChild(btn);
       });
-      listEl.appendChild(btn);
-    });
-  } catch { /* ignore */ }
-}
+    } catch { /* ignore */ }
+  }
 
   // Change Docs Root Directory Modal wiring
+  $("#docs-active-dir-badge")?.addEventListener("click", () => {
+    $("#btn-docs-change-dir")?.click();
+  });
   $("#btn-docs-change-dir")?.addEventListener("click", () => {
     const modal = $("#modal-docs-dir");
     const input = $("#input-docs-dir");
+    const activeDir = _docsCustomDir || ($("#docs-active-dir-badge")?.textContent) || localStorage.getItem("telua_web_docs_dir") || "";
     const activeDir = _docsCustomDir || _docsActiveDir || localStorage.getItem("telua_web_docs_dir") || "";
     if (input) input.value = activeDir;
     renderRecentDocsChips();

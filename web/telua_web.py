@@ -990,6 +990,64 @@ _DOCS_SERVER_DIR = None
 _DOCS_SERVER_PORT = None
 
 
+def _build_sphinx_docs_py(target_dir: Path):
+    """Compile Sphinx documentation into target_dir/_build/html with staging, merge, and fallbacks."""
+    import shutil
+    out_html = target_dir / "_build" / "html"
+    staging_dir = target_dir / "_build" / ".staging"
+    merge_script = ROOT / "sphinx" / "scripts" / "merge_docs.py"
+
+    if staging_dir.is_dir():
+        shutil.rmtree(staging_dir, ignore_errors=True)
+    staging_dir.mkdir(parents=True, exist_ok=True)
+
+    for item in target_dir.iterdir():
+        if item.name not in ("_build", ".git"):
+            dest = staging_dir / item.name
+            if item.is_dir():
+                shutil.copytree(item, dest, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, dest)
+
+    # Fallback conf.py if missing in staging
+    if not (staging_dir / "conf.py").is_file():
+        for candidate in [
+            ROOT / "sphinx" / "templates" / "basic" / "conf.py",
+            ROOT / "sphinx" / "templates" / "architecture" / "conf.py",
+            ROOT / "sphinx" / "conf.py",
+        ]:
+            if candidate.is_file():
+                shutil.copy2(candidate, staging_dir / "conf.py")
+                break
+
+    # Fallback _static if missing in staging
+    if not (staging_dir / "_static").is_dir():
+        for candidate in [
+            ROOT / "sphinx" / "templates" / "basic" / "_static",
+            ROOT / "sphinx" / "templates" / "architecture" / "_static",
+        ]:
+            if candidate.is_dir():
+                shutil.copytree(candidate, staging_dir / "_static", dirs_exist_ok=True)
+                break
+
+    # Fallback asset directory if missing in staging
+    if not (staging_dir / "asset").is_dir():
+        for candidate in [
+            ROOT / "sphinx" / "templates" / "basic" / "asset",
+            ROOT / "sphinx" / "templates" / "architecture" / "asset",
+        ]:
+            if candidate.is_dir():
+                shutil.copytree(candidate, staging_dir / "asset", dirs_exist_ok=True)
+                break
+
+    if (staging_dir / "metadata.json").is_file() and merge_script.is_file():
+        subprocess.run([sys.executable, str(merge_script), str(staging_dir)], capture_output=True, timeout=30)
+
+    cmd = [sys.executable, "-m", "sphinx", "-E", "-a", "-b", "html", str(staging_dir), str(out_html)]
+    proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=60)
+    return (proc.returncode == 0, proc.returncode, proc.stdout, proc.stderr, target_dir, out_html)
+
+
 @app.post("/api/docs/build")
 def api_docs_build():
     """Trigger Sphinx build for target docs directory."""
@@ -1019,37 +1077,15 @@ def api_docs_build():
             return jsonify({"ok": False, "error": str(exc)}), 500
 
     # Cross-platform / Windows fallback
-    out_html = target_dir / "_build" / "html"
-    staging_dir = target_dir / "_build" / ".staging"
-    merge_script = ROOT / "sphinx" / "scripts" / "merge_docs.py"
-
-    build_src = target_dir
-    if (target_dir / "metadata.json").is_file() and merge_script.is_file():
-        import shutil
-        if staging_dir.is_dir():
-            shutil.rmtree(staging_dir, ignore_errors=True)
-        staging_dir.mkdir(parents=True, exist_ok=True)
-        for item in target_dir.iterdir():
-            if item.name not in ("_build", ".git"):
-                dest = staging_dir / item.name
-                if item.is_dir():
-                    shutil.copytree(item, dest, dirs_exist_ok=True)
-                else:
-                    shutil.copy2(item, dest)
-        subprocess.run([sys.executable, str(merge_script), str(staging_dir)], capture_output=True, timeout=30)
-        build_src = staging_dir
-
-    # Use -E -a to always read all files and write all output files, never skipping modified sections
-    cmd = [sys.executable, "-m", "sphinx", "-E", "-a", "-b", "html", str(build_src), str(out_html)]
     try:
-        proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=60)
+        ok, ret, stdout, stderr, tdir, ohtml = _build_sphinx_docs_py(target_dir)
         return jsonify({
-            "ok": proc.returncode == 0,
-            "exit_code": proc.returncode,
-            "stdout": proc.stdout,
-            "stderr": proc.stderr,
-            "target_dir": str(target_dir),
-            "html_dir": str(out_html),
+            "ok": ok,
+            "exit_code": ret,
+            "stdout": stdout,
+            "stderr": stderr,
+            "target_dir": str(tdir),
+            "html_dir": str(ohtml),
         })
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
@@ -1125,24 +1161,7 @@ def api_docs_start():
             pass
     else:
         try:
-            out_html = target_dir / "_build" / "html"
-            staging_dir = target_dir / "_build" / ".staging"
-            merge_script = ROOT / "sphinx" / "scripts" / "merge_docs.py"
-            build_src = target_dir
-            if (target_dir / "metadata.json").is_file() and merge_script.is_file():
-                if staging_dir.is_dir():
-                    shutil.rmtree(staging_dir, ignore_errors=True)
-                staging_dir.mkdir(parents=True, exist_ok=True)
-                for item in target_dir.iterdir():
-                    if item.name not in ("_build", ".git"):
-                        dest = staging_dir / item.name
-                        if item.is_dir():
-                            shutil.copytree(item, dest, dirs_exist_ok=True)
-                        else:
-                            shutil.copy2(item, dest)
-                subprocess.run([sys.executable, str(merge_script), str(staging_dir)], capture_output=True, timeout=30)
-                build_src = staging_dir
-            subprocess.run([sys.executable, "-m", "sphinx", "-E", "-a", "-b", "html", str(build_src), str(out_html)], cwd=str(ROOT), capture_output=True, timeout=60)
+            _build_sphinx_docs_py(target_dir)
         except Exception:
             pass
 
@@ -1183,19 +1202,6 @@ def api_docs_start():
         _DOCS_SERVER_PORT = port
     except Exception as exc:
         abort(500, description=f"Failed to start docs server: {exc}")
-
-    cache_bust_url = f"{url}/?_t={int(time.time())}"
-    open_browser(cache_bust_url)
-
-    return jsonify({
-        "ok": True,
-        "url": url,
-        "cache_bust_url": cache_bust_url,
-        "port": port,
-        "pid": _DOCS_SERVER_PROC.pid if _DOCS_SERVER_PROC else None,
-        "target_dir": str(target_dir),
-        "html_dir": str(html_dir),
-    })
 
     cache_bust_url = f"{url}/?_t={int(time.time())}"
     open_browser(cache_bust_url)

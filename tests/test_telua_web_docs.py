@@ -402,6 +402,25 @@ class TestTeluaWebDocsAPI(unittest.TestCase):
         self.assertIn("1. Step 1", rst)  # Numbered lists
         self.assertIn("(**Bold Part**)", rst)  # No extra spacing around brackets/punctuation
 
+    def test_resolve_rst_target_prefix_deduplication(self):
+        # When name already starts with custom_dir, it should not double the path prefix
+        custom_dir = "sphinx/templates/architecture"
+        name = "sphinx/templates/architecture/index.rst"
+        target, full = twd.resolve_rst_target(name, tw.ROOT, custom_dir=custom_dir)
+        expected = (tw.ROOT / "sphinx" / "templates" / "architecture" / "index.rst").resolve()
+        self.assertEqual(target, expected)
+        self.assertTrue(target.is_file())
+
+    def test_resolve_rst_target_absolute_and_fallback(self):
+        # Existing absolute path should resolve directly
+        real_file = (tw.ROOT / "sphinx" / "templates" / "architecture" / "index.rst").resolve()
+        target, full = twd.resolve_rst_target(str(real_file), tw.ROOT, custom_dir="sphinx/templates/architecture")
+        self.assertEqual(target, real_file)
+
+        # Single relative name in custom dir
+        target, full = twd.resolve_rst_target("index.rst", tw.ROOT, custom_dir="sphinx/templates/architecture")
+        self.assertEqual(target, real_file)
+
 
 if __name__ == "__main__":
     unittest.main()

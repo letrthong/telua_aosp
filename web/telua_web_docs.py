@@ -128,17 +128,46 @@ def scan_docs_files(root: Path, custom_dir: Optional[str] = None) -> Tuple[List[
 
 def resolve_rst_target(name: str, root: Path, custom_dir: Optional[str] = None) -> Tuple[Path, str]:
     """Resolve a .rst file name either inside custom_dir or relative to root."""
-    name = name.strip()
+    name = name.strip().replace("\\", "/")
+
+    # 1. If name is already an absolute path that exists
+    p_name = Path(name)
+    if p_name.is_absolute() and p_name.is_file():
+        return p_name.resolve(), p_name.resolve().as_posix()
+
+    # 2. If custom_dir is provided
     if custom_dir and custom_dir.strip():
-        base = Path(custom_dir.strip())
-        target_base = base if base.is_absolute() else (root / base).resolve()
+        raw_base = Path(custom_dir.strip())
+        target_base = raw_base if raw_base.is_absolute() else (root / raw_base).resolve()
+
+        # Deduplicate prefix if name already starts with custom_dir
+        clean_custom = custom_dir.strip().replace("\\", "/").rstrip("/")
+        if name.startswith(clean_custom + "/"):
+            name = name[len(clean_custom) + 1:]
+        elif target_base.as_posix() != "/" and name.startswith(target_base.as_posix() + "/"):
+            name = name[len(target_base.as_posix()) + 1:]
+
         target = (target_base / name).resolve()
+
+        # Guard: if target does not exist, but (root / name) exists as an actual file,
+        # it means the user selected a root-relative file from a different directory
+        if not target.is_file() and (root / name).is_file():
+            return (root / name).resolve(), name
+
         return target, target.as_posix()
-    if "/" not in name and "\\" not in name:
+
+    # 3. No custom_dir:
+    # If the file exists directly under root / name
+    if (root / name).is_file():
+        return (root / name).resolve(), name
+
+    # If single filename without directory, check root / docs
+    if "/" not in name:
         docs_dir = root / "docs"
         if docs_dir.is_dir() or not (root / name).is_file():
             target = (docs_dir / name).resolve()
             return target, f"docs/{name}"
+
     target = (root / name).resolve()
     return target, name
 
