@@ -856,10 +856,12 @@ docs_cmd_start() {
         cd "$target_dir" || exit 1
         _docs_spawn_detached "$log_file" \
             "$py_cmd" -c "
-import http.server, sys, os
+import http.server, sys, os, mimetypes
+mimetypes.add_type('image/svg+xml', '.svg')
 port = int(sys.argv[1])
 directory = os.path.abspath(sys.argv[2])
 class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
+    extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map, '.svg': 'image/svg+xml'}
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=directory, **kwargs)
     def end_headers(self):

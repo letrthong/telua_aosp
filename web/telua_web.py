@@ -1290,10 +1290,12 @@ def api_docs_start():
 
     try:
         server_script = (
-            "import http.server, sys, os\n"
+            "import http.server, sys, os, mimetypes\n"
+            "mimetypes.add_type('image/svg+xml', '.svg')\n"
             "port = int(sys.argv[1])\n"
             "directory = os.path.abspath(sys.argv[2])\n"
             "class NoCacheHandler(http.server.SimpleHTTPRequestHandler):\n"
+            "    extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map, '.svg': 'image/svg+xml'}\n"
             "    def __init__(self, *args, **kwargs):\n"
             "        super().__init__(*args, directory=directory, **kwargs)\n"
             "    def end_headers(self):\n"

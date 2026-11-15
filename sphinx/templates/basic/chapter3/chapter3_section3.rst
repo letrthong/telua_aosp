@@ -80,3 +80,35 @@ Dưới đây là sơ đồ tuần tự biểu diễn luồng yêu cầu quyền
        MediaApp->>AudioHAL: streamAudioPCM(48kHz, 2ch)
        AudioHAL-->>User: Output Sound via Car Speakers
        deactivate MediaApp
+
+
+PlantUML Diagram: Full-Stack Request Flow
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Dưới đây là sơ đồ tương tác biểu diễn bằng directive ``.. uml::`` (PlantUML) được biên dịch tự động thành vector SVG:
+
+.. uml::
+
+   @startuml
+   autonumber
+   actor User
+   participant "Frontend" as UI
+   participant "Backend" as API
+   database "Database" as DB
+
+   User -> UI : Submit Action / Request
+   activate UI
+   UI -> API : REST / GraphQL API Call
+   activate API
+   API -> DB : SQL Query / Transaction
+   activate DB
+   DB --> API : Result Set
+   deactivate DB
+   API --> UI : JSON Response (HTTP 200)
+   deactivate API
+   UI --> User : Render Success View
+   deactivate UI
+   @enduml
+
+
+

@@ -15,19 +15,34 @@ for ext in ['sphinxcontrib.mermaid', 'sphinxcontrib.plantuml', 'sphinx_copybutto
         pass
 
 import os
+import shutil
 import sys
 from pathlib import Path
 
 # PlantUML CLI Wrapper: local binary, jar or online SVG fallback
-_candidate_wrappers = [
-    Path(__file__).resolve().parent / "plantuml_wrapper.py",
-    Path(__file__).resolve().parent.parent.parent / "scripts" / "plantuml_wrapper.py",
-]
-for _cw in _candidate_wrappers:
-    if _cw.is_file():
-        plantuml = [sys.executable, str(_cw)]
-        plantuml_output_format = 'svg'
-        break
+_wrapper = os.environ.get("PLANTUML_WRAPPER")
+if not (_wrapper and Path(_wrapper).is_file()):
+    _curr = Path(__file__).resolve().parent
+    for _ in range(6):
+        for candidate_sub in [
+            "plantuml_wrapper.py",
+            "scripts/plantuml_wrapper.py",
+            "sphinx/scripts/plantuml_wrapper.py",
+        ]:
+            _cand = _curr / candidate_sub
+            if _cand.is_file():
+                _wrapper = str(_cand)
+                break
+        if _wrapper or _curr.parent == _curr:
+            break
+        _curr = _curr.parent
+
+if _wrapper and Path(_wrapper).is_file():
+    plantuml = [sys.executable, str(_wrapper)]
+    plantuml_output_format = 'svg_img'
+elif shutil.which("plantuml"):
+    plantuml = "plantuml"
+    plantuml_output_format = 'svg_img'
 
 source_suffix = '.rst'
 exclude_patterns = ['_build']

@@ -346,3 +346,42 @@ img.lightbox-enabled:hover {
     box-shadow: none !important;
     background: transparent !important;
 }
+
+/* 4. PlantUML Diagram Styling (Vector SVG & Clean Centering) */
+p.plantuml {
+    position: relative !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    background: #ffffff;
+    padding: 24px !important;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+    margin: 24px 0;
+    overflow-x: auto;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+p.plantuml:hover {
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+    border-color: #cbd5e1;
+}
+
+p.plantuml img,
+p.plantuml object {
+    max-width: 100% !important;
+    height: auto !important;
+    display: block !important;
+    margin: 0 auto !important;
+}
+
+[data-theme="dark"] p.plantuml {
+    background: #1e1e24;
+    border-color: #2e2e38;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+[data-theme="dark"] p.plantuml:hover {
+    border-color: #3f3f4e;
+}
+

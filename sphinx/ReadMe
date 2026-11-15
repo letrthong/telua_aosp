@@ -36,17 +36,15 @@ pip install furo
 
 - **check_mermaid.py**: Checks all mermaid blocks in chapter and section .rst files for syntax that renders as "Syntax error in text" in the browser (leading edge arrows, dangling edges). It is integrated into the build pipeline — see "Run the scripts in this order" below.
 
+- **plantuml_wrapper.py**: Multi-tier cross-platform PlantUML CLI compiler for Sphinx (`.. uml::` / `.. plantuml::`). Automatically uses local `plantuml` binary or `plantuml.jar` if present, with online proxy fallback to generate high-resolution vector SVG diagrams without requiring manual Java/Graphviz setup.
+
 Run the scripts in this order before building Sphinx HTML:
 1. python merge_docs.py
 2. python check_docs.py
 3. python check_mermaid.py
 4. sphinx-build -b html . _build/html
 
-Note: `tel docs build` and `tel docs check` already run check_mermaid.py
-automatically (build step 4/5, after merge + image check, before
-sphinx-build). A mermaid syntax failure aborts the build, so the error is
-caught at build time instead of showing up as a broken diagram in the
-browser.
+Note: `tel docs build` and `tel docs check` already run check_mermaid.py and configure PlantUML wrapper automatically.
 
 ---
 

@@ -74,5 +74,33 @@ Core Use Case Specification
 
 4. **Postconditions**: The higher-priority alert is broadcast clearly to driver speakers, and background media volume seamlessly restores upon alert completion.
 
+PlantUML Sequence: End-to-End System Interaction
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The sequence below illustrates the client-server interaction via PlantUML (``.. uml::`` directive):
+
+.. uml::
+
+   @startuml
+   autonumber
+   actor User
+   participant "Frontend" as UI
+   participant "Backend" as API
+   database "Database" as DB
+
+   User -> UI : Submit Action / Request
+   activate UI
+   UI -> API : REST / GraphQL API Call
+   activate API
+   API -> DB : SQL Query / Transaction
+   activate DB
+   DB --> API : Result Set
+   deactivate DB
+   API --> UI : JSON Response (HTTP 200)
+   deactivate API
+   UI --> User : Render Success View
+   deactivate UI
+   @enduml
+
 .. note::
    **Official Reference**: For official Android Audio Focus API guidelines and interaction contracts, refer to `Android Developers: Managing Audio Focus <https://developer.android.com/guide/topics/media-apps/audio-focus>`_.
