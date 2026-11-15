@@ -25,6 +25,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Optional, Tuple
 
 SCRIPT_FILE = Path(__file__).resolve()
 WEB_DIR = SCRIPT_FILE.parent
