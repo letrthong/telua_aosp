@@ -3227,7 +3227,7 @@ async function buildSphinxDocs() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         dir: _docsCustomDir || _docsActiveDir || "",
-        current_file: _currentDoc?.name || "",
+        current_file: _currentDoc?.full_path || _currentDoc?.name || "",
       }),
     });
     const data = await res.json();
@@ -3263,7 +3263,7 @@ async function startSphinxDocs() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         dir: _docsCustomDir || _docsActiveDir || "",
-        current_file: _currentDoc?.name || "",
+        current_file: _currentDoc?.full_path || _currentDoc?.name || "",
       }),
     });
     const data = await res.json();
@@ -3299,7 +3299,7 @@ async function cleanSphinxDocs() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         dir: _docsCustomDir || _docsActiveDir || "",
-        current_file: _currentDoc?.name || "",
+        current_file: _currentDoc?.full_path || _currentDoc?.name || "",
       }),
     });
     const data = await res.json();

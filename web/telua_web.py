@@ -1120,6 +1120,54 @@ def api_docs_clean():
     })
 
 
+def _kill_docs_server(target_dir: Optional[Path] = None, port: int = 8789):
+    """Ensure any running docs preview server is terminated before restart."""
+    global _DOCS_SERVER_PROC
+    if _DOCS_SERVER_PROC is not None:
+        try:
+            if _DOCS_SERVER_PROC.poll() is None:
+                _DOCS_SERVER_PROC.terminate()
+                _DOCS_SERVER_PROC.wait(timeout=2)
+        except Exception:
+            pass
+        _DOCS_SERVER_PROC = None
+
+    if target_dir is not None:
+        pid_file = target_dir / ".telua_docs.pid"
+        if pid_file.is_file():
+            try:
+                raw_pid = pid_file.read_text(encoding="utf-8").strip()
+                pid = int(raw_pid)
+                if pid > 0 and pid != os.getpid():
+                    if sys.platform.startswith("win"):
+                        subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True)
+                    else:
+                        os.kill(pid, 9)
+            except Exception:
+                pass
+            try:
+                pid_file.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    if sys.platform.startswith("win"):
+        try:
+            out = subprocess.check_output(f"netstat -ano | findstr :{port}", shell=True, text=True, errors="ignore")
+            for line in out.splitlines():
+                parts = line.strip().split()
+                if len(parts) >= 5 and "LISTENING" in parts:
+                    pid = int(parts[-1])
+                    if pid > 0 and pid != os.getpid():
+                        subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True)
+        except Exception:
+            pass
+    else:
+        try:
+            subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True)
+        except Exception:
+            pass
+
+
 @app.post("/api/docs/start")
 def api_docs_start():
     """Launch Sphinx HTTP preview server (telua docs start) and open in browser."""
@@ -1143,15 +1191,8 @@ def api_docs_start():
         if build_dir.is_dir():
             shutil.rmtree(build_dir, ignore_errors=True)
 
-    # Always terminate running server process to avoid stale cache or outdated handler
-    if _DOCS_SERVER_PROC is not None:
-        try:
-            if _DOCS_SERVER_PROC.poll() is None:
-                _DOCS_SERVER_PROC.terminate()
-                _DOCS_SERVER_PROC.wait(timeout=2)
-        except Exception:
-            pass
-        _DOCS_SERVER_PROC = None
+    # Always restart: terminate running server process or port occupier
+    _kill_docs_server(target_dir=target_dir, port=port)
 
     # Always re-compile docs to ensure http://localhost:8789 serves 100% fresh content
     if (ROOT / "build_apk.sh").is_file() and not sys.platform.startswith("win"):

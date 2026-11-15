@@ -817,13 +817,17 @@ docs_cmd_start() {
     local preview_url="http://localhost:$port"
     local browser_url="http://localhost:$port/?_t=$cache_ts"
 
-    # Already running? Just report and open fresh browser with cache buster.
+    # If preview server is already running, stop and restart it to ensure fresh content
     local pid
     if pid="$(_docs_server_pid "$target_dir")"; then
-        log_warn "Docs preview server is already running for '$target_dir' (PID: $pid)."
-        log_info "Opening: $browser_url  (use 'telua docs stop $target_dir' to stop it)"
-        _docs_open_browser "$browser_url"
-        return 0
+        log_info "Docs preview server is already running for '$target_dir' (PID: $pid). Restarting server..."
+        docs_cmd_stop "$target_dir" >/dev/null 2>&1 || true
+        sleep 1
+    fi
+
+    # Ensure target port is free from any orphaned process
+    if command -v fuser >/dev/null 2>&1; then
+        fuser -k "$port/tcp" >/dev/null 2>&1 || true
     fi
 
     local pid_file="$target_dir/$_DOCS_PID_FILE"

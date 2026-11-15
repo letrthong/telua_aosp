@@ -185,7 +185,21 @@ def detect_docs_project_dir(current_file: Optional[str] = None, custom_dir: Opti
     # 2. Derive from active/current file path (e.g. sphinx/templates/basic/... or docs/...)
     if current_file and current_file.strip():
         clean_file = current_file.replace("\\", "/").strip()
-        fpath = Path(clean_file) if Path(clean_file).is_absolute() else (root / clean_file).resolve()
+        fpath = Path(clean_file)
+        if not fpath.is_absolute():
+            if (root / clean_file).is_file():
+                fpath = (root / clean_file).resolve()
+            else:
+                for cand in [
+                    root / "sphinx" / "templates" / "architecture" / clean_file,
+                    root / "sphinx" / "templates" / "basic" / clean_file,
+                    root / "docs" / clean_file,
+                ]:
+                    if cand.is_file():
+                        fpath = cand.resolve()
+                        break
+                else:
+                    fpath = (root / clean_file).resolve()
         cur = fpath if fpath.is_dir() else fpath.parent
         root_resolved = root.resolve()
         while cur and cur != cur.parent and cur != root_resolved:
