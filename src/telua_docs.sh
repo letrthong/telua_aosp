@@ -592,6 +592,13 @@ docs_cmd_build() {
         fi
     fi
 
+    # Ensure plantuml_wrapper.py is present in staging
+    if [ ! -f "$staging_dir/plantuml_wrapper.py" ]; then
+        if [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/scripts/plantuml_wrapper.py" ]; then
+            cp "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/scripts/plantuml_wrapper.py" "$staging_dir/"
+        fi
+    fi
+
     # 1. Check sections & merge chapters if metadata.json is present
     if [ -f "$staging_dir/metadata.json" ]; then
         local script_sec

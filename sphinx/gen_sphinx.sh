@@ -59,6 +59,13 @@ if [ ! -d "$STAGING_DIR/_static" ]; then
   fi
 fi
 
+# Ensure plantuml_wrapper.py is present in staging
+if [ ! -f "$STAGING_DIR/plantuml_wrapper.py" ]; then
+  if [ -f "$SCRIPT_DIR/plantuml_wrapper.py" ]; then
+    cp "$SCRIPT_DIR/plantuml_wrapper.py" "$STAGING_DIR/"
+  fi
+fi
+
 echo "Merging docs from metadata.json into staging directory..."
 python "$SCRIPT_DIR/merge_docs.py" "$STAGING_DIR"
 if [ $? -ne 0 ]; then

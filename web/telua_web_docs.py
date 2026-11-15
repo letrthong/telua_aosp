@@ -16,11 +16,13 @@
 #   - Two-way conversion: rst_to_html and html_to_rst
 #   - Sphinx build & live preview helpers
 
+import base64
 import os
 import re
 import shutil
 import subprocess
 import textwrap
+import urllib.parse
 import zlib
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -238,33 +240,21 @@ def _extract_rst_title(file_path: Path) -> Optional[str]:
 
 
 PLANTUML_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"
+STANDARD_BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+TRANSLATE_TO_PLANTUML = str.maketrans(STANDARD_BASE64_ALPHABET, PLANTUML_ALPHABET)
 
 
 def encode_plantuml(text: str) -> str:
-    """Encode PlantUML text into PlantUML standard deflate format (~1...)."""
+    """Encode PlantUML text into official PlantUML URL format."""
     clean_text = text.strip()
     if not clean_text:
         return ""
     if not clean_text.startswith("@startuml"):
         clean_text = f"@startuml\n{clean_text}\n@enduml"
-    compressor = zlib.compressobj(9, zlib.DEFLATED, -15)
-    compressed = compressor.compress(clean_text.encode("utf-8")) + compressor.flush()
-    alphabet = PLANTUML_ALPHABET
-    r = []
-    i = 0
-    n = len(compressed)
-    while i < n:
-        b1 = compressed[i]
-        b2 = compressed[i + 1] if i + 1 < n else 0
-        b3 = compressed[i + 2] if i + 2 < n else 0
-        r.append(alphabet[(b1 >> 2) & 0x3F])
-        r.append(alphabet[(((b1 & 0x3) << 4) | (b2 >> 4)) & 0x3F])
-        if i + 1 < n:
-            r.append(alphabet[(((b2 & 0xF) << 2) | (b3 >> 6)) & 0x3F])
-        if i + 2 < n:
-            r.append(alphabet[b3 & 0x3F])
-        i += 3
-    return "~1" + "".join(r)
+    utf8_bytes = clean_text.encode("utf-8")
+    compressed = zlib.compress(utf8_bytes, level=9)[2:-4]
+    b64 = base64.b64encode(compressed).decode("ascii").rstrip("=")
+    return b64.translate(TRANSLATE_TO_PLANTUML)
 
 
 def get_plantuml_url(text: str) -> str:
@@ -299,7 +289,7 @@ def _protect_rst_directives(rst_text: str) -> str:
     def repl_plantuml(match):
         code = textwrap.dedent(match.group(1)).strip()
         escaped_code = code.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
-        uml_url = get_plantuml_url(code) if code else ""
+        uml_url = f"/api/docs/plantuml/svg?code={urllib.parse.quote(code)}" if code else ""
         html_block = (
             f'<div class="plantuml-block" data-plantuml="{escaped_code}">'
             f'<div class="plantuml-header" contenteditable="false">'

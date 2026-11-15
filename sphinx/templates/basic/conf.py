@@ -7,7 +7,7 @@ author = 'Example Author'
 extensions = []
 
 # Optional extensions with graceful fallback to prevent build failure if package is missing
-for ext in ['sphinxcontrib.mermaid', 'sphinx_copybutton']:
+for ext in ['sphinxcontrib.mermaid', 'sphinxcontrib.plantuml', 'sphinx_copybutton']:
     try:
         __import__(ext)
         extensions.append(ext)
@@ -15,6 +15,19 @@ for ext in ['sphinxcontrib.mermaid', 'sphinx_copybutton']:
         pass
 
 import os
+import sys
+from pathlib import Path
+
+# PlantUML CLI Wrapper: local binary, jar or online SVG fallback
+_candidate_wrappers = [
+    Path(__file__).resolve().parent / "plantuml_wrapper.py",
+    Path(__file__).resolve().parent.parent.parent / "scripts" / "plantuml_wrapper.py",
+]
+for _cw in _candidate_wrappers:
+    if _cw.is_file():
+        plantuml = [sys.executable, str(_cw)]
+        plantuml_output_format = 'svg'
+        break
 
 source_suffix = '.rst'
 exclude_patterns = ['_build']

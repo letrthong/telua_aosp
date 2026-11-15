@@ -113,7 +113,7 @@ class TestTeluaWebDocsConverters(unittest.TestCase):
         html = twd.rst_to_html(rst)
         self.assertIn("plantuml-block", html)
         self.assertIn("plantuml-diagram-wrap", html)
-        self.assertIn("plantuml.com/plantuml/svg/~1", html)
+        self.assertIn("/api/docs/plantuml/svg", html)
         self.assertIn("plantuml-svg-img", html)
         self.assertIn("btn-view-diag", html)
         self.assertIn("btn-view-code", html)
@@ -129,9 +129,10 @@ class TestTeluaWebDocsConverters(unittest.TestCase):
     def test_plantuml_url_encoder(self):
         code = "Alice -> Bob: Test Service"
         enc = twd.encode_plantuml(code)
-        self.assertTrue(enc.startswith("~1"))
+        self.assertTrue(len(enc) > 10)
         url = twd.get_plantuml_url(code)
-        self.assertTrue(url.startswith("https://www.plantuml.com/plantuml/svg/~1"))
+        self.assertTrue(url.startswith("https://www.plantuml.com/plantuml/svg/"))
+        self.assertNotIn("~1", url)
 
     def test_quill_mermaid_dom_preservation(self):
         quill_html = (
@@ -231,6 +232,12 @@ class TestTeluaWebDocsAPI(unittest.TestCase):
         self.assertEqual(res.status_code, 400)
         res2 = self.client.get("/api/docs/file?name=notfound.rst")
         self.assertEqual(res2.status_code, 404)
+
+    def test_api_docs_plantuml_svg(self):
+        res = self.client.get("/api/docs/plantuml/svg?code=Alice%20-%3E%20Bob:%20Hello")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.mimetype, "image/svg+xml")
+        self.assertIn("<svg", res.get_data(as_text=True))
 
     def test_api_docs_convert_endpoint(self):
         # rst2html

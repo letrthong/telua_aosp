@@ -1797,37 +1797,7 @@ function getPlantumlUrl(text) {
   if (!clean.startsWith("@startuml")) {
     clean = `@startuml\n${clean}\n@enduml`;
   }
-  const encoder = new TextEncoder();
-  const rawBytes = encoder.encode(clean);
-  const n = rawBytes.length;
-  // RFC 1951 uncompressed / stored block (BFINAL=1, BTYPE=00)
-  const deflated = new Uint8Array(5 + n);
-  deflated[0] = 0x01;
-  deflated[1] = n & 0xff;
-  deflated[2] = (n >> 8) & 0xff;
-  const nlen = ~n & 0xffff;
-  deflated[3] = nlen & 0xff;
-  deflated[4] = (nlen >> 8) & 0xff;
-  deflated.set(rawBytes, 5);
-
-  const r = [];
-  let i = 0;
-  const len = deflated.length;
-  while (i < len) {
-    const b1 = deflated[i];
-    const b2 = i + 1 < len ? deflated[i + 1] : 0;
-    const b3 = i + 2 < len ? deflated[i + 2] : 0;
-    r.push(PLANTUML_ALPHABET[(b1 >> 2) & 0x3f]);
-    r.push(PLANTUML_ALPHABET[(((b1 & 0x03) << 4) | (b2 >> 4)) & 0x3f]);
-    if (i + 1 < len) {
-      r.push(PLANTUML_ALPHABET[(((b2 & 0x0f) << 2) | (b3 >> 6)) & 0x3f]);
-    }
-    if (i + 2 < len) {
-      r.push(PLANTUML_ALPHABET[b3 & 0x3f]);
-    }
-    i += 3;
-  }
-  return `https://www.plantuml.com/plantuml/svg/~1${r.join("")}`;
+  return `/api/docs/plantuml/svg?code=${encodeURIComponent(clean)}`;
 }
 
 function autoResizeDiagramTextarea(el) {
@@ -2236,8 +2206,16 @@ function wirePlantumlBlocks(container) {
       img.loading = "lazy";
       if (expectedUrl) img.src = expectedUrl;
       diagWrap.appendChild(img);
-    } else if (!img.getAttribute("src") && expectedUrl) {
+    } else if (expectedUrl && img.getAttribute("src") !== expectedUrl) {
       img.src = expectedUrl;
+    }
+
+    if (img && !img.dataset.wired) {
+      img.dataset.wired = "true";
+      img.onload = () => {
+        img.style.display = "block";
+        diagWrap.querySelector(".plantuml-offline-notice")?.remove();
+      };
     }
 
     // Ensure header exists

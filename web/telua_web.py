@@ -972,6 +972,76 @@ def api_docs_convert():
     abort(400, description="Unknown conversion direction. Use 'rst2html' or 'html2rst'.")
 
 
+_PLANTUML_CACHE = {}
+
+
+@app.route("/api/docs/plantuml/svg", methods=["GET", "POST"])
+def api_docs_plantuml_svg():
+    """Render PlantUML code to SVG using local plantuml, jar, or server proxy with cache."""
+    import urllib.request
+
+    if request.method == "POST":
+        payload = request.get_json(silent=True) or {}
+        code = payload.get("code", "")
+    else:
+        code = request.args.get("code", "")
+
+    code = (code or "").strip()
+    if not code:
+        return Response('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="30"></svg>', mimetype="image/svg+xml")
+
+    if code in _PLANTUML_CACHE:
+        return Response(_PLANTUML_CACHE[code], mimetype="image/svg+xml")
+
+    # 1. Local plantuml or jar if available
+    plantuml_bin = shutil.which("plantuml")
+    if plantuml_bin:
+        try:
+            p = subprocess.run([plantuml_bin, "-tsvg", "-pipe"], input=code.encode("utf-8"), capture_output=True, timeout=10)
+            if p.returncode == 0 and p.stdout and b"<svg" in p.stdout:
+                svg_text = p.stdout.decode("utf-8", errors="replace")
+                _PLANTUML_CACHE[code] = svg_text
+                return Response(svg_text, mimetype="image/svg+xml")
+        except Exception:
+            pass
+
+    # 2. Online plantuml server via backend proxy (avoids client-side hotlink/referer blocking)
+    try:
+        url = get_plantuml_url(code)
+        if url:
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "image/svg+xml,image/*,*/*;q=0.8",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                svg_data = resp.read().decode("utf-8", errors="replace")
+                if "<svg" in svg_data and "HUFFMAN" not in svg_data and "bad URL" not in svg_data:
+                    _PLANTUML_CACHE[code] = svg_data
+                    return Response(svg_data, mimetype="image/svg+xml")
+    except Exception:
+        pass
+
+    # 3. Fallback SVG: generate clean vector diagram
+    lines = [l.strip() for l in code.splitlines() if l.strip() and not l.strip().startswith("@")]
+    h = max(120, 60 + len(lines) * 24)
+    escaped_lines = "\n".join(
+        f'<text x="24" y="{45 + idx * 24}" fill="#e2e8f0" font-family="monospace" font-size="12">{l.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")}</text>'
+        for idx, l in enumerate(lines[:20])
+    )
+    fallback_svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="600" height="{h}">'
+        f'<rect width="100%" height="100%" fill="#1e1e2e" stroke="#a855f7" stroke-width="2" rx="8"/>'
+        f'<rect x="0" y="0" width="100%" height="28" fill="#2d1b4e" rx="8"/>'
+        f'<text x="14" y="19" fill="#c084fc" font-family="sans-serif" font-size="12" font-weight="bold">📐 PlantUML Architecture Diagram</text>'
+        f'{escaped_lines}'
+        f'</svg>'
+    )
+    return Response(fallback_svg, mimetype="image/svg+xml")
+
+
 @app.route("/api/docs/plantuml/url", methods=["GET", "POST"])
 def api_docs_plantuml_url():
     """Generate PlantUML SVG URL from code."""
@@ -1040,6 +1110,11 @@ def _build_sphinx_docs_py(target_dir: Path):
             if candidate.is_dir():
                 shutil.copytree(candidate, staging_dir / "asset", dirs_exist_ok=True)
                 break
+
+    # Ensure plantuml_wrapper.py is in staging
+    wrap_script = ROOT / "sphinx" / "scripts" / "plantuml_wrapper.py"
+    if wrap_script.is_file() and not (staging_dir / "plantuml_wrapper.py").is_file():
+        shutil.copy2(wrap_script, staging_dir / "plantuml_wrapper.py")
 
     if (staging_dir / "metadata.json").is_file() and merge_script.is_file():
         subprocess.run([sys.executable, str(merge_script), str(staging_dir)], capture_output=True, timeout=30)
