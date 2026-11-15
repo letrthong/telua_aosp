@@ -242,3 +242,4 @@ config/const_my_cli.config
 config/apk_overlays.config
 apk_overlays.config
 
+sphinx/templates/basic/_build
