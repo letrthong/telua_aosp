@@ -54,6 +54,7 @@ show_docs_help() {
     printf "  \033[1;36m%-22s\033[0m %s\n" "log" "Show last 40 lines of the preview server log"
     printf "  \033[1;36m%-22s\033[0m %s\n" "sync [dir]" "Pre-check formatting & auto-sync folders/sections into metadata.json"
     printf "  \033[1;36m%-22s\033[0m %s\n" "build" "Validate, merge modular sections & compile Sphinx HTML"
+    printf "  \033[1;36m%-22s\033[0m %s\n" "upgrade [dir]" "Sync legacy project conf.py to support PlantUML (.. uml::)"
     printf "  \033[1;36m%-22s\033[0m %s\n" "check" "Verify section file paths and image links"
     printf "  \033[1;36m%-22s\033[0m %s\n" "clean" "Clean build artifacts (_build directory)"
     printf "  \033[1;36m%-22s\033[0m %s\n" "init [dir] [-t type]" "Initialize docs (templates: basic, architecture, minimal, api)"
@@ -498,6 +499,34 @@ docs_cmd_check() {
 }
 
 # Action: build
+# Action: upgrade (persist PlantUML support into an existing/legacy project's conf.py)
+docs_cmd_upgrade() {
+    local target_dir
+    target_dir="$(resolve_docs_dir "${1:-}")"
+    if [ ! -f "$target_dir/conf.py" ]; then
+        log_error "No conf.py found in '$target_dir'. Nothing to upgrade."
+        return 1
+    fi
+    local py_cmd
+    py_cmd="$(_docs_get_python_cmd)"
+    if [ -z "$py_cmd" ]; then
+        log_error "Python 3 is required but not found in PATH."
+        return 1
+    fi
+    if ! "$py_cmd" -c "import sphinxcontrib.plantuml" >/dev/null 2>&1; then
+        log_info "Installing sphinxcontrib-plantuml..."
+        "$py_cmd" -m pip install -q sphinxcontrib-plantuml || log_warn "pip install failed; install manually."
+    fi
+    local script_puml="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/scripts/inject_plantuml.py"
+    log_info "Upgrading docs config in '$target_dir' (PlantUML support)..."
+    if "$py_cmd" "$script_puml" "$target_dir"; then
+        log_success "Done. Rebuild with: telua docs build $target_dir"
+    else
+        log_error "Upgrade failed."
+        return 1
+    fi
+}
+
 docs_cmd_build() {
     local target_dir
     target_dir="$(resolve_docs_dir "${1:-}")"
@@ -517,7 +546,7 @@ docs_cmd_build() {
 
     local sphinx_cmd
     sphinx_cmd="$(_docs_get_sphinx_build_cmd "$py_cmd")"
-    if [ -z "$sphinx_cmd" ] || ! "$py_cmd" -c "import sphinxcontrib.mermaid" >/dev/null 2>&1; then
+    if [ -z "$sphinx_cmd" ] || ! "$py_cmd" -c "import sphinxcontrib.mermaid, sphinxcontrib.plantuml" >/dev/null 2>&1; then
         _docs_ensure_sphinx_build "$target_dir"
         sphinx_cmd="$(_docs_get_sphinx_build_cmd "$py_cmd")"
     fi
@@ -592,11 +621,11 @@ docs_cmd_build() {
         fi
     fi
 
-    # Ensure plantuml_wrapper.py is present in staging
-    if [ ! -f "$staging_dir/plantuml_wrapper.py" ]; then
-        if [ -f "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/scripts/plantuml_wrapper.py" ]; then
-            cp "${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/scripts/plantuml_wrapper.py" "$staging_dir/"
-        fi
+    # Ensure PlantUML support in staging (auto-upgrades legacy conf.py; source untouched)
+    local script_puml
+    script_puml="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/sphinx/scripts/inject_plantuml.py"
+    if [ -f "$script_puml" ]; then
+        "$py_cmd" "$script_puml" "$staging_dir" >/dev/null 2>&1 || log_warn "PlantUML auto-config skipped."
     fi
 
     # 1. Check sections & merge chapters if metadata.json is present
@@ -968,6 +997,9 @@ handle_docs_command() {
             ;;
         build)
             docs_cmd_build "$@"
+            ;;
+        upgrade|sync-config)
+            docs_cmd_upgrade "$@"
             ;;
         clean)
             docs_cmd_clean "$@"

@@ -59,12 +59,8 @@ if [ ! -d "$STAGING_DIR/_static" ]; then
   fi
 fi
 
-# Ensure plantuml_wrapper.py is present in staging
-if [ ! -f "$STAGING_DIR/plantuml_wrapper.py" ]; then
-  if [ -f "$SCRIPT_DIR/plantuml_wrapper.py" ]; then
-    cp "$SCRIPT_DIR/plantuml_wrapper.py" "$STAGING_DIR/"
-  fi
-fi
+# Ensure PlantUML support in staging (auto-upgrades legacy conf.py)
+python "$SCRIPT_DIR/inject_plantuml.py" "$STAGING_DIR" >/dev/null 2>&1 || true
 
 echo "Merging docs from metadata.json into staging directory..."
 python "$SCRIPT_DIR/merge_docs.py" "$STAGING_DIR"

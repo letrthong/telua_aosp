@@ -1111,10 +1111,10 @@ def _build_sphinx_docs_py(target_dir: Path):
                 shutil.copytree(candidate, staging_dir / "asset", dirs_exist_ok=True)
                 break
 
-    # Ensure plantuml_wrapper.py is in staging
-    wrap_script = ROOT / "sphinx" / "scripts" / "plantuml_wrapper.py"
-    if wrap_script.is_file() and not (staging_dir / "plantuml_wrapper.py").is_file():
-        shutil.copy2(wrap_script, staging_dir / "plantuml_wrapper.py")
+    # Ensure PlantUML support in staging (auto-upgrades legacy conf.py; source untouched)
+    inject_script = ROOT / "sphinx" / "scripts" / "inject_plantuml.py"
+    if inject_script.is_file():
+        subprocess.run([sys.executable, str(inject_script), str(staging_dir)], capture_output=True, timeout=30)
 
     if (staging_dir / "metadata.json").is_file() and merge_script.is_file():
         subprocess.run([sys.executable, str(merge_script), str(staging_dir)], capture_output=True, timeout=30)
