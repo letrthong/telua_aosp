@@ -50,7 +50,7 @@ def scan_docs_files(root: Path, custom_dir: Optional[str] = None) -> Tuple[List[
         if target_dir.is_dir():
             effective_dir = target_dir.as_posix()
             for p in sorted(target_dir.rglob("*.rst")):
-                if not p.is_file():
+                if not p.is_file() or any(part in ("_build", ".staging", ".git") for part in p.parts):
                     continue
                 try:
                     rel = p.relative_to(target_dir).as_posix()
@@ -90,7 +90,7 @@ def scan_docs_files(root: Path, custom_dir: Optional[str] = None) -> Tuple[List[
         if not base.is_dir():
             continue
         for p in sorted(base.rglob("*.rst")):
-            if not p.is_file():
+            if not p.is_file() or any(part in ("_build", ".staging", ".git") for part in p.parts):
                 continue
             rel = p.relative_to(root).as_posix()
             if rel in seen:
@@ -141,6 +141,39 @@ def resolve_rst_target(name: str, root: Path, custom_dir: Optional[str] = None) 
             return target, f"docs/{name}"
     target = (root / name).resolve()
     return target, name
+
+
+def detect_docs_project_dir(current_file: Optional[str] = None, custom_dir: Optional[str] = None, root: Optional[Path] = None) -> Path:
+    """Detect the documentation project root directory from custom_dir, current_file, or project templates."""
+    if root is None:
+        root = Path(__file__).resolve().parent.parent
+
+    # 1. Custom directory explicitly provided
+    if custom_dir and custom_dir.strip():
+        base = Path(custom_dir.strip())
+        target = base if base.is_absolute() else (root / base).resolve()
+        if target.is_dir():
+            return target
+
+    # 2. Derive from active/current file path (e.g. sphinx/templates/basic/... or docs/...)
+    if current_file and current_file.strip():
+        clean_file = current_file.replace("\\", "/").strip()
+        fpath = Path(clean_file) if Path(clean_file).is_absolute() else (root / clean_file).resolve()
+        cur = fpath if fpath.is_dir() else fpath.parent
+        root_resolved = root.resolve()
+        while cur and cur != cur.parent and cur != root_resolved:
+            if (cur / "metadata.json").is_file() or (cur / "conf.py").is_file() or (cur / "index.rst").is_file():
+                return cur
+            cur = cur.parent
+
+    # 3. Default fallback order
+    if (root / "docs").is_dir():
+        return (root / "docs").resolve()
+    if (root / "sphinx" / "templates" / "architecture").is_dir():
+        return (root / "sphinx" / "templates" / "architecture").resolve()
+    if (root / "sphinx" / "templates" / "basic").is_dir():
+        return (root / "sphinx" / "templates" / "basic").resolve()
+    return root.resolve()
 
 
 def _extract_rst_title(file_path: Path) -> Optional[str]:
