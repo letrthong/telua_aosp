@@ -743,7 +743,7 @@ tel web stop                          # Dừng Web UI server
 
 5. **📚 Docs Tab — Sphinx Doc-as-Code & Visual Editor**:
    - **Soạn thảo trực quan 2 chiều (RST $\leftrightarrow$ HTML)**: Tích hợp trình soạn thảo trực quan hiện đại (**Quill.js**, lưu trữ offline 100%) cho phép viết tài liệu kiến trúc kỹ thuật như Word/Google Docs mà không cần thuộc cú pháp RST khắt khe.
-   - **Chuyển đổi 2 chiều tự động**: Tự động chuyển đổi mượt mà giữa HTML và reStructuredText (RST) thông qua `docutils` và engine phân tích cú pháp Python (`web/telua_web_docs.py`), hỗ trợ đầy đủ tiêu đề, danh sách, khối mã `code-block`, hộp chú thích `.. note::`, `.. warning::`...
+   - **Chuyển đổi 2 chiều tự động**: Tự động chuyển đổi mượt mà giữa HTML và reStructuredText (RST) thông qua `docutils` và engine phân tích cú pháp Python (`web/telua_web_docs.py`), hỗ trợ bảo toàn toàn diện: tiêu đề các cấp, danh sách, bảng biểu (`.. list-table::`), hình ảnh (`.. image::`), khối mã `code-block`, hộp chú thích (`.. note::`, `.. warning::`), biểu đồ kiến trúc Mermaid (`.. mermaid::`) và PlantUML (`.. uml::` / `.. plantuml::`).
    - **3 Chế độ làm việc linh hoạt**:
      - 🎨 *Visual*: Soạn thảo tài liệu bằng giao diện trực quan thân thiện.
      - 📝 *Raw RST*: Chỉnh sửa trực tiếp mã nguồn reStructuredText với font monospace chuẩn.

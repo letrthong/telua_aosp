@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="../web/static/mermaid.min.js"></script>
+<script src="../web/static/quill.min.js"></script>
+<style>
+.mermaid-diagram-wrap { padding: 12px; display: flex; justify-content: center; }
+.mermaid-diagram-wrap svg { max-width: 100%; height: auto; }
+</style>
+</head>
+<body>
+<div id="editor"></div>
+<script>
+window.testStatus = "INIT";
+(async () => {
+  try {
+    const q = new Quill("#editor", { theme: "snow" });
+    q.root.innerHTML = '<div class="mermaid-block" data-mermaid="graph TB\nA-->B"><div class="mermaid-label">Label</div><pre class="mermaid">graph TB\nA-->B</pre></div>';
+    
+    // Simulate renderAllMermaidBlocks
+    mermaid.initialize({ startOnLoad: false, securityLevel: "loose" });
+    const block = q.root.querySelector(".mermaid-block");
+    const pre = block.querySelector("pre.mermaid");
+    const code = block.getAttribute("data-mermaid");
+    const { svg } = await mermaid.render("diag_1", code);
+    
+    const diagWrap = document.createElement("div");
+    diagWrap.className = "mermaid-diagram-wrap";
+    diagWrap.innerHTML = svg;
+    block.insertBefore(diagWrap, pre);
+    pre.style.display = "none";
+    
+    // Check if SVG exists inside Quill
+    const svgInQuill = q.root.querySelector(".mermaid-diagram-wrap svg");
+    if (svgInQuill) {
+      window.testStatus = "SUCCESS_SVG_IN_QUILL";
+    } else {
+      window.testStatus = "FAILED_NO_SVG";
+    }
+  } catch (err) {
+    window.testStatus = "ERROR: " + err.message;
+  }
+  document.body.setAttribute("data-test", window.testStatus);
+})();
+</script>
+</body>
+</html>

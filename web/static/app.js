@@ -1781,8 +1781,195 @@ let _docsMode = "wysiwyg"; // "wysiwyg" | "raw" | "split"
 let _docsDirty = false;
 let _docsCustomDir = localStorage.getItem("telua_web_docs_dir") || "";
 
+let _mermaidCounter = 0;
+
+function registerQuillDiagramBlots() {
+  if (!window.Quill || window._quillDiagramBlotsRegistered) return;
+  try {
+    const BlockEmbed = Quill.import("blots/block/embed");
+    if (!BlockEmbed) return;
+
+    class MermaidBlot extends BlockEmbed {
+      static blotName = "mermaidBlock";
+      static tagName = "div";
+      static className = "mermaid-block";
+
+      static create(value) {
+        const node = super.create();
+        node.setAttribute("contenteditable", "false");
+        let code = "";
+        if (typeof value === "string") {
+          code = value;
+        } else if (value && typeof value === "object") {
+          code = value.getAttribute ? (value.getAttribute("data-mermaid") || value.querySelector("pre")?.textContent || "") : (value.code || "");
+        }
+        node.setAttribute("data-mermaid", code);
+        node.innerHTML = `
+          <div class="mermaid-header">
+            <span class="mermaid-label">📊 Mermaid Architecture Diagram</span>
+            <div class="mermaid-actions">
+              <button type="button" class="mermaid-btn btn-view-diag active">👁 Diagram</button>
+              <button type="button" class="mermaid-btn btn-view-code">📝 Code</button>
+            </div>
+          </div>
+          <div class="mermaid-diagram-wrap"><span class="mermaid-loading" style="color:var(--text-dim);font-size:12px;">⏳ Rendering Mermaid Diagram…</span></div>
+          <pre class="mermaid" contenteditable="true" style="display:none;">${code}</pre>
+        `;
+        return node;
+      }
+
+      static value(node) {
+        return node.getAttribute("data-mermaid") || node.querySelector("pre")?.textContent || "";
+      }
+    }
+
+    class PlantumlBlot extends BlockEmbed {
+      static blotName = "plantumlBlock";
+      static tagName = "div";
+      static className = "plantuml-block";
+
+      static create(value) {
+        const node = super.create();
+        node.setAttribute("contenteditable", "false");
+        let code = "";
+        if (typeof value === "string") {
+          code = value;
+        } else if (value && typeof value === "object") {
+          code = value.getAttribute ? (value.getAttribute("data-plantuml") || value.querySelector("pre")?.textContent || "") : (value.code || "");
+        }
+        node.setAttribute("data-plantuml", code);
+        node.innerHTML = `
+          <div class="plantuml-header">
+            <span class="plantuml-label">📐 PlantUML Architecture Diagram</span>
+          </div>
+          <pre class="plantuml" contenteditable="true">${code}</pre>
+        `;
+        return node;
+      }
+
+      static value(node) {
+        return node.getAttribute("data-plantuml") || node.querySelector("pre")?.textContent || "";
+      }
+    }
+
+    Quill.register(MermaidBlot);
+    Quill.register(PlantumlBlot);
+    window._quillDiagramBlotsRegistered = true;
+  } catch (err) {
+    console.warn("Custom Quill Blots registration skipped:", err);
+  }
+}
+
+async function renderAllMermaidBlocks(container) {
+  if (!window.mermaid || !container) return;
+  const blocks = container.querySelectorAll(".mermaid-block");
+  if (!blocks || blocks.length === 0) return;
+
+  const isDark = document.documentElement.getAttribute("data-theme") !== "light";
+  try {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: isDark ? "dark" : "default",
+      securityLevel: "loose",
+    });
+  } catch (e) {}
+
+  for (const block of blocks) {
+    let pre = block.querySelector("pre.mermaid");
+    const rawCode = block.getAttribute("data-mermaid") || (pre ? pre.textContent : "");
+    if (!rawCode || !rawCode.trim()) continue;
+
+    block.setAttribute("data-mermaid", rawCode.trim());
+
+    let diagWrap = block.querySelector(".mermaid-diagram-wrap");
+    if (!diagWrap) {
+      diagWrap = document.createElement("div");
+      diagWrap.className = "mermaid-diagram-wrap";
+      diagWrap.setAttribute("contenteditable", "false");
+      if (pre) block.insertBefore(diagWrap, pre);
+      else block.appendChild(diagWrap);
+    }
+
+    let header = block.querySelector(".mermaid-header");
+    if (!header) {
+      const origLabel = block.querySelector(".mermaid-label");
+      header = document.createElement("div");
+      header.className = "mermaid-header";
+      header.setAttribute("contenteditable", "false");
+      header.innerHTML = `
+        <span class="mermaid-label">📊 Mermaid Architecture Diagram</span>
+        <div class="mermaid-actions">
+          <button type="button" class="mermaid-btn btn-view-diag active">👁 Diagram</button>
+          <button type="button" class="mermaid-btn btn-view-code">📝 Code</button>
+        </div>
+      `;
+      if (origLabel) {
+        block.replaceChild(header, origLabel);
+      } else {
+        block.insertBefore(header, diagWrap);
+      }
+    }
+
+    const btnDiag = header.querySelector(".btn-view-diag");
+    const btnCode = header.querySelector(".btn-view-code");
+    if (btnDiag && btnCode && !header.dataset.wired) {
+      header.dataset.wired = "true";
+      btnDiag.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        btnDiag.classList.add("active");
+        btnCode.classList.remove("active");
+        diagWrap.style.display = "flex";
+        if (pre) pre.style.display = "none";
+      });
+      btnCode.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        btnCode.classList.add("active");
+        btnDiag.classList.remove("active");
+        diagWrap.style.display = "none";
+        if (pre) {
+          pre.style.display = "block";
+          pre.focus();
+        }
+      });
+    }
+
+    if (pre && !pre.dataset.wired) {
+      pre.dataset.wired = "true";
+      pre.addEventListener("blur", async () => {
+        const updated = pre.textContent.trim();
+        block.setAttribute("data-mermaid", updated);
+        setDocsDirty(true);
+        try {
+          _mermaidCounter++;
+          const { svg } = await mermaid.render(`mermaid_dyn_${Date.now()}_${_mermaidCounter}`, updated);
+          diagWrap.innerHTML = svg;
+        } catch (e) {
+          console.warn("Re-render failed:", e);
+        }
+      });
+    }
+
+    // Render SVG diagram
+    try {
+      _mermaidCounter++;
+      const id = `mermaid_diag_${Date.now()}_${_mermaidCounter}`;
+      const { svg } = await mermaid.render(id, rawCode.trim());
+      diagWrap.innerHTML = svg;
+      if (pre) pre.style.display = "none";
+      diagWrap.style.display = "flex";
+    } catch (renderErr) {
+      console.warn("Mermaid render error:", renderErr);
+      diagWrap.innerHTML = `<div style="color:var(--danger, #f87171); padding:8px; font-size:12px;">⚠️ Mermaid Render Error: ${renderErr.message || renderErr}</div>`;
+      if (pre) pre.style.display = "block";
+    }
+  }
+}
+
 function initQuill() {
   if (_quill || !window.Quill || !$("#quill-editor")) return;
+  registerQuillDiagramBlots();
   _quill = new Quill("#quill-editor", {
     theme: "snow",
     placeholder: "Write Sphinx documentation here… Format headings, bold, italic, code blocks visually.",
@@ -1887,7 +2074,12 @@ async function loadDocFile(name) {
     setDocsDirty(false);
 
     if (_quill) {
-      _quill.root.innerHTML = data.html || "<p></p>";
+      if (data.html) {
+        _quill.clipboard.dangerouslyPasteHTML(0, data.html);
+      } else {
+        _quill.setText("");
+      }
+      renderAllMermaidBlocks(_quill.root);
     }
     const rawTa = $("#docs-raw-rst");
     if (rawTa) rawTa.value = data.rst || "";
@@ -1949,7 +2141,8 @@ async function setDocsMode(mode) {
       });
       const data = await res.json();
       if (data.ok && _quill) {
-        _quill.root.innerHTML = data.html;
+        _quill.clipboard.dangerouslyPasteHTML(0, data.html || "<p></p>");
+        renderAllMermaidBlocks(_quill.root);
       }
     } catch (err) {
       console.error("RST2HTML conversion failed:", err);
@@ -1977,13 +2170,40 @@ async function setDocsMode(mode) {
   }
 }
 
-function updateDocsPreview() {
+let _previewDebounceTimer = null;
+async function updateDocsPreview() {
   const preview = $("#docs-preview-content");
   if (!preview) return;
+
+  const rawTa = $("#docs-raw-rst");
+  const isRawActive = _docsMode === "raw" || (_docsMode === "split" && rawTa && !$("#docs-pane-raw")?.classList.contains("hidden"));
+
+  if (isRawActive && rawTa) {
+    clearTimeout(_previewDebounceTimer);
+    _previewDebounceTimer = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/docs/convert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: rawTa.value, direction: "rst2html" }),
+        });
+        const data = await res.json();
+        if (data.ok && data.html) {
+          preview.innerHTML = data.html;
+          renderAllMermaidBlocks(preview);
+        }
+      } catch (err) {
+        console.warn("Live preview convert error:", err);
+      }
+    }, 250);
+    return;
+  }
+
   if (_quill) {
     preview.innerHTML = _quill.root.innerHTML;
-  } else if ($("#docs-raw-rst")) {
-    preview.textContent = $("#docs-raw-rst").value;
+    renderAllMermaidBlocks(preview);
+  } else if (rawTa) {
+    preview.textContent = rawTa.value;
   }
 }
 
@@ -2127,7 +2347,12 @@ async function handleDocsFileUpload(file) {
     };
 
     if (_quill) {
-      _quill.root.innerHTML = htmlContent || "<p></p>";
+      if (htmlContent) {
+        _quill.clipboard.dangerouslyPasteHTML(0, htmlContent);
+      } else {
+        _quill.setText("");
+      }
+      renderAllMermaidBlocks(_quill.root);
     }
     const rawTa = $("#docs-raw-rst");
     if (rawTa) rawTa.value = rstContent;

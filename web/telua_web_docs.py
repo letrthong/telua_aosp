@@ -162,22 +162,37 @@ def _extract_rst_title(file_path: Path) -> Optional[str]:
 
 
 def _protect_rst_directives(rst_text: str) -> str:
-    """Transform Sphinx-specific directives (like .. mermaid::) into raw HTML blocks
-    so docutils preserves them without throwing parse errors.
+    """Transform Sphinx-specific directives (like .. mermaid::, .. uml::, .. plantuml::)
+    into raw HTML blocks so docutils preserves them without throwing parse errors.
     """
-    pattern = re.compile(r'^\.\.\s+mermaid::\s*\n((?:[ \t]+.*\n|\n)*)', re.MULTILINE)
-    def repl(match):
+    mermaid_pattern = re.compile(r'^\.\.\s+mermaid::\s*\n((?:[ \t]+.*\n|\n)*)', re.MULTILINE)
+    def repl_mermaid(match):
         code = match.group(1).strip()
-        escaped_code = code.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        escaped_code = code.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
         raw_block = [
             "",
             ".. raw:: html",
             "",
-            f'   <div class="mermaid-block"><div class="mermaid-label">📊 Mermaid Architecture Diagram</div><pre class="mermaid">{escaped_code}</pre></div>',
+            f'   <div class="mermaid-block" data-mermaid="{escaped_code}"><div class="mermaid-label">📊 Mermaid Architecture Diagram</div><pre class="mermaid">{escaped_code}</pre></div>',
             "",
         ]
         return "\n".join(raw_block) + "\n"
-    return pattern.sub(repl, rst_text)
+    rst_text = mermaid_pattern.sub(repl_mermaid, rst_text)
+
+    plantuml_pattern = re.compile(r'^\.\.\s+(?:plantuml|uml)::\s*\n((?:[ \t]+.*\n|\n)*)', re.MULTILINE)
+    def repl_plantuml(match):
+        code = match.group(1).strip()
+        escaped_code = code.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+        raw_block = [
+            "",
+            ".. raw:: html",
+            "",
+            f'   <div class="plantuml-block" data-plantuml="{escaped_code}"><div class="plantuml-label">📐 PlantUML Architecture Diagram</div><pre class="plantuml">{escaped_code}</pre></div>',
+            "",
+        ]
+        return "\n".join(raw_block) + "\n"
+    rst_text = plantuml_pattern.sub(repl_plantuml, rst_text)
+    return rst_text
 
 
 def rst_to_html(rst_text: str) -> str:
@@ -291,7 +306,7 @@ def html_to_rst(html_text: str) -> str:
         classes = element.get("class", [])
 
         # Unpack nested section or container div unless it's a special block
-        if tag == "section" or (tag == "div" and "admonition" not in classes and "mermaid-block" not in classes):
+        if tag == "section" or (tag == "div" and "admonition" not in classes and "mermaid-block" not in classes and "plantuml-block" not in classes):
             for child in element.children:
                 process_element(child)
             return
@@ -316,19 +331,60 @@ def html_to_rst(html_text: str) -> str:
                 for line in code.splitlines():
                     rst_lines.append(f"   {line}")
                 rst_lines.append("")
+            elif "plantuml" in classes or "uml" in classes:
+                code = element.get_text().strip()
+                rst_lines.append(".. uml::")
+                rst_lines.append("")
+                for line in code.splitlines():
+                    rst_lines.append(f"   {line}")
+                rst_lines.append("")
             else:
                 code = element.get_text()
                 add_code_block(code)
         elif "mermaid-block" in classes:
-            pre = element.find("pre")
-            code = pre.get_text().strip() if pre else element.get_text().strip()
+            code = element.get("data-mermaid", "").strip()
+            if not code:
+                pre = element.find("pre")
+                code = pre.get_text().strip() if pre else element.get_text().strip()
             rst_lines.append(".. mermaid::")
             rst_lines.append("")
             for line in code.splitlines():
                 rst_lines.append(f"   {line}")
             rst_lines.append("")
+        elif "plantuml-block" in classes:
+            code = element.get("data-plantuml", "").strip()
+            if not code:
+                pre = element.find("pre")
+                code = pre.get_text().strip() if pre else element.get_text().strip()
+            rst_lines.append(".. uml::")
+            rst_lines.append("")
+            for line in code.splitlines():
+                rst_lines.append(f"   {line}")
+            rst_lines.append("")
         elif tag == "table":
-            rst_lines.append(".. list-table::")
+            caption_node = element.find("caption")
+            caption_txt = ""
+            if caption_node:
+                caption_txt = "".join(_inline_to_rst(c) for c in caption_node.children).strip()
+                # Clean up any duplicated bolding if docutils added strong
+                caption_txt = re.sub(r"\s+", " ", caption_txt)
+
+            if caption_txt:
+                rst_lines.append(f".. list-table:: {caption_txt}")
+            else:
+                rst_lines.append(".. list-table::")
+
+            # Preserve column widths if defined
+            cols = element.find_all("col")
+            widths = []
+            for col in cols:
+                style = col.get("style", "")
+                m = re.search(r"width:\s*(\d+(?:\.\d+)?)%", style)
+                if m:
+                    widths.append(str(int(round(float(m.group(1))))))
+            if widths:
+                rst_lines.append(f"   :widths: {' '.join(widths)}")
+
             rst_lines.append("   :header-rows: 1")
             rst_lines.append("")
             for row in element.find_all("tr"):

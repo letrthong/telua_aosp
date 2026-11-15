@@ -96,9 +96,28 @@ class TestTeluaWebDocsConverters(unittest.TestCase):
         back_rst = twd.html_to_rst(html)
         self.assertIn(".. mermaid::", back_rst)
         self.assertIn("graph TB", back_rst)
-        self.assertIn(".. list-table::", back_rst)
+        self.assertIn(".. list-table:: Tech Breakdown", back_rst)
         self.assertIn("Kotlin", back_rst)
         self.assertIn(".. image:: /path/to/diagram.png", back_rst)
+
+    def test_plantuml_support(self):
+        rst = (
+            "Architecture Model\n"
+            "==================\n\n"
+            ".. uml::\n\n"
+            "   @startuml\n"
+            "   Alice -> Bob: Call Service\n"
+            "   Bob --> Alice: Return Status\n"
+            "   @enduml\n"
+        )
+        html = twd.rst_to_html(rst)
+        self.assertIn("plantuml-block", html)
+        self.assertIn("Alice -&gt; Bob", html)
+
+        # Convert back to RST
+        back_rst = twd.html_to_rst(html)
+        self.assertIn(".. uml::", back_rst)
+        self.assertIn("Alice -> Bob: Call Service", back_rst)
 
 
 class TestTeluaWebDocsAPI(unittest.TestCase):
