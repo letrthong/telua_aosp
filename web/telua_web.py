@@ -45,6 +45,7 @@ from telua_web_core import (  # noqa: E402
     validate_content,
 )
 from telua_web_docs import (  # noqa: E402
+    detect_docs_project_dir,
     get_plantuml_url,
     html_to_rst,
     resolve_rst_target,
@@ -993,12 +994,9 @@ def api_docs_build():
     """Trigger Sphinx build for target docs directory."""
     payload = request.get_json(silent=True) or {}
     custom_dir = payload.get("dir", "").strip()
+    current_file = payload.get("current_file", "").strip()
 
-    if custom_dir:
-        base = Path(custom_dir)
-        target_dir = base if base.is_absolute() else (ROOT / base).resolve()
-    else:
-        target_dir = (ROOT / "docs") if (ROOT / "docs").is_dir() else (ROOT / "sphinx" / "templates" / "architecture")
+    target_dir = detect_docs_project_dir(current_file=current_file, custom_dir=custom_dir, root=ROOT)
 
     if not target_dir.is_dir():
         return jsonify({"ok": False, "error": f"Documentation directory '{target_dir}' does not exist"}), 404
@@ -1027,6 +1025,8 @@ def api_docs_build():
     build_src = target_dir
     if (target_dir / "metadata.json").is_file() and merge_script.is_file():
         import shutil
+        if staging_dir.is_dir():
+            shutil.rmtree(staging_dir, ignore_errors=True)
         staging_dir.mkdir(parents=True, exist_ok=True)
         for item in target_dir.iterdir():
             if item.name not in ("_build", ".git"):
@@ -1038,7 +1038,8 @@ def api_docs_build():
         subprocess.run([sys.executable, str(merge_script), str(staging_dir)], capture_output=True, timeout=30)
         build_src = staging_dir
 
-    cmd = [sys.executable, "-m", "sphinx", "-b", "html", str(build_src), str(out_html)]
+    # Use -E -a to always read all files and write all output files, never skipping modified sections
+    cmd = [sys.executable, "-m", "sphinx", "-E", "-a", "-b", "html", str(build_src), str(out_html)]
     try:
         proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=60)
         return jsonify({
@@ -1056,17 +1057,14 @@ def api_docs_build():
 @app.post("/api/docs/start")
 def api_docs_start():
     """Launch Sphinx HTTP preview server (telua docs start) and open in browser."""
+    import time
     global _DOCS_SERVER_PROC, _DOCS_SERVER_DIR, _DOCS_SERVER_PORT
     payload = request.get_json(silent=True) or {}
     custom_dir = payload.get("dir", "").strip()
+    current_file = payload.get("current_file", "").strip()
     port = int(payload.get("port", 8789))
 
-    if custom_dir:
-        base = Path(custom_dir)
-        target_dir = base if base.is_absolute() else (ROOT / base).resolve()
-    else:
-        target_dir = (ROOT / "docs") if (ROOT / "docs").is_dir() else (ROOT / "sphinx" / "templates" / "architecture")
-
+    target_dir = detect_docs_project_dir(current_file=current_file, custom_dir=custom_dir, root=ROOT)
     html_dir = target_dir / "_build" / "html"
 
     # If _build/html/index.html does not exist, build first
@@ -1078,7 +1076,25 @@ def api_docs_start():
                 pass
         else:
             try:
-                subprocess.run([sys.executable, "-m", "sphinx", "-b", "html", str(target_dir), str(html_dir)], cwd=str(ROOT), capture_output=True, timeout=60)
+                out_html = target_dir / "_build" / "html"
+                staging_dir = target_dir / "_build" / ".staging"
+                merge_script = ROOT / "sphinx" / "scripts" / "merge_docs.py"
+                build_src = target_dir
+                if (target_dir / "metadata.json").is_file() and merge_script.is_file():
+                    import shutil
+                    if staging_dir.is_dir():
+                        shutil.rmtree(staging_dir, ignore_errors=True)
+                    staging_dir.mkdir(parents=True, exist_ok=True)
+                    for item in target_dir.iterdir():
+                        if item.name not in ("_build", ".git"):
+                            dest = staging_dir / item.name
+                            if item.is_dir():
+                                shutil.copytree(item, dest, dirs_exist_ok=True)
+                            else:
+                                shutil.copy2(item, dest)
+                    subprocess.run([sys.executable, str(merge_script), str(staging_dir)], capture_output=True, timeout=30)
+                    build_src = staging_dir
+                subprocess.run([sys.executable, "-m", "sphinx", "-E", "-a", "-b", "html", str(build_src), str(out_html)], cwd=str(ROOT), capture_output=True, timeout=60)
             except Exception:
                 pass
 
@@ -1116,13 +1132,16 @@ def api_docs_start():
         except Exception as exc:
             abort(500, description=f"Failed to start docs server: {exc}")
 
-    open_browser(url)
+    cache_bust_url = f"{url}/?_t={int(time.time())}"
+    open_browser(cache_bust_url)
 
     return jsonify({
         "ok": True,
         "url": url,
+        "cache_bust_url": cache_bust_url,
         "port": port,
         "pid": _DOCS_SERVER_PROC.pid if _DOCS_SERVER_PROC else None,
+        "target_dir": str(target_dir),
         "html_dir": str(html_dir),
     })
 

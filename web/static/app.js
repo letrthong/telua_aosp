@@ -3193,7 +3193,10 @@ async function buildSphinxDocs() {
     const res = await fetch("/api/docs/build", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dir: _docsCustomDir || "" }),
+      body: JSON.stringify({
+        dir: _docsCustomDir || "",
+        current_file: _currentDoc?.name || "",
+      }),
     });
     const data = await res.json();
     if (data.ok) {
@@ -3219,14 +3222,18 @@ async function startSphinxDocs() {
     const res = await fetch("/api/docs/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dir: _docsCustomDir || "" }),
+      body: JSON.stringify({
+        dir: _docsCustomDir || "",
+        current_file: _currentDoc?.name || "",
+      }),
     });
     const data = await res.json();
     if (data.ok) {
       if (badge) badge.textContent = `Live :${data.port || 8789} ✔`;
       toast("Docs Server Live 🌐", `Preview opened at ${data.url}`, "ok", 4000);
       try {
-        window.open(data.url, "_blank");
+        const previewUrl = data.cache_bust_url || `${data.url}/?_t=${Date.now()}`;
+        window.open(previewUrl, "_blank");
       } catch { /* browser popup blocker */ }
     } else {
       if (badge) badge.textContent = "Server Error";

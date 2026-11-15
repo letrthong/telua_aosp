@@ -309,6 +309,43 @@ class TestTeluaWebDocsAPI(unittest.TestCase):
         self.assertEqual(res3.status_code, 200)
         self.assertIn("Updated External\n================", custom_file.read_text(encoding="utf-8"))
 
+    def test_detect_docs_project_dir(self):
+        root = tw.ROOT
+        # Template basic with index.rst
+        basic_dir = root / "sphinx" / "templates" / "basic"
+        basic_dir.mkdir(parents=True, exist_ok=True)
+        (basic_dir / "index.rst").write_text("Basic\n=====\n", encoding="utf-8")
+        (basic_dir / "chapter1").mkdir(parents=True, exist_ok=True)
+        (basic_dir / "chapter1" / "chapter1_section1.rst").write_text("S1\n==\n", encoding="utf-8")
+
+        d1 = twd.detect_docs_project_dir(current_file="sphinx/templates/basic/chapter1/chapter1_section1.rst", root=root)
+        self.assertEqual(d1, basic_dir.resolve())
+
+        # Template architecture (created in setUp)
+        d2 = twd.detect_docs_project_dir(current_file="sphinx/templates/architecture/index.rst", root=root)
+        self.assertEqual(d2, (root / "sphinx" / "templates" / "architecture").resolve())
+
+        # Custom dir
+        custom = Path(self.test_dir) / "my_docs"
+        custom.mkdir(parents=True, exist_ok=True)
+        d3 = twd.detect_docs_project_dir(custom_dir=str(custom), root=root)
+        self.assertEqual(d3, custom.resolve())
+
+    def test_scan_docs_files_excludes_build_staging(self):
+        root = Path(self.test_dir)
+        docs_dir = root / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        (docs_dir / "valid.rst").write_text("Valid Doc\n=========\n", encoding="utf-8")
+        staging_dir = docs_dir / "_build" / ".staging"
+        staging_dir.mkdir(parents=True, exist_ok=True)
+        (staging_dir / "staged.rst").write_text("Staged Doc\n==========\n", encoding="utf-8")
+
+        files, _ = twd.scan_docs_files(root, custom_dir=str(docs_dir))
+        file_names = [f["name"] for f in files]
+        self.assertIn("valid.rst", file_names)
+        self.assertNotIn("staged.rst", file_names)
+        self.assertFalse(any("_build" in name or ".staging" in name for name in file_names))
+
     def test_api_docs_start(self):
         # Test /api/docs/start endpoint
         res = self.client.post("/api/docs/start", json={"port": 8899})
