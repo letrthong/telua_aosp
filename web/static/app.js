@@ -1777,7 +1777,7 @@ async function runTerminalCommand(explicitCmd = null) {
 let _quill = null;
 let _docsFiles = [];
 let _currentDoc = null; // { name, rst, html, mtime, readonly }
-let _docsMode = "wysiwyg"; // "wysiwyg" | "raw" | "split"
+let _docsMode = localStorage.getItem("telua_web_docs_mode") || "wysiwyg"; // "wysiwyg" | "raw" | "split"
 let _docsDirty = false;
 let _docsCustomDir = localStorage.getItem("telua_web_docs_dir") || "";
 
@@ -2021,7 +2021,9 @@ async function loadDocsFiles(customDir = _docsCustomDir) {
     }
     renderDocsFileSelect();
     if (_docsFiles.length > 0 && (!_currentDoc || !_docsFiles.some(f => f.name === _currentDoc.name))) {
-      const arch = _docsFiles.find(f => f.name.includes("chapter1_section1") || f.name.includes("index.rst")) || _docsFiles[0];
+      const savedDoc = localStorage.getItem("telua_web_docs_last_file");
+      const matched = savedDoc ? _docsFiles.find(f => f.name === savedDoc) : null;
+      const arch = matched || _docsFiles.find(f => f.name.includes("chapter3_section1") || f.name.includes("chapter1_section1") || f.name.includes("index.rst")) || _docsFiles[0];
       loadDocFile(arch.name);
     }
   } catch (err) {
@@ -2090,6 +2092,10 @@ async function loadDocFile(name) {
     }
     if (badge) badge.textContent = data.readonly ? "Read-only" : "Ready";
     renderDocsFileSelect();
+    try {
+      localStorage.setItem("telua_web_docs_last_file", name);
+    } catch (e) {}
+    applyDocsModeUI(_docsMode);
     if (_docsMode === "split") updateDocsPreview();
   } catch (err) {
     toast("Failed to open doc", String(err.message || err), "danger");
@@ -2097,10 +2103,7 @@ async function loadDocFile(name) {
   }
 }
 
-async function setDocsMode(mode) {
-  if (mode === _docsMode) return;
-  initQuill();
-  const badge = $("#docs-status-badge");
+function applyDocsModeUI(mode) {
   const wysiwygPane = $("#docs-pane-wysiwyg");
   const rawPane = $("#docs-pane-raw");
   const previewPane = $("#docs-pane-preview");
@@ -2108,6 +2111,30 @@ async function setDocsMode(mode) {
   $("#btn-docs-mode-wysiwyg")?.classList.toggle("active", mode === "wysiwyg");
   $("#btn-docs-mode-raw")?.classList.toggle("active", mode === "raw");
   $("#btn-docs-mode-split")?.classList.toggle("active", mode === "split");
+
+  if (mode === "wysiwyg") {
+    wysiwygPane?.classList.remove("hidden");
+    wysiwygPane?.classList.remove("split-left");
+    rawPane?.classList.add("hidden");
+    previewPane?.classList.add("hidden");
+  } else if (mode === "raw") {
+    wysiwygPane?.classList.add("hidden");
+    rawPane?.classList.remove("hidden");
+    rawPane?.classList.remove("split-left");
+    previewPane?.classList.add("hidden");
+  } else if (mode === "split") {
+    wysiwygPane?.classList.remove("hidden");
+    wysiwygPane?.classList.add("split-left");
+    rawPane?.classList.add("hidden");
+    previewPane?.classList.remove("hidden");
+    updateDocsPreview();
+  }
+}
+
+async function setDocsMode(mode) {
+  if (mode === _docsMode && $("#btn-docs-mode-" + mode)?.classList.contains("active")) return;
+  initQuill();
+  const badge = $("#docs-status-badge");
 
   // Sync content between editors
   if (_docsMode === "wysiwyg" && (mode === "raw" || mode === "split")) {
@@ -2151,23 +2178,11 @@ async function setDocsMode(mode) {
   }
 
   _docsMode = mode;
-  if (mode === "wysiwyg") {
-    wysiwygPane?.classList.remove("hidden");
-    wysiwygPane?.classList.remove("split-left");
-    rawPane?.classList.add("hidden");
-    previewPane?.classList.add("hidden");
-  } else if (mode === "raw") {
-    wysiwygPane?.classList.add("hidden");
-    rawPane?.classList.remove("hidden");
-    rawPane?.classList.remove("split-left");
-    previewPane?.classList.add("hidden");
-  } else if (mode === "split") {
-    wysiwygPane?.classList.remove("hidden");
-    wysiwygPane?.classList.add("split-left");
-    rawPane?.classList.add("hidden");
-    previewPane?.classList.remove("hidden");
-    updateDocsPreview();
-  }
+  try {
+    localStorage.setItem("telua_web_docs_mode", mode);
+  } catch (e) {}
+
+  applyDocsModeUI(mode);
 }
 
 let _previewDebounceTimer = null;
@@ -2395,6 +2410,7 @@ function switchTab(tab) {
   }
   if (isDocs) {
     initQuill();
+    applyDocsModeUI(_docsMode);
     if (_docsFiles.length === 0) {
       loadDocsFiles();
     }
@@ -2722,6 +2738,8 @@ async function boot() {
 
   if (savedTab === "terminal") {
     switchTab("terminal");
+  } else if (savedTab === "docs") {
+    switchTab("docs");
   } else if (savedTab === "files") {
     if (savedFile && state.files.some(f => f.name === savedFile)) {
       const fileDraft = draftLoadFile();
