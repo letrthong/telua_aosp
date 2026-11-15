@@ -3293,6 +3293,34 @@ async function startSphinxDocs() {
   }
 }
 
+async function cleanSphinxDocs() {
+  const badge = $("#docs-status-badge");
+  const targetDirHint = getActiveDocsDirHint();
+  if (badge) badge.textContent = "Cleaning…";
+  toast("Cleaning Cache 🧹", `Removing _build cache in: ${targetDirHint}…`, "info", 3000);
+  try {
+    const res = await fetch("/api/docs/clean", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dir: _docsCustomDir || "",
+        current_file: _currentDoc?.name || "",
+      }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      if (badge) badge.textContent = "Cleaned ✔";
+      toast("Cache Cleaned 🧹", `Removed build cache: ${data.cleaned_dir}\nReady for fresh compile.`, "ok", 4000);
+    } else {
+      if (badge) badge.textContent = "Clean Error";
+      toast("Clean Error", data.error || "Failed to remove cache", "danger");
+    }
+  } catch (err) {
+    if (badge) badge.textContent = "Clean Error";
+    toast("Clean Error", String(err.message || err), "danger");
+  }
+}
+
 async function handleDocsFileUpload(file) {
   if (!file) return;
   initQuill();
@@ -3505,6 +3533,7 @@ function wire() {
   $("#btn-docs-save")?.addEventListener("click", () => saveCurrentDoc());
   $("#btn-docs-build")?.addEventListener("click", () => buildSphinxDocs());
   $("#btn-docs-start")?.addEventListener("click", () => startSphinxDocs());
+  $("#btn-docs-clean")?.addEventListener("click", () => cleanSphinxDocs());
   $("#docs-raw-rst")?.addEventListener("input", () => {
     setDocsDirty(true);
     if (_docsSplit) updateDocsPreview();
@@ -3528,6 +3557,42 @@ function wire() {
     });
   }
 
+function saveRecentDocsDir(dir) {
+  if (!dir) return;
+  try {
+    let recent = JSON.parse(localStorage.getItem("telua_web_docs_recent_dirs") || "[]");
+    recent = [dir, ...recent.filter(d => d !== dir)].slice(0, 6);
+    localStorage.setItem("telua_web_docs_recent_dirs", JSON.stringify(recent));
+  } catch { /* ignore */ }
+}
+
+function renderRecentDocsChips() {
+  const container = $("#docs-recent-dirs-container");
+  const listEl = $("#docs-recent-dirs-list");
+  if (!container || !listEl) return;
+  try {
+    const recent = JSON.parse(localStorage.getItem("telua_web_docs_recent_dirs") || "[]");
+    if (!recent || !recent.length) {
+      container.style.display = "none";
+      return;
+    }
+    container.style.display = "block";
+    listEl.innerHTML = "";
+    recent.forEach(dir => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "term-chip btn-docs-dir-chip";
+      btn.dataset.dir = dir;
+      btn.textContent = dir;
+      btn.addEventListener("click", () => {
+        const input = $("#input-docs-dir");
+        if (input) input.value = dir;
+      });
+      listEl.appendChild(btn);
+    });
+  } catch { /* ignore */ }
+}
+
   // Change Docs Root Directory Modal wiring
   $("#docs-active-dir-badge")?.addEventListener("click", () => {
     $("#btn-docs-change-dir")?.click();
@@ -3535,7 +3600,9 @@ function wire() {
   $("#btn-docs-change-dir")?.addEventListener("click", () => {
     const modal = $("#modal-docs-dir");
     const input = $("#input-docs-dir");
-    if (input) input.value = _docsCustomDir || "";
+    const activeDir = _docsCustomDir || ($("#docs-active-dir-badge")?.textContent) || localStorage.getItem("telua_web_docs_dir") || "";
+    if (input) input.value = activeDir;
+    renderRecentDocsChips();
     modal?.classList.remove("hidden");
     setTimeout(() => input?.focus(), 40);
   });
@@ -3547,7 +3614,12 @@ function wire() {
     const val = input ? input.value.trim() : "";
     _docsCustomDir = val;
     try {
-      localStorage.setItem("telua_web_docs_dir", _docsCustomDir);
+      if (val) {
+        localStorage.setItem("telua_web_docs_dir", _docsCustomDir);
+        saveRecentDocsDir(_docsCustomDir);
+      } else {
+        localStorage.removeItem("telua_web_docs_dir");
+      }
     } catch { /* ignore */ }
     $("#modal-docs-dir")?.classList.add("hidden");
     loadDocsFiles(_docsCustomDir);

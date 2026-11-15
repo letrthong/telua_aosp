@@ -180,6 +180,7 @@
         <button class="btn primary" id="btn-docs-save" title="Save file (auto-converts HTML to RST if in WYSIWYG mode)">💾 Save RST</button>
         <button class="btn jade-btn" id="btn-docs-build" title="Build Sphinx documentation in background (telua docs build)">🔨 Build Docs</button>
         <button class="btn jade-btn" id="btn-docs-start" title="Launch HTTP preview server in background &amp; open in browser (telua docs start)">🚀 Start Docs</button>
+        <button class="btn ghost danger" id="btn-docs-clean" title="Clear Sphinx build cache &amp; artifacts (_build folder)">🧹 Clean Cache</button>
       </div>
     </div>
     <div class="docs-workspace" id="docs-workspace">
@@ -215,6 +216,10 @@
     <div style="margin:14px 0;">
       <input id="input-docs-dir" type="text" class="term-input mono" style="width:100%;box-sizing:border-box;"
              placeholder="e.g. /home/user/my_project/docs or packages/apps/Car/OemService/docs or sphinx/templates/architecture">
+    </div>
+    <div id="docs-recent-dirs-container" style="margin-bottom:14px;display:none;">
+      <span class="meta">🕒 Recently used directories:</span>
+      <div id="docs-recent-dirs-list" class="term-quick-bar" style="margin-top:6px;border:none;padding:0;"></div>
     </div>
     <div style="margin-bottom:14px;">
       <span class="meta">⚡ Quick suggestions:</span>

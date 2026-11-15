@@ -371,5 +371,37 @@ class TestTeluaWebDocsAPI(unittest.TestCase):
             tw._DOCS_SERVER_PROC = None
 
 
+    def test_api_docs_clean(self):
+        # Create a dummy _build directory in architecture template
+        arch_dir = tw.ROOT / "sphinx" / "templates" / "architecture"
+        build_dir = arch_dir / "_build"
+        build_dir.mkdir(parents=True, exist_ok=True)
+        (build_dir / "dummy.txt").write_text("cache", encoding="utf-8")
+
+        res = self.client.post("/api/docs/clean", json={"dir": str(arch_dir)})
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertTrue(data.get("ok"))
+        self.assertTrue(data.get("was_present"))
+        self.assertFalse(build_dir.exists())
+
+    def test_html_to_rst_architecture_format(self):
+        # Verify architecture section formatting: section title uses hyphens, subsections use tildes, bullets use -
+        sample_html = (
+            "<h1>1.1 System Overview</h1>"
+            "<p>Intro text with (<strong>Bold Part</strong>) and <code>code_ref</code>.</p>"
+            "<h2>Sub Title</h2>"
+            "<ul><li><strong>Item 1</strong>: Desc 1</li><li><strong>Item 2</strong>: Desc 2</li></ul>"
+            "<ol><li>Step 1</li><li>Step 2</li></ol>"
+        )
+        rst = twd.html_to_rst(sample_html, file_name="chapter1/chapter1_section1.rst")
+        self.assertIn("1.1 System Overview", rst)
+        self.assertIn("-" * 90, rst)  # 90 dashes for section title
+        self.assertIn("Sub Title\n~~~~~~~~~", rst)  # Tilde underline matching text
+        self.assertIn("- **Item 1**: Desc 1", rst)  # Hyphen bullets
+        self.assertIn("1. Step 1", rst)  # Numbered lists
+        self.assertIn("(**Bold Part**)", rst)  # No extra spacing around brackets/punctuation
+
+
 if __name__ == "__main__":
     unittest.main()

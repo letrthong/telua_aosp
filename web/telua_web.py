@@ -928,7 +928,7 @@ def api_docs_file_write():
 
     # If incoming format is HTML, convert to RST first
     if fmt == "html":
-        rst_content = html_to_rst(content)
+        rst_content = html_to_rst(content, file_name=name)
     else:
         rst_content = content
 
@@ -966,7 +966,8 @@ def api_docs_convert():
     if direction in ("rst2html", "rst_to_html"):
         return jsonify({"ok": True, "html": rst_to_html(content)})
     elif direction in ("html2rst", "html_to_rst"):
-        return jsonify({"ok": True, "rst": html_to_rst(content)})
+        file_name = payload.get("name", "")
+        return jsonify({"ok": True, "rst": html_to_rst(content, file_name=file_name)})
     abort(400, description="Unknown conversion direction. Use 'rst2html' or 'html2rst'.")
 
 
@@ -1054,85 +1055,147 @@ def api_docs_build():
         return jsonify({"ok": False, "error": str(exc)}), 500
 
 
+@app.post("/api/docs/clean")
+def api_docs_clean():
+    """Remove _build directory and cached doctrees for target docs project."""
+    import shutil
+    payload = request.get_json(silent=True) or {}
+    custom_dir = payload.get("dir", "").strip()
+    current_file = payload.get("current_file", "").strip()
+
+    target_dir = detect_docs_project_dir(current_file=current_file, custom_dir=custom_dir, root=ROOT)
+    if not target_dir.is_dir():
+        return jsonify({"ok": False, "error": f"Documentation directory '{target_dir}' does not exist"}), 404
+
+    build_dir = target_dir / "_build"
+    cleaned = False
+    if build_dir.is_dir():
+        try:
+            shutil.rmtree(build_dir, ignore_errors=True)
+            cleaned = True
+        except Exception as exc:
+            return jsonify({"ok": False, "error": f"Failed to clean _build: {exc}"}), 500
+
+    return jsonify({
+        "ok": True,
+        "target_dir": str(target_dir),
+        "cleaned_dir": str(build_dir),
+        "was_present": cleaned,
+    })
+
+
 @app.post("/api/docs/start")
 def api_docs_start():
     """Launch Sphinx HTTP preview server (telua docs start) and open in browser."""
     import time
+    import shutil
     global _DOCS_SERVER_PROC, _DOCS_SERVER_DIR, _DOCS_SERVER_PORT
     payload = request.get_json(silent=True) or {}
     custom_dir = payload.get("dir", "").strip()
     current_file = payload.get("current_file", "").strip()
     port = int(payload.get("port", 8789))
+    clean_requested = bool(payload.get("clean", False))
 
     target_dir = detect_docs_project_dir(current_file=current_file, custom_dir=custom_dir, root=ROOT)
     if not target_dir.is_dir():
         return jsonify({"ok": False, "error": f"Documentation directory '{target_dir}' does not exist"}), 404
     html_dir = target_dir / "_build" / "html"
 
-    # If _build/html/index.html does not exist, build first
-    if not (html_dir / "index.html").is_file():
-        if (ROOT / "build_apk.sh").is_file() and not sys.platform.startswith("win"):
-            try:
-                subprocess.run(["bash", "build_apk.sh", "docs", "build", str(target_dir)], cwd=str(ROOT), capture_output=True, timeout=60)
-            except Exception:
-                pass
-        else:
-            try:
-                out_html = target_dir / "_build" / "html"
-                staging_dir = target_dir / "_build" / ".staging"
-                merge_script = ROOT / "sphinx" / "scripts" / "merge_docs.py"
-                build_src = target_dir
-                if (target_dir / "metadata.json").is_file() and merge_script.is_file():
-                    import shutil
-                    if staging_dir.is_dir():
-                        shutil.rmtree(staging_dir, ignore_errors=True)
-                    staging_dir.mkdir(parents=True, exist_ok=True)
-                    for item in target_dir.iterdir():
-                        if item.name not in ("_build", ".git"):
-                            dest = staging_dir / item.name
-                            if item.is_dir():
-                                shutil.copytree(item, dest, dirs_exist_ok=True)
-                            else:
-                                shutil.copy2(item, dest)
-                    subprocess.run([sys.executable, str(merge_script), str(staging_dir)], capture_output=True, timeout=30)
-                    build_src = staging_dir
-                subprocess.run([sys.executable, "-m", "sphinx", "-E", "-a", "-b", "html", str(build_src), str(out_html)], cwd=str(ROOT), capture_output=True, timeout=60)
-            except Exception:
-                pass
+    # If clean requested, wipe _build completely
+    if clean_requested:
+        build_dir = target_dir / "_build"
+        if build_dir.is_dir():
+            shutil.rmtree(build_dir, ignore_errors=True)
+
+    # Always terminate running server process to avoid stale cache or outdated handler
+    if _DOCS_SERVER_PROC is not None:
+        try:
+            if _DOCS_SERVER_PROC.poll() is None:
+                _DOCS_SERVER_PROC.terminate()
+                _DOCS_SERVER_PROC.wait(timeout=2)
+        except Exception:
+            pass
+        _DOCS_SERVER_PROC = None
+
+    # Always re-compile docs to ensure http://localhost:8789 serves 100% fresh content
+    if (ROOT / "build_apk.sh").is_file() and not sys.platform.startswith("win"):
+        try:
+            subprocess.run(["bash", "build_apk.sh", "docs", "build", str(target_dir)], cwd=str(ROOT), capture_output=True, timeout=60)
+        except Exception:
+            pass
+    else:
+        try:
+            out_html = target_dir / "_build" / "html"
+            staging_dir = target_dir / "_build" / ".staging"
+            merge_script = ROOT / "sphinx" / "scripts" / "merge_docs.py"
+            build_src = target_dir
+            if (target_dir / "metadata.json").is_file() and merge_script.is_file():
+                if staging_dir.is_dir():
+                    shutil.rmtree(staging_dir, ignore_errors=True)
+                staging_dir.mkdir(parents=True, exist_ok=True)
+                for item in target_dir.iterdir():
+                    if item.name not in ("_build", ".git"):
+                        dest = staging_dir / item.name
+                        if item.is_dir():
+                            shutil.copytree(item, dest, dirs_exist_ok=True)
+                        else:
+                            shutil.copy2(item, dest)
+                subprocess.run([sys.executable, str(merge_script), str(staging_dir)], capture_output=True, timeout=30)
+                build_src = staging_dir
+            subprocess.run([sys.executable, "-m", "sphinx", "-E", "-a", "-b", "html", str(build_src), str(out_html)], cwd=str(ROOT), capture_output=True, timeout=60)
+        except Exception:
+            pass
 
     if not html_dir.is_dir():
         html_dir.mkdir(parents=True, exist_ok=True)
         (html_dir / "index.html").write_text("<h1>Sphinx Docs Preview</h1><p>Ready to build.</p>", encoding="utf-8")
 
-    is_alive = False
-    if _DOCS_SERVER_PROC is not None:
-        try:
-            if _DOCS_SERVER_PROC.poll() is None:
-                # If directory or port changed, restart server
-                if _DOCS_SERVER_DIR != str(html_dir) or _DOCS_SERVER_PORT != port:
-                    _DOCS_SERVER_PROC.terminate()
-                    _DOCS_SERVER_PROC.wait(timeout=2)
-                    is_alive = False
-                else:
-                    is_alive = True
-            else:
-                is_alive = False
-        except Exception:
-            is_alive = False
-
     url = f"http://localhost:{port}"
 
-    if not is_alive:
-        try:
-            _DOCS_SERVER_PROC = subprocess.Popen(
-                [sys.executable, "-m", "http.server", str(port), "--directory", str(html_dir)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            _DOCS_SERVER_DIR = str(html_dir)
-            _DOCS_SERVER_PORT = port
-        except Exception as exc:
-            abort(500, description=f"Failed to start docs server: {exc}")
+    try:
+        server_script = (
+            "import http.server, sys, os\n"
+            "port = int(sys.argv[1])\n"
+            "directory = os.path.abspath(sys.argv[2])\n"
+            "class NoCacheHandler(http.server.SimpleHTTPRequestHandler):\n"
+            "    def __init__(self, *args, **kwargs):\n"
+            "        super().__init__(*args, directory=directory, **kwargs)\n"
+            "    def end_headers(self):\n"
+            "        self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0')\n"
+            "        self.send_header('Pragma', 'no-cache')\n"
+            "        self.send_header('Expires', '0')\n"
+            "        super().end_headers()\n"
+            "    def send_head(self):\n"
+            "        if 'If-Modified-Since' in self.headers:\n"
+            "            del self.headers['If-Modified-Since']\n"
+            "        if 'If-None-Match' in self.headers:\n"
+            "            del self.headers['If-None-Match']\n"
+            "        return super().send_head()\n"
+            "server = http.server.ThreadingHTTPServer(('', port), NoCacheHandler)\n"
+            "server.serve_forever()\n"
+        )
+        _DOCS_SERVER_PROC = subprocess.Popen(
+            [sys.executable, "-c", server_script, str(port), str(html_dir)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        _DOCS_SERVER_DIR = str(html_dir)
+        _DOCS_SERVER_PORT = port
+    except Exception as exc:
+        abort(500, description=f"Failed to start docs server: {exc}")
+
+    cache_bust_url = f"{url}/?_t={int(time.time())}"
+    open_browser(cache_bust_url)
+
+    return jsonify({
+        "ok": True,
+        "url": url,
+        "cache_bust_url": cache_bust_url,
+        "port": port,
+        "pid": _DOCS_SERVER_PROC.pid if _DOCS_SERVER_PROC else None,
+        "target_dir": str(target_dir),
+        "html_dir": str(html_dir),
+    })
 
     cache_bust_url = f"{url}/?_t={int(time.time())}"
     open_browser(cache_bust_url)

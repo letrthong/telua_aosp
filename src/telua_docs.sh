@@ -46,7 +46,7 @@ show_docs_help() {
     echo -e "  Usage: \033[1;33mtelua docs <action> [options]\033[0m  (or: \033[1;33mtelua doc <action>\033[0m)"
     echo ""
     echo -e "\033[1;33mAVAILABLE ACTIONS:\033[0m"
-    printf "  \033[1;36m%-22s\033[0m %s\n" "start [port]" "Build (if needed), launch HTTP server in BACKGROUND & open browser (default: 8789)"
+    printf "  \033[1;36m%-22s\033[0m %s\n" "start [dir] [port] [-c]" "Launch HTTP server in BACKGROUND (supports --clean / -c to clear cache)"
     printf "  \033[1;36m%-22s\033[0m %s\n" "serve [port]" "Alias for 'start' to run local HTTP preview server"
     printf "  \033[1;36m%-22s\033[0m %s\n" "stop" "Stop the background docs preview server"
     printf "  \033[1;36m%-22s\033[0m %s\n" "status" "Show docs preview server status (PID, log path)"
@@ -762,24 +762,38 @@ docs_cmd_log() {
 docs_cmd_start() {
     local target_dir=""
     local port="8789"
-    local arg1="${1:-}"
-    local arg2="${2:-}"
+    local clean_mode=0
 
-    if [ -n "$arg1" ]; then
-        if [[ "$arg1" =~ ^[0-9]+$ ]]; then
-            port="$arg1"
-            if [ -n "$arg2" ]; then
-                target_dir="$(resolve_docs_dir "$arg2")"
-            fi
-        else
-            target_dir="$(resolve_docs_dir "$arg1")"
-            if [ -n "$arg2" ] && [[ "$arg2" =~ ^[0-9]+$ ]]; then
-                port="$arg2"
-            fi
-        fi
-    fi
+    # Parse args (flags --clean/-c/--rebuild, port numbers, or target_dir)
+    for arg in "$@"; do
+        case "$arg" in
+            --clean|-c|--rebuild|-f)
+                clean_mode=1
+                ;;
+            [0-9]*)
+                port="$arg"
+                ;;
+            -*)
+                ;;
+            *)
+                if [ -z "$target_dir" ]; then
+                    target_dir="$(resolve_docs_dir "$arg")"
+                fi
+                ;;
+        esac
+    done
     if [ -z "$target_dir" ]; then
         target_dir="$(resolve_docs_dir "")"
+    fi
+
+    # If clean mode requested, stop running server, wipe _build cache, and re-compile
+    if [ "$clean_mode" -eq 1 ]; then
+        log_info "Clean mode enabled: clearing build cache & restarting server..."
+        docs_cmd_stop "$target_dir" >/dev/null 2>&1 || true
+        docs_cmd_clean "$target_dir"
+        if ! docs_cmd_build "$target_dir"; then
+            return 1
+        fi
     fi
 
     local html_dir="$target_dir/_build/html"
@@ -797,16 +811,20 @@ docs_cmd_start() {
         return 1
     fi
 
-    # Already running? Just report and exit.
+    local cache_ts
+    cache_ts="$(date +%s 2>/dev/null || echo $$)"
+    local preview_url="http://localhost:$port"
+    local browser_url="http://localhost:$port/?_t=$cache_ts"
+
+    # Already running? Just report and open fresh browser with cache buster.
     local pid
     if pid="$(_docs_server_pid "$target_dir")"; then
         log_warn "Docs preview server is already running for '$target_dir' (PID: $pid)."
-        log_info "Open: http://localhost:$port  (use 'telua docs stop $target_dir' to stop it)"
-        _docs_open_browser "http://localhost:$port"
+        log_info "Opening: $browser_url  (use 'telua docs stop $target_dir' to stop it)"
+        _docs_open_browser "$browser_url"
         return 0
     fi
 
-    local preview_url="http://localhost:$port"
     local pid_file="$target_dir/$_DOCS_PID_FILE"
     local log_file="$target_dir/$_DOCS_LOG_FILE"
 
@@ -816,16 +834,36 @@ docs_cmd_start() {
     log_info " Documentation root : $target_dir"
     log_info " HTML directory     : $html_dir"
     log_info " Local URL          : $preview_url"
+    log_info " Cache-Control      : no-cache, no-store, must-revalidate"
     log_info " Log file           : $log_file"
     log_info "============================================================"
     echo ""
 
-    # Launch detached (nohup -> setsid -> bash & disown fallback) so the
-    # terminal stays usable and the server survives terminal close.
+    # Launch detached server with custom NoCacheHandler so browsers never serve stale pages
     (
         cd "$target_dir" || exit 1
         _docs_spawn_detached "$log_file" \
-            "$py_cmd" -m http.server "$port" --directory "$html_dir" \
+            "$py_cmd" -c "
+import http.server, sys, os
+port = int(sys.argv[1])
+directory = os.path.abspath(sys.argv[2])
+class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=directory, **kwargs)
+    def end_headers(self):
+        self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
+        super().end_headers()
+    def send_head(self):
+        if 'If-Modified-Since' in self.headers:
+            del self.headers['If-Modified-Since']
+        if 'If-None-Match' in self.headers:
+            del self.headers['If-None-Match']
+        return super().send_head()
+server = http.server.ThreadingHTTPServer(('', port), NoCacheHandler)
+server.serve_forever()
+" "$port" "$html_dir" \
             > "$pid_file"
     )
 
@@ -844,7 +882,7 @@ docs_cmd_start() {
         elapsed=$((elapsed + 1))
     done
 
-    if ! pid="$(_docs_server_pid)"; then
+    if ! pid="$(_docs_server_pid "$target_dir")"; then
         log_error "Docs preview server failed to start. Last log lines:"
         tail -n 15 "$log_file" 2>/dev/null || true
         return 1
@@ -856,7 +894,7 @@ docs_cmd_start() {
     printf "  \033[1;37m%-14s\033[0m %s\n" "Stop server:" "telua docs stop"
     echo ""
 
-    _docs_open_browser "$preview_url"
+    _docs_open_browser "$browser_url"
     return 0
 }
 

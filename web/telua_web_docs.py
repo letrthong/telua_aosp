@@ -348,8 +348,23 @@ def _inline_to_rst(node) -> str:
     return inner
 
 
+def _clean_rst_spacing(text: str) -> str:
+    """Clean inline spacing around RST bold, code, links, and punctuation."""
+    if not text:
+        return ""
+    # Collapse multiple tabs/spaces
+    text = re.sub(r"[ \t]+", " ", text)
+    # Remove space before punctuation: , . : ; ? ! ) ]
+    text = re.sub(r"\s+([,.:;?!)\]])", r"\1", text)
+    # Remove space after opening brackets: ( [
+    text = re.sub(r"([(\[])\s+", r"\1", text)
+    # Fix link syntax: `text <url>` _ -> `text <url>`_
+    text = re.sub(r"`\s+_", "`_", text)
+    return text.strip()
+
+
 def _convert_table_to_rst(table_elem, caption_txt: str, rst_lines: list):
-    caption_txt = re.sub(r"\s+", " ", caption_txt).strip()
+    caption_txt = _clean_rst_spacing(caption_txt)
     if caption_txt:
         rst_lines.append(f".. list-table:: {caption_txt}")
     else:
@@ -372,8 +387,8 @@ def _convert_table_to_rst(table_elem, caption_txt: str, rst_lines: list):
         if not cells:
             continue
         for c_idx, cell in enumerate(cells):
-            cell_txt = "".join(_inline_to_rst(c) for c in cell.children).strip()
-            cell_txt = re.sub(r"[ \t]+", " ", cell_txt)
+            cell_txt = "".join(_inline_to_rst(c) for c in cell.children)
+            cell_txt = _clean_rst_spacing(cell_txt)
             if c_idx == 0:
                 rst_lines.append(f"   * - {cell_txt}")
             else:
@@ -381,8 +396,9 @@ def _convert_table_to_rst(table_elem, caption_txt: str, rst_lines: list):
     rst_lines.append("")
 
 
-def html_to_rst(html_text: str) -> str:
-    """Convert HTML from Quill.js back to clean, valid reStructuredText (RST)."""
+def html_to_rst(html_text: str, file_name: Optional[str] = None) -> str:
+    """Convert HTML from Quill.js back to clean, valid reStructuredText (RST)
+    matching the exact Sphinx architecture template conventions."""
     if not html_text or not html_text.strip():
         return ""
 
@@ -394,11 +410,49 @@ def html_to_rst(html_text: str) -> str:
     soup = BeautifulSoup(html_text, "html.parser")
     rst_lines = []
 
-    def add_heading(text: str, char: str):
-        text = text.strip()
+    # Detect if target is a section file (e.g. chapterX_sectionY.rst or title starts with X.Y)
+    is_section = False
+    if file_name:
+        fn_clean = file_name.replace("\\", "/").lower()
+        base_name = fn_clean.split("/")[-1]
+        # index.rst and chapterX.rst are root/chapter files, never section files
+        if base_name in ("index.rst", "conf.py") or re.match(r"^chapter\d+\.rst$", base_name):
+            is_section = False
+        elif "section" in base_name or re.search(r"chapter\d+/", fn_clean):
+            is_section = True
+    if not is_section:
+        first_h = soup.find(["h1", "h2", "h3"])
+        if first_h and re.match(r"^\d+\.\d+", first_h.get_text().strip()):
+            is_section = True
+
+    def add_heading(text: str, level: int):
+        text = _clean_rst_spacing(text)
         if not text:
             return
-        underline = char * max(len(text), 4)
+        if is_section:
+            # Section file (e.g. chapterX_sectionY.rst):
+            # Level 1 = section title (hyphen underline, 90 chars in architecture template)
+            # Level 2 = subsection (tilde underline, matching text length)
+            # Level 3 = sub-subsection (caret underline)
+            if level == 1:
+                underline = "-" * max(len(text), 90)
+            elif level == 2:
+                underline = "~" * len(text)
+            elif level == 3:
+                underline = "^" * len(text)
+            else:
+                underline = '"' * len(text)
+        else:
+            # Root or chapter file (e.g. index.rst, chapter1.rst):
+            if level == 1:
+                underline = "=" * max(len(text), 4)
+            elif level == 2:
+                underline = "-" * max(len(text), 4)
+            elif level == 3:
+                underline = "~" * len(text)
+            else:
+                underline = "^" * len(text)
+
         rst_lines.append(text)
         rst_lines.append(underline)
         rst_lines.append("")
@@ -407,21 +461,28 @@ def html_to_rst(html_text: str) -> str:
         rst_lines.append(f".. code-block:: {lang}")
         rst_lines.append("")
         for line in code_text.splitlines():
-            rst_lines.append(f"    {line}")
+            if line.strip():
+                rst_lines.append(f"    {line}")
+            else:
+                rst_lines.append("")
         rst_lines.append("")
 
     def add_admonition(kind: str, title: str, content: str):
         rst_lines.append(f".. {kind}::")
+        indent = "   " if is_section else "    "
         if title and title.lower() != kind.lower():
-            rst_lines.append(f"    :title: {title}")
-        rst_lines.append("")
+            rst_lines.append(f"{indent}:title: {title}")
         for line in content.splitlines():
-            rst_lines.append(f"    {line}")
+            line_str = _clean_rst_spacing(line)
+            if line_str:
+                rst_lines.append(f"{indent}{line_str}")
+            else:
+                rst_lines.append("")
         rst_lines.append("")
 
     def process_element(element):
         if isinstance(element, NavigableString):
-            txt = str(element).strip()
+            txt = _clean_rst_spacing(str(element))
             if txt:
                 rst_lines.append(txt)
                 rst_lines.append("")
@@ -440,31 +501,37 @@ def html_to_rst(html_text: str) -> str:
             return
 
         if tag == "h1":
-            text = "".join(_inline_to_rst(c) for c in element.children).strip()
-            add_heading(text, "=")
+            text = "".join(_inline_to_rst(c) for c in element.children)
+            add_heading(text, 1)
         elif tag == "h2":
-            text = "".join(_inline_to_rst(c) for c in element.children).strip()
-            add_heading(text, "-")
+            text = "".join(_inline_to_rst(c) for c in element.children)
+            add_heading(text, 2)
         elif tag == "h3":
-            text = "".join(_inline_to_rst(c) for c in element.children).strip()
-            add_heading(text, "~")
+            text = "".join(_inline_to_rst(c) for c in element.children)
+            add_heading(text, 3)
         elif tag in ("h4", "h5", "h6"):
-            text = "".join(_inline_to_rst(c) for c in element.children).strip()
-            add_heading(text, "^")
+            text = "".join(_inline_to_rst(c) for c in element.children)
+            add_heading(text, 4)
         elif tag == "pre":
             if "mermaid" in classes:
                 code = element.get_text().strip()
                 rst_lines.append(".. mermaid::")
                 rst_lines.append("")
                 for line in code.splitlines():
-                    rst_lines.append(f"   {line}")
+                    if line.strip():
+                        rst_lines.append(f"   {line}")
+                    else:
+                        rst_lines.append("")
                 rst_lines.append("")
             elif "plantuml" in classes or "uml" in classes:
                 code = element.get_text().strip()
                 rst_lines.append(".. uml::")
                 rst_lines.append("")
                 for line in code.splitlines():
-                    rst_lines.append(f"   {line}")
+                    if line.strip():
+                        rst_lines.append(f"   {line}")
+                    else:
+                        rst_lines.append("")
                 rst_lines.append("")
             else:
                 code = element.get_text()
@@ -477,7 +544,10 @@ def html_to_rst(html_text: str) -> str:
             rst_lines.append(".. mermaid::")
             rst_lines.append("")
             for line in code.splitlines():
-                rst_lines.append(f"   {line}")
+                if line.strip():
+                    rst_lines.append(f"   {line}")
+                else:
+                    rst_lines.append("")
             rst_lines.append("")
         elif "plantuml-block" in classes:
             code = element.get("data-plantuml", "").strip()
@@ -487,7 +557,10 @@ def html_to_rst(html_text: str) -> str:
             rst_lines.append(".. uml::")
             rst_lines.append("")
             for line in code.splitlines():
-                rst_lines.append(f"   {line}")
+                if line.strip():
+                    rst_lines.append(f"   {line}")
+                else:
+                    rst_lines.append("")
             rst_lines.append("")
         elif "doc-table-block" in classes:
             table_elem = element.find("table")
@@ -528,32 +601,34 @@ def html_to_rst(html_text: str) -> str:
             ) or element.get_text().strip()
             add_admonition(kind, title, body_text)
         elif tag == "blockquote":
-            text = "\n".join("    " + line for line in element.get_text().splitlines())
+            text = "\n".join("   " + line for line in element.get_text().splitlines())
             rst_lines.append(text)
             rst_lines.append("")
         elif tag == "ul":
+            bullet_prefix = "- " if is_section else "* "
             for li in element.find_all("li", recursive=False):
-                item_txt = "".join(_inline_to_rst(c) for c in li.children).strip()
+                item_txt = "".join(_inline_to_rst(c) for c in li.children)
+                item_txt = _clean_rst_spacing(item_txt)
                 if item_txt:
-                    rst_lines.append(f"* {item_txt}")
+                    rst_lines.append(f"{bullet_prefix}{item_txt}")
             rst_lines.append("")
         elif tag == "ol":
-            for li in element.find_all("li", recursive=False):
-                item_txt = "".join(_inline_to_rst(c) for c in li.children).strip()
+            for idx, li in enumerate(element.find_all("li", recursive=False)):
+                item_txt = "".join(_inline_to_rst(c) for c in li.children)
+                item_txt = _clean_rst_spacing(item_txt)
                 if item_txt:
-                    rst_lines.append(f"#. {item_txt}")
+                    num_prefix = f"{idx + 1}. " if is_section else "#. "
+                    rst_lines.append(f"{num_prefix}{item_txt}")
             rst_lines.append("")
         elif tag == "p":
-            text = "".join(_inline_to_rst(c) for c in element.children).strip()
-            text = re.sub(r"[ \t]+", " ", text)
-            text = re.sub(r"\s+([,.:;?!])", r"\1", text)
+            text = "".join(_inline_to_rst(c) for c in element.children)
+            text = _clean_rst_spacing(text)
             if text:
                 rst_lines.append(text)
                 rst_lines.append("")
         else:
-            text = "".join(_inline_to_rst(c) for c in element.children).strip()
-            text = re.sub(r"[ \t]+", " ", text)
-            text = re.sub(r"\s+([,.:;?!])", r"\1", text)
+            text = "".join(_inline_to_rst(c) for c in element.children)
+            text = _clean_rst_spacing(text)
             if text:
                 rst_lines.append(text)
                 rst_lines.append("")
