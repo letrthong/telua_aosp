@@ -2653,8 +2653,63 @@ function initQuill() {
   initSyncScroll();
 }
 
-function insertMermaidDiagram() {
-  const defaultCode = `graph TD\n    Client["Client / User"] --> Gateway["API Gateway"]\n    Gateway --> Service["Core Service"]\n    Service --> Database[("Database Storage")]`;
+const MERMAID_TEMPLATES = {
+  flowchart: {
+    title: "Flowchart / Block Diagram",
+    code: `graph TD\n    Client["Client / User"] --> Gateway["API Gateway"]\n    Gateway --> Service["Core Service"]\n    Service --> Database[("Database Storage")]`
+  },
+  sequence: {
+    title: "Sequence Diagram",
+    code: `sequenceDiagram\n    autonumber\n    actor User\n    participant UI as Frontend App\n    participant API as Backend Service\n    participant DB as Database\n\n    User->>UI: Submit Request\n    UI->>API: POST /api/v1/action\n    API->>DB: Query / Update Records\n    DB-->>API: Return Result Set\n    API-->>UI: 200 OK (JSON Data)\n    UI-->>User: Render Success View`
+  },
+  class: {
+    title: "Class Diagram",
+    code: `classDiagram\n    class CarAudioManager {\n        +int volume\n        +requestAudioFocus()\n    }\n    class CarAudioService {\n        -List zones\n        +handleVolumeChange()\n    }\n    class IAudioControlHAL {\n        <<interface>>\n        +setAudioPortConfig()\n    }\n    CarAudioManager --> CarAudioService : AIDL IPC\n    CarAudioService ..|> IAudioControlHAL : Controls Hardware`
+  },
+  usecase: {
+    title: "Use Case Diagram",
+    code: `flowchart LR\n    User["👤 Driver / Passenger"]\n    ADAS["🚨 ADAS Safety System"]\n\n    subgraph System ["Car Audio Management"]\n        UC1(["Media & Radio Playback"])\n        UC2(["Arbitrate Audio Focus"])\n        UC3(["Adjust Volume Groups"])\n        UC4(["Emergency Chime Playback"])\n    end\n\n    User --> UC1\n    User --> UC3\n    ADAS --> UC4\n    UC4 -.->|include| UC2\n    UC1 -.->|include| UC2`
+  },
+  activity: {
+    title: "Activity / Workflow Diagram",
+    code: `flowchart TD\n    Start([● Start]) --> Req["Receive Audio Focus Request"]\n    Req --> Check{"Is Emergency / ADAS?"}\n\n    Check -->|Yes| Preempt["Preempt Current Focus"]\n    Preempt --> Duck["Apply Dynamic Ducking (-20dB)"]\n    Duck --> Route["Route Audio to Driver Speakers"]\n\n    Check -->|No| CheckZone{"Target Zone Available?"}\n    CheckZone -->|Yes| Grant["Grant Audio Focus"]\n    Grant --> Route\n    CheckZone -->|No| Reject["Reject Focus Request"]\n\n    Route --> Finish([◉ Finish])\n    Reject --> Finish`
+  },
+  state: {
+    title: "State Machine Diagram",
+    code: `stateDiagram-v2\n    [*] --> Idle\n    Idle --> Active : Start Event\n    state Active {\n        [*] --> Initializing\n        Initializing --> Running : Ready\n        Running --> Paused : Interrupt\n        Paused --> Running : Resume\n    }\n    Active --> Terminated : Shutdown\n    Terminated --> [*]`
+  }
+};
+
+const PLANTUML_TEMPLATES = {
+  sequence: {
+    title: "Sequence Diagram",
+    code: `@startuml\nautonumber\nactor User\nparticipant "Frontend" as UI\nparticipant "Backend" as API\ndatabase "Database" as DB\n\nUser -> UI : Submit Action / Request\nactivate UI\nUI -> API : REST / GraphQL API Call\nactivate API\nAPI -> DB : SQL Query / Transaction\nactivate DB\nDB --> API : Result Set\ndeactivate DB\nAPI --> UI : JSON Response (HTTP 200)\ndeactivate API\nUI --> User : Render Success View\ndeactivate UI\n@enduml`
+  },
+  class: {
+    title: "Class Diagram",
+    code: `@startuml\nclass CarAudioManager {\n    -int mVolume\n    +requestAudioFocus()\n    +setGroupVolume(int groupId, int volume)\n}\n\nclass CarAudioService {\n    -List<CarAudioZone> mZones\n    +initialize()\n    +handleVolumeChange()\n}\n\ninterface IAudioControlHAL {\n    +setAudioPortConfig()\n    +onVolumeChange(int bus, float gain)\n}\n\nCarAudioManager --> CarAudioService : Binds via AIDL\nCarAudioService ..|> IAudioControlHAL : Controls Hardware\n@enduml`
+  },
+  usecase: {
+    title: "Use Case Diagram",
+    code: `@startuml\nleft to right direction\nactor "Driver / User" as Driver\nactor "ADAS System" as ADAS\n\nrectangle "Audio Management Subsystem" {\n    usecase "Stream Media Playback" as UC1\n    usecase "Arbitrate Audio Focus" as UC2\n    usecase "Adjust Volume Group" as UC3\n    usecase "Broadcast ADAS Warning" as UC4\n}\n\nDriver --> UC1\nDriver --> UC3\nADAS --> UC4\nUC4 ..> UC2 : <<include>>\nUC1 ..> UC2 : <<include>>\n@enduml`
+  },
+  activity: {
+    title: "Activity / Workflow Diagram",
+    code: `@startuml\nstart\n:Receive Audio Focus Request;\n\nif (Is Emergency / ADAS Stream?) then (yes)\n    :Preempt Current Focus;\n    :Apply Dynamic Ducking (-20dB);\n    :Route Audio to Driver Speakers;\nelse (no)\n    if (Target Audio Zone Available?) then (yes)\n        :Grant AUDIOFOCUS_REQUEST_GRANTED;\n        :Activate Media Audio Bus;\n    else (no)\n        :Reject AUDIOFOCUS_REQUEST_FAILED;\n        stop\n    endif\nendif\n\n:Notify AudioFocusChange Callback;\nstop\n@enduml`
+  },
+  component: {
+    title: "Component / Block Diagram",
+    code: `@startuml\npackage "Application Layer" {\n    [Media Player App] as Media\n    [Navigation System] as Nav\n}\n\npackage "Car Framework Services" {\n    [CarAudioService] as AudioSvc\n    [CarPowerManagement] as PowerSvc\n}\n\nnode "Hardware Abstraction (HAL)" {\n    [AudioControl HAL] as AudioHAL\n    [Vehicle HAL] as VHAL\n}\n\nMedia --> AudioSvc : AIDL IPC\nNav --> AudioSvc : AIDL IPC\nAudioSvc --> AudioHAL : Audio Routing\nPowerSvc --> VHAL : Power State\n@enduml`
+  },
+  state: {
+    title: "State Machine Diagram",
+    code: `@startuml\n[*] --> Idle\n\nIdle --> Active : Start Request\nstate Active {\n    [*] --> Initializing\n    Initializing --> Running : Ready\n    Running --> Paused : Interrupt\n    Paused --> Running : Resume\n}\n\nActive --> Stopped : Complete / Abort\nStopped --> [*]\n@enduml`
+  }
+};
+
+function insertMermaidDiagram(diagramType = "flowchart") {
+  const tmpl = MERMAID_TEMPLATES[diagramType] || MERMAID_TEMPLATES.flowchart;
+  const defaultCode = tmpl.code;
 
   if (_docsEditorType === "raw") {
     const ta = $("#docs-raw-rst");
@@ -2666,7 +2721,7 @@ function insertMermaidDiagram() {
     ta.focus();
     setDocsDirty(true);
     if (_docsSplit) updateDocsPreview();
-    toast("Mermaid Diagram Added 📊", "Inserted .. mermaid:: template into RST source.", "ok");
+    toast("Mermaid Diagram Added 📊", `Inserted ${tmpl.title} into RST source.`, "ok");
   } else {
     initQuill();
     if (!_quill) return;
@@ -2676,12 +2731,13 @@ function insertMermaidDiagram() {
     renderAllMermaidBlocks(_quill.root);
     setDocsDirty(true);
     if (_docsSplit) updateDocsPreview();
-    toast("Mermaid Diagram Added 📊", "Inserted Mermaid diagram block into Visual editor.", "ok");
+    toast("Mermaid Diagram Added 📊", `Inserted ${tmpl.title} into Visual editor.`, "ok");
   }
 }
 
-function insertPlantumlDiagram() {
-  const defaultCode = `@startuml\nactor User\nparticipant "Frontend" as UI\nparticipant "Backend" as API\ndatabase "Database" as DB\n\nUser -> UI: Request action\nUI -> API: REST API call\nAPI -> DB: Query records\nDB --> API: Return dataset\nAPI --> UI: JSON response\n@enduml`;
+function insertPlantumlDiagram(diagramType = "sequence") {
+  const tmpl = PLANTUML_TEMPLATES[diagramType] || PLANTUML_TEMPLATES.sequence;
+  const defaultCode = tmpl.code;
 
   if (_docsEditorType === "raw") {
     const ta = $("#docs-raw-rst");
@@ -2693,7 +2749,7 @@ function insertPlantumlDiagram() {
     ta.focus();
     setDocsDirty(true);
     if (_docsSplit) updateDocsPreview();
-    toast("PlantUML Diagram Added 📐", "Inserted .. uml:: template into RST source.", "ok");
+    toast("PlantUML Diagram Added 📐", `Inserted ${tmpl.title} into RST source.`, "ok");
   } else {
     initQuill();
     if (!_quill) return;
@@ -2703,7 +2759,7 @@ function insertPlantumlDiagram() {
     wirePlantumlBlocks(_quill.root);
     setDocsDirty(true);
     if (_docsSplit) updateDocsPreview();
-    toast("PlantUML Diagram Added 📐", "Inserted PlantUML diagram block into Visual editor.", "ok");
+    toast("PlantUML Diagram Added 📐", `Inserted ${tmpl.title} into Visual editor.`, "ok");
   }
 }
 
@@ -3500,8 +3556,64 @@ function wire() {
       if (ed && prev) syncScroll(ed, prev);
     }
   });
-  $("#btn-docs-add-mermaid")?.addEventListener("click", () => insertMermaidDiagram());
-  $("#btn-docs-add-plantuml")?.addEventListener("click", () => insertPlantumlDiagram());
+  // Diagram Dropdown Menu Wiring (Mermaid & PlantUML)
+  const btnMermaid = $("#btn-docs-add-mermaid");
+  const menuMermaid = $("#menu-docs-mermaid");
+  const wrapMermaid = $("#wrap-docs-mermaid");
+
+  const btnPlantuml = $("#btn-docs-add-plantuml");
+  const menuPlantuml = $("#menu-docs-plantuml");
+  const wrapPlantuml = $("#wrap-docs-plantuml");
+
+  function closeAllDiagramMenus() {
+    menuMermaid?.classList.remove("show");
+    wrapMermaid?.classList.remove("open");
+    menuPlantuml?.classList.remove("show");
+    wrapPlantuml?.classList.remove("open");
+  }
+
+  btnMermaid?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = menuMermaid?.classList.contains("show");
+    closeAllDiagramMenus();
+    if (!isOpen) {
+      menuMermaid?.classList.add("show");
+      wrapMermaid?.classList.add("open");
+    }
+  });
+
+  menuMermaid?.querySelectorAll(".dropdown-item")?.forEach(item => {
+    item.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const type = item.getAttribute("data-type") || "flowchart";
+      closeAllDiagramMenus();
+      insertMermaidDiagram(type);
+    });
+  });
+
+  btnPlantuml?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = menuPlantuml?.classList.contains("show");
+    closeAllDiagramMenus();
+    if (!isOpen) {
+      menuPlantuml?.classList.add("show");
+      wrapPlantuml?.classList.add("open");
+    }
+  });
+
+  menuPlantuml?.querySelectorAll(".dropdown-item")?.forEach(item => {
+    item.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const type = item.getAttribute("data-type") || "sequence";
+      closeAllDiagramMenus();
+      insertPlantumlDiagram(type);
+    });
+  });
+
+  document.addEventListener("click", () => {
+    closeAllDiagramMenus();
+  });
+
   $("#btn-docs-add-table")?.addEventListener("click", () => insertTableBlock());
   $("#btn-docs-save")?.addEventListener("click", () => saveCurrentDoc());
   $("#btn-docs-build")?.addEventListener("click", () => buildSphinxDocs());

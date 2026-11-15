@@ -202,10 +202,89 @@
             RST</button>
           <button class="btn" id="btn-docs-mode-split" title="Split view: Editor &amp; Live HTML Preview">👁 Split
             View</button>
-          <button class="btn ghost" id="btn-docs-add-mermaid"
-            title="Insert a Mermaid Architecture Diagram into document">+ 📊 Mermaid</button>
-          <button class="btn ghost" id="btn-docs-add-plantuml"
-            title="Insert a PlantUML Architecture Diagram into document">+ 📐 PlantUML</button>
+          <div class="dropdown-wrapper" id="wrap-docs-mermaid">
+            <button class="btn ghost dropdown-trigger" id="btn-docs-add-mermaid"
+              title="Insert a Mermaid Architecture Diagram (Click to select type)">+ 📊 Mermaid <span class="dropdown-arrow">▼</span></button>
+            <div class="dropdown-menu" id="menu-docs-mermaid">
+              <div class="dropdown-item" data-type="flowchart">
+                <span class="dropdown-item-icon">📊</span>
+                <div class="dropdown-item-content">
+                  <span class="dropdown-item-title">Flowchart / Block Diagram</span>
+                  <span class="dropdown-item-desc">graph TD (Nodes, Services, Gateways)</span>
+                </div>
+              </div>
+              <div class="dropdown-item" data-type="sequence">
+                <span class="dropdown-item-icon">🔄</span>
+                <div class="dropdown-item-content">
+                  <span class="dropdown-item-title">Sequence Diagram</span>
+                  <span class="dropdown-item-desc">sequenceDiagram (Actors, APIs, DB flows)</span>
+                </div>
+              </div>
+              <div class="dropdown-item" data-type="class">
+                <span class="dropdown-item-icon">🏛️</span>
+                <div class="dropdown-item-content">
+                  <span class="dropdown-item-title">Class Diagram</span>
+                  <span class="dropdown-item-desc">classDiagram (OOP classes, AIDL interfaces)</span>
+                </div>
+              </div>
+              <div class="dropdown-item" data-type="usecase">
+                <span class="dropdown-item-icon">🎯</span>
+                <div class="dropdown-item-content">
+                  <span class="dropdown-item-title">Use Case Diagram</span>
+                  <span class="dropdown-item-desc">flowchart LR (Actors, Boundaries, System use cases)</span>
+                </div>
+              </div>
+              <div class="dropdown-item" data-type="activity">
+                <span class="dropdown-item-icon">⚡</span>
+                <div class="dropdown-item-content">
+                  <span class="dropdown-item-title">Activity / Workflow Diagram</span>
+                  <span class="dropdown-item-desc">flowchart TD (Decision branches & workflow)</span>
+                </div>
+              </div>
+              <div class="dropdown-item" data-type="state">
+                <span class="dropdown-item-icon">🔀</span>
+                <div class="dropdown-item-content">
+                  <span class="dropdown-item-title">State Machine Diagram</span>
+                  <span class="dropdown-item-desc">stateDiagram-v2 (Lifecycle & States)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dropdown-wrapper" id="wrap-docs-plantuml">
+            <button class="btn ghost dropdown-trigger" id="btn-docs-add-plantuml"
+              title="Insert a PlantUML Architecture Diagram (Click to select type)">+ 📐 PlantUML <span class="dropdown-arrow">▼</span></button>
+            <div class="dropdown-menu" id="menu-docs-plantuml">
+              <div class="dropdown-item" data-type="sequence">
+                <span class="dropdown-item-icon">🔄</span>
+                <div class="dropdown-item-content">
+                  <span class="dropdown-item-title">Sequence Diagram</span>
+                  <span class="dropdown-item-desc">Actors, UI, Backend, DB lifecycle</span>
+                </div>
+              </div>
+              <div class="dropdown-item" data-type="class">
+                <span class="dropdown-item-icon">🏛️</span>
+                <div class="dropdown-item-content">
+                  <span class="dropdown-item-title">Class Diagram</span>
+                  <span class="dropdown-item-desc">Classes, AIDL interfaces & methods</span>
+                </div>
+              </div>
+              <div class="dropdown-item" data-type="component">
+                <span class="dropdown-item-icon">📦</span>
+                <div class="dropdown-item-content">
+                  <span class="dropdown-item-title">Component / Block Diagram</span>
+                  <span class="dropdown-item-desc">Packages, Apps, HAL & Subsystems</span>
+                </div>
+              </div>
+              <div class="dropdown-item" data-type="state">
+                <span class="dropdown-item-icon">🔀</span>
+                <div class="dropdown-item-content">
+                  <span class="dropdown-item-title">State Machine Diagram</span>
+                  <span class="dropdown-item-desc">Composite states & transitions</span>
+                </div>
+              </div>
+            </div>
+          </div>
           <button class="btn ghost" id="btn-docs-add-table"
             title="Insert an editable Table into document (.. list-table::)">+ ▦ Table</button>
           <button class="btn primary" id="btn-docs-save"
