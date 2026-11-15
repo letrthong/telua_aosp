@@ -112,12 +112,26 @@ class TestTeluaWebDocsConverters(unittest.TestCase):
         )
         html = twd.rst_to_html(rst)
         self.assertIn("plantuml-block", html)
+        self.assertIn("plantuml-diagram-wrap", html)
+        self.assertIn("plantuml.com/plantuml/svg/~1", html)
+        self.assertIn("plantuml-svg-img", html)
+        self.assertIn("btn-view-diag", html)
+        self.assertIn("btn-view-code", html)
+        self.assertIn("btn-copy-uml", html)
+        self.assertIn("btn-del-uml", html)
         self.assertIn("Alice -&gt; Bob", html)
 
         # Convert back to RST
         back_rst = twd.html_to_rst(html)
         self.assertIn(".. uml::", back_rst)
         self.assertIn("Alice -> Bob: Call Service", back_rst)
+
+    def test_plantuml_url_encoder(self):
+        code = "Alice -> Bob: Test Service"
+        enc = twd.encode_plantuml(code)
+        self.assertTrue(enc.startswith("~1"))
+        url = twd.get_plantuml_url(code)
+        self.assertTrue(url.startswith("https://www.plantuml.com/plantuml/svg/~1"))
 
     def test_quill_mermaid_dom_preservation(self):
         quill_html = (
@@ -137,6 +151,44 @@ class TestTeluaWebDocsConverters(unittest.TestCase):
         self.assertIn("App --> HAL", back_rst)
         self.assertIn("Section text", back_rst)
         self.assertIn("Following text", back_rst)
+
+    def test_quill_mermaid_with_textarea(self):
+        quill_html = (
+            '<div class="mermaid-block" contenteditable="false" data-mermaid="graph TD\n   A --> B">'
+            '  <div class="mermaid-header"></div>'
+            '  <textarea class="mermaid-code-input">graph TD\n   A --> B</textarea>'
+            '</div>'
+        )
+        back_rst = twd.html_to_rst(quill_html)
+        self.assertIn(".. mermaid::", back_rst)
+        self.assertIn("A --> B", back_rst)
+
+    def test_doc_table_block_to_rst(self):
+        table_html = (
+            '<div class="doc-table-block" contenteditable="false">'
+            '  <div class="doc-table-header">'
+            '    <input class="doc-table-caption-input" value="Performance SLAs">'
+            '  </div>'
+            '  <div class="doc-table-scroll">'
+            '    <table class="doc-table-grid">'
+            '      <thead>'
+            '        <tr><th>Metric</th><th>Target</th></tr>'
+            '      </thead>'
+            '      <tbody>'
+            '        <tr><td>Latency</td><td>&lt; 50ms</td></tr>'
+            '        <tr><td>Throughput</td><td>10k req/s</td></tr>'
+            '      </tbody>'
+            '    </table>'
+            '  </div>'
+            '</div>'
+        )
+        back_rst = twd.html_to_rst(table_html)
+        self.assertIn(".. list-table:: Performance SLAs", back_rst)
+        self.assertIn(":header-rows: 1", back_rst)
+        self.assertIn("* - Metric", back_rst)
+        self.assertIn("  - Target", back_rst)
+        self.assertIn("* - Latency", back_rst)
+        self.assertIn("  - < 50ms", back_rst)
 
 
 class TestTeluaWebDocsAPI(unittest.TestCase):

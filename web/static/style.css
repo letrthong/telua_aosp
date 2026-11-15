@@ -1231,6 +1231,121 @@ code, .mono { font-family: var(--mono); }
   font-weight: 600;
 }
 
+/* ============ Doc Table Block (Sphinx .. list-table::) ============ */
+.doc-table-block {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-soft);
+  margin: 18px 0;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .15);
+}
+.doc-table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(56, 189, 248, .12);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.doc-table-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 240px;
+}
+.doc-table-label {
+  color: #38bdf8;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.doc-table-chip {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.doc-table-caption-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  outline: none;
+  min-width: 140px;
+}
+.doc-table-caption-input:focus {
+  border-color: #38bdf8;
+}
+.doc-table-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.doc-table-btn {
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all .15s ease;
+  user-select: none;
+}
+.doc-table-btn:hover {
+  background: rgba(56, 189, 248, .2);
+  color: #38bdf8;
+  border-color: #38bdf8;
+}
+.doc-table-btn.danger:hover {
+  background: rgba(248, 113, 113, .2);
+  color: var(--danger, #f87171);
+  border-color: var(--danger, #f87171);
+}
+.doc-table-scroll {
+  overflow-x: auto;
+  padding: 10px 14px;
+  background: var(--bg);
+}
+.doc-table-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  margin: 0 !important;
+}
+.doc-table-grid th, .doc-table-grid td {
+  border: 1px solid var(--border) !important;
+  padding: 8px 12px !important;
+  min-width: 80px;
+  outline: none !important;
+  line-height: 1.5;
+  color: var(--text);
+  transition: background .12s ease;
+}
+.doc-table-grid th {
+  background: var(--bg-soft) !important;
+  color: #38bdf8 !important;
+  font-weight: 700 !important;
+}
+.doc-table-grid td:focus, .doc-table-grid th:focus {
+  background: rgba(56, 189, 248, .12) !important;
+  box-shadow: inset 0 0 0 1.5px #38bdf8 !important;
+}
+
 /* Mermaid diagram blocks */
 .mermaid-block {
   border: 1px solid var(--border);
@@ -1294,6 +1409,13 @@ code, .mono { font-family: var(--mono); }
   background: rgba(255, 255, 255, .16);
   color: var(--text);
 }
+.mermaid-btn.danger:hover,
+.plantuml-btn.danger:hover,
+.doc-table-btn.danger:hover {
+  background: rgba(248, 113, 113, .2) !important;
+  color: var(--danger, #f87171) !important;
+  border-color: var(--danger, #f87171) !important;
+}
 .mermaid-btn.active {
   background: var(--accent);
   color: #fff;
@@ -1320,12 +1442,20 @@ code, .mono { font-family: var(--mono); }
 /* Mermaid & PlantUML diagram code editor styling */
 .mermaid-block pre.mermaid,
 .mermaid-block pre.mermaid-code,
+.mermaid-block .mermaid-code-input,
 .plantuml-block pre.plantuml,
 .plantuml-block pre.plantuml-code,
+.plantuml-block .plantuml-code-input,
 .ql-snow .ql-editor .mermaid-block pre,
+.ql-snow .ql-editor .mermaid-block textarea,
 .ql-snow .ql-editor .plantuml-block pre,
+.ql-snow .ql-editor .plantuml-block textarea,
 .docs-preview-body .mermaid-block pre,
-.docs-preview-body .plantuml-block pre {
+.docs-preview-body .mermaid-block textarea,
+.docs-preview-body .plantuml-block pre,
+.docs-preview-body .plantuml-block textarea {
+  width: 100% !important;
+  box-sizing: border-box !important;
   margin: 0 !important;
   padding: 14px 18px !important;
   background-color: #0d1117 !important;
@@ -1339,28 +1469,40 @@ code, .mono { font-family: var(--mono); }
   overflow-x: auto !important;
   white-space: pre !important;
   tab-size: 4 !important;
-  min-height: 100px !important;
-  max-height: 480px !important;
+  min-height: 120px !important;
+  max-height: 520px !important;
   outline: none !important;
   border-radius: 0 0 8px 8px !important;
   box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.45) !important;
   caret-color: #58a6ff !important;
   user-select: text !important;
+  resize: vertical !important;
 }
 
 [data-theme="light"] .mermaid-block pre.mermaid,
 [data-theme="light"] .mermaid-block pre.mermaid-code,
+[data-theme="light"] .mermaid-block .mermaid-code-input,
 [data-theme="light"] .plantuml-block pre.plantuml,
 [data-theme="light"] .plantuml-block pre.plantuml-code,
+[data-theme="light"] .plantuml-block .plantuml-code-input,
 [data-theme="light"] .ql-snow .ql-editor .mermaid-block pre,
+[data-theme="light"] .ql-snow .ql-editor .mermaid-block textarea,
 [data-theme="light"] .ql-snow .ql-editor .plantuml-block pre,
+[data-theme="light"] .ql-snow .ql-editor .plantuml-block textarea,
 [data-theme="light"] .docs-preview-body .mermaid-block pre,
-[data-theme="light"] .docs-preview-body .plantuml-block pre {
+[data-theme="light"] .docs-preview-body .mermaid-block textarea,
+[data-theme="light"] .docs-preview-body .plantuml-block pre,
+[data-theme="light"] .docs-preview-body .plantuml-block textarea {
   background-color: #1e1e2e !important;
   background: #1e1e2e !important;
   color: #89b4fa !important;
   caret-color: #89b4fa !important;
   box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.25) !important;
+}
+
+.mermaid-code-input:focus,
+.plantuml-code-input:focus {
+  border-top: 1px solid var(--accent) !important;
 }
 
 /* PlantUML diagram blocks */
@@ -1402,6 +1544,36 @@ code, .mono { font-family: var(--mono); }
   background: #a855f7;
   color: #fff;
   border-color: #a855f7;
+}
+.plantuml-diagram-wrap {
+  padding: 16px;
+  background: #0d1117;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-x: auto;
+  min-height: 80px;
+}
+[data-theme="light"] .plantuml-diagram-wrap {
+  background: #ffffff;
+}
+.plantuml-diagram-wrap img.plantuml-svg-img,
+.plantuml-diagram-wrap svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+.plantuml-offline-notice {
+  padding: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: center;
+  background: rgba(168, 85, 247, 0.08);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 /* Images */

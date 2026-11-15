@@ -20,6 +20,8 @@ import os
 import re
 import shutil
 import subprocess
+import textwrap
+import zlib
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -161,13 +163,51 @@ def _extract_rst_title(file_path: Path) -> Optional[str]:
     return None
 
 
+PLANTUML_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"
+
+
+def encode_plantuml(text: str) -> str:
+    """Encode PlantUML text into PlantUML standard deflate format (~1...)."""
+    clean_text = text.strip()
+    if not clean_text:
+        return ""
+    if not clean_text.startswith("@startuml"):
+        clean_text = f"@startuml\n{clean_text}\n@enduml"
+    compressor = zlib.compressobj(9, zlib.DEFLATED, -15)
+    compressed = compressor.compress(clean_text.encode("utf-8")) + compressor.flush()
+    alphabet = PLANTUML_ALPHABET
+    r = []
+    i = 0
+    n = len(compressed)
+    while i < n:
+        b1 = compressed[i]
+        b2 = compressed[i + 1] if i + 1 < n else 0
+        b3 = compressed[i + 2] if i + 2 < n else 0
+        r.append(alphabet[(b1 >> 2) & 0x3F])
+        r.append(alphabet[(((b1 & 0x3) << 4) | (b2 >> 4)) & 0x3F])
+        if i + 1 < n:
+            r.append(alphabet[(((b2 & 0xF) << 2) | (b3 >> 6)) & 0x3F])
+        if i + 2 < n:
+            r.append(alphabet[b3 & 0x3F])
+        i += 3
+    return "~1" + "".join(r)
+
+
+def get_plantuml_url(text: str) -> str:
+    """Get public PlantUML server SVG URL for a diagram text."""
+    encoded = encode_plantuml(text)
+    if not encoded:
+        return ""
+    return f"https://www.plantuml.com/plantuml/svg/{encoded}"
+
+
 def _protect_rst_directives(rst_text: str) -> str:
     """Transform Sphinx-specific directives (like .. mermaid::, .. uml::, .. plantuml::)
     into raw HTML blocks so docutils preserves them without throwing parse errors.
     """
     mermaid_pattern = re.compile(r'^\.\.\s+mermaid::\s*\n((?:[ \t]+.*\n|\n)*)', re.MULTILINE)
     def repl_mermaid(match):
-        code = match.group(1).strip()
+        code = textwrap.dedent(match.group(1)).strip()
         escaped_code = code.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
         html_block = f'<div class="mermaid-block" data-mermaid="{escaped_code}"><div class="mermaid-label">📊 Mermaid Architecture Diagram</div><pre class="mermaid">{escaped_code}</pre></div>'
         indented = "\n".join("   " + line for line in html_block.splitlines())
@@ -183,9 +223,29 @@ def _protect_rst_directives(rst_text: str) -> str:
 
     plantuml_pattern = re.compile(r'^\.\.\s+(?:plantuml|uml)::\s*\n((?:[ \t]+.*\n|\n)*)', re.MULTILINE)
     def repl_plantuml(match):
-        code = match.group(1).strip()
+        code = textwrap.dedent(match.group(1)).strip()
         escaped_code = code.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
-        html_block = f'<div class="plantuml-block" data-plantuml="{escaped_code}"><div class="plantuml-label">📐 PlantUML Architecture Diagram</div><pre class="plantuml">{escaped_code}</pre></div>'
+        uml_url = get_plantuml_url(code) if code else ""
+        html_block = (
+            f'<div class="plantuml-block" data-plantuml="{escaped_code}">'
+            f'<div class="plantuml-header" contenteditable="false">'
+            f'<div class="plantuml-title-wrap">'
+            f'<span class="plantuml-label">📐 PlantUML Architecture Diagram</span>'
+            f'<span class="plantuml-chip">.. uml::</span>'
+            f'</div>'
+            f'<div class="plantuml-actions">'
+            f'<button type="button" class="plantuml-btn btn-view-diag active" title="Show Rendered Diagram">👁 Diagram</button>'
+            f'<button type="button" class="plantuml-btn btn-view-code" title="View / Edit Diagram Code">📝 Code</button>'
+            f'<button type="button" class="plantuml-btn btn-copy-uml" title="Copy PlantUML Syntax">📋 Copy</button>'
+            f'<button type="button" class="plantuml-btn btn-del-uml danger" title="Delete Diagram">🗑</button>'
+            f'</div>'
+            f'</div>'
+            f'<div class="plantuml-diagram-wrap" contenteditable="false">'
+            f'<img class="plantuml-svg-img" src="{uml_url}" alt="PlantUML Diagram" loading="lazy" />'
+            f'</div>'
+            f'<textarea class="plantuml-code-input" spellcheck="false" style="display:none;" placeholder="Type PlantUML syntax here…">{escaped_code}</textarea>'
+            f'</div>'
+        )
         indented = "\n".join("   " + line for line in html_block.splitlines())
         raw_block = [
             "",
@@ -257,6 +317,39 @@ def _inline_to_rst(node) -> str:
     return inner
 
 
+def _convert_table_to_rst(table_elem, caption_txt: str, rst_lines: list):
+    caption_txt = re.sub(r"\s+", " ", caption_txt).strip()
+    if caption_txt:
+        rst_lines.append(f".. list-table:: {caption_txt}")
+    else:
+        rst_lines.append(".. list-table::")
+
+    cols = table_elem.find_all("col")
+    widths = []
+    for col in cols:
+        style = col.get("style", "")
+        m = re.search(r"width:\s*(\d+(?:\.\d+)?)%", style)
+        if m:
+            widths.append(str(int(round(float(m.group(1))))))
+    if widths:
+        rst_lines.append(f"   :widths: {' '.join(widths)}")
+
+    rst_lines.append("   :header-rows: 1")
+    rst_lines.append("")
+    for row in table_elem.find_all("tr"):
+        cells = row.find_all(["th", "td"])
+        if not cells:
+            continue
+        for c_idx, cell in enumerate(cells):
+            cell_txt = "".join(_inline_to_rst(c) for c in cell.children).strip()
+            cell_txt = re.sub(r"[ \t]+", " ", cell_txt)
+            if c_idx == 0:
+                rst_lines.append(f"   * - {cell_txt}")
+            else:
+                rst_lines.append(f"     - {cell_txt}")
+    rst_lines.append("")
+
+
 def html_to_rst(html_text: str) -> str:
     """Convert HTML from Quill.js back to clean, valid reStructuredText (RST)."""
     if not html_text or not html_text.strip():
@@ -310,7 +403,7 @@ def html_to_rst(html_text: str) -> str:
         classes = element.get("class", [])
 
         # Unpack nested section or container div unless it's a special block
-        if tag == "section" or (tag == "div" and "admonition" not in classes and "mermaid-block" not in classes and "plantuml-block" not in classes):
+        if tag == "section" or (tag == "div" and "admonition" not in classes and "mermaid-block" not in classes and "plantuml-block" not in classes and "doc-table-block" not in classes):
             for child in element.children:
                 process_element(child)
             return
@@ -348,8 +441,8 @@ def html_to_rst(html_text: str) -> str:
         elif "mermaid-block" in classes:
             code = element.get("data-mermaid", "").strip()
             if not code:
-                pre = element.find("pre")
-                code = pre.get_text().strip() if pre else element.get_text().strip()
+                elem = element.find("textarea") or element.find("pre")
+                code = elem.get_text().strip() if elem else element.get_text().strip()
             rst_lines.append(".. mermaid::")
             rst_lines.append("")
             for line in code.splitlines():
@@ -358,51 +451,28 @@ def html_to_rst(html_text: str) -> str:
         elif "plantuml-block" in classes:
             code = element.get("data-plantuml", "").strip()
             if not code:
-                pre = element.find("pre")
-                code = pre.get_text().strip() if pre else element.get_text().strip()
+                elem = element.find("textarea") or element.find("pre")
+                code = elem.get_text().strip() if elem else element.get_text().strip()
             rst_lines.append(".. uml::")
             rst_lines.append("")
             for line in code.splitlines():
                 rst_lines.append(f"   {line}")
             rst_lines.append("")
+        elif "doc-table-block" in classes:
+            table_elem = element.find("table")
+            if not table_elem:
+                return
+            caption_input = element.find("input", class_="doc-table-caption-input")
+            caption_txt = caption_input.get("value", "").strip() if caption_input else ""
+            if not caption_txt:
+                caption_node = table_elem.find("caption")
+                if caption_node:
+                    caption_txt = "".join(_inline_to_rst(c) for c in caption_node.children).strip()
+            _convert_table_to_rst(table_elem, caption_txt, rst_lines)
         elif tag == "table":
             caption_node = element.find("caption")
-            caption_txt = ""
-            if caption_node:
-                caption_txt = "".join(_inline_to_rst(c) for c in caption_node.children).strip()
-                # Clean up any duplicated bolding if docutils added strong
-                caption_txt = re.sub(r"\s+", " ", caption_txt)
-
-            if caption_txt:
-                rst_lines.append(f".. list-table:: {caption_txt}")
-            else:
-                rst_lines.append(".. list-table::")
-
-            # Preserve column widths if defined
-            cols = element.find_all("col")
-            widths = []
-            for col in cols:
-                style = col.get("style", "")
-                m = re.search(r"width:\s*(\d+(?:\.\d+)?)%", style)
-                if m:
-                    widths.append(str(int(round(float(m.group(1))))))
-            if widths:
-                rst_lines.append(f"   :widths: {' '.join(widths)}")
-
-            rst_lines.append("   :header-rows: 1")
-            rst_lines.append("")
-            for row in element.find_all("tr"):
-                cells = row.find_all(["th", "td"])
-                if not cells:
-                    continue
-                for c_idx, cell in enumerate(cells):
-                    cell_txt = "".join(_inline_to_rst(c) for c in cell.children).strip()
-                    cell_txt = re.sub(r"[ \t]+", " ", cell_txt)
-                    if c_idx == 0:
-                        rst_lines.append(f"   * - {cell_txt}")
-                    else:
-                        rst_lines.append(f"     - {cell_txt}")
-            rst_lines.append("")
+            caption_txt = "".join(_inline_to_rst(c) for c in caption_node.children).strip() if caption_node else ""
+            _convert_table_to_rst(element, caption_txt, rst_lines)
         elif tag == "img":
             src = element.get("src", "").strip()
             alt = element.get("alt", "").strip()

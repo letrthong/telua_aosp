@@ -526,7 +526,7 @@ async function saveFile() {
     c.mtime_str = data.saved_at;
     setCurrentMeta();
     toast("Saved ✓", `${data.name} (${data.bytes} bytes)` +
-          (data.backup ? ` · backup: ${data.backup}` : ""), "ok", 5000);
+      (data.backup ? ` · backup: ${data.backup}` : ""), "ok", 5000);
     refreshFiles();
     if (data.name === "config/apk.config" || data.name === "apk.config") refreshStatus();
   } catch (err) {
@@ -628,14 +628,14 @@ function renderPipelines() {
   const filtered = terms.length === 0
     ? state.pipelines
     : state.pipelines.filter(p => {
-        const hay = [
-          p.name || "",
-          p.description || "",
-          p.array || "",
-          ...(p.steps || []),
-        ].join(" ").toLowerCase();
-        return terms.some(t => hay.includes(t));
-      });
+      const hay = [
+        p.name || "",
+        p.description || "",
+        p.array || "",
+        ...(p.steps || []),
+      ].join(" ").toLowerCase();
+      return terms.some(t => hay.includes(t));
+    });
 
   for (const p of filtered) {
     list.appendChild(pipelineCard(p));
@@ -1788,6 +1788,53 @@ let _syncScrollTimer = null;
 
 let _mermaidCounter = 0;
 
+const PLANTUML_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_";
+
+function getPlantumlUrl(text) {
+  if (!text || !text.trim()) return "";
+  let clean = text.trim();
+  if (!clean.startsWith("@startuml")) {
+    clean = `@startuml\n${clean}\n@enduml`;
+  }
+  const encoder = new TextEncoder();
+  const rawBytes = encoder.encode(clean);
+  const n = rawBytes.length;
+  // RFC 1951 uncompressed / stored block (BFINAL=1, BTYPE=00)
+  const deflated = new Uint8Array(5 + n);
+  deflated[0] = 0x01;
+  deflated[1] = n & 0xff;
+  deflated[2] = (n >> 8) & 0xff;
+  const nlen = ~n & 0xffff;
+  deflated[3] = nlen & 0xff;
+  deflated[4] = (nlen >> 8) & 0xff;
+  deflated.set(rawBytes, 5);
+
+  const r = [];
+  let i = 0;
+  const len = deflated.length;
+  while (i < len) {
+    const b1 = deflated[i];
+    const b2 = i + 1 < len ? deflated[i + 1] : 0;
+    const b3 = i + 2 < len ? deflated[i + 2] : 0;
+    r.push(PLANTUML_ALPHABET[(b1 >> 2) & 0x3f]);
+    r.push(PLANTUML_ALPHABET[(((b1 & 0x03) << 4) | (b2 >> 4)) & 0x3f]);
+    if (i + 1 < len) {
+      r.push(PLANTUML_ALPHABET[(((b2 & 0x0f) << 2) | (b3 >> 6)) & 0x3f]);
+    }
+    if (i + 2 < len) {
+      r.push(PLANTUML_ALPHABET[b3 & 0x3f]);
+    }
+    i += 3;
+  }
+  return `https://www.plantuml.com/plantuml/svg/~1${r.join("")}`;
+}
+
+function autoResizeDiagramTextarea(el) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = Math.max(120, Math.min(el.scrollHeight + 8, 600)) + "px";
+}
+
 function registerQuillDiagramBlots() {
   if (!window.Quill || window._quillDiagramBlotsRegistered) return;
   try {
@@ -1806,7 +1853,7 @@ function registerQuillDiagramBlots() {
         if (typeof value === "string") {
           code = value;
         } else if (value && typeof value === "object") {
-          code = value.getAttribute ? (value.getAttribute("data-mermaid") || value.querySelector("pre")?.textContent || "") : (value.code || "");
+          code = value.getAttribute ? (value.getAttribute("data-mermaid") || value.querySelector("textarea")?.value || value.querySelector("pre")?.textContent || "") : (value.code || "");
         }
         node.setAttribute("data-mermaid", code);
         const safeCode = (code || "")
@@ -1825,18 +1872,19 @@ function registerQuillDiagramBlots() {
               <button type="button" class="mermaid-btn btn-view-diag active" title="Show Rendered Diagram">👁 Diagram</button>
               <button type="button" class="mermaid-btn btn-view-code" title="View / Edit Diagram Code">📝 Code</button>
               <button type="button" class="mermaid-btn btn-copy-code" title="Copy Diagram Syntax">📋 Copy</button>
+              <button type="button" class="mermaid-btn btn-del-diag danger" title="Delete Diagram">🗑</button>
             </div>
           </div>
           <div class="mermaid-diagram-wrap" contenteditable="false">
             <span class="mermaid-loading" style="color:var(--text-dim);font-size:12px;">⏳ Rendering Mermaid diagram graphic…</span>
           </div>
-          <pre class="mermaid mermaid-code" contenteditable="true" spellcheck="false" style="display:none;" title="Click to edit diagram syntax">${safeCode}</pre>
+          <textarea class="mermaid-code-input" spellcheck="false" style="display:none;" title="Click to edit diagram syntax" placeholder="Type Mermaid syntax here…">${safeCode}</textarea>
         `;
         return node;
       }
 
       static value(node) {
-        return node.getAttribute("data-mermaid") || node.querySelector("pre")?.textContent || "";
+        return node.getAttribute("data-mermaid") || node.querySelector("textarea")?.value || node.querySelector("pre")?.textContent || "";
       }
     }
 
@@ -1852,7 +1900,7 @@ function registerQuillDiagramBlots() {
         if (typeof value === "string") {
           code = value;
         } else if (value && typeof value === "object") {
-          code = value.getAttribute ? (value.getAttribute("data-plantuml") || value.querySelector("pre")?.textContent || "") : (value.code || "");
+          code = value.getAttribute ? (value.getAttribute("data-plantuml") || value.querySelector("textarea")?.value || value.querySelector("pre")?.textContent || "") : (value.code || "");
         }
         node.setAttribute("data-plantuml", code);
         const safeCode = (code || "")
@@ -1861,6 +1909,8 @@ function registerQuillDiagramBlots() {
           .replace(/>/g, "&gt;")
           .replace(/"/g, "&quot;");
 
+        const umlUrl = getPlantumlUrl(code);
+
         node.innerHTML = `
           <div class="plantuml-header" contenteditable="false">
             <div class="plantuml-title-wrap">
@@ -1868,24 +1918,471 @@ function registerQuillDiagramBlots() {
               <span class="plantuml-chip">.. uml::</span>
             </div>
             <div class="plantuml-actions">
+              <button type="button" class="plantuml-btn btn-view-diag active" title="Show Rendered Diagram">👁 Diagram</button>
+              <button type="button" class="plantuml-btn btn-view-code" title="View / Edit Diagram Code">📝 Code</button>
               <button type="button" class="plantuml-btn btn-copy-uml" title="Copy PlantUML Syntax">📋 Copy</button>
+              <button type="button" class="plantuml-btn btn-del-uml danger" title="Delete Diagram">🗑</button>
             </div>
           </div>
-          <pre class="plantuml plantuml-code" contenteditable="true" spellcheck="false" title="Click to edit diagram syntax">${safeCode}</pre>
+          <div class="plantuml-diagram-wrap" contenteditable="false">
+            <img class="plantuml-svg-img" src="${umlUrl}" alt="PlantUML Diagram" loading="lazy" />
+          </div>
+          <textarea class="plantuml-code-input" spellcheck="false" style="display:none;" title="Click to edit diagram syntax" placeholder="Type PlantUML syntax here…">${safeCode}</textarea>
         `;
         return node;
       }
 
       static value(node) {
-        return node.getAttribute("data-plantuml") || node.querySelector("pre")?.textContent || "";
+        return node.getAttribute("data-plantuml") || node.querySelector("textarea")?.value || node.querySelector("pre")?.textContent || "";
+      }
+    }
+
+    class TableBlockBlot extends BlockEmbed {
+      static blotName = "tableBlock";
+      static tagName = "div";
+      static className = "doc-table-block";
+
+      static create(value) {
+        const node = super.create();
+        node.setAttribute("contenteditable", "false");
+        const tableHtml = typeof value === "string" ? value : (value?.tableHtml || "");
+        buildTableBlockCard(node, tableHtml);
+        return node;
+      }
+
+      static value(node) {
+        const table = node.querySelector("table");
+        return table ? table.outerHTML : "";
       }
     }
 
     Quill.register(MermaidBlot);
     Quill.register(PlantumlBlot);
+    Quill.register(TableBlockBlot);
     window._quillDiagramBlotsRegistered = true;
   } catch (err) {
     console.warn("Custom Quill Blots registration skipped:", err);
+  }
+}
+
+function buildTableBlockCard(node, tableHtml) {
+  let tempDiv = document.createElement("div");
+  tempDiv.innerHTML = tableHtml || "";
+  let table = tempDiv.querySelector("table");
+  if (!table) {
+    table = document.createElement("table");
+    table.className = "doc-table-grid";
+    table.innerHTML = `
+      <thead>
+        <tr><th>Header 1</th><th>Header 2</th><th>Header 3</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Data 1</td><td>Data 2</td><td>Data 3</td></tr>
+      </tbody>
+    `;
+  }
+  table.classList.add("doc-table-grid");
+
+  let captionText = "";
+  const cap = table.querySelector("caption");
+  if (cap) {
+    captionText = cap.textContent.trim();
+    cap.remove();
+  }
+
+  node.setAttribute("contenteditable", "false");
+  node.innerHTML = `
+    <div class="doc-table-header" contenteditable="false">
+      <div class="doc-table-title-wrap">
+        <span class="doc-table-label">▦ List Table</span>
+        <span class="doc-table-chip">.. list-table::</span>
+        <input type="text" class="doc-table-caption-input" placeholder="Table Title / Caption (optional)" value="${captionText.replace(/"/g, '&quot;')}">
+      </div>
+      <div class="doc-table-actions">
+        <button type="button" class="doc-table-btn btn-table-add-row" title="Add Row at bottom">+ Row</button>
+        <button type="button" class="doc-table-btn btn-table-add-col" title="Add Column at right">+ Col</button>
+        <button type="button" class="doc-table-btn btn-table-del-row" title="Remove Last Row">- Row</button>
+        <button type="button" class="doc-table-btn btn-table-del-col" title="Remove Last Column">- Col</button>
+        <button type="button" class="doc-table-btn btn-table-del danger" title="Delete Table">🗑</button>
+      </div>
+    </div>
+    <div class="doc-table-scroll" contenteditable="false"></div>
+  `;
+
+  const scrollWrap = node.querySelector(".doc-table-scroll");
+  scrollWrap.appendChild(table);
+
+  wireSingleTableBlock(node);
+}
+
+function wireSingleTableBlock(blockNode) {
+  if (!blockNode || blockNode.dataset.wired) return;
+  blockNode.dataset.wired = "true";
+
+  const table = blockNode.querySelector("table");
+  const captionInput = blockNode.querySelector(".doc-table-caption-input");
+
+  if (captionInput) {
+    captionInput.addEventListener("input", () => setDocsDirty(true));
+    captionInput.addEventListener("keydown", (e) => e.stopPropagation());
+    captionInput.addEventListener("paste", (e) => e.stopPropagation());
+    captionInput.addEventListener("copy", (e) => e.stopPropagation());
+    captionInput.addEventListener("cut", (e) => e.stopPropagation());
+    captionInput.addEventListener("mousedown", (e) => e.stopPropagation());
+  }
+
+  function wireCells() {
+    if (!table) return;
+    const cells = table.querySelectorAll("th, td");
+    for (const cell of cells) {
+      if (cell.dataset.wired) continue;
+      cell.dataset.wired = "true";
+      cell.setAttribute("contenteditable", "true");
+      cell.setAttribute("spellcheck", "false");
+
+      cell.addEventListener("input", () => setDocsDirty(true));
+      cell.addEventListener("mousedown", (e) => e.stopPropagation());
+      cell.addEventListener("mouseup", (e) => e.stopPropagation());
+      cell.addEventListener("click", (e) => e.stopPropagation());
+      cell.addEventListener("copy", (e) => e.stopPropagation());
+      cell.addEventListener("cut", (e) => {
+        e.stopPropagation();
+        setTimeout(() => setDocsDirty(true), 0);
+      });
+      cell.addEventListener("paste", (e) => {
+        e.stopPropagation();
+        setTimeout(() => setDocsDirty(true), 0);
+      });
+      cell.addEventListener("keydown", (e) => {
+        e.stopPropagation();
+        if (e.key === "Tab") {
+          e.preventDefault();
+          const allCells = Array.from(table.querySelectorAll("th, td"));
+          const idx = allCells.indexOf(cell);
+          if (e.shiftKey) {
+            if (idx > 0) allCells[idx - 1].focus();
+          } else {
+            if (idx < allCells.length - 1) {
+              allCells[idx + 1].focus();
+            } else {
+              addRow();
+              const newCells = table.querySelectorAll("th, td");
+              if (newCells.length > allCells.length) {
+                newCells[allCells.length].focus();
+              }
+            }
+          }
+        }
+      });
+    }
+  }
+
+  function addRow() {
+    if (!table) return;
+    const rows = table.querySelectorAll("tr");
+    const numCols = rows.length > 0 ? rows[0].querySelectorAll("th, td").length : 3;
+    const newTr = document.createElement("tr");
+    for (let i = 0; i < numCols; i++) {
+      const td = document.createElement("td");
+      td.textContent = "";
+      newTr.appendChild(td);
+    }
+    const tbody = table.querySelector("tbody") || table;
+    tbody.appendChild(newTr);
+    wireCells();
+    setDocsDirty(true);
+    if (_docsSplit) updateDocsPreview();
+    const firstTd = newTr.querySelector("td");
+    if (firstTd) firstTd.focus();
+  }
+
+  function addCol() {
+    if (!table) return;
+    const rows = table.querySelectorAll("tr");
+    for (let r = 0; r < rows.length; r++) {
+      const row = rows[r];
+      const isHeader = row.parentElement && row.parentElement.tagName.toLowerCase() === "thead" || (r === 0 && row.querySelector("th"));
+      const cell = document.createElement(isHeader ? "th" : "td");
+      cell.textContent = isHeader ? `Header ${row.children.length + 1}` : "";
+      row.appendChild(cell);
+    }
+    wireCells();
+    setDocsDirty(true);
+    if (_docsSplit) updateDocsPreview();
+  }
+
+  function delRow() {
+    if (!table) return;
+    const rows = table.querySelectorAll("tr");
+    if (rows.length > 2) {
+      rows[rows.length - 1].remove();
+      setDocsDirty(true);
+      if (_docsSplit) updateDocsPreview();
+    }
+  }
+
+  function delCol() {
+    if (!table) return;
+    const rows = table.querySelectorAll("tr");
+    if (rows.length > 0 && rows[0].children.length > 1) {
+      for (const row of rows) {
+        if (row.lastElementChild) row.lastElementChild.remove();
+      }
+      setDocsDirty(true);
+      if (_docsSplit) updateDocsPreview();
+    }
+  }
+
+  blockNode.querySelector(".btn-table-add-row")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    addRow();
+  });
+
+  blockNode.querySelector(".btn-table-add-col")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    addCol();
+  });
+
+  blockNode.querySelector(".btn-table-del-row")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    delRow();
+  });
+
+  blockNode.querySelector(".btn-table-del-col")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    delCol();
+  });
+
+  blockNode.querySelector(".btn-table-del")?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (confirm("Delete this table?")) {
+      blockNode.remove();
+      setDocsDirty(true);
+      if (_docsSplit) updateDocsPreview();
+    }
+  });
+
+  wireCells();
+}
+
+function wireDocTableBlocks(container) {
+  if (!container) return;
+  const rawTables = container.querySelectorAll("table:not(.doc-table-grid)");
+  for (const tbl of rawTables) {
+    if (tbl.closest(".doc-table-block")) continue;
+    const wrapper = document.createElement("div");
+    wrapper.className = "doc-table-block";
+    tbl.parentNode.insertBefore(wrapper, tbl);
+    buildTableBlockCard(wrapper, tbl.outerHTML);
+    tbl.remove();
+  }
+  const blocks = container.querySelectorAll(".doc-table-block");
+  for (const block of blocks) {
+    wireSingleTableBlock(block);
+  }
+}
+
+function wirePlantumlBlocks(container) {
+  if (!container) return;
+  const blocks = container.querySelectorAll(".plantuml-block");
+  for (const block of blocks) {
+    let ta = block.querySelector("textarea.plantuml-code-input, textarea");
+    const pre = block.querySelector("pre.plantuml, pre.plantuml-code, pre");
+    const rawCode = block.getAttribute("data-plantuml") || (ta ? ta.value : (pre ? pre.textContent : ""));
+    const trimmedCode = (rawCode || "").trim();
+
+    if (trimmedCode) {
+      block.setAttribute("data-plantuml", trimmedCode);
+    }
+
+    if (!ta) {
+      ta = document.createElement("textarea");
+      ta.className = "plantuml-code-input";
+      ta.spellcheck = false;
+      ta.style.display = "none";
+      ta.placeholder = "Type PlantUML syntax here…";
+      if (pre) {
+        block.replaceChild(ta, pre);
+      } else {
+        block.appendChild(ta);
+      }
+    } else if (pre) {
+      pre.remove();
+    }
+    if (trimmedCode) ta.value = trimmedCode;
+
+    // Ensure diagWrap exists
+    let diagWrap = block.querySelector(".plantuml-diagram-wrap");
+    if (!diagWrap) {
+      diagWrap = document.createElement("div");
+      diagWrap.className = "plantuml-diagram-wrap";
+      diagWrap.setAttribute("contenteditable", "false");
+      block.insertBefore(diagWrap, ta);
+    }
+
+    // Ensure img exists inside diagWrap
+    let img = diagWrap.querySelector("img.plantuml-svg-img, img");
+    const expectedUrl = getPlantumlUrl(trimmedCode);
+    if (!img) {
+      img = document.createElement("img");
+      img.className = "plantuml-svg-img";
+      img.alt = "PlantUML Diagram";
+      img.loading = "lazy";
+      if (expectedUrl) img.src = expectedUrl;
+      diagWrap.appendChild(img);
+    } else if (!img.getAttribute("src") && expectedUrl) {
+      img.src = expectedUrl;
+    }
+
+    // Ensure header exists
+    let header = block.querySelector(".plantuml-header");
+    if (!header) {
+      const origLabel = block.querySelector(".plantuml-label");
+      header = document.createElement("div");
+      header.className = "plantuml-header";
+      header.setAttribute("contenteditable", "false");
+      header.innerHTML = `
+        <div class="plantuml-title-wrap">
+          <span class="plantuml-label">📐 PlantUML Architecture Diagram</span>
+          <span class="plantuml-chip">.. uml::</span>
+        </div>
+        <div class="plantuml-actions">
+          <button type="button" class="plantuml-btn btn-view-diag active" title="Show Rendered Diagram">👁 Diagram</button>
+          <button type="button" class="plantuml-btn btn-view-code" title="View / Edit Diagram Code">📝 Code</button>
+          <button type="button" class="plantuml-btn btn-copy-uml" title="Copy PlantUML Syntax">📋 Copy</button>
+          <button type="button" class="plantuml-btn btn-del-uml danger" title="Delete Diagram">🗑</button>
+        </div>
+      `;
+      if (origLabel) {
+        block.replaceChild(header, origLabel);
+      } else {
+        block.insertBefore(header, diagWrap);
+      }
+    }
+
+    const btnDiag = header.querySelector(".btn-view-diag");
+    const btnCode = header.querySelector(".btn-view-code");
+    const btnCopy = header.querySelector(".btn-copy-uml");
+    const btnDel = header.querySelector(".btn-del-uml");
+
+    if (btnDel && !btnDel.dataset.wired) {
+      btnDel.dataset.wired = "true";
+      btnDel.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (confirm("Delete this PlantUML diagram?")) {
+          block.remove();
+          setDocsDirty(true);
+          if (_docsSplit) updateDocsPreview();
+        }
+      });
+    }
+
+    if (btnCopy && !btnCopy.dataset.wired) {
+      btnCopy.dataset.wired = "true";
+      btnCopy.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const codeText = block.getAttribute("data-plantuml") || (ta ? ta.value : "");
+        try {
+          await navigator.clipboard.writeText(codeText);
+          btnCopy.textContent = "✓ Copied!";
+          setTimeout(() => { btnCopy.textContent = "📋 Copy"; }, 1500);
+        } catch {
+          if (typeof toast === "function") toast("Copied to clipboard", codeText, "ok");
+        }
+      });
+    }
+
+    if (btnDiag && btnCode && !header.dataset.wired) {
+      header.dataset.wired = "true";
+
+      btnDiag.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        btnDiag.classList.add("active");
+        btnCode.classList.remove("active");
+        ta.style.display = "none";
+        diagWrap.style.display = "flex";
+
+        const currentCode = (ta ? ta.value.trim() : "") || block.getAttribute("data-plantuml") || "";
+        if (currentCode && currentCode !== block.getAttribute("data-plantuml-rendered")) {
+          block.setAttribute("data-plantuml", currentCode);
+          block.setAttribute("data-plantuml-rendered", currentCode);
+          const newUrl = getPlantumlUrl(currentCode);
+          if (img) img.src = newUrl;
+        }
+      });
+
+      btnCode.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        btnCode.classList.add("active");
+        btnDiag.classList.remove("active");
+        diagWrap.style.display = "none";
+        ta.style.display = "block";
+        autoResizeDiagramTextarea(ta);
+        ta.focus();
+      });
+    }
+
+    if (trimmedCode && !block.getAttribute("data-plantuml-rendered")) {
+      block.setAttribute("data-plantuml-rendered", trimmedCode);
+    }
+
+    if (ta && !ta.dataset.wired) {
+      ta.dataset.wired = "true";
+
+      ta.addEventListener("paste", (e) => {
+        e.stopPropagation();
+        setTimeout(() => {
+          block.setAttribute("data-plantuml", ta.value);
+          setDocsDirty(true);
+          autoResizeDiagramTextarea(ta);
+        }, 0);
+      });
+      ta.addEventListener("copy", (e) => e.stopPropagation());
+      ta.addEventListener("cut", (e) => {
+        e.stopPropagation();
+        setTimeout(() => {
+          block.setAttribute("data-plantuml", ta.value);
+          setDocsDirty(true);
+          autoResizeDiagramTextarea(ta);
+        }, 0);
+      });
+      ta.addEventListener("mousedown", (e) => e.stopPropagation());
+      ta.addEventListener("mouseup", (e) => e.stopPropagation());
+      ta.addEventListener("click", (e) => e.stopPropagation());
+      ta.addEventListener("keyup", (e) => e.stopPropagation());
+
+      ta.addEventListener("input", () => {
+        block.setAttribute("data-plantuml", ta.value);
+        setDocsDirty(true);
+        autoResizeDiagramTextarea(ta);
+      });
+
+      ta.addEventListener("keydown", (e) => {
+        e.stopPropagation();
+        if (e.key === "Tab") {
+          e.preventDefault();
+          const start = ta.selectionStart;
+          const end = ta.selectionEnd;
+          ta.value = ta.value.substring(0, start) + "    " + ta.value.substring(end);
+          ta.selectionStart = ta.selectionEnd = start + 4;
+          block.setAttribute("data-plantuml", ta.value);
+          setDocsDirty(true);
+          autoResizeDiagramTextarea(ta);
+        } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          btnDiag?.click();
+        }
+      });
+    }
   }
 }
 
@@ -1901,31 +2398,33 @@ async function renderAllMermaidBlocks(container) {
       theme: isDark ? "dark" : "default",
       securityLevel: "loose",
     });
-  } catch (e) {}
+  } catch (e) { }
 
   for (const block of blocks) {
-    let pre = block.querySelector("pre.mermaid, pre.mermaid-code, pre");
-    const rawCode = block.getAttribute("data-mermaid") || (pre ? pre.textContent : "");
+    let ta = block.querySelector("textarea.mermaid-code-input, textarea");
+    const pre = block.querySelector("pre.mermaid, pre.mermaid-code, pre");
+    const rawCode = block.getAttribute("data-mermaid") || (ta ? ta.value : (pre ? pre.textContent : ""));
     if (!rawCode || !rawCode.trim()) continue;
 
     const trimmedCode = rawCode.trim();
     block.setAttribute("data-mermaid", trimmedCode);
 
-    // Ensure pre element always exists and has the exact code
-    if (!pre) {
-      pre = document.createElement("pre");
-      pre.className = "mermaid mermaid-code";
-      pre.setAttribute("contenteditable", "true");
-      pre.setAttribute("spellcheck", "false");
-      pre.style.display = "none";
-      block.appendChild(pre);
-    } else {
-      pre.classList.add("mermaid-code");
-      pre.setAttribute("contenteditable", "true");
-      pre.setAttribute("spellcheck", "false");
+    // Convert or ensure textarea element exists
+    if (!ta) {
+      ta = document.createElement("textarea");
+      ta.className = "mermaid-code-input";
+      ta.spellcheck = false;
+      ta.style.display = "none";
+      ta.placeholder = "Type Mermaid syntax here…";
+      if (pre) {
+        block.replaceChild(ta, pre);
+      } else {
+        block.appendChild(ta);
+      }
+    } else if (pre) {
+      pre.remove();
     }
-    // Always populate pre.textContent so it's NEVER blank or lost
-    pre.textContent = trimmedCode;
+    ta.value = trimmedCode;
 
     // Ensure diagWrap exists
     let diagWrap = block.querySelector(".mermaid-diagram-wrap");
@@ -1933,7 +2432,7 @@ async function renderAllMermaidBlocks(container) {
       diagWrap = document.createElement("div");
       diagWrap.className = "mermaid-diagram-wrap";
       diagWrap.setAttribute("contenteditable", "false");
-      block.insertBefore(diagWrap, pre);
+      block.insertBefore(diagWrap, ta);
     }
 
     // Ensure header exists
@@ -1952,6 +2451,7 @@ async function renderAllMermaidBlocks(container) {
           <button type="button" class="mermaid-btn btn-view-diag active" title="Show Rendered Diagram">👁 Diagram</button>
           <button type="button" class="mermaid-btn btn-view-code" title="View / Edit Diagram Code">📝 Code</button>
           <button type="button" class="mermaid-btn btn-copy-code" title="Copy Diagram Syntax">📋 Copy</button>
+          <button type="button" class="mermaid-btn btn-del-diag danger" title="Delete Diagram">🗑</button>
         </div>
       `;
       if (origLabel) {
@@ -1964,13 +2464,27 @@ async function renderAllMermaidBlocks(container) {
     const btnDiag = header.querySelector(".btn-view-diag");
     const btnCode = header.querySelector(".btn-view-code");
     const btnCopy = header.querySelector(".btn-copy-code");
+    const btnDel = header.querySelector(".btn-del-diag");
+
+    if (btnDel && !btnDel.dataset.wired) {
+      btnDel.dataset.wired = "true";
+      btnDel.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (confirm("Delete this Mermaid diagram?")) {
+          block.remove();
+          setDocsDirty(true);
+          if (_docsSplit) updateDocsPreview();
+        }
+      });
+    }
 
     if (btnCopy && !btnCopy.dataset.wired) {
       btnCopy.dataset.wired = "true";
       btnCopy.addEventListener("click", async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const codeText = block.getAttribute("data-mermaid") || (pre ? pre.textContent : "");
+        const codeText = block.getAttribute("data-mermaid") || ta.value;
         try {
           await navigator.clipboard.writeText(codeText);
           btnCopy.textContent = "✓ Copied!";
@@ -1989,11 +2503,11 @@ async function renderAllMermaidBlocks(container) {
         e.stopPropagation();
         btnDiag.classList.add("active");
         btnCode.classList.remove("active");
-        if (pre) pre.style.display = "none";
+        ta.style.display = "none";
         diagWrap.style.display = "flex";
 
-        // If user edited code in pre, re-render the diagram
-        const currentCode = (pre ? pre.textContent.trim() : "") || block.getAttribute("data-mermaid") || "";
+        // Re-render diagram if code was edited
+        const currentCode = ta.value.trim() || block.getAttribute("data-mermaid") || "";
         if (currentCode && currentCode !== block.getAttribute("data-mermaid-rendered")) {
           block.setAttribute("data-mermaid", currentCode);
           try {
@@ -2016,32 +2530,65 @@ async function renderAllMermaidBlocks(container) {
         btnDiag.classList.remove("active");
         diagWrap.style.display = "none";
 
-        // Ensure pre exists, has the latest code, and is displayed
-        if (!pre) {
-          pre = document.createElement("pre");
-          pre.className = "mermaid mermaid-code";
-          pre.setAttribute("contenteditable", "true");
-          pre.setAttribute("spellcheck", "false");
-          block.appendChild(pre);
-        }
-        pre.textContent = block.getAttribute("data-mermaid") || trimmedCode;
-        pre.style.display = "block";
+        ta.value = block.getAttribute("data-mermaid") || trimmedCode;
+        ta.style.display = "block";
+        autoResizeDiagramTextarea(ta);
         setTimeout(() => {
-          try { pre.focus(); } catch (err) {}
-        }, 10);
+          try { ta.focus(); } catch (err) { }
+        }, 15);
       });
     }
 
-    // Keep pre text synchronized when user types
-    if (pre && !pre.dataset.wired) {
-      pre.dataset.wired = "true";
-      pre.addEventListener("input", () => {
-        const updated = pre.textContent.trim();
-        block.setAttribute("data-mermaid", updated);
-        setDocsDirty(true);
+    // Keep textarea synchronized when user types
+    if (ta && !ta.dataset.wired) {
+      ta.dataset.wired = "true";
+
+      // Stop propagation of clipboard events so Quill doesn't cancel or hijack paste/copy/cut
+      ta.addEventListener("paste", (e) => {
+        e.stopPropagation();
+        setTimeout(() => {
+          block.setAttribute("data-mermaid", ta.value);
+          setDocsDirty(true);
+          autoResizeDiagramTextarea(ta);
+        }, 0);
       });
-      pre.addEventListener("blur", async () => {
-        const updated = pre.textContent.trim();
+      ta.addEventListener("copy", (e) => e.stopPropagation());
+      ta.addEventListener("cut", (e) => {
+        e.stopPropagation();
+        setTimeout(() => {
+          block.setAttribute("data-mermaid", ta.value);
+          setDocsDirty(true);
+          autoResizeDiagramTextarea(ta);
+        }, 0);
+      });
+
+      // Stop mouse and keyboard bubbling to Quill
+      ta.addEventListener("mousedown", (e) => e.stopPropagation());
+      ta.addEventListener("mouseup", (e) => e.stopPropagation());
+      ta.addEventListener("click", (e) => e.stopPropagation());
+      ta.addEventListener("keyup", (e) => e.stopPropagation());
+
+      ta.addEventListener("input", () => {
+        block.setAttribute("data-mermaid", ta.value);
+        setDocsDirty(true);
+        autoResizeDiagramTextarea(ta);
+      });
+
+      ta.addEventListener("keydown", (e) => {
+        e.stopPropagation();
+        if (e.key === "Tab") {
+          e.preventDefault();
+          const start = ta.selectionStart;
+          const end = ta.selectionEnd;
+          ta.value = ta.value.substring(0, start) + "    " + ta.value.substring(end);
+          ta.selectionStart = ta.selectionEnd = start + 4;
+          block.setAttribute("data-mermaid", ta.value);
+          setDocsDirty(true);
+        }
+      });
+
+      ta.addEventListener("blur", async () => {
+        const updated = ta.value.trim();
         block.setAttribute("data-mermaid", updated);
         setDocsDirty(true);
         if (updated && updated !== block.getAttribute("data-mermaid-rendered")) {
@@ -2065,16 +2612,15 @@ async function renderAllMermaidBlocks(container) {
       const { svg } = await mermaid.render(id, trimmedCode);
       diagWrap.innerHTML = svg;
       block.setAttribute("data-mermaid-rendered", trimmedCode);
-      if (pre) pre.style.display = "none";
+      ta.style.display = "none";
       diagWrap.style.display = "flex";
     } catch (renderErr) {
       console.warn("Mermaid render error:", renderErr);
       diagWrap.innerHTML = `<div style="color:var(--danger, #f87171); padding:8px; font-size:12px;">⚠️ Mermaid Render Error: ${renderErr.message || renderErr}</div>`;
-      if (pre) {
-        pre.style.display = "block";
-        btnCode?.classList.add("active");
-        btnDiag?.classList.remove("active");
-      }
+      ta.style.display = "block";
+      autoResizeTextarea(ta);
+      btnCode?.classList.add("active");
+      btnDiag?.classList.remove("active");
     }
   }
 }
@@ -2098,13 +2644,21 @@ function initQuill() {
 
   const Delta = Quill.import("delta");
   if (Delta && _quill.clipboard) {
-    _quill.clipboard.addMatcher(".mermaid-block", function(node, delta) {
-      const code = node.getAttribute("data-mermaid") || node.querySelector("pre")?.textContent || "";
+    _quill.clipboard.addMatcher(".mermaid-block", function (node, delta) {
+      const code = node.getAttribute("data-mermaid") || node.querySelector("textarea")?.value || node.querySelector("pre")?.textContent || "";
       return new Delta().insert({ mermaidBlock: code });
     });
-    _quill.clipboard.addMatcher(".plantuml-block", function(node, delta) {
-      const code = node.getAttribute("data-plantuml") || node.querySelector("pre")?.textContent || "";
+    _quill.clipboard.addMatcher(".plantuml-block", function (node, delta) {
+      const code = node.getAttribute("data-plantuml") || node.querySelector("textarea")?.value || node.querySelector("pre")?.textContent || "";
       return new Delta().insert({ plantumlBlock: code });
+    });
+    _quill.clipboard.addMatcher(".doc-table-block", function (node, delta) {
+      const tbl = node.querySelector("table");
+      return new Delta().insert({ tableBlock: tbl ? tbl.outerHTML : node.innerHTML });
+    });
+    _quill.clipboard.addMatcher("table", function (node, delta) {
+      if (node.closest(".doc-table-block")) return delta;
+      return new Delta().insert({ tableBlock: node.outerHTML });
     });
   }
 
@@ -2118,6 +2672,98 @@ function initQuill() {
   });
 
   initSyncScroll();
+}
+
+function insertMermaidDiagram() {
+  const defaultCode = `graph TD\n    Client["Client / User"] --> Gateway["API Gateway"]\n    Gateway --> Service["Core Service"]\n    Service --> Database[("Database Storage")]`;
+
+  if (_docsEditorType === "raw") {
+    const ta = $("#docs-raw-rst");
+    if (!ta) return;
+    const insertText = `\n.. mermaid::\n\n    ${defaultCode.replace(/\n/g, "\n    ")}\n\n`;
+    const start = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
+    ta.value = ta.value.substring(0, start) + insertText + ta.value.substring(start);
+    ta.selectionStart = ta.selectionEnd = start + insertText.length;
+    ta.focus();
+    setDocsDirty(true);
+    if (_docsSplit) updateDocsPreview();
+    toast("Mermaid Diagram Added 📊", "Inserted .. mermaid:: template into RST source.", "ok");
+  } else {
+    initQuill();
+    if (!_quill) return;
+    const range = _quill.getSelection(true) || { index: _quill.getLength() };
+    _quill.insertEmbed(range.index, "mermaidBlock", defaultCode, Quill.sources.USER);
+    _quill.setSelection(range.index + 1, Quill.sources.SILENT);
+    renderAllMermaidBlocks(_quill.root);
+    setDocsDirty(true);
+    if (_docsSplit) updateDocsPreview();
+    toast("Mermaid Diagram Added 📊", "Inserted Mermaid diagram block into Visual editor.", "ok");
+  }
+}
+
+function insertPlantumlDiagram() {
+  const defaultCode = `@startuml\nactor User\nparticipant "Frontend" as UI\nparticipant "Backend" as API\ndatabase "Database" as DB\n\nUser -> UI: Request action\nUI -> API: REST API call\nAPI -> DB: Query records\nDB --> API: Return dataset\nAPI --> UI: JSON response\n@enduml`;
+
+  if (_docsEditorType === "raw") {
+    const ta = $("#docs-raw-rst");
+    if (!ta) return;
+    const insertText = `\n.. uml::\n\n    ${defaultCode.replace(/\n/g, "\n    ")}\n\n`;
+    const start = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
+    ta.value = ta.value.substring(0, start) + insertText + ta.value.substring(start);
+    ta.selectionStart = ta.selectionEnd = start + insertText.length;
+    ta.focus();
+    setDocsDirty(true);
+    if (_docsSplit) updateDocsPreview();
+    toast("PlantUML Diagram Added 📐", "Inserted .. uml:: template into RST source.", "ok");
+  } else {
+    initQuill();
+    if (!_quill) return;
+    const range = _quill.getSelection(true) || { index: _quill.getLength() };
+    _quill.insertEmbed(range.index, "plantumlBlock", defaultCode, Quill.sources.USER);
+    _quill.setSelection(range.index + 1, Quill.sources.SILENT);
+    wirePlantumlBlocks(_quill.root);
+    setDocsDirty(true);
+    if (_docsSplit) updateDocsPreview();
+    toast("PlantUML Diagram Added 📐", "Inserted PlantUML diagram block into Visual editor.", "ok");
+  }
+}
+
+function insertTableBlock() {
+  const defaultTableHtml = `
+    <table class="doc-table-grid">
+      <caption>Table Title</caption>
+      <thead>
+        <tr><th>Header 1</th><th>Header 2</th><th>Header 3</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Data 1</td><td>Data 2</td><td>Data 3</td></tr>
+        <tr><td>Data 4</td><td>Data 5</td><td>Data 6</td></tr>
+      </tbody>
+    </table>
+  `;
+
+  if (_docsEditorType === "raw") {
+    const ta = $("#docs-raw-rst");
+    if (!ta) return;
+    const rstTable = `\n.. list-table:: Table Title\n   :widths: 30 35 35\n   :header-rows: 1\n\n   * - Header 1\n     - Header 2\n     - Header 3\n   * - Data 1\n     - Data 2\n     - Data 3\n   * - Data 4\n     - Data 5\n     - Data 6\n\n`;
+    const start = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
+    ta.value = ta.value.substring(0, start) + rstTable + ta.value.substring(start);
+    ta.selectionStart = ta.selectionEnd = start + rstTable.length;
+    ta.focus();
+    setDocsDirty(true);
+    if (_docsSplit) updateDocsPreview();
+    toast("Table Added ▦", "Inserted .. list-table:: template into RST source.", "ok");
+  } else {
+    initQuill();
+    if (!_quill) return;
+    const range = _quill.getSelection(true) || { index: _quill.getLength() };
+    _quill.insertEmbed(range.index, "tableBlock", defaultTableHtml, Quill.sources.USER);
+    _quill.setSelection(range.index + 1, Quill.sources.SILENT);
+    wireDocTableBlocks(_quill.root);
+    setDocsDirty(true);
+    if (_docsSplit) updateDocsPreview();
+    toast("Table Added ▦", "Inserted interactive Table into Visual editor.", "ok");
+  }
 }
 
 function setDocsDirty(val) {
@@ -2208,6 +2854,8 @@ async function loadDocFile(name) {
         _quill.clipboard.dangerouslyPasteHTML(0, data.html);
       }
       renderAllMermaidBlocks(_quill.root);
+      wirePlantumlBlocks(_quill.root);
+      wireDocTableBlocks(_quill.root);
     }
     const rawTa = $("#docs-raw-rst");
     if (rawTa) rawTa.value = data.rst || "";
@@ -2220,7 +2868,7 @@ async function loadDocFile(name) {
     renderDocsFileSelect();
     try {
       localStorage.setItem("telua_web_docs_last_file", name);
-    } catch (e) {}
+    } catch (e) { }
     applyDocsModeUI();
     if (_docsSplit) updateDocsPreview();
   } catch (err) {
@@ -2271,7 +2919,7 @@ function applyDocsModeUI() {
     localStorage.setItem("telua_web_docs_editor", _docsEditorType);
     localStorage.setItem("telua_web_docs_split", String(_docsSplit));
     localStorage.setItem("telua_web_docs_mode", _docsSplit ? "split" : _docsEditorType);
-  } catch (e) {}
+  } catch (e) { }
 
   initSyncScroll();
 }
@@ -2405,6 +3053,8 @@ async function switchToEditorType(type) {
         _quill.setText("");
         _quill.clipboard.dangerouslyPasteHTML(0, data.html || "<p></p>");
         renderAllMermaidBlocks(_quill.root);
+        wirePlantumlBlocks(_quill.root);
+        wireDocTableBlocks(_quill.root);
       }
     } catch (err) {
       console.error("RST2HTML conversion failed:", err);
@@ -2462,6 +3112,8 @@ async function updateDocsPreview() {
         if (data.ok && data.html) {
           preview.innerHTML = data.html;
           await renderAllMermaidBlocks(preview);
+          wirePlantumlBlocks(preview);
+          wireDocTableBlocks(preview);
           if (_docsSyncScroll) {
             const maxTarget = preview.scrollHeight - preview.clientHeight;
             if (maxTarget > 0 && prevRatio > 0) {
@@ -2479,6 +3131,8 @@ async function updateDocsPreview() {
   if (_quill) {
     preview.innerHTML = _quill.root.innerHTML;
     await renderAllMermaidBlocks(preview);
+    wirePlantumlBlocks(preview);
+    wireDocTableBlocks(preview);
     if (_docsSyncScroll) {
       const maxTarget = preview.scrollHeight - preview.clientHeight;
       if (maxTarget > 0 && prevRatio > 0) {
@@ -2536,11 +3190,16 @@ async function buildSphinxDocs() {
   if (badge) badge.textContent = "Building Sphinx…";
   toast("Building Docs 🔨", "Compiling Sphinx HTML in background…", "info", 3000);
   try {
-    const res = await fetch("/api/docs/build", { method: "POST" });
+    const res = await fetch("/api/docs/build", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dir: _docsCustomDir || "" }),
+    });
     const data = await res.json();
     if (data.ok) {
       if (badge) badge.textContent = "Build Success ✔";
-      toast("Sphinx Build Succeeded 🎉", "Documentation compiled successfully to docs/_build/html.", "ok", 5000);
+      const targetTxt = data.html_dir || (_docsCustomDir ? `${_docsCustomDir}/_build/html` : "docs/_build/html");
+      toast("Sphinx Build Succeeded 🎉", `Documentation compiled successfully to ${targetTxt}.`, "ok", 5000);
     } else {
       if (badge) badge.textContent = "Build Warning";
       const errDetail = data.stderr || data.error || "Build returned non-zero code";
@@ -2634,6 +3293,8 @@ async function handleDocsFileUpload(file) {
         _quill.setText("");
       }
       renderAllMermaidBlocks(_quill.root);
+      wirePlantumlBlocks(_quill.root);
+      wireDocTableBlocks(_quill.root);
     }
     const rawTa = $("#docs-raw-rst");
     if (rawTa) rawTa.value = rstContent;
@@ -2690,7 +3351,7 @@ function switchTab(tab) {
   if (isFiles && !state.current) {
     const fileDraft = draftLoadFile();
     if (fileDraft && fileDraft.name && fileDraft.content != null &&
-        state.files.some(f => f.name === fileDraft.name)) {
+      state.files.some(f => f.name === fileDraft.name)) {
       openFile(fileDraft.name, fileDraft.content);
     } else if (state.files.some(f => f.name === "config/apk.config")) {
       openFile("config/apk.config");
@@ -2775,7 +3436,7 @@ function wire() {
     _docsSyncScroll = !_docsSyncScroll;
     try {
       localStorage.setItem("telua_web_docs_sync_scroll", String(_docsSyncScroll));
-    } catch (e) {}
+    } catch (e) { }
     updateSyncScrollButtonUI();
     if (_docsSyncScroll) {
       const ed = getActiveDocsEditorElement();
@@ -2783,6 +3444,9 @@ function wire() {
       if (ed && prev) syncScroll(ed, prev);
     }
   });
+  $("#btn-docs-add-mermaid")?.addEventListener("click", () => insertMermaidDiagram());
+  $("#btn-docs-add-plantuml")?.addEventListener("click", () => insertPlantumlDiagram());
+  $("#btn-docs-add-table")?.addEventListener("click", () => insertTableBlock());
   $("#btn-docs-save")?.addEventListener("click", () => saveCurrentDoc());
   $("#btn-docs-build")?.addEventListener("click", () => buildSphinxDocs());
   $("#btn-docs-start")?.addEventListener("click", () => startSphinxDocs());

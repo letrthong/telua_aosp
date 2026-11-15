@@ -706,7 +706,7 @@ _docs_spawn_detached() {
 
 _docs_server_pid() {
     local target_dir pid_file pid
-    target_dir="$(resolve_docs_dir "")" || return 1
+    target_dir="$(resolve_docs_dir "${1:-}")" || return 1
     pid_file="$target_dir/$_DOCS_PID_FILE"
     [ -f "$pid_file" ] || return 1
     pid="$(cat "$pid_file" 2>/dev/null)"
@@ -716,31 +716,33 @@ _docs_server_pid() {
 }
 
 docs_cmd_stop() {
+    local target_dir
+    target_dir="$(resolve_docs_dir "${1:-}")"
     local pid
-    pid="$(_docs_server_pid)" || { log_warn "Docs preview server is not running."; return 0; }
+    pid="$(_docs_server_pid "$target_dir")" || { log_warn "Docs preview server is not running in '$target_dir'."; return 0; }
     log_info "Stopping docs preview server (PID: $pid)..."
     kill "$pid" 2>/dev/null || true
     sleep 1
     kill -9 "$pid" 2>/dev/null || true
-    rm -f "$(resolve_docs_dir "")/$_DOCS_PID_FILE" 2>/dev/null || true
+    rm -f "$target_dir/$_DOCS_PID_FILE" 2>/dev/null || true
     log_success "Docs preview server stopped."
 }
 
 docs_cmd_status() {
     local target_dir pid port
-    target_dir="$(resolve_docs_dir "")" || return 1
+    target_dir="$(resolve_docs_dir "${1:-}")" || return 1
     echo ""
     echo -e "\033[1;36m================================================================================\033[0m"
     echo -e "\033[1;32m  TELUA DOCS PREVIEW - SERVER STATUS\033[0m"
     echo -e "  Docs root:       \033[0;33m$target_dir\033[0m"
-    if pid="$(_docs_server_pid)"; then
+    if pid="$(_docs_server_pid "$target_dir")"; then
         port="$(tr -dc '0-9' < "$target_dir/$_DOCS_LOG_FILE" 2>/dev/null | head -c 4)"
         echo -e "  State:           \033[1;32mRUNNING\033[0m (PID: $pid)"
         echo -e "  Log file:        $target_dir/$_DOCS_LOG_FILE"
-        echo -e "  Stop server:     \033[1;33mtelua docs stop\033[0m"
+        echo -e "  Stop server:     \033[1;33mtelua docs stop $target_dir\033[0m"
     else
         echo -e "  State:           \033[0;90mSTOPPED\033[0m"
-        echo -e "  Start server:    \033[1;33mtelua docs start [port]\033[0m"
+        echo -e "  Start server:    \033[1;33mtelua docs start [dir] [port]\033[0m"
     fi
     echo -e "\033[1;36m================================================================================\033[0m"
     echo ""
@@ -748,7 +750,7 @@ docs_cmd_status() {
 
 docs_cmd_log() {
     local target_dir
-    target_dir="$(resolve_docs_dir "")" || return 1
+    target_dir="$(resolve_docs_dir "${1:-}")" || return 1
     local log_file="$target_dir/$_DOCS_LOG_FILE"
     if [ ! -f "$log_file" ]; then
         log_warn "No log file found at $log_file (server never started?)."
@@ -758,9 +760,27 @@ docs_cmd_log() {
 }
 
 docs_cmd_start() {
-    local target_dir
-    target_dir="$(resolve_docs_dir "")"
-    local port="${1:-8789}"
+    local target_dir=""
+    local port="8789"
+    local arg1="${1:-}"
+    local arg2="${2:-}"
+
+    if [ -n "$arg1" ]; then
+        if [[ "$arg1" =~ ^[0-9]+$ ]]; then
+            port="$arg1"
+            if [ -n "$arg2" ]; then
+                target_dir="$(resolve_docs_dir "$arg2")"
+            fi
+        else
+            target_dir="$(resolve_docs_dir "$arg1")"
+            if [ -n "$arg2" ] && [[ "$arg2" =~ ^[0-9]+$ ]]; then
+                port="$arg2"
+            fi
+        fi
+    fi
+    if [ -z "$target_dir" ]; then
+        target_dir="$(resolve_docs_dir "")"
+    fi
 
     local html_dir="$target_dir/_build/html"
     if [ ! -f "$html_dir/index.html" ]; then
@@ -779,9 +799,9 @@ docs_cmd_start() {
 
     # Already running? Just report and exit.
     local pid
-    if pid="$(_docs_server_pid)"; then
-        log_warn "Docs preview server is already running (PID: $pid)."
-        log_info "Open: http://localhost:$port  (use 'telua docs stop' to stop it)"
+    if pid="$(_docs_server_pid "$target_dir")"; then
+        log_warn "Docs preview server is already running for '$target_dir' (PID: $pid)."
+        log_info "Open: http://localhost:$port  (use 'telua docs stop $target_dir' to stop it)"
         _docs_open_browser "http://localhost:$port"
         return 0
     fi

@@ -45,6 +45,7 @@ from telua_web_core import (  # noqa: E402
     validate_content,
 )
 from telua_web_docs import (  # noqa: E402
+    get_plantuml_url,
     html_to_rst,
     resolve_rst_target,
     rst_to_html,
@@ -968,33 +969,94 @@ def api_docs_convert():
     abort(400, description="Unknown conversion direction. Use 'rst2html' or 'html2rst'.")
 
 
+@app.route("/api/docs/plantuml/url", methods=["GET", "POST"])
+def api_docs_plantuml_url():
+    """Generate PlantUML SVG URL from code."""
+    if request.method == "POST":
+        payload = request.get_json(silent=True) or {}
+        code = payload.get("code", "")
+    else:
+        code = request.args.get("code", "")
+    if not code:
+        return jsonify({"ok": False, "error": "No PlantUML code provided"}), 400
+    url = get_plantuml_url(code)
+    return jsonify({"ok": True, "url": url})
+
+
+_DOCS_SERVER_PROC = None
+_DOCS_SERVER_DIR = None
+_DOCS_SERVER_PORT = None
+
+
 @app.post("/api/docs/build")
 def api_docs_build():
-    """Trigger Sphinx build in background or sync."""
-    cmd = ["bash", "build_apk.sh", "docs", "build"] if (ROOT / "build_apk.sh").is_file() and not sys.platform.startswith("win") else None
-    if cmd is None:
-        src_dir = ROOT / "sphinx" / "templates" / "architecture"
-        out_dir = ROOT / "docs" / "_build" / "html"
-        cmd = [sys.executable, "-m", "sphinx", "-b", "html", str(src_dir), str(out_dir)]
+    """Trigger Sphinx build for target docs directory."""
+    payload = request.get_json(silent=True) or {}
+    custom_dir = payload.get("dir", "").strip()
 
+    if custom_dir:
+        base = Path(custom_dir)
+        target_dir = base if base.is_absolute() else (ROOT / base).resolve()
+    else:
+        target_dir = (ROOT / "docs") if (ROOT / "docs").is_dir() else (ROOT / "sphinx" / "templates" / "architecture")
+
+    if not target_dir.is_dir():
+        return jsonify({"ok": False, "error": f"Documentation directory '{target_dir}' does not exist"}), 404
+
+    # On Linux/macOS with build_apk.sh, delegate to bash build_apk.sh docs build <target_dir>
+    if (ROOT / "build_apk.sh").is_file() and not sys.platform.startswith("win"):
+        cmd = ["bash", "build_apk.sh", "docs", "build", str(target_dir)]
+        try:
+            proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=60)
+            return jsonify({
+                "ok": proc.returncode == 0,
+                "exit_code": proc.returncode,
+                "stdout": proc.stdout,
+                "stderr": proc.stderr,
+                "target_dir": str(target_dir),
+                "html_dir": str(target_dir / "_build" / "html"),
+            })
+        except Exception as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 500
+
+    # Cross-platform / Windows fallback
+    out_html = target_dir / "_build" / "html"
+    staging_dir = target_dir / "_build" / ".staging"
+    merge_script = ROOT / "sphinx" / "scripts" / "merge_docs.py"
+
+    build_src = target_dir
+    if (target_dir / "metadata.json").is_file() and merge_script.is_file():
+        import shutil
+        staging_dir.mkdir(parents=True, exist_ok=True)
+        for item in target_dir.iterdir():
+            if item.name not in ("_build", ".git"):
+                dest = staging_dir / item.name
+                if item.is_dir():
+                    shutil.copytree(item, dest, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(item, dest)
+        subprocess.run([sys.executable, str(merge_script), str(staging_dir)], capture_output=True, timeout=30)
+        build_src = staging_dir
+
+    cmd = [sys.executable, "-m", "sphinx", "-b", "html", str(build_src), str(out_html)]
     try:
-        proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=40)
+        proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=60)
         return jsonify({
             "ok": proc.returncode == 0,
             "exit_code": proc.returncode,
             "stdout": proc.stdout,
             "stderr": proc.stderr,
+            "target_dir": str(target_dir),
+            "html_dir": str(out_html),
         })
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
 
 
-_DOCS_SERVER_PROC = None
-
 @app.post("/api/docs/start")
 def api_docs_start():
     """Launch Sphinx HTTP preview server (telua docs start) and open in browser."""
-    global _DOCS_SERVER_PROC
+    global _DOCS_SERVER_PROC, _DOCS_SERVER_DIR, _DOCS_SERVER_PORT
     payload = request.get_json(silent=True) or {}
     custom_dir = payload.get("dir", "").strip()
     port = int(payload.get("port", 8789))
@@ -1009,11 +1071,16 @@ def api_docs_start():
 
     # If _build/html/index.html does not exist, build first
     if not (html_dir / "index.html").is_file():
-        cmd = [sys.executable, "-m", "sphinx", "-b", "html", str(target_dir), str(html_dir)]
-        try:
-            subprocess.run(cmd, cwd=str(ROOT), capture_output=True, timeout=40)
-        except Exception:
-            pass
+        if (ROOT / "build_apk.sh").is_file() and not sys.platform.startswith("win"):
+            try:
+                subprocess.run(["bash", "build_apk.sh", "docs", "build", str(target_dir)], cwd=str(ROOT), capture_output=True, timeout=60)
+            except Exception:
+                pass
+        else:
+            try:
+                subprocess.run([sys.executable, "-m", "sphinx", "-b", "html", str(target_dir), str(html_dir)], cwd=str(ROOT), capture_output=True, timeout=60)
+            except Exception:
+                pass
 
     if not html_dir.is_dir():
         html_dir.mkdir(parents=True, exist_ok=True)
@@ -1023,7 +1090,15 @@ def api_docs_start():
     if _DOCS_SERVER_PROC is not None:
         try:
             if _DOCS_SERVER_PROC.poll() is None:
-                is_alive = True
+                # If directory or port changed, restart server
+                if _DOCS_SERVER_DIR != str(html_dir) or _DOCS_SERVER_PORT != port:
+                    _DOCS_SERVER_PROC.terminate()
+                    _DOCS_SERVER_PROC.wait(timeout=2)
+                    is_alive = False
+                else:
+                    is_alive = True
+            else:
+                is_alive = False
         except Exception:
             is_alive = False
 
@@ -1036,6 +1111,8 @@ def api_docs_start():
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+            _DOCS_SERVER_DIR = str(html_dir)
+            _DOCS_SERVER_PORT = port
         except Exception as exc:
             abort(500, description=f"Failed to start docs server: {exc}")
 
