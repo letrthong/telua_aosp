@@ -119,6 +119,25 @@ class TestTeluaWebDocsConverters(unittest.TestCase):
         self.assertIn(".. uml::", back_rst)
         self.assertIn("Alice -> Bob: Call Service", back_rst)
 
+    def test_quill_mermaid_dom_preservation(self):
+        quill_html = (
+            '<p>Section text</p>'
+            '<div class="mermaid-block" contenteditable="false" data-mermaid="graph TB\n   App --> HAL">'
+            '  <div class="mermaid-header">'
+            '    <span class="mermaid-label">Mermaid</span>'
+            '    <span class="mermaid-chip">.. mermaid::</span>'
+            '  </div>'
+            '  <div class="mermaid-diagram-wrap"><svg><g id="test"></g></svg></div>'
+            '  <pre class="mermaid" style="display:none;">graph TB\n   App --> HAL</pre>'
+            '</div>'
+            '<p>Following text</p>'
+        )
+        back_rst = twd.html_to_rst(quill_html)
+        self.assertIn(".. mermaid::", back_rst)
+        self.assertIn("App --> HAL", back_rst)
+        self.assertIn("Section text", back_rst)
+        self.assertIn("Following text", back_rst)
+
 
 class TestTeluaWebDocsAPI(unittest.TestCase):
     def setUp(self):

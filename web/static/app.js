@@ -1777,9 +1777,14 @@ async function runTerminalCommand(explicitCmd = null) {
 let _quill = null;
 let _docsFiles = [];
 let _currentDoc = null; // { name, rst, html, mtime, readonly }
-let _docsMode = localStorage.getItem("telua_web_docs_mode") || "wysiwyg"; // "wysiwyg" | "raw" | "split"
+let _docsEditorType = localStorage.getItem("telua_web_docs_editor") || (localStorage.getItem("telua_web_docs_mode") === "raw" ? "raw" : "wysiwyg"); // "wysiwyg" | "raw"
+let _docsSplit = localStorage.getItem("telua_web_docs_split") === "true" || localStorage.getItem("telua_web_docs_mode") === "split";
+let _docsMode = _docsSplit ? "split" : _docsEditorType; // legacy sync
 let _docsDirty = false;
 let _docsCustomDir = localStorage.getItem("telua_web_docs_dir") || "";
+let _docsSyncScroll = localStorage.getItem("telua_web_docs_sync_scroll") !== "false"; // default true
+let _syncScrollSource = null;
+let _syncScrollTimer = null;
 
 let _mermaidCounter = 0;
 
@@ -1806,14 +1811,19 @@ function registerQuillDiagramBlots() {
         node.setAttribute("data-mermaid", code);
         node.innerHTML = `
           <div class="mermaid-header">
-            <span class="mermaid-label">📊 Mermaid Architecture Diagram</span>
+            <div class="mermaid-title-wrap">
+              <span class="mermaid-label">📊 Mermaid Architecture Diagram</span>
+              <span class="mermaid-chip">.. mermaid::</span>
+            </div>
             <div class="mermaid-actions">
-              <button type="button" class="mermaid-btn btn-view-diag active">👁 Diagram</button>
-              <button type="button" class="mermaid-btn btn-view-code">📝 Code</button>
+              <button type="button" class="mermaid-btn btn-view-diag active" title="Show Rendered Diagram">👁 Diagram</button>
+              <button type="button" class="mermaid-btn btn-view-code" title="View / Edit Diagram Code">📝 Code</button>
             </div>
           </div>
-          <div class="mermaid-diagram-wrap"><span class="mermaid-loading" style="color:var(--text-dim);font-size:12px;">⏳ Rendering Mermaid Diagram…</span></div>
-          <pre class="mermaid" contenteditable="true" style="display:none;">${code}</pre>
+          <div class="mermaid-diagram-wrap">
+            <span class="mermaid-loading" style="color:var(--text-dim);font-size:12px;">⏳ Rendering Mermaid diagram graphic…</span>
+          </div>
+          <pre class="mermaid" contenteditable="true" style="display:none;" title="Click to edit diagram syntax">${code}</pre>
         `;
         return node;
       }
@@ -1840,9 +1850,12 @@ function registerQuillDiagramBlots() {
         node.setAttribute("data-plantuml", code);
         node.innerHTML = `
           <div class="plantuml-header">
-            <span class="plantuml-label">📐 PlantUML Architecture Diagram</span>
+            <div class="plantuml-title-wrap">
+              <span class="plantuml-label">📐 PlantUML Architecture Diagram</span>
+              <span class="plantuml-chip">.. uml::</span>
+            </div>
           </div>
-          <pre class="plantuml" contenteditable="true">${code}</pre>
+          <pre class="plantuml" contenteditable="true" title="Click to edit diagram syntax">${code}</pre>
         `;
         return node;
       }
@@ -1983,14 +1996,29 @@ function initQuill() {
       ],
     },
   });
+
+  const Delta = Quill.import("delta");
+  if (Delta && _quill.clipboard) {
+    _quill.clipboard.addMatcher(".mermaid-block", function(node, delta) {
+      const code = node.getAttribute("data-mermaid") || node.querySelector("pre")?.textContent || "";
+      return new Delta().insert({ mermaidBlock: code });
+    });
+    _quill.clipboard.addMatcher(".plantuml-block", function(node, delta) {
+      const code = node.getAttribute("data-plantuml") || node.querySelector("pre")?.textContent || "";
+      return new Delta().insert({ plantumlBlock: code });
+    });
+  }
+
   _quill.on("text-change", (delta, oldDelta, source) => {
     if (source === "user") {
       setDocsDirty(true);
-      if (_docsMode === "split") {
+      if (_docsSplit && _docsEditorType === "wysiwyg") {
         updateDocsPreview();
       }
     }
   });
+
+  initSyncScroll();
 }
 
 function setDocsDirty(val) {
@@ -2076,10 +2104,9 @@ async function loadDocFile(name) {
     setDocsDirty(false);
 
     if (_quill) {
+      _quill.setText("");
       if (data.html) {
         _quill.clipboard.dangerouslyPasteHTML(0, data.html);
-      } else {
-        _quill.setText("");
       }
       renderAllMermaidBlocks(_quill.root);
     }
@@ -2095,49 +2122,157 @@ async function loadDocFile(name) {
     try {
       localStorage.setItem("telua_web_docs_last_file", name);
     } catch (e) {}
-    applyDocsModeUI(_docsMode);
-    if (_docsMode === "split") updateDocsPreview();
+    applyDocsModeUI();
+    if (_docsSplit) updateDocsPreview();
   } catch (err) {
     toast("Failed to open doc", String(err.message || err), "danger");
     if (badge) badge.textContent = "Error";
   }
 }
 
-function applyDocsModeUI(mode) {
+function applyDocsModeUI() {
   const wysiwygPane = $("#docs-pane-wysiwyg");
   const rawPane = $("#docs-pane-raw");
   const previewPane = $("#docs-pane-preview");
 
-  $("#btn-docs-mode-wysiwyg")?.classList.toggle("active", mode === "wysiwyg");
-  $("#btn-docs-mode-raw")?.classList.toggle("active", mode === "raw");
-  $("#btn-docs-mode-split")?.classList.toggle("active", mode === "split");
+  $("#btn-docs-mode-wysiwyg")?.classList.toggle("active", _docsEditorType === "wysiwyg");
+  $("#btn-docs-mode-raw")?.classList.toggle("active", _docsEditorType === "raw");
+  $("#btn-docs-mode-split")?.classList.toggle("active", _docsSplit);
 
-  if (mode === "wysiwyg") {
-    wysiwygPane?.classList.remove("hidden");
-    wysiwygPane?.classList.remove("split-left");
-    rawPane?.classList.add("hidden");
-    previewPane?.classList.add("hidden");
-  } else if (mode === "raw") {
-    wysiwygPane?.classList.add("hidden");
-    rawPane?.classList.remove("hidden");
-    rawPane?.classList.remove("split-left");
-    previewPane?.classList.add("hidden");
-  } else if (mode === "split") {
-    wysiwygPane?.classList.remove("hidden");
-    wysiwygPane?.classList.add("split-left");
-    rawPane?.classList.add("hidden");
+  if (_docsSplit) {
     previewPane?.classList.remove("hidden");
+    if (_docsEditorType === "raw") {
+      wysiwygPane?.classList.add("hidden");
+      wysiwygPane?.classList.remove("split-left");
+      rawPane?.classList.remove("hidden");
+      rawPane?.classList.add("split-left");
+    } else {
+      rawPane?.classList.add("hidden");
+      rawPane?.classList.remove("split-left");
+      wysiwygPane?.classList.remove("hidden");
+      wysiwygPane?.classList.add("split-left");
+    }
     updateDocsPreview();
+  } else {
+    previewPane?.classList.add("hidden");
+    if (_docsEditorType === "raw") {
+      wysiwygPane?.classList.add("hidden");
+      wysiwygPane?.classList.remove("split-left");
+      rawPane?.classList.remove("hidden");
+      rawPane?.classList.remove("split-left");
+    } else {
+      rawPane?.classList.add("hidden");
+      rawPane?.classList.remove("split-left");
+      wysiwygPane?.classList.remove("hidden");
+      wysiwygPane?.classList.remove("split-left");
+    }
+  }
+
+  try {
+    localStorage.setItem("telua_web_docs_editor", _docsEditorType);
+    localStorage.setItem("telua_web_docs_split", String(_docsSplit));
+    localStorage.setItem("telua_web_docs_mode", _docsSplit ? "split" : _docsEditorType);
+  } catch (e) {}
+
+  initSyncScroll();
+}
+
+function getActiveDocsEditorElement() {
+  if (_docsEditorType === "raw") {
+    return $("#docs-raw-rst");
+  }
+  const root = _quill ? _quill.root : $("#quill-editor .ql-editor");
+  if (root) return root;
+  return $("#quill-editor");
+}
+
+function syncScroll(sourceElem, targetElem) {
+  if (!_docsSplit || !_docsSyncScroll || !sourceElem || !targetElem) return;
+  if (_syncScrollSource && _syncScrollSource !== sourceElem) return;
+
+  _syncScrollSource = sourceElem;
+  clearTimeout(_syncScrollTimer);
+
+  const maxSource = sourceElem.scrollHeight - sourceElem.clientHeight;
+  const maxTarget = targetElem.scrollHeight - targetElem.clientHeight;
+
+  if (maxSource <= 0 || maxTarget <= 0) {
+    if (maxTarget <= 0) targetElem.scrollTop = 0;
+  } else {
+    if (sourceElem.scrollTop <= 4) {
+      targetElem.scrollTop = 0;
+    } else if (sourceElem.scrollTop >= maxSource - 4) {
+      targetElem.scrollTop = maxTarget;
+    } else {
+      const ratio = sourceElem.scrollTop / maxSource;
+      targetElem.scrollTop = Math.round(ratio * maxTarget);
+    }
+  }
+
+  _syncScrollTimer = setTimeout(() => {
+    _syncScrollSource = null;
+  }, 60);
+}
+
+function updateSyncScrollButtonUI() {
+  const btn = $("#btn-docs-sync-scroll");
+  if (!btn) return;
+  btn.classList.toggle("active", Boolean(_docsSyncScroll));
+  btn.textContent = _docsSyncScroll ? "🔗 Sync On" : "🔓 Sync Off";
+  btn.title = _docsSyncScroll
+    ? "Synchronized scrolling is ON (Editor & Preview scroll together). Click to toggle."
+    : "Synchronized scrolling is OFF. Click to toggle.";
+}
+
+function initSyncScroll() {
+  updateSyncScrollButtonUI();
+
+  const preview = $("#docs-preview-content");
+  if (preview && !preview.dataset.syncBound) {
+    preview.dataset.syncBound = "1";
+    preview.addEventListener("scroll", () => {
+      const target = getActiveDocsEditorElement();
+      if (target) syncScroll(preview, target);
+    }, { passive: true });
+  }
+
+  const rawTa = $("#docs-raw-rst");
+  if (rawTa && !rawTa.dataset.syncBound) {
+    rawTa.dataset.syncBound = "1";
+    rawTa.addEventListener("scroll", () => {
+      if (_docsEditorType === "raw" && preview) {
+        syncScroll(rawTa, preview);
+      }
+    }, { passive: true });
+  }
+
+  const qlEditor = (_quill && _quill.root) || $("#quill-editor .ql-editor");
+  if (qlEditor && !qlEditor.dataset.syncBound) {
+    qlEditor.dataset.syncBound = "1";
+    qlEditor.addEventListener("scroll", () => {
+      if (_docsEditorType === "wysiwyg" && preview) {
+        syncScroll(qlEditor, preview);
+      }
+    }, { passive: true });
+  }
+
+  const qlContainer = $("#quill-editor");
+  if (qlContainer && !qlContainer.dataset.syncBound) {
+    qlContainer.dataset.syncBound = "1";
+    qlContainer.addEventListener("scroll", () => {
+      if (_docsEditorType === "wysiwyg" && preview) {
+        syncScroll(qlContainer, preview);
+      }
+    }, { passive: true });
   }
 }
 
-async function setDocsMode(mode) {
-  if (mode === _docsMode && $("#btn-docs-mode-" + mode)?.classList.contains("active")) return;
+async function switchToEditorType(type) {
+  if (type === _docsEditorType) return;
   initQuill();
   const badge = $("#docs-status-badge");
 
-  // Sync content between editors
-  if (_docsMode === "wysiwyg" && (mode === "raw" || mode === "split")) {
+  if (_docsEditorType === "wysiwyg" && type === "raw") {
     // Convert current Quill HTML to RST
     if (_quill && _docsDirty) {
       if (badge) badge.textContent = "Converting HTML → RST…";
@@ -2156,8 +2291,8 @@ async function setDocsMode(mode) {
       }
       if (badge) badge.textContent = "Ready";
     }
-  } else if (_docsMode === "raw" && (mode === "wysiwyg" || mode === "split")) {
-    // Convert current raw RST to HTML for Quill / preview
+  } else if (_docsEditorType === "raw" && type === "wysiwyg") {
+    // Convert current raw RST to HTML for Quill
     const rst = $("#docs-raw-rst")?.value || "";
     if (badge) badge.textContent = "Converting RST → HTML…";
     try {
@@ -2168,6 +2303,7 @@ async function setDocsMode(mode) {
       });
       const data = await res.json();
       if (data.ok && _quill) {
+        _quill.setText("");
         _quill.clipboard.dangerouslyPasteHTML(0, data.html || "<p></p>");
         renderAllMermaidBlocks(_quill.root);
       }
@@ -2177,12 +2313,25 @@ async function setDocsMode(mode) {
     if (badge) badge.textContent = "Ready";
   }
 
-  _docsMode = mode;
-  try {
-    localStorage.setItem("telua_web_docs_mode", mode);
-  } catch (e) {}
+  _docsEditorType = type;
+  _docsMode = _docsSplit ? "split" : _docsEditorType;
+  applyDocsModeUI();
+}
 
-  applyDocsModeUI(mode);
+function toggleDocsSplit() {
+  _docsSplit = !_docsSplit;
+  _docsMode = _docsSplit ? "split" : _docsEditorType;
+  applyDocsModeUI();
+}
+
+async function setDocsMode(mode) {
+  if (mode === "wysiwyg") {
+    await switchToEditorType("wysiwyg");
+  } else if (mode === "raw") {
+    await switchToEditorType("raw");
+  } else if (mode === "split") {
+    toggleDocsSplit();
+  }
 }
 
 let _previewDebounceTimer = null;
@@ -2190,10 +2339,18 @@ async function updateDocsPreview() {
   const preview = $("#docs-preview-content");
   if (!preview) return;
 
-  const rawTa = $("#docs-raw-rst");
-  const isRawActive = _docsMode === "raw" || (_docsMode === "split" && rawTa && !$("#docs-pane-raw")?.classList.contains("hidden"));
+  const editorElem = getActiveDocsEditorElement();
+  let prevRatio = 0;
+  if (editorElem) {
+    const maxSource = editorElem.scrollHeight - editorElem.clientHeight;
+    if (maxSource > 0) {
+      prevRatio = editorElem.scrollTop / maxSource;
+    }
+  }
 
-  if (isRawActive && rawTa) {
+  if (_docsEditorType === "raw") {
+    const rawTa = $("#docs-raw-rst");
+    if (!rawTa) return;
     clearTimeout(_previewDebounceTimer);
     _previewDebounceTimer = setTimeout(async () => {
       try {
@@ -2205,20 +2362,30 @@ async function updateDocsPreview() {
         const data = await res.json();
         if (data.ok && data.html) {
           preview.innerHTML = data.html;
-          renderAllMermaidBlocks(preview);
+          await renderAllMermaidBlocks(preview);
+          if (_docsSyncScroll) {
+            const maxTarget = preview.scrollHeight - preview.clientHeight;
+            if (maxTarget > 0 && prevRatio > 0) {
+              preview.scrollTop = Math.round(prevRatio * maxTarget);
+            }
+          }
         }
       } catch (err) {
         console.warn("Live preview convert error:", err);
       }
-    }, 250);
+    }, 200);
     return;
   }
 
   if (_quill) {
     preview.innerHTML = _quill.root.innerHTML;
-    renderAllMermaidBlocks(preview);
-  } else if (rawTa) {
-    preview.textContent = rawTa.value;
+    await renderAllMermaidBlocks(preview);
+    if (_docsSyncScroll) {
+      const maxTarget = preview.scrollHeight - preview.clientHeight;
+      if (maxTarget > 0 && prevRatio > 0) {
+        preview.scrollTop = Math.round(prevRatio * maxTarget);
+      }
+    }
   }
 }
 
@@ -2232,12 +2399,12 @@ async function saveCurrentDoc() {
 
   let content = "";
   let format = "rst";
-  if (_docsMode === "wysiwyg" || _docsMode === "split") {
-    content = _quill ? _quill.root.innerHTML : "";
-    format = "html";
-  } else {
+  if (_docsEditorType === "raw") {
     content = $("#docs-raw-rst")?.value || "";
     format = "rst";
+  } else {
+    content = _quill ? _quill.root.innerHTML : "";
+    format = "html";
   }
 
   try {
@@ -2380,7 +2547,7 @@ async function handleDocsFileUpload(file) {
     setDocsDirty(true);
     if (badge) badge.textContent = "Imported (Unsaved)";
     toast("File Imported 📤", `${file.name} loaded into editor. Ready to edit and save.`, "ok", 4000);
-    if (_docsMode === "split") updateDocsPreview();
+    if (_docsSplit) updateDocsPreview();
   } catch (err) {
     if (badge) badge.textContent = "Import Failed";
     toast("Import Failed", String(err.message || err), "danger");
@@ -2393,6 +2560,10 @@ function switchTab(tab) {
   const isTerminal = tab === "terminal";
   const isDocs = tab === "docs";
   const isPipelinesView = !isFiles && !isTerminal && !isDocs;
+
+  // Collapse Config Files sidebar in Docs view to give maximum full-width canvas
+  $(".layout")?.classList.toggle("no-sidebar", isDocs);
+
   $("#view-files")?.classList.toggle("hidden", !isFiles);
   $("#view-pipelines")?.classList.toggle("hidden", !isPipelinesView);
   $("#view-terminal")?.classList.toggle("hidden", !isTerminal);
@@ -2410,7 +2581,7 @@ function switchTab(tab) {
   }
   if (isDocs) {
     initQuill();
-    applyDocsModeUI(_docsMode);
+    applyDocsModeUI();
     if (_docsFiles.length === 0) {
       loadDocsFiles();
     }
@@ -2498,15 +2669,27 @@ function wire() {
 
   // Sphinx Docs wiring
   $("#docs-file-select")?.addEventListener("change", (e) => loadDocFile(e.target.value));
-  $("#btn-docs-mode-wysiwyg")?.addEventListener("click", () => setDocsMode("wysiwyg"));
-  $("#btn-docs-mode-raw")?.addEventListener("click", () => setDocsMode("raw"));
-  $("#btn-docs-mode-split")?.addEventListener("click", () => setDocsMode("split"));
+  $("#btn-docs-mode-wysiwyg")?.addEventListener("click", () => switchToEditorType("wysiwyg"));
+  $("#btn-docs-mode-raw")?.addEventListener("click", () => switchToEditorType("raw"));
+  $("#btn-docs-mode-split")?.addEventListener("click", () => toggleDocsSplit());
+  $("#btn-docs-sync-scroll")?.addEventListener("click", () => {
+    _docsSyncScroll = !_docsSyncScroll;
+    try {
+      localStorage.setItem("telua_web_docs_sync_scroll", String(_docsSyncScroll));
+    } catch (e) {}
+    updateSyncScrollButtonUI();
+    if (_docsSyncScroll) {
+      const ed = getActiveDocsEditorElement();
+      const prev = $("#docs-preview-content");
+      if (ed && prev) syncScroll(ed, prev);
+    }
+  });
   $("#btn-docs-save")?.addEventListener("click", () => saveCurrentDoc());
   $("#btn-docs-build")?.addEventListener("click", () => buildSphinxDocs());
   $("#btn-docs-start")?.addEventListener("click", () => startSphinxDocs());
   $("#docs-raw-rst")?.addEventListener("input", () => {
     setDocsDirty(true);
-    if (_docsMode === "split") updateDocsPreview();
+    if (_docsSplit) updateDocsPreview();
   });
 
   const docsWs = $("#docs-workspace");
