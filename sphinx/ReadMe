@@ -36,15 +36,41 @@ pip install furo
 
 - **check_mermaid.py**: Checks all mermaid blocks in chapter and section .rst files for syntax that renders as "Syntax error in text" in the browser (leading edge arrows, dangling edges). It is integrated into the build pipeline — see "Run the scripts in this order" below.
 
-- **plantuml_wrapper.py**: Multi-tier cross-platform PlantUML CLI compiler for Sphinx (`.. uml::` / `.. plantuml::`). Automatically uses local `plantuml` binary or `plantuml.jar` if present, with online proxy fallback to generate high-resolution vector SVG diagrams without requiring manual Java/Graphviz setup.
+- **plantuml_wrapper.py**: Cross-platform PlantUML compiler used by Sphinx for `.. uml::` / `.. plantuml::`. It tries, in order: a local `plantuml` binary, then `java -jar plantuml.jar` (set `PLANTUML_JAR`), then the online plantuml.com server. If all fail (offline), it writes a placeholder image so the build never breaks. No Java/Graphviz setup is required.
+
+- **inject_plantuml.py**: Adds PlantUML support to existing/legacy projects whose conf.py predates it.
+  - `python inject_plantuml.py <docs_dir>` appends a marked block (`# --- telua-plantuml-autoconfig ---`) to conf.py and copies `plantuml_wrapper.py` + `_telua_static/telua_plantuml.css` next to it. Running it again does not duplicate the block.
+  - `python inject_plantuml.py <docs_dir> --check` only reports whether the block is present (exit code 1 if not).
+  - User settings are kept: it only adds the missing extension, replaces `plantuml` only when the configured command cannot run, and switches `plantuml_output_format` to `'svg_img'` only when it is unset or `'svg'` (`'svg'` produces an `<object>` tag that browsers often fail to display).
+  - `tel docs build` / `tel docs start` / `gen_sphinx.sh` / the Web UI run it automatically on `_build/.staging`, so source files stay untouched. `tel docs upgrade [dir]` runs it on the real project to make the change permanent.
 
 Run the scripts in this order before building Sphinx HTML:
 1. python merge_docs.py
 2. python check_docs.py
 3. python check_mermaid.py
-4. sphinx-build -b html . _build/html
+4. python inject_plantuml.py .      (only needed for legacy conf.py)
+5. sphinx-build -b html . _build/html
 
-Note: `tel docs build` and `tel docs check` already run check_mermaid.py and configure PlantUML wrapper automatically.
+Note: `tel docs build` already runs all of the above automatically, in an isolated staging directory.
+
+---
+
+# PlantUML diagrams
+
+.. code-block:: rst
+
+   .. uml::
+
+      @startuml
+      actor User
+      participant "Frontend" as UI
+      User -> UI : Click
+      @enduml
+
+Output: `_build/html/_images/plantuml-<hash>.svg`, embedded as `<img>`.
+
+Legacy project? Either just run `tel docs build` (auto-configured in staging),
+or persist the config once with `tel docs upgrade [dir]`.
 
 ---
 

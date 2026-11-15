@@ -660,7 +660,35 @@ tel docs serve                        # Alias cho lệnh start
 
 # 6. Dọn dẹp thư mục build:
 tel docs clean
+
+# 7. Đồng bộ cấu hình cho dự án CŨ để hỗ trợ PlantUML (ghi vĩnh viễn vào conf.py):
+tel docs upgrade [dir]                # Alias: tel docs sync-config
 ```
+
+#### Sơ đồ PlantUML (`.. uml::` / `.. plantuml::`)
+
+Viết sơ đồ trực tiếp trong file `.rst`. Bạn **không cần cài Java/PlantUML**: khi build, sơ đồ được biên dịch thành ảnh SVG (`_build/html/_images/plantuml-*.svg`) và hiển thị bằng thẻ `<img>`.
+
+```rst
+.. uml::
+
+   @startuml
+   actor User
+   participant "Frontend" as UI
+   participant "Backend" as API
+   database "Database" as DB
+   User -> UI : Submit
+   UI -> API : REST call
+   API -> DB : Query
+   @enduml
+```
+
+* **Cách biên dịch** ([`sphinx/scripts/plantuml_wrapper.py`](sphinx/scripts/plantuml_wrapper.py)), thử lần lượt: lệnh `plantuml` trong PATH → `java -jar plantuml.jar` (biến `PLANTUML_JAR`) → server online `plantuml.com` → nếu offline thì dùng ảnh thay thế, build không bị lỗi.
+* **Template mới** (`tel docs init`): đã có sẵn cấu hình PlantUML trong `conf.py`.
+* **Dự án cũ** (`conf.py` chưa có PlantUML):
+  * **Tự động**: `tel docs build` / `tel docs start` / nút Build trên Web tự thêm cấu hình vào bản `conf.py` trong thư mục tạm `_build/.staging`. File gốc **không bị sửa**.
+  * **Ghi vĩnh viễn**: `tel docs upgrade [dir]` thêm một đoạn cấu hình (có đánh dấu `# --- telua-plantuml-autoconfig ---`) vào cuối `conf.py`, đồng thời copy `plantuml_wrapper.py` và `_telua_static/telua_plantuml.css` vào dự án. Nên dùng cách này khi chia sẻ dự án hoặc build trực tiếp bằng `sphinx-build`. Chạy lại nhiều lần cũng không bị thêm trùng.
+  * Cấu hình của bạn được giữ nguyên: chỉ thêm extension còn thiếu; chỉ thay `plantuml` khi lệnh đã khai báo không chạy được; chỉ đổi `plantuml_output_format` khi chưa đặt hoặc đang là `'svg'` (đổi sang `'svg_img'`).
 
 ---
 
