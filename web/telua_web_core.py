@@ -148,8 +148,14 @@ def parse_version_from_file(build_apk_sh: Path):
 def parse_active_project_from_file(apk_config: Path):
     try:
         text = apk_config.read_text(encoding="utf-8", errors="ignore")
-        m = re.search(r'^\s*ACTIVE_PROJECT\s*=\s*"([^"]*)"', text, re.M)
-        return m.group(1) if m else ""
+        m = re.search(r'^\s*ACTIVE_PROJECT\s*=\s*["\']?(.*?)["\']?\s*$', text, re.M)
+        if m:
+            val = m.group(1).strip()
+            sub = re.match(r'^\$\{[A-Za-z0-9_]+:-(.*?)\}$', val)
+            if sub:
+                val = sub.group(1).strip()
+            return val
+        return ""
     except OSError:
         return ""
 

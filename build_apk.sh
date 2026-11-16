@@ -1338,7 +1338,9 @@ load_and_validate_config() {
 
     # 2b. Kiểm tra file cấu hình cá nhân (apk_overlays.config)
     local overlay_cfg=""
-    if [ -f "$MASTER_SCRIPT_DIR/config/overlay/apk_overlays.config" ]; then
+    if [ -n "${OVERLAY_CONFIG_FILE:-}" ] && [ -f "$OVERLAY_CONFIG_FILE" ]; then
+        overlay_cfg="$OVERLAY_CONFIG_FILE"
+    elif [ -f "$MASTER_SCRIPT_DIR/config/overlay/apk_overlays.config" ]; then
         overlay_cfg="$MASTER_SCRIPT_DIR/config/overlay/apk_overlays.config"
     elif [ -f "$SCRIPT_DIR/config/overlay/apk_overlays.config" ]; then
         overlay_cfg="$SCRIPT_DIR/config/overlay/apk_overlays.config"

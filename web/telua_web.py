@@ -145,11 +145,23 @@ def parse_version():
 
 
 def parse_active_project():
+    overlay_config = ROOT / "config" / "overlay" / "apk_overlays.config"
+    if overlay_config.is_file():
+        proj = parse_active_project_from_file(overlay_config)
+        if proj:
+            return proj
     return parse_active_project_from_file(APK_CONFIG)
 
 
 def parse_profiles():
-    return parse_profiles_from_file(APK_CONFIG)
+    profs = parse_profiles_from_file(APK_CONFIG)
+    overlay_config = ROOT / "config" / "overlay" / "apk_overlays.config"
+    if overlay_config.is_file():
+        ov_profs = parse_profiles_from_file(overlay_config)
+        for p in ov_profs:
+            if p not in profs:
+                profs.append(p)
+    return profs
 
 
 def _crypto_items():
@@ -312,6 +324,17 @@ def api_info():
 # ------------------------------------------------------------------------------
 # REST API — AOSP Configuration & Build Control
 # ------------------------------------------------------------------------------
+def _upsert_bash_var(text: str, var_name: str, value: str) -> str:
+    """Updates an existing bash variable (including uncommenting it if commented), or appends it."""
+    pattern = re.compile(r'^[ \t]*#?[ \t]*' + re.escape(var_name) + r'\s*=.*$', re.M)
+    new_line = f'{var_name}="{value}"'
+    if pattern.search(text):
+        return pattern.sub(new_line, text, count=1)
+    else:
+        text = text.rstrip()
+        return f'{text}\n{new_line}\n'
+
+
 def _parse_aosp_info():
     text = ""
     if APK_CONFIG.is_file():
@@ -343,7 +366,7 @@ def _parse_aosp_info():
         return default
 
     aosp_root = get_var("AOSP_ROOT_DIR", "")
-    active_project = parse_active_project() or get_var("ACTIVE_PROJECT", "oem_service")
+    active_project = get_var("ACTIVE_PROJECT", "") or parse_active_project() or "oem_service"
     target_product = get_var("CONFIG_TARGET_PRODUCT", "")
     target_variant = get_var("CONFIG_TARGET_BUILD_VARIANT", "")
 
@@ -351,24 +374,29 @@ def _parse_aosp_info():
     apk_name = ""
     source_path = ""
     deploy_path = ""
-    case_match = re.search(r'case\s+"\$ACTIVE_PROJECT"\s+in(.*?)\nesac', text, re.S)
-    if case_match:
-        case_block = case_match.group(1)
-        branch_match = re.search(r'^[ \t]*"' + re.escape(active_project) + r'"\)(.*?);;', case_block, re.M | re.S)
-        if branch_match:
-            branch_body = branch_match.group(1)
-            m_mod = re.search(r'^[ \t]*MODULE_NAME\s*=\s*"([^"]*)"', branch_body, re.M)
-            if m_mod:
-                module_name = m_mod.group(1)
-            m_apk = re.search(r'^[ \t]*APK_FILE_NAME\s*=\s*"([^"]*)"', branch_body, re.M)
-            if m_apk:
-                apk_name = m_apk.group(1)
-            m_src = re.search(r'^[ \t]*SOURCE_CODE_RELATIVE_PATH\s*=\s*"([^"]*)"', branch_body, re.M)
-            if m_src:
-                source_path = m_src.group(1)
-            m_dep = re.search(r'^[ \t]*APK_DEPLOY_PATH\s*=\s*"([^"]*)"', branch_body, re.M)
-            if m_dep:
-                deploy_path = m_dep.group(1)
+    for src in (overlay_text, text):
+        if not src:
+            continue
+        case_match = re.search(r'case\s+"\$ACTIVE_PROJECT"\s+in(.*?)\nesac', src, re.S)
+        if case_match:
+            case_block = case_match.group(1)
+            branch_match = re.search(r'^[ \t]*"' + re.escape(active_project) + r'"\)(.*?);;', case_block, re.M | re.S)
+            if branch_match:
+                branch_body = branch_match.group(1)
+                m_mod = re.search(r'^[ \t]*MODULE_NAME\s*=\s*"([^"]*)"', branch_body, re.M)
+                if m_mod and not module_name:
+                    module_name = m_mod.group(1)
+                m_apk = re.search(r'^[ \t]*APK_FILE_NAME\s*=\s*"([^"]*)"', branch_body, re.M)
+                if m_apk and not apk_name:
+                    apk_name = m_apk.group(1)
+                m_src = re.search(r'^[ \t]*SOURCE_CODE_RELATIVE_PATH\s*=\s*"([^"]*)"', branch_body, re.M)
+                if m_src and not source_path:
+                    source_path = m_src.group(1)
+                m_dep = re.search(r'^[ \t]*APK_DEPLOY_PATH\s*=\s*"([^"]*)"', branch_body, re.M)
+                if m_dep and not deploy_path:
+                    deploy_path = m_dep.group(1)
+        if module_name and apk_name:
+            break
 
     aosp_exists = False
     if aosp_root:
@@ -377,10 +405,13 @@ def _parse_aosp_info():
         except Exception:
             aosp_exists = False
 
-    try:
-        cfg_rel = str(APK_CONFIG.relative_to(ROOT))
-    except ValueError:
-        cfg_rel = str(APK_CONFIG)
+    if overlay_config.is_file():
+        cfg_rel = "config/overlay/apk_overlays.config"
+    else:
+        try:
+            cfg_rel = str(APK_CONFIG.relative_to(ROOT))
+        except ValueError:
+            cfg_rel = str(APK_CONFIG)
 
     profiles = parse_profiles()
     return {
@@ -412,56 +443,48 @@ def api_aosp_config_post():
     target_product = data.get("target_product")
     target_variant = data.get("target_variant")
 
-    if not APK_CONFIG.is_file():
-        abort(404, description="apk.config not found in %s" % ROOT)
+    overlay_dir = ROOT / "config" / "overlay"
+    overlay_dir.mkdir(parents=True, exist_ok=True)
+    overlay_config = overlay_dir / "apk_overlays.config"
+    if not overlay_config.is_file():
+        example = overlay_dir / "apk_overlays.config.example"
+        if example.is_file():
+            shutil.copy2(example, overlay_config)
+        else:
+            overlay_config.write_text("#!/bin/bash\n# Personal AOSP & Lunch Overrides\n", encoding="utf-8")
 
-    text = APK_CONFIG.read_text(encoding="utf-8", errors="ignore")
-
-    backup_path = APK_CONFIG.with_suffix(".config.bak")
     try:
-        shutil.copy2(APK_CONFIG, backup_path)
+        otext = overlay_config.read_text(encoding="utf-8", errors="ignore")
     except OSError:
-        pass
+        otext = "#!/bin/bash\n"
 
     if aosp_root_dir is not None:
         clean_root = str(aosp_root_dir).strip().replace("\\", "/")
-        if re.search(r'^[ \t]*AOSP_ROOT_DIR\s*=', text, re.M):
-            text = re.sub(r'^[ \t]*AOSP_ROOT_DIR\s*=.*$', f'AOSP_ROOT_DIR="${{AOSP_ROOT_DIR:-{clean_root}}}"', text, flags=re.M)
-        else:
-            text = f'AOSP_ROOT_DIR="${{AOSP_ROOT_DIR:-{clean_root}}}"\n' + text
+        otext = _upsert_bash_var(otext, "AOSP_ROOT_DIR", clean_root)
 
     if active_project:
         name = str(active_project).strip()
-        text = re.sub(r'(?m)^([ \t]*ACTIVE_PROJECT\s*=\s*)"[^"]*"', r'\g<1>"%s"' % name, text, count=1)
+        otext = _upsert_bash_var(otext, "ACTIVE_PROJECT", name)
 
     if target_product is not None:
         tp = str(target_product).strip()
-        if re.search(r'^[ \t]*CONFIG_TARGET_PRODUCT\s*=', text, re.M):
-            text = re.sub(r'^[ \t]*CONFIG_TARGET_PRODUCT\s*=.*$', f'CONFIG_TARGET_PRODUCT="{tp}"', text, flags=re.M)
+        otext = _upsert_bash_var(otext, "CONFIG_TARGET_PRODUCT", tp)
 
     if target_variant is not None:
         tv = str(target_variant).strip()
-        if re.search(r'^[ \t]*CONFIG_TARGET_BUILD_VARIANT\s*=', text, re.M):
-            text = re.sub(r'^[ \t]*CONFIG_TARGET_BUILD_VARIANT\s*=.*$', f'CONFIG_TARGET_BUILD_VARIANT="{tv}"', text, flags=re.M)
+        otext = _upsert_bash_var(otext, "CONFIG_TARGET_BUILD_VARIANT", tv)
 
-    APK_CONFIG.write_text(text, encoding="utf-8")
+    overlay_config.write_text(otext, encoding="utf-8")
 
-    overlay_config = ROOT / "config" / "overlay" / "apk_overlays.config"
-    if overlay_config.is_file():
+    # Also keep ACTIVE_PROJECT in apk.config synced as baseline fallback
+    if APK_CONFIG.is_file():
         try:
-            otext = overlay_config.read_text(encoding="utf-8", errors="ignore")
-            dirty_overlay = False
-            if aosp_root_dir is not None and re.search(r'^[ \t]*AOSP_ROOT_DIR\s*=', otext, re.M):
-                clean_root = str(aosp_root_dir).strip().replace("\\", "/")
-                otext = re.sub(r'^[ \t]*AOSP_ROOT_DIR\s*=.*$', f'AOSP_ROOT_DIR="{clean_root}"', otext, flags=re.M)
-                dirty_overlay = True
+            text = APK_CONFIG.read_text(encoding="utf-8", errors="ignore")
             if active_project:
                 name = str(active_project).strip()
-                if re.search(r'(?m)^([ \t]*ACTIVE_PROJECT\s*=\s*)"[^"]*"', otext):
-                    otext = re.sub(r'(?m)^([ \t]*ACTIVE_PROJECT\s*=\s*)"[^"]*"', r'\g<1>"%s"' % name, otext, count=1)
-                    dirty_overlay = True
-            if dirty_overlay:
-                overlay_config.write_text(otext, encoding="utf-8")
+                if re.search(r'ACTIVE_PROJECT\s*=', text):
+                    text = re.sub(r'(?m)^([ \t]*ACTIVE_PROJECT\s*=\s*)["\']?.*?["\']?$', r'\g<1>"%s"' % name, text, count=1)
+                    APK_CONFIG.write_text(text, encoding="utf-8")
         except OSError:
             pass
 
