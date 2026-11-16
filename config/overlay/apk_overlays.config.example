@@ -35,6 +35,7 @@ case "$ACTIVE_PROJECT" in
      
 esac
 
+# AOSP_ROOT_DIR="/home/developer/workspace/android"
 # CONFIG_TARGET_PRODUCT="my_board_in"
 # CONFIG_TARGET_BUILD_VARIANT="userdebug"
 # BUILD_JOBS="16"

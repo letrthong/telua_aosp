@@ -90,27 +90,48 @@ resolve_android_paths() {
     fi
     local android_dir=""
 
-    while [ "$current_dir" != "/" ] && [ "$current_dir" != "." ]; do
-        if [ "$(basename "$current_dir")" = "android" ]; then
-            android_dir="$current_dir"
-            break
+    # 1. Check if AOSP_ROOT_DIR is explicitly configured in apk.config, overlay, or environment
+    if [ -n "${AOSP_ROOT_DIR:-}" ]; then
+        local raw_root="${AOSP_ROOT_DIR//\\//}"
+        if [ -d "$raw_root" ]; then
+            ROOT_DIR="$raw_root"
+            if [ -d "$raw_root/android" ]; then
+                android_dir="$raw_root/android"
+            else
+                android_dir="$raw_root"
+            fi
+        else
+            log_warn "Configured AOSP_ROOT_DIR='$AOSP_ROOT_DIR' does not exist."
         fi
-        current_dir="$(dirname "$current_dir")"
-    done
-
-    if [ -z "$android_dir" ]; then
-        log_error "Could not find the 'android' root directory in ancestor paths!"
-        log_info "Must check apk.config"
-        # 'return' (not 'exit') so callers like show_info can recover.
-        return 1
     fi
 
-    ROOT_DIR="$(dirname "$android_dir")"
+    # 2. If not found via AOSP_ROOT_DIR, walk ancestor paths looking for 'android'
+    if [ -z "$android_dir" ]; then
+        while [ "$current_dir" != "/" ] && [ "$current_dir" != "." ]; do
+            if [ "$(basename "$current_dir")" = "android" ]; then
+                android_dir="$current_dir"
+                break
+            fi
+            current_dir="$(dirname "$current_dir")"
+        done
+
+        if [ -z "$android_dir" ]; then
+            log_error "Could not find the 'android' root directory in ancestor paths!"
+            log_info "Please configure AOSP_ROOT_DIR in apk.config or via Web UI."
+            # 'return' (not 'exit') so callers like show_info can recover.
+            return 1
+        fi
+        ROOT_DIR="$(dirname "$android_dir")"
+    fi
 
     if [ -n "$AOSP_TOP_REL_PATH" ]; then
         ANDROID_TOP="$ROOT_DIR/$AOSP_TOP_REL_PATH"
     elif [ -d "$ROOT_DIR/android/qssi" ]; then
         ANDROID_TOP="$ROOT_DIR/android/qssi"
+    elif [ -d "$ROOT_DIR/qssi" ]; then
+        ANDROID_TOP="$ROOT_DIR/qssi"
+    elif [ -d "$ROOT_DIR/android" ]; then
+        ANDROID_TOP="$ROOT_DIR/android"
     else
         ANDROID_TOP="$android_dir"
     fi

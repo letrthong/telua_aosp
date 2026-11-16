@@ -299,6 +299,157 @@ def api_info():
 
 
 # ------------------------------------------------------------------------------
+# REST API — AOSP Configuration & Build Control
+# ------------------------------------------------------------------------------
+def _parse_aosp_info():
+    text = ""
+    if APK_CONFIG.is_file():
+        try:
+            text = APK_CONFIG.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            pass
+
+    overlay_config = ROOT / "config" / "overlay" / "apk_overlays.config"
+    overlay_text = ""
+    if overlay_config.is_file():
+        try:
+            overlay_text = overlay_config.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            pass
+
+    def get_var(name: str, default: str = "") -> str:
+        if overlay_text:
+            m = re.search(r'^[ \t]*' + re.escape(name) + r'[ \t]*=[ \t]*["\']?(.*?)["\']?[ \t]*$', overlay_text, re.M)
+            if m and not m.group(0).strip().startswith("#"):
+                return m.group(1).strip()
+        m = re.search(r'^[ \t]*' + re.escape(name) + r'[ \t]*=[ \t]*["\']?(.*?)["\']?[ \t]*$', text, re.M)
+        if m:
+            val = m.group(1).strip()
+            sub = re.match(r'^\$\{[A-Za-z0-9_]+:-(.*?)\}$', val)
+            if sub:
+                val = sub.group(1).strip()
+            return val
+        return default
+
+    aosp_root = get_var("AOSP_ROOT_DIR", "")
+    active_project = get_var("ACTIVE_PROJECT", "oem_service")
+    target_product = get_var("CONFIG_TARGET_PRODUCT", "")
+    target_variant = get_var("CONFIG_TARGET_BUILD_VARIANT", "")
+
+    module_name = ""
+    apk_name = ""
+    source_path = ""
+    deploy_path = ""
+    case_match = re.search(r'case\s+"\$ACTIVE_PROJECT"\s+in(.*?)\nesac', text, re.S)
+    if case_match:
+        case_block = case_match.group(1)
+        branch_match = re.search(r'^[ \t]*"' + re.escape(active_project) + r'"\)(.*?);;', case_block, re.M | re.S)
+        if branch_match:
+            branch_body = branch_match.group(1)
+            m_mod = re.search(r'^[ \t]*MODULE_NAME\s*=\s*"([^"]*)"', branch_body, re.M)
+            if m_mod:
+                module_name = m_mod.group(1)
+            m_apk = re.search(r'^[ \t]*APK_FILE_NAME\s*=\s*"([^"]*)"', branch_body, re.M)
+            if m_apk:
+                apk_name = m_apk.group(1)
+            m_src = re.search(r'^[ \t]*SOURCE_CODE_RELATIVE_PATH\s*=\s*"([^"]*)"', branch_body, re.M)
+            if m_src:
+                source_path = m_src.group(1)
+            m_dep = re.search(r'^[ \t]*APK_DEPLOY_PATH\s*=\s*"([^"]*)"', branch_body, re.M)
+            if m_dep:
+                deploy_path = m_dep.group(1)
+
+    aosp_exists = False
+    if aosp_root:
+        try:
+            aosp_exists = Path(aosp_root).is_dir()
+        except Exception:
+            aosp_exists = False
+
+    try:
+        cfg_rel = str(APK_CONFIG.relative_to(ROOT))
+    except ValueError:
+        cfg_rel = str(APK_CONFIG)
+
+    profiles = parse_profiles()
+    return {
+        "ok": True,
+        "aosp_root_dir": aosp_root,
+        "aosp_exists": aosp_exists,
+        "active_project": active_project,
+        "target_product": target_product,
+        "target_variant": target_variant,
+        "module_name": module_name,
+        "apk_name": apk_name,
+        "source_path": source_path,
+        "deploy_path": deploy_path,
+        "profiles": profiles,
+        "config_file": cfg_rel,
+    }
+
+
+@app.get("/api/aosp/config")
+def api_aosp_config_get():
+    return jsonify(_parse_aosp_info())
+
+
+@app.post("/api/aosp/config")
+def api_aosp_config_post():
+    data = request.get_json(silent=True) or {}
+    aosp_root_dir = data.get("aosp_root_dir")
+    active_project = data.get("active_project")
+    target_product = data.get("target_product")
+    target_variant = data.get("target_variant")
+
+    if not APK_CONFIG.is_file():
+        abort(404, description="apk.config not found in %s" % ROOT)
+
+    text = APK_CONFIG.read_text(encoding="utf-8", errors="ignore")
+
+    backup_path = APK_CONFIG.with_suffix(".config.bak")
+    try:
+        shutil.copy2(APK_CONFIG, backup_path)
+    except OSError:
+        pass
+
+    if aosp_root_dir is not None:
+        clean_root = str(aosp_root_dir).strip().replace("\\", "/")
+        if re.search(r'^[ \t]*AOSP_ROOT_DIR\s*=', text, re.M):
+            text = re.sub(r'^[ \t]*AOSP_ROOT_DIR\s*=.*$', f'AOSP_ROOT_DIR="${{AOSP_ROOT_DIR:-{clean_root}}}"', text, flags=re.M)
+        else:
+            text = f'AOSP_ROOT_DIR="${{AOSP_ROOT_DIR:-{clean_root}}}"\n' + text
+
+    if active_project:
+        name = str(active_project).strip()
+        text = re.sub(r'(?m)^([ \t]*ACTIVE_PROJECT\s*=\s*)"[^"]*"', r'\g<1>"%s"' % name, text, count=1)
+
+    if target_product is not None:
+        tp = str(target_product).strip()
+        if re.search(r'^[ \t]*CONFIG_TARGET_PRODUCT\s*=', text, re.M):
+            text = re.sub(r'^[ \t]*CONFIG_TARGET_PRODUCT\s*=.*$', f'CONFIG_TARGET_PRODUCT="{tp}"', text, flags=re.M)
+
+    if target_variant is not None:
+        tv = str(target_variant).strip()
+        if re.search(r'^[ \t]*CONFIG_TARGET_BUILD_VARIANT\s*=', text, re.M):
+            text = re.sub(r'^[ \t]*CONFIG_TARGET_BUILD_VARIANT\s*=.*$', f'CONFIG_TARGET_BUILD_VARIANT="{tv}"', text, flags=re.M)
+
+    APK_CONFIG.write_text(text, encoding="utf-8")
+
+    overlay_config = ROOT / "config" / "overlay" / "apk_overlays.config"
+    if overlay_config.is_file() and aosp_root_dir is not None:
+        try:
+            otext = overlay_config.read_text(encoding="utf-8", errors="ignore")
+            if re.search(r'^[ \t]*AOSP_ROOT_DIR\s*=', otext, re.M):
+                clean_root = str(aosp_root_dir).strip().replace("\\", "/")
+                otext = re.sub(r'^[ \t]*AOSP_ROOT_DIR\s*=.*$', f'AOSP_ROOT_DIR="{clean_root}"', otext, flags=re.M)
+                overlay_config.write_text(otext, encoding="utf-8")
+        except OSError:
+            pass
+
+    return jsonify(_parse_aosp_info())
+
+
+# ------------------------------------------------------------------------------
 # Crypto & Overlay API
 # ------------------------------------------------------------------------------
 @app.get("/api/crypto/status")

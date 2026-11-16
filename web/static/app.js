@@ -583,17 +583,19 @@ let _lastNonSystemPlSource = "my";
 
 function syncTopTabs() {
   const isFiles = !$("#view-files").classList.contains("hidden");
+  const isAosp = !$("#view-aosp")?.classList.contains("hidden");
   const isTerminal = !$("#view-terminal")?.classList.contains("hidden");
   const isDocs = !$("#view-docs")?.classList.contains("hidden");
-  const isSystem = !isFiles && !isTerminal && !isDocs && (state.plSource === "system" || state.plSource === "docker");
-  const isPipelines = !isFiles && !isTerminal && !isDocs && !isSystem;
+  const isSystem = !isFiles && !isAosp && !isTerminal && !isDocs && (state.plSource === "system" || state.plSource === "docker");
+  const isPipelines = !isFiles && !isAosp && !isTerminal && !isDocs && !isSystem;
   $("#tab-files")?.classList.toggle("active", isFiles);
   $("#tab-pipelines")?.classList.toggle("active", isPipelines);
   $("#tab-system")?.classList.toggle("active", isSystem);
+  $("#tab-aosp")?.classList.toggle("active", isAosp);
   $("#tab-terminal")?.classList.toggle("active", isTerminal);
   $("#tab-docs")?.classList.toggle("active", isDocs);
   try {
-    const activeTabName = isFiles ? "files" : (isTerminal ? "terminal" : (isDocs ? "docs" : (isSystem ? "system" : "pipelines")));
+    const activeTabName = isFiles ? "files" : (isAosp ? "aosp" : (isTerminal ? "terminal" : (isDocs ? "docs" : (isSystem ? "system" : "pipelines"))));
     localStorage.setItem(LAST_TAB_KEY, activeTabName);
     localStorage.setItem(LAST_SOURCE_KEY, state.plSource);
   } catch { /* ignore */ }
@@ -602,8 +604,9 @@ function syncTopTabs() {
 function switchPipelineSource(source) {
   if (source === "docker") source = "system";
   if (source !== "system") _lastNonSystemPlSource = source;
-  // Ensure Pipelines view is visible if user clicks a source while in Terminal, Files, or Docs
+  // Ensure Pipelines view is visible if user clicks a source while in Terminal, Files, Docs, or AOSP
   $("#view-files")?.classList.add("hidden");
+  $("#view-aosp")?.classList.add("hidden");
   $("#view-terminal")?.classList.add("hidden");
   $("#view-docs")?.classList.add("hidden");
   $("#view-pipelines")?.classList.remove("hidden");
@@ -3426,17 +3429,263 @@ async function handleDocsFileUpload(file) {
   }
 }
 
+/* ==============================================================================
+   AOSP Command Center & Environment Module
+   ============================================================================== */
+let _aospRunning = false;
+let _aospAbortController = null;
+
+async function loadAospConfig() {
+  try {
+    const res = await fetch("/api/aosp/config");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (!data.ok) return;
+
+    if ($("#aosp-root-input")) $("#aosp-root-input").value = data.aosp_root_dir || "";
+    if ($("#aosp-cfg-file")) $("#aosp-cfg-file").textContent = data.config_file || "config/apk.config";
+
+    const pathStatus = $("#aosp-path-status");
+    if (pathStatus) {
+      if (data.aosp_root_dir) {
+        if (data.aosp_exists) {
+          pathStatus.innerHTML = '<span style="color:#3fb950;font-weight:600;">✔ Directory exists on disk</span>';
+        } else {
+          pathStatus.innerHTML = '<span style="color:#f85149;font-weight:600;">⚠️ Directory not found on disk</span>';
+        }
+      } else {
+        pathStatus.innerHTML = '<span style="color:var(--text-dim);font-style:italic;">Auto-detect from ancestors</span>';
+      }
+    }
+
+    const projSel = $("#aosp-project-select");
+    if (projSel) {
+      projSel.innerHTML = "";
+      (data.profiles || []).forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p;
+        opt.textContent = p + (p === data.active_project ? " (active)" : "");
+        if (p === data.active_project) opt.selected = true;
+        projSel.appendChild(opt);
+      });
+    }
+
+    if ($("#aosp-target-product")) $("#aosp-target-product").value = data.target_product || "";
+    if ($("#aosp-target-variant")) $("#aosp-target-variant").value = data.target_variant || "";
+
+    if ($("#aosp-badge-project")) $("#aosp-badge-project").textContent = data.active_project || "—";
+    if ($("#aosp-badge-target")) {
+      const targetStr = (data.target_product && data.target_variant)
+        ? `${data.target_product}-${data.target_variant}`
+        : "lunch: —";
+      $("#aosp-badge-target").textContent = targetStr;
+    }
+
+    if ($("#aosp-meta-module")) $("#aosp-meta-module").textContent = data.module_name || "—";
+    if ($("#aosp-meta-apk")) $("#aosp-meta-apk").textContent = data.apk_name || "—";
+    if ($("#aosp-meta-source")) $("#aosp-meta-source").textContent = data.source_path || "—";
+    if ($("#aosp-meta-deploy")) $("#aosp-meta-deploy").textContent = data.deploy_path || "—";
+  } catch (err) {
+    console.error("Failed to load AOSP config:", err);
+  }
+}
+
+async function saveAospConfig() {
+  const saveBtn = $("#btn-aosp-save");
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+  }
+  try {
+    const payload = {
+      aosp_root_dir: $("#aosp-root-input")?.value || "",
+      active_project: $("#aosp-project-select")?.value || "",
+      target_product: $("#aosp-target-product")?.value || "",
+      target_variant: $("#aosp-target-variant")?.value || "",
+    };
+    const res = await fetch("/api/aosp/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    await loadAospConfig();
+    refreshStatus();
+    toast("AOSP Configuration Saved", "Updated apk.config successfully.", "ok", 3000);
+  } catch (err) {
+    toast("Save Failed", String(err.message || err), "danger");
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "💾 Save Config";
+    }
+  }
+}
+
+async function runAospCommand(cmd) {
+  cmd = (cmd || "").trim();
+  if (!cmd) return;
+  if (_aospRunning) {
+    toast("AOSP busy", "Please wait for current command to complete or click ⏹ Stop.", "warn");
+    return;
+  }
+
+  const outEl = $("#aosp-output");
+  const badge = $("#aosp-status-badge");
+  const stopBtn = $("#btn-aosp-stop");
+  const actionBtns = document.querySelectorAll(".aosp-action-btn");
+
+  _aospRunning = true;
+  _aospAbortController = new AbortController();
+  const signal = _aospAbortController.signal;
+
+  actionBtns.forEach(b => b.disabled = true);
+  if (stopBtn) {
+    stopBtn.disabled = false;
+    stopBtn.classList.add("danger-solid");
+  }
+
+  const separator = outEl && outEl.innerHTML.trim() ? "\n" : "";
+  const headerHtml = `${separator}<span style="color:#3fb950;font-weight:700">tel:aosp $</span> <span style="color:#58a6ff;font-weight:700">${esc(cmd)}</span>\n`;
+  if (outEl) {
+    outEl.innerHTML += headerHtml + `<span style="opacity:.7">⏳ Running… (click ⏹ Stop to abort)</span>\n`;
+    outEl.scrollTop = outEl.scrollHeight;
+  }
+
+  let elapsed = 0;
+  if (badge) {
+    badge.textContent = `⏳ Running… (0s)`;
+    badge.className = "run-badge running";
+  }
+  const timerId = setInterval(() => {
+    elapsed++;
+    if (badge && _aospRunning) badge.textContent = `⏳ Running… (${elapsed}s)`;
+  }, 1000);
+
+  let streamedPreview = "";
+  try {
+    const res = await fetch("/api/terminal/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ command: cmd }),
+      signal,
+    });
+
+    if (res.ok && res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let rawBuffer = "";
+      let exitCode = 0;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        rawBuffer += chunk;
+
+        const lines = rawBuffer.split("\n");
+        rawBuffer = lines.pop() || "";
+        for (const line of lines) {
+          const mExit = line.match(/^__TELUA_EXIT_CODE__:(\d+)/);
+          if (mExit) {
+            exitCode = parseInt(mExit[1], 10);
+            continue;
+          }
+          if (line.startsWith("__TELUA_PWD__:")) continue;
+          streamedPreview += line + "\n";
+          if (streamedPreview.length > 150000) {
+            streamedPreview = streamedPreview.slice(-120000);
+          }
+        }
+        if (outEl) {
+          outEl.innerHTML = headerHtml + esc(streamedPreview);
+          outEl.scrollTop = outEl.scrollHeight;
+        }
+      }
+
+      if (rawBuffer) {
+        const mExit = rawBuffer.match(/^__TELUA_EXIT_CODE__:(\d+)/);
+        if (mExit) {
+          exitCode = parseInt(mExit[1], 10);
+        } else if (!rawBuffer.startsWith("__TELUA_PWD__:")) {
+          streamedPreview += rawBuffer;
+          if (outEl) {
+            outEl.innerHTML = headerHtml + esc(streamedPreview);
+            outEl.scrollTop = outEl.scrollHeight;
+          }
+        }
+      }
+
+      clearInterval(timerId);
+      if (badge) {
+        if (exitCode === 0) {
+          badge.textContent = `✔ Finished (${elapsed}s)`;
+          badge.className = "run-badge ok";
+          toast("AOSP Command Succeeded", `'${cmd}' completed successfully.`, "ok", 3000);
+        } else {
+          badge.textContent = `❌ Exit ${exitCode} (${elapsed}s)`;
+          badge.className = "run-badge error";
+          toast("AOSP Command Failed", `'${cmd}' exited with code ${exitCode}.`, "danger", 4000);
+        }
+      }
+    } else {
+      throw new Error("HTTP " + res.status);
+    }
+  } catch (err) {
+    clearInterval(timerId);
+    if (signal.aborted) {
+      if (badge) {
+        badge.textContent = `⏹ Stopped (${elapsed}s)`;
+        badge.className = "run-badge warn";
+      }
+      if (outEl) {
+        outEl.innerHTML += `<span style="color:#d29922">\n[INTERRUPTED] Command aborted by user.\n</span>`;
+      }
+    } else {
+      if (badge) {
+        badge.textContent = `❌ Error (${elapsed}s)`;
+        badge.className = "run-badge error";
+      }
+      if (outEl) {
+        outEl.innerHTML += `<span style="color:#f85149">\n[ERROR] ${esc(String(err.message || err))}\n</span>`;
+      }
+    }
+  } finally {
+    clearInterval(timerId);
+    _aospRunning = false;
+    _aospAbortController = null;
+    actionBtns.forEach(b => b.disabled = false);
+    if (stopBtn) {
+      stopBtn.disabled = true;
+      stopBtn.classList.remove("danger-solid");
+    }
+    if (outEl) outEl.scrollTop = outEl.scrollHeight;
+  }
+}
+
+async function stopAospCommand() {
+  if (!_aospRunning) return;
+  if (_aospAbortController) {
+    try { _aospAbortController.abort(); } catch { /* ignore */ }
+  }
+  try {
+    await fetch("/api/terminal/stop", { method: "POST" });
+  } catch { /* ignore */ }
+}
+
 /* ---------------- Wiring ---------------- */
 function switchTab(tab) {
   const isFiles = tab === "files";
+  const isAosp = tab === "aosp";
   const isTerminal = tab === "terminal";
   const isDocs = tab === "docs";
-  const isPipelinesView = !isFiles && !isTerminal && !isDocs;
+  const isPipelinesView = !isFiles && !isAosp && !isTerminal && !isDocs;
 
   // Collapse Config Files sidebar in Docs view to give maximum full-width canvas
   $(".layout")?.classList.toggle("no-sidebar", isDocs);
 
   $("#view-files")?.classList.toggle("hidden", !isFiles);
+  $("#view-aosp")?.classList.toggle("hidden", !isAosp);
   $("#view-pipelines")?.classList.toggle("hidden", !isPipelinesView);
   $("#view-terminal")?.classList.toggle("hidden", !isTerminal);
   $("#view-docs")?.classList.toggle("hidden", !isDocs);
@@ -3447,6 +3696,10 @@ function switchTab(tab) {
   }
   syncTopTabs();
   renderFiles($("#search")?.value || "");
+  if (isAosp) {
+    loadAospConfig();
+    return;
+  }
   if (isTerminal) {
     setTimeout(() => $("#term-input")?.focus(), 40);
     return;
@@ -3536,8 +3789,36 @@ function wire() {
   $("#tab-files")?.addEventListener("click", () => switchTab("files"));
   $("#tab-pipelines")?.addEventListener("click", () => { switchTab("pipelines"); renderFiles($("#search")?.value || ""); });
   $("#tab-system")?.addEventListener("click", () => { switchTab("system"); renderFiles($("#search")?.value || ""); });
+  $("#tab-aosp")?.addEventListener("click", () => switchTab("aosp"));
   $("#tab-terminal")?.addEventListener("click", () => { switchTab("terminal"); renderFiles($("#search")?.value || ""); });
   $("#tab-docs")?.addEventListener("click", () => switchTab("docs"));
+
+  // AOSP Center wiring
+  $("#btn-aosp-reload")?.addEventListener("click", () => loadAospConfig());
+  $("#btn-aosp-save")?.addEventListener("click", () => saveAospConfig());
+  $("#aosp-project-select")?.addEventListener("change", () => saveAospConfig());
+  $("#btn-aosp-clear")?.addEventListener("click", () => { if ($("#aosp-output")) $("#aosp-output").innerHTML = ""; });
+  $("#btn-aosp-copy")?.addEventListener("click", () => {
+    try {
+      navigator.clipboard.writeText($("#aosp-output")?.textContent || "");
+      toast("Copied ✓", "AOSP console output copied to clipboard.", "ok", 2200);
+    } catch {
+      toast("Copy failed", "Select text manually to copy.", "warn");
+    }
+  });
+  $("#btn-aosp-stop")?.addEventListener("click", () => stopAospCommand());
+  document.querySelectorAll(".aosp-action-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const cmd = btn.dataset.cmd;
+      if (cmd) runAospCommand(cmd);
+    });
+  });
+  document.querySelectorAll(".aosp-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const cmd = chip.dataset.cmd;
+      if (cmd) runAospCommand(cmd);
+    });
+  });
 
   // Sphinx Docs wiring
   $("#docs-file-select")?.addEventListener("change", (e) => loadDocFile(e.target.value));
@@ -3898,6 +4179,8 @@ async function boot() {
 
   if (savedTab === "terminal") {
     switchTab("terminal");
+  } else if (savedTab === "aosp") {
+    switchTab("aosp");
   } else if (savedTab === "docs") {
     switchTab("docs");
   } else if (savedTab === "files") {

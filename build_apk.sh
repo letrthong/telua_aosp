@@ -1103,6 +1103,7 @@ show_info_general() {
     printf "  \033[1;37m%-20s\033[0m \033[1;32m%s\033[0m\n" "Module Name:" "$module_name"
     printf "  \033[1;37m%-20s\033[0m \033[0;37m%s\033[0m\n" "Source Path:" "$SOURCE_CODE_RELATIVE_PATH"
     printf "  \033[1;37m%-20s\033[0m \033[0;32m%s/%s\033[0m\n" "APK Output:" "$APK_OUTPUT_RELATIVE_PATH" "$APK_FILE_NAME"
+    printf "  \033[1;37m%-20s\033[0m \033[0;35m%s\033[0m\n" "AOSP Root Dir:" "${AOSP_ROOT_DIR:-Auto-detect (ancestor search)}"
     printf "  \033[1;37m%-20s\033[0m \033[0;36m%s\033[0m\n" "Root Dir:" "${ROOT_DIR:-Not found}"
     printf "  \033[1;37m%-20s\033[0m \033[0;90m%s\033[0m\n" "AOSP Top Rel:" "${AOSP_TOP_REL_PATH:-Auto-detect (android/qssi or android)}"
     printf "  \033[1;37m%-20s\033[0m \033[0;36m%s\033[0m\n" "AOSP Top:" "${ANDROID_TOP:-Not found (no 'android' dir above $SCRIPT_DIR)}"

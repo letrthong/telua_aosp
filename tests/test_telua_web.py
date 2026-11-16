@@ -216,6 +216,27 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertEqual(res_stop.status_code, 200)
         self.assertTrue(res_stop.get_json()["ok"])
 
+    def test_api_aosp_config_get_and_post(self):
+        res = self.client.get("/api/aosp/config")
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertTrue(data["ok"])
+        self.assertIn("aosp_root_dir", data)
+        self.assertIn("active_project", data)
+        self.assertIn("profiles", data)
+
+        # Test updating AOSP config
+        res_post = self.client.post("/api/aosp/config", json={
+            "aosp_root_dir": "D:/test_aosp_path",
+            "active_project": "oem_service",
+        })
+        self.assertEqual(res_post.status_code, 200)
+        updated = res_post.get_json()
+        self.assertEqual(updated["aosp_root_dir"], "D:/test_aosp_path")
+
+        # Reset AOSP_ROOT_DIR back to empty
+        self.client.post("/api/aosp/config", json={"aosp_root_dir": ""})
+
 
 if __name__ == "__main__":
     unittest.main()

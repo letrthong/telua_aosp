@@ -32,6 +32,7 @@
         <button class="tab" id="tab-system"
           title="System &amp; Docker CLI pipelines (config/const_system_cli.config — telua system <action>)">🖥
           System</button>
+        <button class="tab" id="tab-aosp" title="AOSP Android Build, Deploy &amp; Test Center (tel b, tel test, apk.config)">🤖 AOSP</button>
         <button class="tab" id="tab-terminal"
           title="Interactive Web CLI Terminal — run tel / Linux / Git / ADB commands directly">💻 Terminal</button>
         <button class="tab" id="tab-docs" title="Sphinx Doc-as-Code — WYSIWYG Quill.js &amp; RST Converter">📚
@@ -178,6 +179,126 @@
         <button class="btn primary" id="btn-term-run">▶ Run</button>
         <button class="btn danger" id="btn-term-stop" disabled title="Stop running command (Ctrl+C / SIGINT)">⏹
           Stop</button>
+      </div>
+    </section>
+
+    <!-- ============ AOSP pane (Build, Deploy, Test & Path Config) ============ -->
+    <section class="editor-pane hidden" id="view-aosp">
+      <div class="editor-head">
+        <div class="editor-title">
+          <span class="mono" style="color:var(--accent);font-weight:700">🤖 AOSP Center</span>
+          <span id="aosp-badge-project" class="run-badge">oem_service</span>
+          <span id="aosp-badge-target" class="run-badge" style="opacity:0.85;">lunch: —</span>
+          <span id="aosp-status-badge" class="run-badge">Ready</span>
+        </div>
+        <div class="editor-actions">
+          <button class="btn" id="btn-aosp-reload" title="Reload configuration from apk.config">↺ Reload</button>
+          <button class="btn" id="btn-aosp-copy" title="Copy output to clipboard">📋 Copy Log</button>
+          <button class="btn" id="btn-aosp-clear" title="Clear console output">🧹 Clear</button>
+        </div>
+      </div>
+
+      <!-- Config Box -->
+      <div class="aosp-config-card" id="aosp-config-card">
+        <div class="aosp-card-head">
+          <span class="aosp-card-title">📁 Workspace &amp; AOSP Environment Configuration</span>
+          <span id="aosp-cfg-file" class="meta mono">config/apk.config</span>
+        </div>
+
+        <div class="aosp-form-grid">
+          <div class="aosp-form-group aosp-col-full">
+            <label for="aosp-root-input" class="aosp-label">
+              <span>AOSP Root Directory (<code>AOSP_ROOT_DIR</code>)</span>
+              <span id="aosp-path-status" class="aosp-path-status"></span>
+            </label>
+            <div class="aosp-input-row">
+              <input type="text" id="aosp-root-input" class="term-input mono"
+                placeholder="e.g. /home/developer/workspace/android or D:/workspace/android (Leave blank for ancestor search)">
+              <button class="btn primary" id="btn-aosp-save" title="Save AOSP Configuration into apk.config">💾 Save Config</button>
+            </div>
+            <span class="aosp-help">The root containing your Android source tree (e.g. <code>android/</code>, <code>android/qssi</code>, or AOSP root). Required when <code>telua_aosp</code> is outside the AOSP workspace.</span>
+          </div>
+
+          <div class="aosp-form-group">
+            <label for="aosp-project-select" class="aosp-label">Active Project (<code>ACTIVE_PROJECT</code>)</label>
+            <select id="aosp-project-select" class="theme-select mono" style="width:100%;"></select>
+          </div>
+
+          <div class="aosp-form-group">
+            <label for="aosp-target-product" class="aosp-label">Target Product (<code>CONFIG_TARGET_PRODUCT</code>)</label>
+            <input type="text" id="aosp-target-product" class="term-input mono" placeholder="e.g. abc_xyz_in or qssi">
+          </div>
+
+          <div class="aosp-form-group">
+            <label for="aosp-target-variant" class="aosp-label">Build Variant (<code>CONFIG_TARGET_BUILD_VARIANT</code>)</label>
+            <input type="text" id="aosp-target-variant" class="term-input mono" placeholder="e.g. userdebug or eng">
+          </div>
+        </div>
+
+        <div class="aosp-meta-strip" id="aosp-meta-strip">
+          <div class="aosp-meta-item">
+            <span class="meta-label">Module:</span>
+            <span id="aosp-meta-module" class="mono meta-value">—</span>
+          </div>
+          <div class="aosp-meta-item">
+            <span class="meta-label">APK Name:</span>
+            <span id="aosp-meta-apk" class="mono meta-value">—</span>
+          </div>
+          <div class="aosp-meta-item">
+            <span class="meta-label">Source Path:</span>
+            <span id="aosp-meta-source" class="mono meta-value">—</span>
+          </div>
+          <div class="aosp-meta-item">
+            <span class="meta-label">Deploy Path:</span>
+            <span id="aosp-meta-deploy" class="mono meta-value">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Commands Bar -->
+      <div class="aosp-actions-bar">
+        <div class="aosp-btn-group">
+          <button class="btn primary aosp-action-btn" id="btn-aosp-build" data-cmd="tel b"
+            title="Execute: tel b (Full compilation 'm &lt;module&gt;', push APK, and reboot device)">
+            🔨 Build &amp; Deploy (<code>tel b</code>)
+          </button>
+          <button class="btn jade-btn aosp-action-btn" id="btn-aosp-fast-deploy" data-cmd="tel b -n"
+            title="Execute: tel b -n (Fast deploy 5-10s: push APK and restart framework without full reboot)">
+            ⚡ Fast Deploy (<code>tel b -n</code>)
+          </button>
+          <button class="btn jade-btn aosp-action-btn" id="btn-aosp-test" data-cmd="tel test"
+            title="Execute: tel test (Run unittest suite)">
+            🧪 Run Tests (<code>tel test</code>)
+          </button>
+          <button class="btn aosp-action-btn" id="btn-aosp-info" data-cmd="tel info"
+            title="Execute: tel info (build_apk.sh --info diagnostics)">
+            ℹ️ Target Info (<code>tel info</code>)
+          </button>
+        </div>
+        <button class="btn danger" id="btn-aosp-stop" disabled title="Stop running AOSP command (SIGINT/kill)">
+          ⏹ Stop
+        </button>
+      </div>
+
+      <!-- Quick Command Chips -->
+      <div class="term-quick-bar" style="margin: 0 16px 8px 16px;">
+        <span class="meta">⚡ AOSP Shortcuts:</span>
+        <button class="term-chip aosp-chip" data-cmd="tel b">tel b</button>
+        <button class="term-chip aosp-chip" data-cmd="tel b -n">tel b -n</button>
+        <button class="term-chip aosp-chip" data-cmd="tel test">tel test</button>
+        <button class="term-chip aosp-chip" data-cmd="tel info">tel info</button>
+        <button class="term-chip aosp-chip" data-cmd="tel --help">tel --help</button>
+        <button class="term-chip aosp-chip" data-cmd="adb devices -l">adb devices -l</button>
+        <button class="term-chip aosp-chip" data-cmd="adb remount">adb remount</button>
+      </div>
+
+      <!-- Live Terminal Console -->
+      <div class="aosp-console-wrap">
+        <pre id="aosp-output" class="info-out run-terminal term-screen">🤖 AOSP Command Center ready.
+• Click "🔨 Build & Deploy" or "⚡ Fast Deploy" to compile and install your module.
+• Ensure AOSP Root Directory is configured above if telua_aosp is located outside the Android tree.
+• Live execution logs will stream here.
+</pre>
       </div>
     </section>
 
