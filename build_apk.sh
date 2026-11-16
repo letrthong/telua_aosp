@@ -1352,7 +1352,7 @@ load_and_validate_config() {
 
     if [ -n "$overlay_cfg" ] && [ -f "$overlay_cfg" ] && [ -z "${CLI_PROFILE:-}" ]; then
         local ov_proj
-        ov_proj="$(grep -E '^[[:space:]]*ACTIVE_PROJECT=' "$overlay_cfg" | tail -n1 | cut -d= -f2- | tr -d '"'"'"' | xargs 2>/dev/null || echo "")"
+        ov_proj="$(grep -E '^[[:space:]]*ACTIVE_PROJECT=' "$overlay_cfg" | tail -n1 | cut -d= -f2- | tr -d '\042\047' | xargs 2>/dev/null || echo "")"
         if [ -n "$ov_proj" ]; then
             ACTIVE_PROJECT="$ov_proj"
         fi
