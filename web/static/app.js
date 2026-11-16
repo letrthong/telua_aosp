@@ -3848,8 +3848,21 @@ function wire() {
 
   // AOSP Center wiring
   $("#btn-aosp-reload")?.addEventListener("click", () => loadAospConfig());
+  $("#btn-aosp-edit")?.addEventListener("click", () => setAospEditMode(true));
+  $("#btn-aosp-cancel")?.addEventListener("click", () => cancelAospEdit());
   $("#btn-aosp-save")?.addEventListener("click", () => saveAospConfig());
   $("#aosp-project-select")?.addEventListener("change", () => saveAospConfig());
+  ["#aosp-root-input", "#aosp-target-product", "#aosp-target-variant"].forEach(sel => {
+    $(sel)?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        saveAospConfig();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        cancelAospEdit();
+      }
+    });
+  });
   $("#btn-aosp-clear")?.addEventListener("click", () => { if ($("#aosp-output")) $("#aosp-output").innerHTML = ""; });
   $("#btn-aosp-copy")?.addEventListener("click", () => {
     try {
