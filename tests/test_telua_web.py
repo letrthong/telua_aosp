@@ -225,14 +225,20 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertIn("active_project", data)
         self.assertIn("profiles", data)
 
-        # Test updating AOSP config
+        # Test updating AOSP config including target lunch and overlay persistence
         res_post = self.client.post("/api/aosp/config", json={
             "aosp_root_dir": "D:/test_aosp_path",
             "active_project": "oem_service",
+            "target_product": "test_board_car",
+            "target_variant": "userdebug",
         })
         self.assertEqual(res_post.status_code, 200)
         updated = res_post.get_json()
         self.assertEqual(updated["aosp_root_dir"], "D:/test_aosp_path")
+        self.assertEqual(updated["active_project"], "oem_service")
+        self.assertEqual(updated["target_product"], "test_board_car")
+        self.assertEqual(updated["target_variant"], "userdebug")
+        self.assertIn("apk_overlays.config", updated["config_file"])
 
         # Reset AOSP_ROOT_DIR back to empty
         self.client.post("/api/aosp/config", json={"aosp_root_dir": ""})
