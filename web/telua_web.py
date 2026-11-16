@@ -277,6 +277,17 @@ def api_profile():
     except OSError:
         backup = None
     APK_CONFIG.write_text(new_text, encoding="utf-8")
+
+    overlay_config = ROOT / "config" / "overlay" / "apk_overlays.config"
+    if overlay_config.is_file():
+        try:
+            otext = overlay_config.read_text(encoding="utf-8", errors="ignore")
+            if re.search(r'(?m)^([ \t]*ACTIVE_PROJECT\s*=\s*)"[^"]*"', otext):
+                new_otext = re.sub(r'(?m)^([ \t]*ACTIVE_PROJECT\s*=\s*)"[^"]*"', r'\g<1>"%s"' % name, otext, count=1)
+                overlay_config.write_text(new_otext, encoding="utf-8")
+        except OSError:
+            pass
+
     return jsonify({"ok": True, "active_project": name, "backup": backup})
 
 
@@ -332,7 +343,7 @@ def _parse_aosp_info():
         return default
 
     aosp_root = get_var("AOSP_ROOT_DIR", "")
-    active_project = get_var("ACTIVE_PROJECT", "oem_service")
+    active_project = parse_active_project() or get_var("ACTIVE_PROJECT", "oem_service")
     target_product = get_var("CONFIG_TARGET_PRODUCT", "")
     target_variant = get_var("CONFIG_TARGET_BUILD_VARIANT", "")
 
@@ -436,12 +447,20 @@ def api_aosp_config_post():
     APK_CONFIG.write_text(text, encoding="utf-8")
 
     overlay_config = ROOT / "config" / "overlay" / "apk_overlays.config"
-    if overlay_config.is_file() and aosp_root_dir is not None:
+    if overlay_config.is_file():
         try:
             otext = overlay_config.read_text(encoding="utf-8", errors="ignore")
-            if re.search(r'^[ \t]*AOSP_ROOT_DIR\s*=', otext, re.M):
+            dirty_overlay = False
+            if aosp_root_dir is not None and re.search(r'^[ \t]*AOSP_ROOT_DIR\s*=', otext, re.M):
                 clean_root = str(aosp_root_dir).strip().replace("\\", "/")
                 otext = re.sub(r'^[ \t]*AOSP_ROOT_DIR\s*=.*$', f'AOSP_ROOT_DIR="{clean_root}"', otext, flags=re.M)
+                dirty_overlay = True
+            if active_project:
+                name = str(active_project).strip()
+                if re.search(r'(?m)^([ \t]*ACTIVE_PROJECT\s*=\s*)"[^"]*"', otext):
+                    otext = re.sub(r'(?m)^([ \t]*ACTIVE_PROJECT\s*=\s*)"[^"]*"', r'\g<1>"%s"' % name, otext, count=1)
+                    dirty_overlay = True
+            if dirty_overlay:
                 overlay_config.write_text(otext, encoding="utf-8")
         except OSError:
             pass
