@@ -1154,6 +1154,7 @@ function openProfileModal() {
         toast("Profile switched ✓", `ACTIVE_PROJECT="${data.active_project}" (backup: ${data.backup || "none"})`, "ok");
         $("#modal-profile").classList.add("hidden");
         refreshStatus();
+        if (!$("#view-aosp")?.classList.contains("hidden")) loadAospConfig();
         if (state.current && (state.current.name === "config/apk.config" || state.current.name === "apk.config")) openFile(state.current.name);
       } catch (err) {
         toast("Switch failed", err.message, "err");
@@ -3434,6 +3435,52 @@ async function handleDocsFileUpload(file) {
    ============================================================================== */
 let _aospRunning = false;
 let _aospAbortController = null;
+let _aospEditMode = false;
+let _aospLoadedData = null;
+
+function setAospEditMode(editing) {
+  _aospEditMode = !!editing;
+  const card = $("#aosp-config-card");
+  card?.classList.toggle("is-editing", _aospEditMode);
+
+  const rootInput = $("#aosp-root-input");
+  const prodInput = $("#aosp-target-product");
+  const varInput = $("#aosp-target-variant");
+  if (rootInput) rootInput.disabled = !_aospEditMode;
+  if (prodInput) prodInput.disabled = !_aospEditMode;
+  if (varInput) varInput.disabled = !_aospEditMode;
+
+  const btnEdit = $("#btn-aosp-edit");
+  const btnSave = $("#btn-aosp-save");
+  const btnCancel = $("#btn-aosp-cancel");
+  const badge = $("#aosp-edit-badge");
+
+  if (btnEdit) btnEdit.classList.toggle("hidden", _aospEditMode);
+  if (btnSave) btnSave.classList.toggle("hidden", !_aospEditMode);
+  if (btnCancel) btnCancel.classList.toggle("hidden", !_aospEditMode);
+
+  if (badge) {
+    if (_aospEditMode) {
+      badge.innerHTML = '<span style="color:var(--yellow);font-weight:600;">✎ Editing…</span>';
+    } else {
+      badge.innerHTML = '<span style="color:var(--text-dim);">🔒 View mode</span>';
+    }
+  }
+
+  if (_aospEditMode && rootInput) {
+    rootInput.focus();
+    rootInput.select();
+  }
+}
+
+function cancelAospEdit() {
+  if (_aospLoadedData) {
+    if ($("#aosp-root-input")) $("#aosp-root-input").value = _aospLoadedData.aosp_root_dir || "";
+    if ($("#aosp-target-product")) $("#aosp-target-product").value = _aospLoadedData.target_product || "";
+    if ($("#aosp-target-variant")) $("#aosp-target-variant").value = _aospLoadedData.target_variant || "";
+  }
+  setAospEditMode(false);
+}
 
 async function loadAospConfig() {
   try {
@@ -3442,7 +3489,12 @@ async function loadAospConfig() {
     const data = await res.json();
     if (!data.ok) return;
 
-    if ($("#aosp-root-input")) $("#aosp-root-input").value = data.aosp_root_dir || "";
+    _aospLoadedData = data;
+    if (!_aospEditMode) {
+      setAospEditMode(false);
+    }
+
+    if ($("#aosp-root-input") && !_aospEditMode) $("#aosp-root-input").value = data.aosp_root_dir || "";
     if ($("#aosp-cfg-file")) $("#aosp-cfg-file").textContent = data.config_file || "config/apk.config";
 
     const pathStatus = $("#aosp-path-status");
@@ -3470,8 +3522,8 @@ async function loadAospConfig() {
       });
     }
 
-    if ($("#aosp-target-product")) $("#aosp-target-product").value = data.target_product || "";
-    if ($("#aosp-target-variant")) $("#aosp-target-variant").value = data.target_variant || "";
+    if ($("#aosp-target-product") && !_aospEditMode) $("#aosp-target-product").value = data.target_product || "";
+    if ($("#aosp-target-variant") && !_aospEditMode) $("#aosp-target-variant").value = data.target_variant || "";
 
     if ($("#aosp-badge-project")) $("#aosp-badge-project").textContent = data.active_project || "—";
     if ($("#aosp-badge-target")) {
@@ -3509,6 +3561,7 @@ async function saveAospConfig() {
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error("HTTP " + res.status);
+    setAospEditMode(false);
     await loadAospConfig();
     refreshStatus();
     toast("AOSP Configuration Saved", "Updated apk.config successfully.", "ok", 3000);
@@ -3517,7 +3570,7 @@ async function saveAospConfig() {
   } finally {
     if (saveBtn) {
       saveBtn.disabled = false;
-      saveBtn.textContent = "💾 Save Config";
+      saveBtn.textContent = "💾 Save";
     }
   }
 }

@@ -201,8 +201,16 @@
       <!-- Config Box -->
       <div class="aosp-config-card" id="aosp-config-card">
         <div class="aosp-card-head">
-          <span class="aosp-card-title">📁 Workspace &amp; AOSP Environment Configuration</span>
-          <span id="aosp-cfg-file" class="meta mono">config/apk.config</span>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="aosp-card-title">📁 Workspace &amp; AOSP Environment Configuration</span>
+            <span id="aosp-edit-badge" class="meta" style="font-size:11px;">🔒 View mode</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="aosp-cfg-file" class="meta mono">config/apk.config</span>
+            <button class="btn" id="btn-aosp-edit" title="Unlock fields to edit AOSP root, lunch product and variant">✎ Edit</button>
+            <button class="btn primary hidden" id="btn-aosp-save" title="Save AOSP Configuration into apk.config">💾 Save</button>
+            <button class="btn ghost hidden" id="btn-aosp-cancel" title="Cancel edits and reload original values">✖ Cancel</button>
+          </div>
         </div>
 
         <div class="aosp-form-grid">
@@ -212,9 +220,8 @@
               <span id="aosp-path-status" class="aosp-path-status"></span>
             </label>
             <div class="aosp-input-row">
-              <input type="text" id="aosp-root-input" class="term-input mono"
+              <input type="text" id="aosp-root-input" class="term-input mono" disabled
                 placeholder="e.g. /home/developer/workspace/android or D:/workspace/android (Leave blank for ancestor search)">
-              <button class="btn primary" id="btn-aosp-save" title="Save AOSP Configuration into apk.config">💾 Save Config</button>
             </div>
             <span class="aosp-help">The root containing your Android source tree (e.g. <code>android/</code>, <code>android/qssi</code>, or AOSP root). Required when <code>telua_aosp</code> is outside the AOSP workspace.</span>
           </div>
@@ -226,12 +233,12 @@
 
           <div class="aosp-form-group">
             <label for="aosp-target-product" class="aosp-label">Target Product (<code>CONFIG_TARGET_PRODUCT</code>)</label>
-            <input type="text" id="aosp-target-product" class="term-input mono" placeholder="e.g. abc_xyz_in or qssi">
+            <input type="text" id="aosp-target-product" class="term-input mono" disabled placeholder="e.g. abc_xyz_in or qssi">
           </div>
 
           <div class="aosp-form-group">
             <label for="aosp-target-variant" class="aosp-label">Build Variant (<code>CONFIG_TARGET_BUILD_VARIANT</code>)</label>
-            <input type="text" id="aosp-target-variant" class="term-input mono" placeholder="e.g. userdebug or eng">
+            <input type="text" id="aosp-target-variant" class="term-input mono" disabled placeholder="e.g. userdebug or eng">
           </div>
         </div>
 
