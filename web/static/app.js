@@ -3435,52 +3435,7 @@ async function handleDocsFileUpload(file) {
    ============================================================================== */
 let _aospRunning = false;
 let _aospAbortController = null;
-let _aospEditMode = false;
 let _aospLoadedData = null;
-
-function setAospEditMode(editing) {
-  _aospEditMode = !!editing;
-  const card = $("#aosp-config-card");
-  card?.classList.toggle("is-editing", _aospEditMode);
-
-  const rootInput = $("#aosp-root-input");
-  const prodInput = $("#aosp-target-product");
-  const varInput = $("#aosp-target-variant");
-  if (rootInput) rootInput.disabled = !_aospEditMode;
-  if (prodInput) prodInput.disabled = !_aospEditMode;
-  if (varInput) varInput.disabled = !_aospEditMode;
-
-  const btnEdit = $("#btn-aosp-edit");
-  const btnSave = $("#btn-aosp-save");
-  const btnCancel = $("#btn-aosp-cancel");
-  const badge = $("#aosp-edit-badge");
-
-  if (btnEdit) btnEdit.classList.toggle("hidden", _aospEditMode);
-  if (btnSave) btnSave.classList.toggle("hidden", !_aospEditMode);
-  if (btnCancel) btnCancel.classList.toggle("hidden", !_aospEditMode);
-
-  if (badge) {
-    if (_aospEditMode) {
-      badge.innerHTML = '<span style="color:var(--yellow);font-weight:600;">✎ Editing…</span>';
-    } else {
-      badge.innerHTML = '<span style="color:var(--text-dim);">🔒 View mode</span>';
-    }
-  }
-
-  if (_aospEditMode && rootInput) {
-    rootInput.focus();
-    rootInput.select();
-  }
-}
-
-function cancelAospEdit() {
-  if (_aospLoadedData) {
-    if ($("#aosp-root-input")) $("#aosp-root-input").value = _aospLoadedData.aosp_root_dir || "";
-    if ($("#aosp-target-product")) $("#aosp-target-product").value = _aospLoadedData.target_product || "";
-    if ($("#aosp-target-variant")) $("#aosp-target-variant").value = _aospLoadedData.target_variant || "";
-  }
-  setAospEditMode(false);
-}
 
 async function loadAospConfig() {
   try {
@@ -3490,49 +3445,49 @@ async function loadAospConfig() {
     if (!data.ok) return;
 
     _aospLoadedData = data;
-    if (!_aospEditMode) {
-      setAospEditMode(false);
-    }
 
-    if ($("#aosp-root-input") && !_aospEditMode) $("#aosp-root-input").value = data.aosp_root_dir || "";
-    if ($("#aosp-cfg-file")) $("#aosp-cfg-file").textContent = data.config_file || "config/apk.config";
-
+    // Compact bar: AOSP Root Path & Status
+    const barRoot = $("#aosp-bar-root");
     const pathStatus = $("#aosp-path-status");
-    if (pathStatus) {
+    if (barRoot) {
       if (data.aosp_root_dir) {
-        if (data.aosp_exists) {
-          pathStatus.innerHTML = '<span style="color:#3fb950;font-weight:600;">✔ Directory exists on disk</span>';
-        } else {
-          pathStatus.innerHTML = '<span style="color:#f85149;font-weight:600;">⚠️ Directory not found on disk</span>';
+        barRoot.textContent = data.aosp_root_dir;
+        barRoot.title = `AOSP Root Directory: ${data.aosp_root_dir}`;
+        if (pathStatus) {
+          pathStatus.innerHTML = data.aosp_exists
+            ? '<span style="color:#3fb950;font-weight:700;" title="Directory exists on disk">✔</span>'
+            : '<span style="color:#f85149;font-weight:700;" title="Directory not found on disk">⚠️</span>';
         }
       } else {
-        pathStatus.innerHTML = '<span style="color:var(--text-dim);font-style:italic;">Auto-detect from ancestors</span>';
+        barRoot.textContent = "Auto-detect (ancestor search)";
+        barRoot.title = "Searching parent directories for 'android/'";
+        if (pathStatus) pathStatus.innerHTML = "";
       }
     }
 
+    // Compact bar: Active Project Select
     const projSel = $("#aosp-project-select");
     if (projSel) {
       projSel.innerHTML = "";
       (data.profiles || []).forEach(p => {
         const opt = document.createElement("option");
         opt.value = p;
-        opt.textContent = p + (p === data.active_project ? " (active)" : "");
+        opt.textContent = p;
         if (p === data.active_project) opt.selected = true;
         projSel.appendChild(opt);
       });
     }
 
-    if ($("#aosp-target-product") && !_aospEditMode) $("#aosp-target-product").value = data.target_product || "";
-    if ($("#aosp-target-variant") && !_aospEditMode) $("#aosp-target-variant").value = data.target_variant || "";
-
-    if ($("#aosp-badge-project")) $("#aosp-badge-project").textContent = data.active_project || "—";
-    if ($("#aosp-badge-target")) {
+    // Compact bar: Lunch Target (Product & Variant combined)
+    const barTarget = $("#aosp-bar-target");
+    if (barTarget) {
       const targetStr = (data.target_product && data.target_variant)
         ? `${data.target_product}-${data.target_variant}`
         : "lunch: —";
-      $("#aosp-badge-target").textContent = targetStr;
+      barTarget.textContent = targetStr;
     }
 
+    // Compact bar: Meta pills
     if ($("#aosp-meta-module")) $("#aosp-meta-module").textContent = data.module_name || "—";
     if ($("#aosp-meta-apk")) $("#aosp-meta-apk").textContent = data.apk_name || "—";
     if ($("#aosp-meta-source")) $("#aosp-meta-source").textContent = data.source_path || "—";
@@ -3542,18 +3497,57 @@ async function loadAospConfig() {
   }
 }
 
-async function saveAospConfig() {
-  const saveBtn = $("#btn-aosp-save");
+function openAospConfigModal() {
+  const d = _aospLoadedData || {};
+  if ($("#aosp-modal-root-input")) $("#aosp-modal-root-input").value = d.aosp_root_dir || "";
+  if ($("#aosp-modal-cfg-file")) $("#aosp-modal-cfg-file").textContent = d.config_file || "config/apk.config";
+
+  const modalPathStatus = $("#aosp-modal-path-status");
+  if (modalPathStatus) {
+    if (d.aosp_root_dir) {
+      modalPathStatus.innerHTML = d.aosp_exists
+        ? '<span style="color:#3fb950;font-weight:600;">✔ Directory exists on disk</span>'
+        : '<span style="color:#f85149;font-weight:600;">⚠️ Directory not found on disk</span>';
+    } else {
+      modalPathStatus.innerHTML = '<span style="color:var(--text-dim);font-style:italic;">Auto-detect from ancestors</span>';
+    }
+  }
+
+  const modalProjSel = $("#aosp-modal-project-select");
+  if (modalProjSel) {
+    modalProjSel.innerHTML = "";
+    (d.profiles || []).forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p;
+      opt.textContent = p;
+      if (p === d.active_project) opt.selected = true;
+      modalProjSel.appendChild(opt);
+    });
+  }
+
+  if ($("#aosp-modal-target-product")) $("#aosp-modal-target-product").value = d.target_product || "";
+  if ($("#aosp-modal-target-variant")) $("#aosp-modal-target-variant").value = d.target_variant || "";
+
+  $("#modal-aosp-config")?.classList.remove("hidden");
+  setTimeout(() => $("#aosp-modal-root-input")?.focus(), 50);
+}
+
+function closeAospConfigModal() {
+  $("#modal-aosp-config")?.classList.add("hidden");
+}
+
+async function saveAospConfigFromModal() {
+  const saveBtn = $("#btn-aosp-modal-save");
   if (saveBtn) {
     saveBtn.disabled = true;
     saveBtn.textContent = "Saving…";
   }
   try {
     const payload = {
-      aosp_root_dir: $("#aosp-root-input")?.value || "",
-      active_project: $("#aosp-project-select")?.value || "",
-      target_product: $("#aosp-target-product")?.value || "",
-      target_variant: $("#aosp-target-variant")?.value || "",
+      aosp_root_dir: $("#aosp-modal-root-input")?.value || "",
+      active_project: $("#aosp-modal-project-select")?.value || "",
+      target_product: $("#aosp-modal-target-product")?.value || "",
+      target_variant: $("#aosp-modal-target-variant")?.value || "",
     };
     const res = await fetch("/api/aosp/config", {
       method: "POST",
@@ -3561,7 +3555,7 @@ async function saveAospConfig() {
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error("HTTP " + res.status);
-    setAospEditMode(false);
+    closeAospConfigModal();
     await loadAospConfig();
     refreshStatus();
     toast("AOSP Configuration Saved", "Updated apk.config successfully.", "ok", 3000);
@@ -3570,8 +3564,25 @@ async function saveAospConfig() {
   } finally {
     if (saveBtn) {
       saveBtn.disabled = false;
-      saveBtn.textContent = "💾 Save";
+      saveBtn.textContent = "💾 Save Configuration";
     }
+  }
+}
+
+async function quickSwitchAospProject(projectName) {
+  if (!projectName) return;
+  try {
+    const res = await fetch("/api/aosp/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active_project: projectName }),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    await loadAospConfig();
+    refreshStatus();
+    toast("Project Switched", `ACTIVE_PROJECT="${projectName}"`, "ok", 2500);
+  } catch (err) {
+    toast("Switch Failed", String(err.message || err), "danger");
   }
 }
 
@@ -3848,18 +3859,22 @@ function wire() {
 
   // AOSP Center wiring
   $("#btn-aosp-reload")?.addEventListener("click", () => loadAospConfig());
-  $("#btn-aosp-edit")?.addEventListener("click", () => setAospEditMode(true));
-  $("#btn-aosp-cancel")?.addEventListener("click", () => cancelAospEdit());
-  $("#btn-aosp-save")?.addEventListener("click", () => saveAospConfig());
-  $("#aosp-project-select")?.addEventListener("change", () => saveAospConfig());
-  ["#aosp-root-input", "#aosp-target-product", "#aosp-target-variant"].forEach(sel => {
+  $("#btn-aosp-open-dialog")?.addEventListener("click", () => openAospConfigModal());
+  $("#btn-aosp-edit-dialog")?.addEventListener("click", () => openAospConfigModal());
+  $("#btn-aosp-modal-cancel")?.addEventListener("click", () => closeAospConfigModal());
+  $("#btn-aosp-modal-save")?.addEventListener("click", () => saveAospConfigFromModal());
+  $("#modal-aosp-config")?.addEventListener("click", (e) => {
+    if (e.target === $("#modal-aosp-config")) closeAospConfigModal();
+  });
+  $("#aosp-project-select")?.addEventListener("change", (e) => quickSwitchAospProject(e.target.value));
+  ["#aosp-modal-root-input", "#aosp-modal-target-product", "#aosp-modal-target-variant"].forEach(sel => {
     $(sel)?.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        saveAospConfig();
+        saveAospConfigFromModal();
       } else if (e.key === "Escape") {
         e.preventDefault();
-        cancelAospEdit();
+        closeAospConfigModal();
       }
     });
   });

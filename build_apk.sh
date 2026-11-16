@@ -36,6 +36,7 @@ GIT_CONFIG_FILE_NAME="const_git.config"
 DOCKER_CONFIG_FILE_NAME="const_docker.config"
 SYSTEM_CLI_CONFIG_FILE_NAME="const_system_cli.config"
 NETWORK_CONFIG_FILE_NAME="const_network.config"
+OVERLAY_CONFIG_FILE_NAME="apk_overlays.config"
 # Personal (untracked, git-ignored) files relative to the toolkit repo.
 # 'telua init' creates them from '<file>.example' if missing; 'telua update' backs them up and restores them.
 # Both live in config/overlay/ (git-ignored — see .gitignore 'config/overlay/*.config').
@@ -153,6 +154,7 @@ MULTI_CONFIG_FILE="$(find_const_config_file "$MULTI_CONFIG_FILE_NAME")"
 MY_CONFIG_FILE="$(find_const_config_file "$MY_CONFIG_FILE_NAME")"
 [ ! -f "$MY_CONFIG_FILE" ] && MY_CONFIG_FILE="$(find_const_config_file "$PROJECT_CONFIG_FILE_NAME")"
 PROJECT_CONFIG_FILE="$MY_CONFIG_FILE"
+OVERLAY_CONFIG_FILE="$(find_const_config_file "$OVERLAY_CONFIG_FILE_NAME")"
 
 # --- Logging helpers (single source of truth: src/telua_log.sh) ---
 # Shared color logging helpers (log_info/log_success/log_warn/log_error) were
@@ -1093,6 +1095,9 @@ show_info_general() {
     echo -e "\n\033[1;36m=== 1. GENERAL BUILD CONFIGURATION ===\033[0m"
     printf "  \033[1;37m%-20s\033[0m \033[1;33mv%s\033[0m \033[0;90m(Updated: %s)\033[0m\n" "Script Version:" "$SCRIPT_VERSION" "$SCRIPT_LAST_UPDATED"
     printf "  \033[1;37m%-20s\033[0m \033[0;32m%s\033[0m\n" "Config File:" "$CONFIG_FILE"
+    if [ -n "${OVERLAY_CONFIG_FILE:-}" ] && [ -f "$OVERLAY_CONFIG_FILE" ]; then
+        printf "  \033[1;37m%-20s\033[0m \033[0;32m%s [ACTIVE]\033[0m\n" "Overlay File:" "$OVERLAY_CONFIG_FILE"
+    fi
     printf "  \033[1;37m%-20s\033[0m \033[0;33m%s\033[0m\n" "Car Config:" "$CAR_CONFIG_FILE"
     printf "  \033[1;37m%-20s\033[0m \033[0;33m%s\033[0m\n" "Security Config:" "$SECURITY_CONFIG_FILE"
     printf "  \033[1;37m%-20s\033[0m \033[1;35m%s\033[0m\n" "Project:" "${ACTIVE_PROJECT:-default}"
@@ -1331,8 +1336,33 @@ load_and_validate_config() {
         fi
     fi
 
-    # 3. Nạp cấu hình dự án (có thể ghi đè bất kỳ biến Car nào nếu cần)
+    # 2b. Kiểm tra file cấu hình cá nhân (apk_overlays.config)
+    local overlay_cfg=""
+    if [ -f "$MASTER_SCRIPT_DIR/config/overlay/apk_overlays.config" ]; then
+        overlay_cfg="$MASTER_SCRIPT_DIR/config/overlay/apk_overlays.config"
+    elif [ -f "$SCRIPT_DIR/config/overlay/apk_overlays.config" ]; then
+        overlay_cfg="$SCRIPT_DIR/config/overlay/apk_overlays.config"
+    elif [ -f "$MASTER_SCRIPT_DIR/apk_overlays.config" ]; then
+        overlay_cfg="$MASTER_SCRIPT_DIR/apk_overlays.config"
+    elif [ -f "$SCRIPT_DIR/apk_overlays.config" ]; then
+        overlay_cfg="$SCRIPT_DIR/apk_overlays.config"
+    fi
+
+    if [ -n "$overlay_cfg" ] && [ -f "$overlay_cfg" ] && [ -z "${CLI_PROFILE:-}" ]; then
+        local ov_proj
+        ov_proj="$(grep -E '^[[:space:]]*ACTIVE_PROJECT=' "$overlay_cfg" | tail -n1 | cut -d= -f2- | tr -d '"'"'"' | xargs 2>/dev/null || echo "")"
+        if [ -n "$ov_proj" ]; then
+            ACTIVE_PROJECT="$ov_proj"
+        fi
+    fi
+
+    # 3. Nạp cấu hình dự án gốc
     source_config_safe "$CONFIG_FILE"
+
+    # 3b. Nạp file cấu hình cá nhân để ghi đè AOSP_ROOT_DIR, CONFIG_TARGET_PRODUCT, v.v.
+    if [ -n "$overlay_cfg" ] && [ -f "$overlay_cfg" ]; then
+        source_config_safe "$overlay_cfg"
+    fi
 
     local missing_vars=0
     local required_vars=(

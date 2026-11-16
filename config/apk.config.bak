@@ -27,14 +27,14 @@
 # Leave empty ("") to auto-detect by searching ancestor directories for 'android/'.
 # Example: AOSP_ROOT_DIR="/home/developer/workspace/android" or "D:/workspace/android"
 # ------------------------------------------------------------------------------
-AOSP_ROOT_DIR="${AOSP_ROOT_DIR:-D:/test_aosp_path}"
+AOSP_ROOT_DIR="${AOSP_ROOT_DIR:-}"
 
 # ------------------------------------------------------------------------------
 # 1. Project Selection
 # Set the active project to build and deploy:
 # Options: "oem_service" | "car_audio" | "vehicle_service"
 # ------------------------------------------------------------------------------
-ACTIVE_PROJECT="oem_service"
+ACTIVE_PROJECT="vehicle_service"
 
 # Define project profiles (source path, output directory, APK name, deploy path)
 case "$ACTIVE_PROJECT" in

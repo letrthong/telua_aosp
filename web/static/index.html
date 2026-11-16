@@ -187,78 +187,45 @@
       <div class="editor-head">
         <div class="editor-title">
           <span class="mono" style="color:var(--accent);font-weight:700">🤖 AOSP Center</span>
-          <span id="aosp-badge-project" class="run-badge">oem_service</span>
-          <span id="aosp-badge-target" class="run-badge" style="opacity:0.85;">lunch: —</span>
           <span id="aosp-status-badge" class="run-badge">Ready</span>
         </div>
         <div class="editor-actions">
+          <button class="btn" id="btn-aosp-open-dialog" title="Open AOSP Environment &amp; Lunch Configuration Dialog">⚙️ Config Settings</button>
           <button class="btn" id="btn-aosp-reload" title="Reload configuration from apk.config">↺ Reload</button>
           <button class="btn" id="btn-aosp-copy" title="Copy output to clipboard">📋 Copy Log</button>
           <button class="btn" id="btn-aosp-clear" title="Clear console output">🧹 Clear</button>
         </div>
       </div>
 
-      <!-- Config Box -->
-      <div class="aosp-config-card" id="aosp-config-card">
-        <div class="aosp-card-head">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <span class="aosp-card-title">📁 Workspace &amp; AOSP Environment Configuration</span>
-            <span id="aosp-edit-badge" class="meta" style="font-size:11px;">🔒 View mode</span>
+      <!-- Compact AOSP Info Bar -->
+      <div class="aosp-compact-bar" id="aosp-compact-bar">
+        <div class="aosp-bar-row">
+          <div class="aosp-bar-cell aosp-bar-root-cell">
+            <span class="aosp-bar-label">📁 Root:</span>
+            <span id="aosp-bar-root" class="mono aosp-bar-val" title="AOSP Root Directory">Auto-detect</span>
+            <span id="aosp-path-status" class="aosp-path-status"></span>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span id="aosp-cfg-file" class="meta mono">config/apk.config</span>
-            <button class="btn" id="btn-aosp-edit" title="Unlock fields to edit AOSP root, lunch product and variant">✎ Edit</button>
-            <button class="btn primary hidden" id="btn-aosp-save" title="Save AOSP Configuration into apk.config">💾 Save</button>
-            <button class="btn ghost hidden" id="btn-aosp-cancel" title="Cancel edits and reload original values">✖ Cancel</button>
+
+          <div class="aosp-bar-cell">
+            <span class="aosp-bar-label">📦 Project:</span>
+            <select id="aosp-project-select" class="theme-select mono aosp-bar-select" title="Switch active project profile"></select>
+          </div>
+
+          <div class="aosp-bar-cell">
+            <span class="aosp-bar-label">🎯 Lunch:</span>
+            <span id="aosp-bar-target" class="mono aosp-bar-val aosp-highlight" title="Target Product &amp; Variant">—</span>
+          </div>
+
+          <div class="aosp-bar-cell aosp-bar-right">
+            <button class="btn ghost" id="btn-aosp-edit-dialog" title="Edit AOSP Root, Product &amp; Variant in Dialog">✎ Edit</button>
           </div>
         </div>
 
-        <div class="aosp-form-grid">
-          <div class="aosp-form-group aosp-col-full">
-            <label for="aosp-root-input" class="aosp-label">
-              <span>AOSP Root Directory (<code>AOSP_ROOT_DIR</code>)</span>
-              <span id="aosp-path-status" class="aosp-path-status"></span>
-            </label>
-            <div class="aosp-input-row">
-              <input type="text" id="aosp-root-input" class="term-input mono" disabled
-                placeholder="e.g. /home/developer/workspace/android or D:/workspace/android (Leave blank for ancestor search)">
-            </div>
-            <span class="aosp-help">The root containing your Android source tree (e.g. <code>android/</code>, <code>android/qssi</code>, or AOSP root). Required when <code>telua_aosp</code> is outside the AOSP workspace.</span>
-          </div>
-
-          <div class="aosp-form-group">
-            <label for="aosp-project-select" class="aosp-label">Active Project (<code>ACTIVE_PROJECT</code>)</label>
-            <select id="aosp-project-select" class="theme-select mono" style="width:100%;"></select>
-          </div>
-
-          <div class="aosp-form-group">
-            <label for="aosp-target-product" class="aosp-label">Target Product (<code>CONFIG_TARGET_PRODUCT</code>)</label>
-            <input type="text" id="aosp-target-product" class="term-input mono" disabled placeholder="e.g. abc_xyz_in or qssi">
-          </div>
-
-          <div class="aosp-form-group">
-            <label for="aosp-target-variant" class="aosp-label">Build Variant (<code>CONFIG_TARGET_BUILD_VARIANT</code>)</label>
-            <input type="text" id="aosp-target-variant" class="term-input mono" disabled placeholder="e.g. userdebug or eng">
-          </div>
-        </div>
-
-        <div class="aosp-meta-strip" id="aosp-meta-strip">
-          <div class="aosp-meta-item">
-            <span class="meta-label">Module:</span>
-            <span id="aosp-meta-module" class="mono meta-value">—</span>
-          </div>
-          <div class="aosp-meta-item">
-            <span class="meta-label">APK Name:</span>
-            <span id="aosp-meta-apk" class="mono meta-value">—</span>
-          </div>
-          <div class="aosp-meta-item">
-            <span class="meta-label">Source Path:</span>
-            <span id="aosp-meta-source" class="mono meta-value">—</span>
-          </div>
-          <div class="aosp-meta-item">
-            <span class="meta-label">Deploy Path:</span>
-            <span id="aosp-meta-deploy" class="mono meta-value">—</span>
-          </div>
+        <div class="aosp-bar-meta">
+          <span class="aosp-meta-pill"><b class="pill-k">Module:</b> <span id="aosp-meta-module" class="mono pill-v">—</span></span>
+          <span class="aosp-meta-pill"><b class="pill-k">APK:</b> <span id="aosp-meta-apk" class="mono pill-v">—</span></span>
+          <span class="aosp-meta-pill"><b class="pill-k">Source:</b> <span id="aosp-meta-source" class="mono pill-v">—</span></span>
+          <span class="aosp-meta-pill"><b class="pill-k">Deploy:</b> <span id="aosp-meta-deploy" class="mono pill-v">—</span></span>
         </div>
       </div>
 
@@ -498,6 +465,54 @@
       <div class="modal-actions">
         <button class="btn" id="btn-docs-dir-cancel">Cancel</button>
         <button class="btn primary" id="btn-docs-dir-apply">✔ Apply &amp; Scan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ AOSP Configuration Modal Dialog ============ -->
+  <div class="modal hidden" id="modal-aosp-config">
+    <div class="modal-box wide">
+      <div class="aosp-modal-head">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:18px;">⚙️</span>
+          <h3 style="margin:0;">AOSP Environment &amp; Lunch Configuration</h3>
+        </div>
+        <span id="aosp-modal-cfg-file" class="meta mono">config/apk.config</span>
+      </div>
+      <p class="meta" style="margin:8px 0 16px 0;">Configure your Android AOSP workspace root and lunch targets. Edits are saved to <code>apk.config</code> (and <code>apk_overlays.config</code>).</p>
+
+      <div class="aosp-modal-form">
+        <div class="aosp-form-group" style="margin-bottom:14px;">
+          <label for="aosp-modal-root-input" class="aosp-label">
+            <span>AOSP Root Directory (<code>AOSP_ROOT_DIR</code>)</span>
+            <span id="aosp-modal-path-status" class="aosp-path-status"></span>
+          </label>
+          <input type="text" id="aosp-modal-root-input" class="term-input mono" style="width:100%;box-sizing:border-box;"
+            placeholder="e.g. /home/developer/workspace/android or D:/workspace/android (Leave blank for ancestor search)">
+          <span class="aosp-help">The root containing your Android source tree (e.g. <code>android/</code>, <code>android/qssi</code>, or AOSP root). Required when <code>telua_aosp</code> is outside the AOSP workspace.</span>
+        </div>
+
+        <div class="aosp-modal-grid">
+          <div class="aosp-form-group">
+            <label for="aosp-modal-project-select" class="aosp-label">Active Project (<code>ACTIVE_PROJECT</code>)</label>
+            <select id="aosp-modal-project-select" class="theme-select mono" style="width:100%;"></select>
+          </div>
+
+          <div class="aosp-form-group">
+            <label for="aosp-modal-target-product" class="aosp-label">Target Product (<code>CONFIG_TARGET_PRODUCT</code>)</label>
+            <input type="text" id="aosp-modal-target-product" class="term-input mono" style="width:100%;box-sizing:border-box;" placeholder="e.g. abc_xyz_in or qssi">
+          </div>
+
+          <div class="aosp-form-group">
+            <label for="aosp-modal-target-variant" class="aosp-label">Build Variant (<code>CONFIG_TARGET_BUILD_VARIANT</code>)</label>
+            <input type="text" id="aosp-modal-target-variant" class="term-input mono" style="width:100%;box-sizing:border-box;" placeholder="e.g. userdebug or eng">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions" style="margin-top:20px;">
+        <button class="btn" id="btn-aosp-modal-cancel">Cancel</button>
+        <button class="btn primary" id="btn-aosp-modal-save">💾 Save Configuration</button>
       </div>
     </div>
   </div>
