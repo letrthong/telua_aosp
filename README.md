@@ -786,6 +786,17 @@ tel web stop                          # Dừng Web UI server
    - **Palette 5 Chủ Đề Màu Sắc (Theme Selector)**: Hỗ trợ chuyển đổi tức thì giữa 🌙 *Dark (Mặc định)*, 💎 *Jade (Emerald)*, 🌊 *Ocean (Deep Blue)*, 🔮 *Amethyst (Purple)*, và ☀️ *Light*, tự động ghi nhớ sở thích giao diện của từng người dùng.
    - **Quick Actions Bar**: Nút tắt chạy nhanh `tel info` (thông tin môi trường/thiết bị) và `tel run unittest` (chạy toàn bộ 120+ unit test suite của cả Python và Shell) với modal xem log chi tiết.
 
+#### 🤖 AOSP Center — Build/Deploy/Test theo đúng thư mục source của project
+
+> **⚠️ Quan trọng — `tel b` phụ thuộc thư mục hiện tại:** `build_apk.sh` tìm `apk.config` từ thư mục hiện tại duyệt ngược lên cây AOSP. Vì vậy **phải `cd` vào thư mục source của project trước** (ví dụ `cd <AOSP_TOP>/vendor/bosch/services/car/oemcarservice`) rồi mới chạy `tel b`; nếu không, script sẽ rơi vào template `config/apk.config` của toolkit và báo `ERROR: Unknown ACTIVE_PROJECT ...` với danh sách profile không khớp.
+
+- **Tự động chạy đúng thư mục source**: Tab **🤖 AOSP** luôn thực thi `tel b` / `tel test` / shortcut từ thư mục source của project đang chọn (`<AOSP_TOP>/<SOURCE_CODE_RELATIVE_PATH>`, ví dụ `.../android/qssi/vendor/bosch/services/car/oemcarservice`), không cần `cd` thủ công. Header console hiển thị `(cd <source_dir>)` để xác nhận thư mục thực thi.
+- **Tự động tạo `apk.config` khi chọn project**: Khi user chọn project (dropdown **Project** trên compact bar, modal **⚙️ Config Settings**, hoặc chip `project:`), backend tự động:
+  1. Tạo `<source_dir>/apk.config` từ template `config/apk.config` nếu chưa có;
+  2. Merge overlay cá nhân `config/overlay/apk_overlays.config` qua `python/config_overlay.py` (đầy đủ các branch profile `oemcarservice`, `car_audio`, `vehicle_service`, `kitchen_sink`, `overlay_bosch_audio`, ...);
+  3. Cập nhật `ACTIVE_PROJECT="<project>"` trong file đó — đồng bộ cả `apk.config` gốc và overlay.
+- **Kiểm tra trạng thái**: Hover vào pill **Source** trên compact bar để xem đường dẫn source dir tuyệt đối và trạng thái `apk.config` (✔ đã có / sẽ tự tạo khi đổi project). API trả về thêm `source_dir`, `source_dir_exists`, `apk_config_in_source` tại `GET /api/aosp/config`.
+
 ---
 
 ## 6. Execution Lifecycle

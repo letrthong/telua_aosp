@@ -3490,7 +3490,13 @@ async function loadAospConfig() {
     // Compact bar: Meta pills
     if ($("#aosp-meta-module")) $("#aosp-meta-module").textContent = data.module_name || "—";
     if ($("#aosp-meta-apk")) $("#aosp-meta-apk").textContent = data.apk_name || "—";
-    if ($("#aosp-meta-source")) $("#aosp-meta-source").textContent = data.source_path || "—";
+    if ($("#aosp-meta-source")) {
+      const srcEl = $("#aosp-meta-source");
+      srcEl.textContent = data.source_path || "—";
+      srcEl.title = data.source_dir
+        ? `Source dir: ${data.source_dir}${data.apk_config_in_source ? " (apk.config ✔)" : " (apk.config missing — auto-created on project switch)"}`
+        : "";
+    }
     if ($("#aosp-meta-deploy")) $("#aosp-meta-deploy").textContent = data.deploy_path || "—";
   } catch (err) {
     console.error("Failed to load AOSP config:", err);
@@ -3610,7 +3616,10 @@ async function runAospCommand(cmd) {
   }
 
   const separator = outEl && outEl.innerHTML.trim() ? "\n" : "";
-  const headerHtml = `${separator}<span style="color:#3fb950;font-weight:700">tel:aosp $</span> <span style="color:#58a6ff;font-weight:700">${esc(cmd)}</span>\n`;
+  const runDir = (_aospLoadedData && _aospLoadedData.source_dir_exists && _aospLoadedData.source_dir)
+    ? _aospLoadedData.source_dir : "";
+  const dirHint = runDir ? `<span style="opacity:.65"> (cd ${esc(runDir)})</span>` : "";
+  const headerHtml = `${separator}<span style="color:#3fb950;font-weight:700">tel:aosp $</span> <span style="color:#58a6ff;font-weight:700">${esc(cmd)}</span>${dirHint}\n`;
   if (outEl) {
     outEl.innerHTML += headerHtml + `<span style="opacity:.7">⏳ Running… (click ⏹ Stop to abort)</span>\n`;
     outEl.scrollTop = outEl.scrollHeight;
@@ -3628,10 +3637,12 @@ async function runAospCommand(cmd) {
 
   let streamedPreview = "";
   try {
-    // Run from the AOSP project root (when configured) so build_apk.sh picks
-    // up the project's own apk.config (profiles, TEST_BUILD_SCRIPT, ...).
-    const aospCwd = (_aospLoadedData && _aospLoadedData.aosp_exists && _aospLoadedData.aosp_root_dir)
-      ? _aospLoadedData.aosp_root_dir : "";
+    // Run from the project source directory (<AOSP_TOP>/<SOURCE_CODE_RELATIVE_PATH>)
+    // so build_apk.sh discovers the project's own apk.config (profiles,
+    // TEST_BUILD_SCRIPT, ...). Falls back to the AOSP root, then the toolkit root.
+    const d = _aospLoadedData || {};
+    const aospCwd = (d.source_dir_exists && d.source_dir) ? d.source_dir
+      : (d.aosp_exists && d.aosp_root_dir) ? d.aosp_root_dir : "";
     const res = await fetch("/api/terminal/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

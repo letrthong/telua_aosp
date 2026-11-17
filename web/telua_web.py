@@ -300,7 +300,12 @@ def api_profile():
         except OSError:
             pass
 
-    return jsonify({"ok": True, "active_project": name, "backup": backup})
+    # Keep the project source dir's apk.config in sync (create it when missing)
+    # so 'tel b' run from that directory uses the newly selected profile.
+    project_cfg = ensure_project_apk_config(name)
+
+    return jsonify({"ok": True, "active_project": name, "backup": backup,
+                    "project_apk_config": project_cfg})
 
 
 @app.get("/api/info")
@@ -333,6 +338,82 @@ def _upsert_bash_var(text: str, var_name: str, value: str) -> str:
     else:
         text = text.rstrip()
         return f'{text}\n{new_line}\n'
+
+
+def _project_source_dir(info=None):
+    """Absolute Path of the active project's source dir (<AOSP_TOP>/<SOURCE_CODE_RELATIVE_PATH>).
+
+    'tel b' discovers apk.config from the current working directory upwards,
+    so commands must run from this directory for the project to pick up its
+    own apk.config. Returns None when the AOSP root or source path is unknown.
+    """
+    info = info if info is not None else _parse_aosp_info()
+    root = (info.get("aosp_root_dir") or "").strip()
+    src_rel = (info.get("source_path") or "").strip().strip("/")
+    if not root or not src_rel:
+        return None
+    aosp_root = Path(root)
+    top_rel = (info.get("aosp_top_rel_path") or "").strip().strip("/")
+    if top_rel:
+        aosp_top = aosp_root / top_rel
+    else:
+        # Mirror build_apk.sh auto-detection: prefer android/qssi, then qssi, then android.
+        aosp_top = aosp_root
+        for rel in ("android/qssi", "qssi", "android"):
+            if (aosp_root / rel).is_dir():
+                aosp_top = aosp_root / rel
+                break
+    return aosp_top / src_rel
+
+
+def ensure_project_apk_config(project_name):
+    """Create (or point ACTIVE_PROJECT of) <source_dir>/apk.config at project_name.
+
+    A missing config is seeded from the toolkit template (config/apk.config) and
+    merged with the personal overlay (config/overlay/apk_overlays.config via
+    python/config_overlay.py) so every custom profile branch is available, then
+    ACTIVE_PROJECT is set to project_name.
+
+    Returns {"path": str, "created": bool, "updated": bool} or None when the
+    source directory cannot be resolved (nothing is written in that case).
+    """
+    if not project_name:
+        return None
+    src_dir = _project_source_dir()
+    if src_dir is None or not src_dir.is_dir():
+        return None
+    target = src_dir / "apk.config"
+    result = {"path": str(target), "created": False, "updated": False}
+    if not target.is_file():
+        template = APK_CONFIG if APK_CONFIG.is_file() else ROOT / "apk.config"
+        if not template.is_file():
+            return None
+        try:
+            shutil.copy2(template, target)
+        except OSError:
+            return None
+        result["created"] = True
+        overlay = ROOT / "config" / "overlay" / "apk_overlays.config"
+        overlay_script = ROOT / "python" / "config_overlay.py"
+        if overlay.is_file() and overlay_script.is_file():
+            try:
+                subprocess.run(
+                    [sys.executable, str(overlay_script), str(target), str(overlay)],
+                    cwd=str(ROOT), capture_output=True, text=True, timeout=30)
+            except Exception:
+                pass
+    try:
+        text = target.read_text(encoding="utf-8", errors="ignore")
+        new_text, count = re.subn(
+            r'(?m)^([ \t]*ACTIVE_PROJECT\s*=\s*)["\']?.*?["\']?[ \t]*$',
+            lambda m: '%s"%s"' % (m.group(1), project_name),
+            text, count=1)
+        if count:
+            target.write_text(new_text, encoding="utf-8")
+            result["updated"] = True
+    except OSError:
+        pass
+    return result
 
 
 def _parse_aosp_info():
@@ -369,6 +450,7 @@ def _parse_aosp_info():
     active_project = get_var("ACTIVE_PROJECT", "") or parse_active_project() or "oem_service"
     target_product = get_var("CONFIG_TARGET_PRODUCT", "")
     target_variant = get_var("CONFIG_TARGET_BUILD_VARIANT", "")
+    aosp_top_rel = get_var("AOSP_TOP_REL_PATH", "")
 
     module_name = ""
     apk_name = ""
@@ -414,7 +496,7 @@ def _parse_aosp_info():
             cfg_rel = str(APK_CONFIG)
 
     profiles = parse_profiles()
-    return {
+    info = {
         "ok": True,
         "aosp_root_dir": aosp_root,
         "aosp_exists": aosp_exists,
@@ -427,7 +509,13 @@ def _parse_aosp_info():
         "deploy_path": deploy_path,
         "profiles": profiles,
         "config_file": cfg_rel,
+        "aosp_top_rel_path": aosp_top_rel,
     }
+    src_dir = _project_source_dir(info)
+    info["source_dir"] = str(src_dir) if src_dir else ""
+    info["source_dir_exists"] = bool(src_dir is not None and src_dir.is_dir())
+    info["apk_config_in_source"] = bool(src_dir is not None and (src_dir / "apk.config").is_file())
+    return info
 
 
 @app.get("/api/aosp/config")
@@ -488,7 +576,17 @@ def api_aosp_config_post():
         except OSError:
             pass
 
-    return jsonify(_parse_aosp_info())
+    # Seed <source_dir>/apk.config for the selected project so that 'tel b' run
+    # from the project source directory (the Web UI AOSP Center does this
+    # automatically) picks up the right profile instead of falling back to the
+    # toolkit template config.
+    project_cfg = None
+    if active_project:
+        project_cfg = ensure_project_apk_config(str(active_project).strip())
+
+    info = _parse_aosp_info()
+    info["project_apk_config"] = project_cfg
+    return jsonify(info)
 
 
 # ------------------------------------------------------------------------------
