@@ -559,6 +559,13 @@ parse_early_arguments() {
             --init|--init-config|init)
                 CLI_IS_INIT="true"
                 ;;
+            # Config-free commands: these run entirely from the toolkit repo
+            # (git/web/docs/crypto/find/replace/help/version) and never need
+            # apk.config, the personal overlay, or ACTIVE_PROJECT validation.
+            # Detected early so load_and_validate_config() can be skipped.
+            update|--update|--git-update|git|--git|git-help|--git-help|git-diff|--git-diff|git-amend|--git-amend|docker-help|--docker-help|network-help|--network-help|network|--network|docker|--docker|web|--web|crypto|--crypto|encrypt|--encrypt|enc|decrypt|--decrypt|dec|docs|--docs|doc|java|--java|clean-java|cleanjava|find-file|find_file|f-file|f-f|find-dir|find_dir|f-dir|f-d|find-text|find_text|f-text|f-t|replace|--replace|replace-text|replace_text|-v|--version|version|-h|--help|help|install|--install|unittest|--unittest|unttest|unit-test)
+                CLI_CONFIG_FREE="true"
+                ;;
         esac
         if [ "$prev" = "--config" ]; then
             if [ -f "$arg" ]; then
@@ -1263,6 +1270,16 @@ source_config_safe() {
 }
 
 load_and_validate_config() {
+    # Config-free commands (update, git, web, docs, crypto, find/replace, help,
+    # version, install, unittest, ...) run entirely from the toolkit repo and
+    # never read apk.config / apk_overlays.config / ACTIVE_PROJECT. Skipping the
+    # config load makes them work from ANY directory (even without apk.config)
+    # and removes the profile-validation overhead.
+    if [ "${CLI_CONFIG_FREE:-false}" = "true" ]; then
+        log_info "Config-free command detected: skipping apk.config load (no ACTIVE_PROJECT check)."
+        return 0
+    fi
+
     # 1. Nạp cấu hình Car chung (nằm cùng thư mục với build_apk.sh)
     if [ -f "$CAR_CONFIG_FILE" ]; then
         source_config_safe "$CAR_CONFIG_FILE"
@@ -1489,7 +1506,9 @@ main() {
     parse_arguments "$@"
 
     # RAM monitoring: snapshot at start + peak sampler for the whole run
-    if [ "$ENABLE_RAM_MONITOR" = "true" ]; then
+    # (skipped for config-free commands: they exit before any build work and
+    # ENABLE_RAM_MONITOR may be unset when apk.config was never loaded).
+    if [ "${CLI_CONFIG_FREE:-false}" != "true" ] && [ "${ENABLE_RAM_MONITOR:-true}" = "true" ]; then
         log_ram_snapshot "START"
         start_ram_sampler
         trap stop_ram_sampler EXIT

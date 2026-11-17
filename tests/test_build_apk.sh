@@ -171,6 +171,24 @@ assert_success "Invalid profile is rejected with error" grep -q "Unknown ACTIVE_
 assert_success "Invalid profile does not corrupt apk.config" grep -q 'ACTIVE_PROJECT="car_audio"' "$TMP_PROF_DIR/apk.config"
 rm -rf "$TMP_PROF_DIR"
 
+# Test 4f: Config-free commands skip apk.config load (no ACTIVE_PROJECT check)
+log_test "Testing config-free commands (update/git/web/help run without apk.config)..."
+TMP_NOCONF_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_noconf_test.XXXXXX")
+# Run from a directory WITHOUT any apk.config: config-free commands must still work.
+out_git_help=$(cd "$TMP_NOCONF_DIR" && "$MAIN_SCRIPT" git 2>&1 || true)
+assert_success "'tel git' works without apk.config" grep -q "FREQUENTLY USED GIT COMMANDS" <<< "$out_git_help"
+assert_success "'tel git' skips config load" grep -q "Config-free command detected" <<< "$out_git_help"
+out_help=$(cd "$TMP_NOCONF_DIR" && "$MAIN_SCRIPT" --help 2>&1 || true)
+assert_success "'tel --help' works without apk.config" grep -q "Usage: build_apk.sh" <<< "$out_help"
+out_ver=$(cd "$TMP_NOCONF_DIR" && "$MAIN_SCRIPT" -v 2>&1 || true)
+assert_success "'tel -v' works without apk.config" grep -q "build_apk.sh v" <<< "$out_ver"
+out_find=$(cd "$TMP_NOCONF_DIR" && "$MAIN_SCRIPT" --find-file "config_crypto.py" "$REPO_ROOT" 2>&1 || true)
+assert_success "'tel --find-file' works without apk.config" grep -q "config_crypto.py" <<< "$out_find"
+# Build-like commands must STILL require apk.config (regression guard).
+out_build=$(cd "$TMP_NOCONF_DIR" && "$MAIN_SCRIPT" build 2>&1 || true)
+assert_success "'tel build' still requires apk.config" grep -q "Configuration file 'apk.config' not found" <<< "$out_build"
+rm -rf "$TMP_NOCONF_DIR"
+
 # Test 5: Safe personal config backup and restore logic
 log_test "Testing personal config backup and restore isolation..."
 TMP_TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/telua_sh_test.XXXXXX")
