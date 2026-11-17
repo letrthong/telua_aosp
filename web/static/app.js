@@ -965,6 +965,54 @@ let _lastRunPipelineName = null;
 let _lastRunPipelineSource = null;
 let _runAbortController = null;
 let _runStoppedByUser = false;
+let _runAutoCloseTimer = null;
+let _runLastActivity = 0;
+
+// Auto-close the run modal 10s after the pipeline finishes (success only).
+// User interaction (mouse move / click / scroll / key inside the dialog)
+// RESETS the countdown back to 10s so the user keeps their reading time.
+function cancelRunAutoClose() {
+  if (_runAutoCloseTimer) {
+    clearInterval(_runAutoCloseTimer);
+    _runAutoCloseTimer = null;
+  }
+  const closeBtn = $("#btn-run-close");
+  if (closeBtn) closeBtn.textContent = "Close";
+}
+
+// Record user activity inside the run modal (used by the auto-close tick).
+function markRunActivity() {
+  _runLastActivity = Date.now();
+}
+
+function scheduleRunAutoClose(ok) {
+  cancelRunAutoClose();
+  // Only auto-close on success; failures stay open so the user can read the log.
+  if (!ok) return;
+  const modal = $("#modal-run");
+  const closeBtn = $("#btn-run-close");
+  if (!modal || modal.classList.contains("hidden")) return;
+  let remain = 10;
+  const tick = () => {
+    if (!modal || modal.classList.contains("hidden")) { cancelRunAutoClose(); return; }
+    // User recently interacted with the dialog (mouse move/click/scroll/key):
+    // reset the countdown back to 10s so it never closes under the cursor.
+    if (Date.now() - _runLastActivity < 1500) {
+      remain = 10;
+      if (closeBtn) closeBtn.textContent = "Close (10s)";
+      return;
+    }
+    if (closeBtn) closeBtn.textContent = `Close (${remain}s)`;
+    if (remain <= 0) {
+      cancelRunAutoClose();
+      modal.classList.add("hidden");
+      return;
+    }
+    remain--;
+  };
+  tick();
+  _runAutoCloseTimer = setInterval(tick, 1000);
+}
 
 async function stopPipelineRun() {
   if (!_runAbortController) return;
@@ -1020,6 +1068,7 @@ async function runPipeline(name, explicitSource = null) {
     runStopBtn.disabled = false;
     runStopBtn.classList.add("danger-solid");
   }
+  cancelRunAutoClose();
   $("#modal-run").classList.remove("hidden");
 
   try {
@@ -1062,6 +1111,7 @@ async function runPipeline(name, explicitSource = null) {
         badge.textContent = ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${exitCode} (${elapsed}s)`;
         badge.className = "run-badge " + (ok ? "ok" : "err");
       }
+      scheduleRunAutoClose(exitCode === 0);
       return;
     }
 
@@ -1081,6 +1131,7 @@ async function runPipeline(name, explicitSource = null) {
       badge.textContent = ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${data.exit_code} (${elapsed}s)`;
       badge.className = "run-badge " + (ok ? "ok" : "err");
     }
+    scheduleRunAutoClose(data.exit_code === 0);
   } catch (err) {
     if (_runStoppedByUser || err.name === "AbortError") {
       outEl.innerHTML += `\n<span style="color:#d29922;font-weight:700">^C [Stopped by user · ${elapsed}s]</span>\n`;
@@ -3841,7 +3892,10 @@ function wire() {
   $("#btn-unittest")?.addEventListener("click", () => runPipeline("unittest", "multi"));
   $("#btn-info-close")?.addEventListener("click", () => $("#modal-info")?.classList.add("hidden"));
   $("#btn-profile-close")?.addEventListener("click", () => $("#modal-profile")?.classList.add("hidden"));
-  $("#btn-run-close")?.addEventListener("click", () => $("#modal-run")?.classList.add("hidden"));
+  $("#btn-run-close")?.addEventListener("click", () => {
+    cancelRunAutoClose();
+    $("#modal-run")?.classList.add("hidden");
+  });
   $("#btn-run-again")?.addEventListener("click", () => {
     if (_lastRunPipelineName) runPipeline(_lastRunPipelineName, _lastRunPipelineSource);
   });
@@ -4109,6 +4163,15 @@ function wire() {
   $("#btn-term-stop")?.addEventListener("click", () => stopTerminalCommand());
   $("#btn-term-new-session")?.addEventListener("click", () => newTerminalSession());
   $("#btn-run-stop")?.addEventListener("click", () => stopPipelineRun());
+  // Reset the auto-close countdown whenever the user interacts with the run
+  // dialog (mouse move, click, scroll, key press, touch) so the modal only
+  // closes 10s after the user STOPS interacting with it.
+  const runModalEl = $("#modal-run");
+  if (runModalEl) {
+    ["mousemove", "mousedown", "click", "wheel", "keydown", "touchstart"].forEach(evt => {
+      runModalEl.addEventListener(evt, markRunActivity, { passive: true });
+    });
+  }
   $("#btn-term-clear")?.addEventListener("click", clearTerminalOutput);
   $("#btn-term-copy")?.addEventListener("click", async () => {
     const text = $("#term-output")?.innerText || "";
@@ -4229,6 +4292,7 @@ function wire() {
       }
       $("#modal-profile")?.classList.add("hidden");
       $("#modal-info")?.classList.add("hidden");
+      if ($("#modal-run") && !$("#modal-run").classList.contains("hidden")) cancelRunAutoClose();
       $("#modal-run")?.classList.add("hidden");
       $("#modal-crypto")?.classList.add("hidden");
     }
