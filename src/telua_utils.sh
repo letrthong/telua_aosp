@@ -238,6 +238,12 @@ apply_init_profile() {
     else
         log_warn "No ACTIVE_PROJECT key in $target_config; profile '$CLI_PROFILE' not applied."
     fi
+    # Keep the personal overlay in sync (it is sourced after apk.config).
+    local overlay_cfg="${MASTER_SCRIPT_DIR:-$SCRIPT_DIR}/config/overlay/apk_overlays.config"
+    if [ -f "$overlay_cfg" ] && grep -qE '^[[:space:]]*ACTIVE_PROJECT=' "$overlay_cfg"; then
+        sed -i -E "s/^[[:space:]]*ACTIVE_PROJECT=.*/ACTIVE_PROJECT=\"$CLI_PROFILE\"/" "$overlay_cfg"
+        log_info "Updated ACTIVE_PROJECT=\"$CLI_PROFILE\" in $overlay_cfg"
+    fi
 }
 
 # --- 1b. Initialize Project Config (--init) ---

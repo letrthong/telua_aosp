@@ -22,6 +22,9 @@
 
 set -e
 
+# Directory where the user invoked this script (captured before any 'cd').
+TELUA_INVOCATION_DIR="$PWD"
+
 # --- Constants & Global Defaults ---
 SCRIPT_VERSION="2.11.0"
 SCRIPT_LAST_UPDATED="2026-10-23"
@@ -517,7 +520,7 @@ print_help() {
     echo ""
     echo -e "\033[1;34mBuild & Deployment Options\033[0m \033[0;90m(used with 'build' or standalone):\033[0m"
     printf "  \033[1;36m%-28s\033[0m %s\n" "-p, --profile <name>" "Switch ACTIVE_PROJECT profile in $CONFIG_FILE_NAME and build/run"
-    printf "  \033[1;36m%-28s\033[0m %s\n" "--no-reboot" "Fast restart (stop && start) instead of full device reboot"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "-n, --no-reboot" "Fast restart (stop && start) instead of full device reboot"
     printf "  \033[1;36m%-28s\033[0m %s\n" "--start-deploy true|false" "Override ENABLE_DEPLOY from $CONFIG_FILE_NAME"
     printf "  \033[1;36m%-28s\033[0m %s\n" "--platform android|qnx" "Target platform: 'android' (default) or 'qnx' (reserved)"
     printf "  \033[1;36m%-28s\033[0m %s\n" "--repo-sync" "Run 'repo sync' in ROOT_DIR before building module"
@@ -633,7 +636,7 @@ parse_arguments() {
                 ENABLE_DEPLOY="$2"
                 shift 2
                 ;;
-            --no-reboot)
+            --no-reboot|-n)
                 NO_REBOOT="true"
                 shift
                 ;;
@@ -1334,6 +1337,13 @@ load_and_validate_config() {
         else
             ACTIVE_PROJECT="$CLI_PROFILE"
         fi
+        # Keep the personal overlay in sync so it does not override the new
+        # profile back on the next run (overlay is sourced after apk.config).
+        if [ -n "${OVERLAY_CONFIG_FILE:-}" ] && [ -f "$OVERLAY_CONFIG_FILE" ] \
+            && grep -qE '^[[:space:]]*ACTIVE_PROJECT=' "$OVERLAY_CONFIG_FILE"; then
+            sed -i -E "s/^[[:space:]]*ACTIVE_PROJECT=.*/ACTIVE_PROJECT=\"$CLI_PROFILE\"/" "$OVERLAY_CONFIG_FILE"
+            log_info "Updated ACTIVE_PROJECT=\"$CLI_PROFILE\" in $OVERLAY_CONFIG_FILE"
+        fi
     fi
 
     # 2b. Kiểm tra file cấu hình cá nhân (apk_overlays.config)
@@ -1434,11 +1444,31 @@ run_tests() {
     local config_dir
     config_dir="$(dirname "$CONFIG_FILE")"
     local test_dir="$config_dir/$TEST_RELATIVE_PATH"
-    if [ ! -d "$test_dir" ] && [ "$(basename "$config_dir")" = "config" ]; then
+    if [ ! -f "$test_dir/$TEST_BUILD_SCRIPT" ] && [ "$(basename "$config_dir")" = "config" ]; then
         test_dir="$(dirname "$config_dir")/$TEST_RELATIVE_PATH"
     fi
-    if [ ! -d "$test_dir" ]; then
-        log_error "Test directory '$test_dir' does not exist"
+    # Fallback: pick the FIRST directory that actually contains the test
+    # script (a dir merely existing is not enough — e.g. the toolkit's own
+    # tests/ holds run_unittest_test.sh, not the project's run_coverage.sh).
+    # Order: AOSP project root -> invocation dir -> AOSP tree module search.
+    if [ ! -f "$test_dir/$TEST_BUILD_SCRIPT" ]; then
+        local candidate
+        if [ -n "${AOSP_ROOT_DIR:-}" ] && [ -f "${AOSP_ROOT_DIR%/}/$TEST_RELATIVE_PATH/$TEST_BUILD_SCRIPT" ]; then
+            test_dir="${AOSP_ROOT_DIR%/}/$TEST_RELATIVE_PATH"
+        elif [ -n "${TELUA_INVOCATION_DIR:-}" ] && [ "$TELUA_INVOCATION_DIR" != "$PWD" ] \
+            && [ -f "${TELUA_INVOCATION_DIR%/}/$TEST_RELATIVE_PATH/$TEST_BUILD_SCRIPT" ]; then
+            test_dir="${TELUA_INVOCATION_DIR%/}/$TEST_RELATIVE_PATH"
+        elif [ -n "${AOSP_ROOT_DIR:-}" ] && [ -d "${AOSP_ROOT_DIR%/}" ]; then
+            # Search the AOSP tree for <module>/tests/$TEST_BUILD_SCRIPT
+            candidate="$(find "${AOSP_ROOT_DIR%/}/android" -maxdepth 8 -type f \
+                -name "$TEST_BUILD_SCRIPT" -path "*/$TEST_RELATIVE_PATH/*" 2>/dev/null | head -n1)"
+            if [ -n "$candidate" ]; then
+                test_dir="$(dirname "$candidate")"
+            fi
+        fi
+    fi
+    if [ ! -f "$test_dir/$TEST_BUILD_SCRIPT" ]; then
+        log_error "Test build script '$TEST_BUILD_SCRIPT' not found (searched test dir: '$test_dir')"
         exit 1
     fi
 

@@ -3628,10 +3628,14 @@ async function runAospCommand(cmd) {
 
   let streamedPreview = "";
   try {
+    // Run from the AOSP project root (when configured) so build_apk.sh picks
+    // up the project's own apk.config (profiles, TEST_BUILD_SCRIPT, ...).
+    const aospCwd = (_aospLoadedData && _aospLoadedData.aosp_exists && _aospLoadedData.aosp_root_dir)
+      ? _aospLoadedData.aosp_root_dir : "";
     const res = await fetch("/api/terminal/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ command: cmd }),
+      body: JSON.stringify({ command: cmd, cwd: aospCwd }),
       signal,
     });
 
@@ -3662,7 +3666,7 @@ async function runAospCommand(cmd) {
           }
         }
         if (outEl) {
-          outEl.innerHTML = headerHtml + esc(streamedPreview);
+          outEl.innerHTML = headerHtml + ansiToHtml(streamedPreview);
           outEl.scrollTop = outEl.scrollHeight;
         }
       }
@@ -3674,7 +3678,7 @@ async function runAospCommand(cmd) {
         } else if (!rawBuffer.startsWith("__TELUA_PWD__:")) {
           streamedPreview += rawBuffer;
           if (outEl) {
-            outEl.innerHTML = headerHtml + esc(streamedPreview);
+            outEl.innerHTML = headerHtml + ansiToHtml(streamedPreview);
             outEl.scrollTop = outEl.scrollHeight;
           }
         }
