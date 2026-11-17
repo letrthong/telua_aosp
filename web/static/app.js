@@ -594,7 +594,11 @@ function syncTopTabs() {
   $("#tab-system")?.classList.toggle("active", isSystem);
   $("#tab-aosp")?.classList.toggle("active", isAosp);
   $("#tab-terminal")?.classList.toggle("active", isTerminal);
-  $("#tab-logcat")?.classList.toggle("active", isLogcat);
+  const logcatTab = $("#tab-logcat");
+  if (logcatTab) {
+    logcatTab.classList.toggle("active", isLogcat);
+    logcatTab.classList.toggle("tab-streaming", Boolean(_logcatStreaming));
+  }
   $("#tab-docs")?.classList.toggle("active", isDocs);
   try {
     const activeTabName = isFiles ? "files" : (isAosp ? "aosp" : (isTerminal ? "terminal" : (isLogcat ? "logcat" : (isDocs ? "docs" : (isSystem ? "system" : "pipelines")))));
@@ -606,11 +610,12 @@ function syncTopTabs() {
 function switchPipelineSource(source) {
   if (source === "docker") source = "system";
   if (source !== "system") _lastNonSystemPlSource = source;
-  // Ensure Pipelines view is visible if user clicks a source while in Terminal, Files, Docs, or AOSP
+  // Ensure Pipelines view is visible if user clicks a source while in Terminal, Files, Docs, Logcat or AOSP
   $("#view-files")?.classList.add("hidden");
   $("#view-aosp")?.classList.add("hidden");
   $("#view-terminal")?.classList.add("hidden");
   $("#view-docs")?.classList.add("hidden");
+  $("#view-logcat")?.classList.add("hidden");
   $("#view-pipelines")?.classList.remove("hidden");
   if (state.plSource === source) {
     syncTopTabs();
@@ -4066,6 +4071,7 @@ async function startLogcatStream() {
   if (_logcatStreaming) return;
   _logcatStreaming = true;
   updateLogcatControls();
+  syncTopTabs();
 
   const badge = $("#logcat-status-badge");
   if (badge) {
@@ -4118,7 +4124,10 @@ async function startLogcatStream() {
         _logcatRenderPending = true;
         requestAnimationFrame(() => {
           _logcatRenderPending = false;
-          renderLogcat();
+          const viewLogcat = $("#view-logcat");
+          if (viewLogcat && !viewLogcat.classList.contains("hidden")) {
+            renderLogcat();
+          }
         });
       }
     }
@@ -4136,6 +4145,7 @@ async function startLogcatStream() {
     _logcatStreaming = false;
     _logcatAbortController = null;
     updateLogcatControls();
+    syncTopTabs();
     if (badge) {
       badge.textContent = "Idle";
       badge.className = "run-badge";
@@ -4152,6 +4162,7 @@ async function stopLogcatStream() {
     await fetch("/api/logcat/stop", { method: "POST" });
   } catch { /* ignore */ }
   updateLogcatControls();
+  syncTopTabs();
 }
 
 function updateLogcatControls() {
@@ -4265,18 +4276,6 @@ function initLogcat() {
   $("#btn-logcat-copy")?.addEventListener("click", copyLogcat);
   $("#btn-logcat-export")?.addEventListener("click", exportLogcat);
 
-  // Quick tag chips
-  document.querySelectorAll(".logcat-tag-chip").forEach(chip => {
-    chip.addEventListener("click", () => {
-      const tag = chip.dataset.tag || "";
-      const tagInput = $("#logcat-filter-tag");
-      if (tagInput) {
-        tagInput.value = tag;
-        renderLogcat();
-      }
-    });
-  });
-
   // Auto-scroll management
   autoScrollChk?.addEventListener("change", (e) => {
     _logcatAutoScroll = e.target.checked;
@@ -4340,6 +4339,22 @@ function switchTab(tab) {
   renderFiles($("#search")?.value || "");
   if (isLogcat) {
     initLogcat();
+    renderLogcat();
+    updateLogcatControls();
+    const badge = $("#logcat-status-badge");
+    if (badge) {
+      if (_logcatStreaming) {
+        badge.textContent = "Streaming";
+        badge.className = "run-badge ok";
+      } else {
+        badge.textContent = "Idle";
+        badge.className = "run-badge";
+      }
+    }
+    if (_logcatAutoScroll) {
+      const screen = $("#logcat-screen");
+      if (screen) screen.scrollTop = screen.scrollHeight;
+    }
     return;
   }
   if (isAosp) {

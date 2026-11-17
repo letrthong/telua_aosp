@@ -211,6 +211,19 @@ code,
   color: #fff;
 }
 
+.tab.tab-streaming:not(.active)::after {
+  content: " ●";
+  color: #3fb950;
+  font-size: 10px;
+  animation: pulse-stream 1.5s infinite;
+}
+
+@keyframes pulse-stream {
+  0% { opacity: 1; }
+  50% { opacity: 0.35; }
+  100% { opacity: 1; }
+}
+
 .chip {
   background: var(--bg-panel);
   border: 1px solid var(--border);
