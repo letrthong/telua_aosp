@@ -313,6 +313,33 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertTrue(data_stop["ok"])
         self.assertEqual(data_stop["stopped"], 0)
 
+        # 3. Test logcat filters get (default or saved)
+        res_filters = self.client.get("/api/logcat/filters")
+        self.assertEqual(res_filters.status_code, 200)
+        data_filters = res_filters.get_json()
+        self.assertTrue(data_filters["ok"])
+        self.assertIsInstance(data_filters["filters"], list)
+
+        # 4. Test logcat filters post
+        sample_filters = [
+            {"id": "test-1", "name": "UnitTest Rule", "enabled": True, "level": "W", "tag": "TestTag", "text": "error", "pid": "123"}
+        ]
+        res_post_filters = self.client.post("/api/logcat/filters", json={"filters": sample_filters})
+        self.assertEqual(res_post_filters.status_code, 200)
+        data_post = res_post_filters.get_json()
+        self.assertTrue(data_post["ok"])
+        self.assertEqual(data_post["count"], 1)
+
+        # Verify saved
+        res_verify = self.client.get("/api/logcat/filters")
+        self.assertEqual(res_verify.status_code, 200)
+        data_verify = res_verify.get_json()
+        self.assertEqual(len(data_verify["filters"]), 1)
+        self.assertEqual(data_verify["filters"][0]["name"], "UnitTest Rule")
+
+        # Restore default filters
+        self.client.post("/api/logcat/filters", json={"filters": telua_web.DEFAULT_LOGCAT_FILTERS})
+
 
 if __name__ == "__main__":
     unittest.main()

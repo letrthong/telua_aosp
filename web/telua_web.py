@@ -16,6 +16,7 @@
 #   - web/telua_web_pipelines.py (pipeline parsing, serialization & rewriting)
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -89,6 +90,54 @@ MY_CLI_CONFIG = (
     or not (ROOT / "config" / "const_my_cli.config").is_file()
     else (ROOT / "config" / "const_my_cli.config")
 )
+LOGCAT_FILTERS_FILE = ROOT / "config" / "logcat_filters.json"
+DEFAULT_LOGCAT_FILTERS = [
+    {
+        "id": "rule-fatal",
+        "name": "Fatal & Crashes",
+        "enabled": True,
+        "level": "E",
+        "tag": "AndroidRuntime|DEBUG",
+        "text": "FATAL|CRASH|Exception",
+        "pid": "",
+    },
+    {
+        "id": "rule-caraudio",
+        "name": "Car Audio",
+        "enabled": False,
+        "level": "D",
+        "tag": "CarAudio.*|AudioFlinger",
+        "text": "",
+        "pid": "",
+    },
+    {
+        "id": "rule-carservice",
+        "name": "Car Service",
+        "enabled": False,
+        "level": "I",
+        "tag": "CarService|CarProperty.*",
+        "text": "",
+        "pid": "",
+    },
+    {
+        "id": "rule-oem",
+        "name": "OEM Service",
+        "enabled": False,
+        "level": "D",
+        "tag": "Oem.*",
+        "text": "",
+        "pid": "",
+    },
+    {
+        "id": "rule-am",
+        "name": "Activity Manager",
+        "enabled": False,
+        "level": "I",
+        "tag": "ActivityManager|ActivityTaskManager",
+        "text": "",
+        "pid": "",
+    },
+]
 
 START_TIME = time.time()
 FLASK_VERSION = ""
@@ -1392,6 +1441,39 @@ def api_logcat_clear():
             "exit_code": res.returncode,
             "output": (res.stdout or "") + (res.stderr or ""),
         })
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@app.get("/api/logcat/filters")
+def api_logcat_filters_get():
+    """Retrieve saved Logcat filter rule array from config/logcat_filters.json."""
+    if LOGCAT_FILTERS_FILE.is_file():
+        try:
+            with open(LOGCAT_FILTERS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                return jsonify({"ok": True, "filters": data, "path": "config/logcat_filters.json"})
+        except Exception:
+            pass
+    return jsonify({"ok": True, "filters": DEFAULT_LOGCAT_FILTERS, "path": "config/logcat_filters.json", "default": True})
+
+
+@app.post("/api/logcat/filters")
+def api_logcat_filters_post():
+    """Save Logcat filter rule array to config/logcat_filters.json."""
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({"ok": False, "error": "Invalid JSON body"}), 400
+    filters = data if isinstance(data, list) else data.get("filters")
+    if not isinstance(filters, list):
+        return jsonify({"ok": False, "error": "'filters' must be a JSON array"}), 400
+
+    LOGCAT_FILTERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(LOGCAT_FILTERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(filters, f, indent=2, ensure_ascii=False)
+        return jsonify({"ok": True, "count": len(filters), "path": "config/logcat_filters.json"})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
 

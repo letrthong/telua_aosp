@@ -27,14 +27,19 @@
       </div>
       <nav class="tabs">
         <button class="tab" id="tab-files" title="Browse &amp; edit config files">📄 Files</button>
-        <button class="tab active" id="tab-pipelines" title="Edit MY_CMD_* / MULTI / CAR / DUMP pipelines">⚡ Pipelines</button>
+        <button class="tab active" id="tab-pipelines" title="Edit MY_CMD_* / MULTI / CAR / DUMP pipelines">⚡
+          Pipelines</button>
         <button class="tab" id="tab-system"
-          title="System &amp; Docker CLI pipelines (config/const_system_cli.config — telua system <action>)">🖥 System</button>
-        <button class="tab" id="tab-aosp" title="AOSP Android Build, Deploy &amp; Test Center (tel b, tel test, apk.config)">🤖 AOSP</button>
+          title="System &amp; Docker CLI pipelines (config/const_system_cli.config — telua system <action>)">🖥
+          System</button>
+        <button class="tab" id="tab-aosp"
+          title="AOSP Android Build, Deploy &amp; Test Center (tel b, tel test, apk.config)">🤖 AOSP</button>
         <button class="tab" id="tab-terminal"
           title="Interactive Web CLI Terminal — run tel / Linux / Git / ADB commands directly">💻 Terminal</button>
-        <button class="tab" id="tab-logcat" title="Live Android Logcat stream with realtime search, tag &amp; level filter">📱 Logcat</button>
-        <button class="tab" id="tab-docs" title="Sphinx Doc-as-Code — WYSIWYG Quill.js &amp; RST Converter">📚 Docs</button>
+        <button class="tab" id="tab-logcat"
+          title="Live Android Logcat stream with realtime search, tag &amp; level filter">📱 Logcat</button>
+        <button class="tab" id="tab-docs" title="Sphinx Doc-as-Code — WYSIWYG Quill.js &amp; RST Converter">📚
+          Docs</button>
       </nav>
     </div>
     <div class="statusbar">
@@ -158,7 +163,8 @@
       <div class="term-quick-bar" id="term-quick-bar">
         <span class="meta">⚡ Quick commands:</span>
         <button class="term-chip" data-cmd="tel --info">tel --info</button>
-        <button class="term-chip" data-cmd="tel update" title="Update toolkit repo: git pull origin main (preserves personal overlays)">tel update</button>
+        <button class="term-chip" data-cmd="tel update"
+          title="Update toolkit repo: git pull origin main (preserves personal overlays)">tel update</button>
         <button class="term-chip" data-cmd="tel system">tel system</button>
         <button class="term-chip" data-cmd="tel system ram">tel system ram</button>
         <button class="term-chip" data-cmd="tel system os">tel system os</button>
@@ -194,7 +200,8 @@
         <div class="editor-actions">
           <button class="btn primary" id="btn-logcat-toggle">▶ Start</button>
           <button class="btn" id="btn-logcat-clear-view" title="Clear current logs from screen">🧹 Clear View</button>
-          <button class="btn danger ghost" id="btn-logcat-clear-device" title="Clear device buffer: adb logcat -c">🗑 Clear Device</button>
+          <button class="btn danger ghost" id="btn-logcat-clear-device" title="Clear device buffer: adb logcat -c">🗑
+            Clear Device</button>
           <button class="btn" id="btn-logcat-copy" title="Copy visible logs">📋 Copy</button>
           <button class="btn" id="btn-logcat-export" title="Download visible logs as .txt">💾 Export</button>
         </div>
@@ -204,7 +211,9 @@
       <div class="logcat-filter-bar">
         <div class="logcat-input-wrap">
           <span class="logcat-input-icon">🔍</span>
-          <input type="text" id="logcat-filter-text" class="term-input mono" placeholder="Filter message or regex (e.g. fatal|error or 'onAudioFocus')…" autocomplete="off" spellcheck="false">
+          <input type="text" id="logcat-filter-text" class="term-input mono"
+            placeholder="Filter message or regex (e.g. fatal|error or 'onAudioFocus')…" autocomplete="off"
+            spellcheck="false">
           <button class="logcat-clear-btn hidden" id="btn-logcat-clear-text" title="Clear filter">✕</button>
         </div>
 
@@ -223,15 +232,23 @@
 
         <div class="logcat-filter-group">
           <label class="logcat-filter-lbl" for="logcat-filter-tag">Tag:</label>
-          <input type="text" id="logcat-filter-tag" class="term-input mono logcat-input-sm" placeholder="e.g. CarAudio" autocomplete="off" spellcheck="false">
+          <input type="text" id="logcat-filter-tag" class="term-input mono logcat-input-sm" placeholder="e.g. CarAudio"
+            autocomplete="off" spellcheck="false">
         </div>
 
         <div class="logcat-filter-group">
           <label class="logcat-filter-lbl" for="logcat-filter-pid">PID:</label>
-          <input type="text" id="logcat-filter-pid" class="term-input mono logcat-input-xs" placeholder="PID" autocomplete="off" spellcheck="false">
+          <input type="text" id="logcat-filter-pid" class="term-input mono logcat-input-xs" placeholder="PID"
+            autocomplete="off" spellcheck="false">
         </div>
 
-        <label class="chk" style="white-space:nowrap;margin-left:auto;cursor:pointer;" title="Keep scrolled to the bottom as new logs arrive">
+        <button class="btn btn-sm ghost" id="btn-open-logcat-filters" title="Open Filter Rules Manager (JSON config)" style="margin-left:4px;display:inline-flex;align-items:center;gap:6px;height:30px;white-space:nowrap;">
+          <span>⚙️ Filter Rules</span>
+          <span id="logcat-filter-badge" class="chip" style="font-size:10px;padding:0 5px;">0</span>
+        </button>
+
+        <label class="chk" style="white-space:nowrap;margin-left:auto;cursor:pointer;"
+          title="Keep scrolled to the bottom as new logs arrive">
           <input type="checkbox" id="logcat-autoscroll" checked> Auto-scroll
         </label>
       </div>
@@ -239,7 +256,8 @@
       <!-- Logcat Streaming Display -->
       <div class="logcat-container" id="logcat-container">
         <div class="logcat-screen mono" id="logcat-screen"></div>
-        <button class="logcat-scroll-pill hidden" id="logcat-scroll-pill" title="Scroll to bottom">↓ Resume Auto-scroll</button>
+        <button class="logcat-scroll-pill hidden" id="logcat-scroll-pill" title="Scroll to bottom">↓ Resume
+          Auto-scroll</button>
       </div>
     </section>
 
@@ -251,7 +269,8 @@
           <span id="aosp-status-badge" class="run-badge">Ready</span>
         </div>
         <div class="editor-actions">
-          <button class="btn" id="btn-aosp-open-dialog" title="Open AOSP Environment &amp; Lunch Configuration Dialog">⚙️ Config Settings</button>
+          <button class="btn" id="btn-aosp-open-dialog"
+            title="Open AOSP Environment &amp; Lunch Configuration Dialog">⚙️ Config Settings</button>
           <button class="btn" id="btn-aosp-reload" title="Reload configuration from apk.config">↺ Reload</button>
           <button class="btn" id="btn-aosp-copy" title="Copy output to clipboard">📋 Copy Log</button>
           <button class="btn" id="btn-aosp-clear" title="Clear console output">🧹 Clear</button>
@@ -269,24 +288,31 @@
 
           <div class="aosp-bar-cell">
             <span class="aosp-bar-label">📦 Project:</span>
-            <select id="aosp-project-select" class="theme-select mono aosp-bar-select" title="Switch active project profile"></select>
+            <select id="aosp-project-select" class="theme-select mono aosp-bar-select"
+              title="Switch active project profile"></select>
           </div>
 
           <div class="aosp-bar-cell">
             <span class="aosp-bar-label">🎯 Lunch:</span>
-            <span id="aosp-bar-target" class="mono aosp-bar-val aosp-highlight" title="Target Product &amp; Variant">—</span>
+            <span id="aosp-bar-target" class="mono aosp-bar-val aosp-highlight"
+              title="Target Product &amp; Variant">—</span>
           </div>
 
           <div class="aosp-bar-cell aosp-bar-right">
-            <button class="btn ghost" id="btn-aosp-edit-dialog" title="Edit AOSP Root, Product &amp; Variant in Dialog">✎ Edit</button>
+            <button class="btn ghost" id="btn-aosp-edit-dialog"
+              title="Edit AOSP Root, Product &amp; Variant in Dialog">✎ Edit</button>
           </div>
         </div>
 
         <div class="aosp-bar-meta">
-          <span class="aosp-meta-pill"><b class="pill-k">Module:</b> <span id="aosp-meta-module" class="mono pill-v">—</span></span>
-          <span class="aosp-meta-pill"><b class="pill-k">APK:</b> <span id="aosp-meta-apk" class="mono pill-v">—</span></span>
-          <span class="aosp-meta-pill"><b class="pill-k">Source:</b> <span id="aosp-meta-source" class="mono pill-v">—</span></span>
-          <span class="aosp-meta-pill"><b class="pill-k">Deploy:</b> <span id="aosp-meta-deploy" class="mono pill-v">—</span></span>
+          <span class="aosp-meta-pill"><b class="pill-k">Module:</b> <span id="aosp-meta-module"
+              class="mono pill-v">—</span></span>
+          <span class="aosp-meta-pill"><b class="pill-k">APK:</b> <span id="aosp-meta-apk"
+              class="mono pill-v">—</span></span>
+          <span class="aosp-meta-pill"><b class="pill-k">Source:</b> <span id="aosp-meta-source"
+              class="mono pill-v">—</span></span>
+          <span class="aosp-meta-pill"><b class="pill-k">Deploy:</b> <span id="aosp-meta-deploy"
+              class="mono pill-v">—</span></span>
         </div>
       </div>
 
@@ -322,7 +348,8 @@
         <button class="term-chip aosp-chip" data-cmd="tel b -n">tel b -n</button>
         <button class="term-chip aosp-chip" data-cmd="tel test">tel test</button>
         <button class="term-chip aosp-chip" data-cmd="tel info">tel info</button>
-        <button class="term-chip aosp-chip" data-cmd="tel update" title="Update toolkit repo: git pull origin main (preserves personal overlays)">tel update</button>
+        <button class="term-chip aosp-chip" data-cmd="tel update"
+          title="Update toolkit repo: git pull origin main (preserves personal overlays)">tel update</button>
         <button class="term-chip aosp-chip" data-cmd="tel --help">tel --help</button>
         <button class="term-chip aosp-chip" data-cmd="adb devices -l">adb devices -l</button>
         <button class="term-chip aosp-chip" data-cmd="adb remount">adb remount</button>
@@ -361,7 +388,8 @@
             View</button>
           <div class="dropdown-wrapper" id="wrap-docs-mermaid">
             <button class="btn ghost dropdown-trigger" id="btn-docs-add-mermaid"
-              title="Insert a Mermaid Architecture Diagram (Click to select type)">+ 📊 Mermaid <span class="dropdown-arrow">▼</span></button>
+              title="Insert a Mermaid Architecture Diagram (Click to select type)">+ 📊 Mermaid <span
+                class="dropdown-arrow">▼</span></button>
             <div class="dropdown-menu" id="menu-docs-mermaid">
               <div class="dropdown-item" data-type="flowchart">
                 <span class="dropdown-item-icon">📊</span>
@@ -410,7 +438,8 @@
 
           <div class="dropdown-wrapper" id="wrap-docs-plantuml">
             <button class="btn ghost dropdown-trigger" id="btn-docs-add-plantuml"
-              title="Insert a PlantUML Architecture Diagram (Click to select type)">+ 📐 PlantUML <span class="dropdown-arrow">▼</span></button>
+              title="Insert a PlantUML Architecture Diagram (Click to select type)">+ 📐 PlantUML <span
+                class="dropdown-arrow">▼</span></button>
             <div class="dropdown-menu" id="menu-docs-plantuml">
               <div class="dropdown-item" data-type="sequence">
                 <span class="dropdown-item-icon">🔄</span>
@@ -541,7 +570,8 @@
         </div>
         <span id="aosp-modal-cfg-file" class="meta mono">config/apk.config</span>
       </div>
-      <p class="meta" style="margin:8px 0 16px 0;">Configure your Android AOSP workspace root and lunch targets. Edits are saved to <code>apk.config</code> (and <code>apk_overlays.config</code>).</p>
+      <p class="meta" style="margin:8px 0 16px 0;">Configure your Android AOSP workspace root and lunch targets. Edits
+        are saved to <code>apk.config</code> (and <code>apk_overlays.config</code>).</p>
 
       <div class="aosp-modal-form">
         <div class="aosp-form-group" style="margin-bottom:14px;">
@@ -549,24 +579,31 @@
             <span>AOSP Root Directory (<code>AOSP_ROOT_DIR</code>)</span>
             <span id="aosp-modal-path-status" class="aosp-path-status"></span>
           </label>
-          <input type="text" id="aosp-modal-root-input" class="term-input mono" style="width:100%;box-sizing:border-box;"
+          <input type="text" id="aosp-modal-root-input" class="term-input mono"
+            style="width:100%;box-sizing:border-box;"
             placeholder="e.g. /home/developer/workspace/android or D:/workspace/android (Leave blank for ancestor search)">
-          <span class="aosp-help">The root containing your Android source tree (e.g. <code>android/</code>, <code>android/qssi</code>, or AOSP root). Required when <code>telua_aosp</code> is outside the AOSP workspace.</span>
+          <span class="aosp-help">The root containing your Android source tree (e.g. <code>android/</code>,
+            <code>android/qssi</code>, or AOSP root). Required when <code>telua_aosp</code> is outside the AOSP
+            workspace.</span>
         </div>
 
         <div class="aosp-modal-grid">
           <div class="aosp-form-group">
-            <label for="aosp-modal-project-select" class="aosp-label">Active Project (<code>ACTIVE_PROJECT</code>)</label>
+            <label for="aosp-modal-project-select" class="aosp-label">Active Project
+              (<code>ACTIVE_PROJECT</code>)</label>
             <select id="aosp-modal-project-select" class="theme-select mono" style="width:100%;"></select>
           </div>
 
           <div class="aosp-form-group">
-            <label for="aosp-modal-target-product" class="aosp-label">Target Product (<code>CONFIG_TARGET_PRODUCT</code>)</label>
-            <input type="text" id="aosp-modal-target-product" class="term-input mono" style="width:100%;box-sizing:border-box;" placeholder="e.g. abc_xyz_in or qssi">
+            <label for="aosp-modal-target-product" class="aosp-label">Target Product
+              (<code>CONFIG_TARGET_PRODUCT</code>)</label>
+            <input type="text" id="aosp-modal-target-product" class="term-input mono"
+              style="width:100%;box-sizing:border-box;" placeholder="e.g. abc_xyz_in or qssi">
           </div>
 
           <div class="aosp-form-group">
-            <label for="aosp-modal-target-variant" class="aosp-label">Build Variant (<code>CONFIG_TARGET_BUILD_VARIANT</code>)</label>
+            <label for="aosp-modal-target-variant" class="aosp-label">Build Variant
+              (<code>CONFIG_TARGET_BUILD_VARIANT</code>)</label>
             <select id="aosp-modal-target-variant" class="theme-select mono" style="width:100%;box-sizing:border-box;">
               <option value="userdebug" selected>userdebug</option>
             </select>
@@ -648,7 +685,8 @@
           <span class="run-icon">▶</span>
           <h3 id="run-title">Pipeline output</h3>
         </div>
-        <span id="run-autoclose-badge" class="run-badge autoclose hidden" title="Dialog closes automatically — move the mouse inside to reset the timer"></span>
+        <span id="run-autoclose-badge" class="run-badge autoclose hidden"
+          title="Dialog closes automatically — move the mouse inside to reset the timer"></span>
         <span id="run-status-badge" class="run-badge running">⏳ Running…</span>
       </div>
       <pre id="run-output" class="info-out run-terminal">Running…</pre>
@@ -712,6 +750,46 @@
       <div class="modal-actions confirm-foot">
         <button class="btn" id="btn-confirm-cancel">Cancel</button>
         <button class="btn danger-solid" id="btn-confirm-ok">🗑 Confirm Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Logcat Filter Rules Manager Dialog ============ -->
+  <div class="modal hidden" id="modal-logcat-filters">
+    <div class="modal-box wide" style="max-width:820px;max-height:90vh;display:flex;flex-direction:column;">
+      <div class="editor-head" style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);flex-shrink:0;">
+        <div class="editor-title">
+          <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;">⚙️ Logcat Filter Rules Manager</span>
+          <span class="meta mono">config/logcat_filters.json</span>
+          <span id="logcat-modal-rules-count" class="chip" style="font-size:11px;padding:1px 6px;">0 active</span>
+        </div>
+        <div class="editor-actions" style="gap:6px;">
+          <button class="btn btn-xs primary" id="btn-logcat-modal-add-item">+ Add Rule</button>
+          <button class="btn btn-xs ghost" id="btn-logcat-modal-toggle-raw" title="Toggle between Item list and Raw JSON array view">{} Raw JSON</button>
+          <button class="btn btn-xs ghost" id="btn-logcat-modal-download" title="Download filters as JSON file">⬇ Download</button>
+          <button class="btn btn-xs ghost" id="btn-logcat-modal-upload" title="Upload JSON filter config file">⬆ Upload</button>
+          <input type="file" id="input-logcat-modal-upload-file" accept=".json,application/json" style="display:none;">
+        </div>
+      </div>
+
+      <!-- Item List Container -->
+      <div id="logcat-modal-items-container" style="flex:1;overflow-y:auto;min-height:240px;max-height:55vh;padding-right:4px;display:flex;flex-direction:column;gap:8px;">
+        <!-- Filter rule item cards dynamically generated here -->
+      </div>
+
+      <!-- Raw JSON Container (Toggled via {} Raw JSON) -->
+      <div id="logcat-modal-raw-container" class="hidden" style="flex:1;display:flex;flex-direction:column;gap:8px;min-height:240px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span class="meta" style="font-size:11px;">Edit or paste JSON config array directly:</span>
+          <button class="btn btn-xs ghost" id="btn-logcat-modal-format-json">Format {}</button>
+        </div>
+        <textarea id="logcat-modal-raw-textarea" class="editor mono" style="flex:1;min-height:260px;font-size:12px;box-sizing:border-box;resize:vertical;" spellcheck="false" placeholder="[ { &quot;name&quot;: &quot;...&quot;, &quot;enabled&quot;: true, ... } ]"></textarea>
+      </div>
+
+      <!-- Footer Buttons -->
+      <div class="modal-actions" style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border);flex-shrink:0;">
+        <button class="btn" id="btn-logcat-modal-close">Close</button>
+        <button class="btn primary" id="btn-logcat-modal-save">💾 Save &amp; Apply</button>
       </div>
     </div>
   </div>

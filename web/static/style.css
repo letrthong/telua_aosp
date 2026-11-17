@@ -219,9 +219,17 @@ code,
 }
 
 @keyframes pulse-stream {
-  0% { opacity: 1; }
-  50% { opacity: 0.35; }
-  100% { opacity: 1; }
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+
+  100% {
+    opacity: 1;
+  }
 }
 
 .chip {
@@ -2735,6 +2743,92 @@ code,
   border-radius: 6px;
 }
 
+/* Logcat Filter Rules Modal Item Cards */
+.logcat-item-card {
+  background: var(--bg-panel, #161b22);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  transition: all 0.15s ease;
+}
+
+.logcat-item-card.active {
+  border-color: rgba(31, 111, 235, 0.55);
+  background: rgba(31, 111, 235, 0.08);
+}
+
+.logcat-item-card.disabled {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+.logcat-item-card.editing {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 10px 14px;
+}
+
+.logcat-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.logcat-item-check-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.logcat-item-toggle {
+  cursor: pointer;
+  margin: 0;
+}
+
+.logcat-item-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.logcat-item-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.logcat-rule-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent);
+}
+
+.logcat-rule-tag,
+.logcat-rule-text,
+.logcat-rule-pid {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.logcat-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .logcat-container {
   position: relative;
   flex: 1;
@@ -2772,12 +2866,33 @@ code,
   background: rgba(255, 255, 255, 0.05);
 }
 
-.logcat-row.level-V { color: #8b949e; }
-.logcat-row.level-D { color: #a5d6ff; }
-.logcat-row.level-I { color: var(--text); }
-.logcat-row.level-W { color: #e3b341; background: rgba(210, 153, 34, 0.08); }
-.logcat-row.level-E { color: #ff7b72; background: rgba(248, 81, 73, 0.12); }
-.logcat-row.level-F { color: #ffffff; background: #b62324; font-weight: bold; }
+.logcat-row.level-V {
+  color: #8b949e;
+}
+
+.logcat-row.level-D {
+  color: #a5d6ff;
+}
+
+.logcat-row.level-I {
+  color: var(--text);
+}
+
+.logcat-row.level-W {
+  color: #e3b341;
+  background: rgba(210, 153, 34, 0.08);
+}
+
+.logcat-row.level-E {
+  color: #ff7b72;
+  background: rgba(248, 81, 73, 0.12);
+}
+
+.logcat-row.level-F {
+  color: #ffffff;
+  background: #b62324;
+  font-weight: bold;
+}
 
 .log-time {
   color: #8b949e;
@@ -2803,12 +2918,32 @@ code,
   user-select: none;
 }
 
-.log-badge.level-V { color: #8b949e; }
-.log-badge.level-D { color: #58a6ff; }
-.log-badge.level-I { color: #3fb950; }
-.log-badge.level-W { color: #d29922; }
-.log-badge.level-E { color: #f85149; font-weight: 800; }
-.log-badge.level-F { color: #ffffff; background: #f85149; font-weight: 900; }
+.log-badge.level-V {
+  color: #8b949e;
+}
+
+.log-badge.level-D {
+  color: #58a6ff;
+}
+
+.log-badge.level-I {
+  color: #3fb950;
+}
+
+.log-badge.level-W {
+  color: #d29922;
+}
+
+.log-badge.level-E {
+  color: #f85149;
+  font-weight: 800;
+}
+
+.log-badge.level-F {
+  color: #ffffff;
+  background: #f85149;
+  font-weight: 900;
+}
 
 .log-tag {
   color: #d2a8ff;

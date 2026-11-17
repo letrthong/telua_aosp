@@ -1,0 +1,47 @@
+[
+  {
+    "enabled": true,
+    "id": "rule-fatal",
+    "level": "E",
+    "name": "Fatal & Crashes",
+    "pid": "",
+    "tag": "AndroidRuntime|DEBUG",
+    "text": "FATAL|CRASH|Exception"
+  },
+  {
+    "enabled": false,
+    "id": "rule-caraudio",
+    "level": "D",
+    "name": "Car Audio",
+    "pid": "",
+    "tag": "CarAudio.*|AudioFlinger",
+    "text": ""
+  },
+  {
+    "enabled": false,
+    "id": "rule-carservice",
+    "level": "I",
+    "name": "Car Service",
+    "pid": "",
+    "tag": "CarService|CarProperty.*",
+    "text": ""
+  },
+  {
+    "enabled": false,
+    "id": "rule-oem",
+    "level": "D",
+    "name": "OEM Service",
+    "pid": "",
+    "tag": "Oem.*",
+    "text": ""
+  },
+  {
+    "enabled": false,
+    "id": "rule-am",
+    "level": "I",
+    "name": "Activity Manager",
+    "pid": "",
+    "tag": "ActivityManager|ActivityTaskManager",
+    "text": ""
+  }
+]

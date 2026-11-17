@@ -3882,6 +3882,37 @@ let _logcatRenderPending = false;
 let _logcatAutoScroll = true;
 let _logcatInitialized = false;
 
+const LOGCAT_RULES_STORAGE_KEY = "telua_logcat_filters";
+let _logcatRules = [];
+
+function matchLogcatRule(entry, rule) {
+  if (!rule || !rule.enabled) return false;
+  if (rule.level && rule.level !== "ALL") {
+    const minScore = LOG_LEVEL_SCORES[rule.level] || 1;
+    if (entry.levelScore < minScore) return false;
+  }
+  if (rule.tag) {
+    try {
+      const re = new RegExp(rule.tag, "i");
+      if (!re.test(entry.tag)) return false;
+    } catch {
+      if (!entry.tag.toLowerCase().includes(rule.tag.toLowerCase())) return false;
+    }
+  }
+  if (rule.pid) {
+    if (!String(entry.pid).includes(String(rule.pid).trim())) return false;
+  }
+  if (rule.text) {
+    try {
+      const re = new RegExp(rule.text, "i");
+      if (!re.test(entry.msg) && !re.test(entry.tag) && !re.test(entry.raw)) return false;
+    } catch {
+      if (!entry.raw.toLowerCase().includes(rule.text.toLowerCase())) return false;
+    }
+  }
+  return true;
+}
+
 function parseLogcatLine(raw) {
   const line = raw.replace(/\r?\n$/, "");
   if (!line.trim()) return null;
@@ -3965,9 +3996,20 @@ function getLogcatFilters() {
 
 function isLogcatEntryVisible(entry, filters) {
   if (!entry) return false;
-  if (entry.levelScore < filters.minLevelScore) return false;
-  if (filters.tag && !entry.tag.toLowerCase().includes(filters.tag)) return false;
-  if (filters.pid && !entry.pid.includes(filters.pid)) return false;
+
+  const activeRules = _logcatRules.filter(r => r.enabled);
+  if (activeRules.length > 0) {
+    // If user has enabled rules, entry must match at least ONE enabled rule
+    const matched = activeRules.some(r => matchLogcatRule(entry, r));
+    if (!matched) return false;
+  } else {
+    // Fall back to top toolbar level, tag, and pid
+    if (entry.levelScore < filters.minLevelScore) return false;
+    if (filters.tag && !entry.tag.toLowerCase().includes(filters.tag)) return false;
+    if (filters.pid && !entry.pid.includes(filters.pid)) return false;
+  }
+
+  // Quick text filter applies across visible results
   if (filters.text) {
     if (filters.isRegex) {
       try {
@@ -4241,6 +4283,537 @@ function exportLogcat() {
   toast("Exported ✓", `Downloaded ${visibleLines.length} log lines.`, "ok", 2500);
 }
 
+/* ---------------- Logcat Filter Rules Management (Dialog & JSON Config) ---------------- */
+async function loadLogcatFilters() {
+  try {
+    const res = await fetch("/api/logcat/filters");
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.filters) && data.filters.length > 0) {
+        _logcatRules = data.filters;
+        updateLogcatFilterBadge();
+        renderLogcat();
+        return;
+      }
+    }
+  } catch { /* ignore fallback */ }
+
+  if (!_logcatRules || _logcatRules.length === 0) {
+    try {
+      const saved = localStorage.getItem(LOGCAT_RULES_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          _logcatRules = parsed;
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  if (!_logcatRules || _logcatRules.length === 0) {
+    _logcatRules = [
+      { id: "rule-fatal", name: "Fatal & Crashes", enabled: true, level: "E", tag: "AndroidRuntime|DEBUG", text: "FATAL|CRASH|Exception", pid: "" },
+      { id: "rule-caraudio", name: "Car Audio", enabled: false, level: "D", tag: "CarAudio.*|AudioFlinger", text: "", pid: "" },
+      { id: "rule-carservice", name: "Car Service", enabled: false, level: "I", tag: "CarService|CarProperty.*", text: "", pid: "" },
+      { id: "rule-oem", name: "OEM Service", enabled: false, level: "D", tag: "Oem.*", text: "", pid: "" },
+      { id: "rule-am", name: "Activity Manager", enabled: false, level: "I", tag: "ActivityManager|ActivityTaskManager", text: "", pid: "" },
+    ];
+  }
+
+  updateLogcatFilterBadge();
+  renderLogcat();
+}
+
+function updateLogcatFilterBadge() {
+  const activeCount = _logcatRules.filter(r => r.enabled).length;
+  const badge = $("#logcat-filter-badge");
+  if (badge) {
+    badge.textContent = `${activeCount}`;
+    badge.className = activeCount > 0 ? "chip ok" : "chip";
+  }
+  const modalCount = $("#logcat-modal-rules-count");
+  if (modalCount) {
+    modalCount.textContent = `${activeCount} active / ${_logcatRules.length} total`;
+    modalCount.className = activeCount > 0 ? "chip ok" : "chip";
+  }
+}
+
+function stripRuleInternal(r) {
+  const { _editing, _isNew, ...clean } = r;
+  return clean;
+}
+
+function renderLogcatModalItems() {
+  const container = $("#logcat-modal-items-container");
+  if (!container) return;
+  container.innerHTML = "";
+  updateLogcatFilterBadge();
+
+  if (_logcatRules.length === 0) {
+    const emptyDiv = document.createElement("div");
+    emptyDiv.className = "meta";
+    emptyDiv.style.cssText = "text-align:center;padding:30px 10px;font-size:12px;";
+    emptyDiv.innerHTML = "No filter rules configured. Click <b>+ Add Rule</b> or <b>⬆ Upload</b> to get started.";
+    container.appendChild(emptyDiv);
+    return;
+  }
+
+  _logcatRules.forEach((rule, idx) => {
+    const card = document.createElement("div");
+    card.className = `logcat-item-card ${rule._editing ? "editing" : (rule.enabled ? "active" : "disabled")}`;
+    card.dataset.id = rule.id;
+
+    if (rule._editing) {
+      // ---------------- Inline Editing Form ----------------
+      const gridTop = document.createElement("div");
+      gridTop.style.cssText = "display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:8px;";
+
+      // Name input
+      const nameCol = document.createElement("div");
+      const nameLbl = document.createElement("label");
+      nameLbl.className = "meta";
+      nameLbl.style.fontSize = "10px";
+      nameLbl.textContent = "Rule Name *:";
+      const nameIn = document.createElement("input");
+      nameIn.type = "text";
+      nameIn.className = "term-input mono";
+      nameIn.style.cssText = "width:100%;height:28px;font-size:12px;box-sizing:border-box;";
+      nameIn.value = rule.name || "";
+      nameIn.placeholder = "e.g. Car Audio";
+      nameCol.appendChild(nameLbl);
+      nameCol.appendChild(nameIn);
+
+      // Level select
+      const lvlCol = document.createElement("div");
+      const lvlLbl = document.createElement("label");
+      lvlLbl.className = "meta";
+      lvlLbl.style.fontSize = "10px";
+      lvlLbl.textContent = "Min Level:";
+      const lvlSel = document.createElement("select");
+      lvlSel.className = "theme-select mono";
+      lvlSel.style.cssText = "width:100%;height:28px;font-size:12px;box-sizing:border-box;";
+      const levels = [
+        { v: "ALL", l: "ALL Levels" },
+        { v: "V", l: "V · Verbose +" },
+        { v: "D", l: "D · Debug +" },
+        { v: "I", l: "I · Info +" },
+        { v: "W", l: "W · Warn +" },
+        { v: "E", l: "E · Error +" },
+        { v: "F", l: "F · Fatal only" },
+      ];
+      levels.forEach(lv => {
+        const opt = document.createElement("option");
+        opt.value = lv.v;
+        opt.textContent = lv.l;
+        if ((rule.level || "I") === lv.v) opt.selected = true;
+        lvlSel.appendChild(opt);
+      });
+      lvlCol.appendChild(lvlLbl);
+      lvlCol.appendChild(lvlSel);
+
+      // PID input
+      const pidCol = document.createElement("div");
+      const pidLbl = document.createElement("label");
+      pidLbl.className = "meta";
+      pidLbl.style.fontSize = "10px";
+      pidLbl.textContent = "PID (optional):";
+      const pidIn = document.createElement("input");
+      pidIn.type = "text";
+      pidIn.className = "term-input mono";
+      pidIn.style.cssText = "width:100%;height:28px;font-size:12px;box-sizing:border-box;";
+      pidIn.value = rule.pid || "";
+      pidIn.placeholder = "e.g. 1842";
+      pidCol.appendChild(pidLbl);
+      pidCol.appendChild(pidIn);
+
+      gridTop.appendChild(nameCol);
+      gridTop.appendChild(lvlCol);
+      gridTop.appendChild(pidCol);
+
+      // Grid Middle: Tag and Pattern
+      const gridMid = document.createElement("div");
+      gridMid.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;";
+
+      const tagCol = document.createElement("div");
+      const tagLbl = document.createElement("label");
+      tagLbl.className = "meta";
+      tagLbl.style.fontSize = "10px";
+      tagLbl.textContent = "Tag (string or regex):";
+      const tagIn = document.createElement("input");
+      tagIn.type = "text";
+      tagIn.className = "term-input mono";
+      tagIn.style.cssText = "width:100%;height:28px;font-size:12px;box-sizing:border-box;";
+      tagIn.value = rule.tag || "";
+      tagIn.placeholder = "e.g. CarAudio.* or AudioFlinger";
+      tagCol.appendChild(tagLbl);
+      tagCol.appendChild(tagIn);
+
+      const textCol = document.createElement("div");
+      const textLbl = document.createElement("label");
+      textLbl.className = "meta";
+      textLbl.style.fontSize = "10px";
+      textLbl.textContent = "Message Pattern / Regex:";
+      const textIn = document.createElement("input");
+      textIn.type = "text";
+      textIn.className = "term-input mono";
+      textIn.style.cssText = "width:100%;height:28px;font-size:12px;box-sizing:border-box;";
+      textIn.value = rule.text || "";
+      textIn.placeholder = "e.g. FATAL|CRASH|Exception";
+      textCol.appendChild(textLbl);
+      textCol.appendChild(textIn);
+
+      gridMid.appendChild(tagCol);
+      gridMid.appendChild(textCol);
+
+      // Bottom Row: Enabled toggle + Done / Cancel buttons
+      const botRow = document.createElement("div");
+      botRow.style.cssText = "display:flex;justify-content:space-between;align-items:center;";
+
+      const enableLbl = document.createElement("label");
+      enableLbl.className = "chk";
+      enableLbl.style.cssText = "cursor:pointer;font-size:11px;display:flex;align-items:center;gap:6px;";
+      const enableChk = document.createElement("input");
+      enableChk.type = "checkbox";
+      enableChk.checked = rule.enabled ?? true;
+      enableLbl.appendChild(enableChk);
+      const enableText = document.createElement("span");
+      enableText.textContent = "Enable this filter rule";
+      enableLbl.appendChild(enableText);
+
+      const btnGroup = document.createElement("div");
+      btnGroup.style.cssText = "display:flex;gap:6px;";
+
+      const cancelBtn = document.createElement("button");
+      cancelBtn.className = "btn btn-xs";
+      cancelBtn.textContent = "Cancel";
+      cancelBtn.addEventListener("click", () => {
+        if (rule._isNew) {
+          _logcatRules = _logcatRules.filter(r => r.id !== rule.id);
+        } else {
+          delete rule._editing;
+        }
+        renderLogcatModalItems();
+      });
+
+      const doneBtn = document.createElement("button");
+      doneBtn.className = "btn btn-xs primary";
+      doneBtn.textContent = "✓ Done";
+      doneBtn.addEventListener("click", () => {
+        const valName = nameIn.value.trim();
+        if (!valName) {
+          toast("Name Required", "Please enter a rule name.", "warn");
+          nameIn.focus();
+          return;
+        }
+        rule.name = valName;
+        rule.level = lvlSel.value;
+        rule.tag = tagIn.value.trim();
+        rule.text = textIn.value.trim();
+        rule.pid = pidIn.value.trim();
+        rule.enabled = enableChk.checked;
+        delete rule._editing;
+        delete rule._isNew;
+        renderLogcatModalItems();
+        updateLogcatFilterBadge();
+        renderLogcat();
+        saveLogcatFilters(false);
+      });
+
+      btnGroup.appendChild(cancelBtn);
+      btnGroup.appendChild(doneBtn);
+
+      botRow.appendChild(enableLbl);
+      botRow.appendChild(btnGroup);
+
+      card.appendChild(gridTop);
+      card.appendChild(gridMid);
+      card.appendChild(botRow);
+
+      container.appendChild(card);
+      setTimeout(() => nameIn.focus(), 30);
+    } else {
+      // ---------------- Display Card View ----------------
+      const head = document.createElement("div");
+      head.className = "logcat-item-head";
+
+      // Left: Checkbox + Rule Name
+      const checkWrap = document.createElement("label");
+      checkWrap.className = "logcat-item-check-wrap";
+      checkWrap.title = rule.enabled ? "Rule is active (click to disable)" : "Rule is disabled (click to enable)";
+
+      const chk = document.createElement("input");
+      chk.type = "checkbox";
+      chk.className = "logcat-item-toggle";
+      chk.checked = Boolean(rule.enabled);
+      chk.addEventListener("change", (e) => {
+        rule.enabled = e.target.checked;
+        card.className = `logcat-item-card ${rule.enabled ? "active" : "disabled"}`;
+        updateLogcatFilterBadge();
+        renderLogcat();
+        saveLogcatFilters(false);
+      });
+      checkWrap.appendChild(chk);
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "logcat-item-name";
+      nameEl.textContent = rule.name || "Untitled Rule";
+      checkWrap.appendChild(nameEl);
+      head.appendChild(checkWrap);
+
+      // Middle: Badges
+      const badges = document.createElement("div");
+      badges.className = "logcat-item-badges";
+
+      const lvlBadge = document.createElement("span");
+      lvlBadge.className = "logcat-rule-badge";
+      lvlBadge.textContent = rule.level ? `${rule.level}+` : "ALL";
+      badges.appendChild(lvlBadge);
+
+      if (rule.tag) {
+        const tagEl = document.createElement("span");
+        tagEl.className = "logcat-rule-tag";
+        tagEl.textContent = `🏷 ${rule.tag}`;
+        tagEl.title = `Tag: ${rule.tag}`;
+        badges.appendChild(tagEl);
+      }
+
+      if (rule.text) {
+        const textEl = document.createElement("span");
+        textEl.className = "logcat-rule-text";
+        textEl.textContent = `🔍 ${rule.text}`;
+        textEl.title = `Pattern: ${rule.text}`;
+        badges.appendChild(textEl);
+      }
+
+      if (rule.pid) {
+        const pidEl = document.createElement("span");
+        pidEl.className = "logcat-rule-pid";
+        pidEl.textContent = `PID: ${rule.pid}`;
+        badges.appendChild(pidEl);
+      }
+      head.appendChild(badges);
+
+      // Right: Actions (Edit & Delete)
+      const actions = document.createElement("div");
+      actions.className = "logcat-item-actions";
+
+      const editBtn = document.createElement("button");
+      editBtn.className = "btn btn-xs ghost";
+      editBtn.textContent = "✎ Edit";
+      editBtn.title = "Edit this filter rule";
+      editBtn.addEventListener("click", () => {
+        rule._editing = true;
+        renderLogcatModalItems();
+      });
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "btn btn-xs danger ghost";
+      delBtn.textContent = "🗑 Delete";
+      delBtn.title = "Delete this filter rule";
+      delBtn.addEventListener("click", () => {
+        if (!confirm(`Delete filter rule '${rule.name}'?`)) return;
+        _logcatRules = _logcatRules.filter(r => r.id !== rule.id);
+        renderLogcatModalItems();
+        updateLogcatFilterBadge();
+        renderLogcat();
+        saveLogcatFilters(false);
+        toast("Rule Deleted", `Removed '${rule.name}'.`, "info", 2000);
+      });
+
+      actions.appendChild(editBtn);
+      actions.appendChild(delBtn);
+      head.appendChild(actions);
+
+      card.appendChild(head);
+      container.appendChild(card);
+    }
+  });
+}
+
+function openLogcatFiltersModal() {
+  const modal = $("#modal-logcat-filters");
+  if (!modal) return;
+
+  // Ensure default item view mode
+  $("#logcat-modal-items-container")?.classList.remove("hidden");
+  $("#logcat-modal-raw-container")?.classList.add("hidden");
+  const toggleBtn = $("#btn-logcat-modal-toggle-raw");
+  if (toggleBtn) toggleBtn.textContent = "{} Raw JSON";
+
+  _logcatRules.forEach(r => {
+    delete r._editing;
+    delete r._isNew;
+  });
+
+  renderLogcatModalItems();
+  updateLogcatFilterBadge();
+  modal.classList.remove("hidden");
+}
+
+function closeLogcatFiltersModal() {
+  _logcatRules.forEach(r => {
+    delete r._editing;
+    delete r._isNew;
+  });
+  $("#modal-logcat-filters")?.classList.add("hidden");
+}
+
+function toggleLogcatModalRawView() {
+  const itemsContainer = $("#logcat-modal-items-container");
+  const rawContainer = $("#logcat-modal-raw-container");
+  const textarea = $("#logcat-modal-raw-textarea");
+  const toggleBtn = $("#btn-logcat-modal-toggle-raw");
+  if (!itemsContainer || !rawContainer || !textarea) return;
+
+  const isShowingRaw = !rawContainer.classList.contains("hidden");
+  if (isShowingRaw) {
+    // Switch from Raw JSON to Items
+    try {
+      const parsed = JSON.parse(textarea.value);
+      if (!Array.isArray(parsed)) throw new Error("JSON must be an array of rule objects: [ { ... } ]");
+      _logcatRules = parsed.map((r, i) => ({
+        id: r.id || `rule-${Date.now()}-${i}`,
+        name: r.name || `Rule ${i + 1}`,
+        enabled: r.enabled ?? true,
+        level: r.level || "I",
+        tag: r.tag || "",
+        text: r.text || "",
+        pid: r.pid || "",
+      }));
+      rawContainer.classList.add("hidden");
+      itemsContainer.classList.remove("hidden");
+      if (toggleBtn) toggleBtn.textContent = "{} Raw JSON";
+      renderLogcatModalItems();
+      renderLogcat();
+    } catch (err) {
+      toast("Invalid JSON", err.message, "err", 4000);
+    }
+  } else {
+    // Switch from Items to Raw JSON
+    const cleanList = _logcatRules.map(stripRuleInternal);
+    textarea.value = JSON.stringify(cleanList, null, 2);
+    itemsContainer.classList.add("hidden");
+    rawContainer.classList.remove("hidden");
+    if (toggleBtn) toggleBtn.textContent = "📋 Item View";
+    setTimeout(() => textarea.focus(), 30);
+  }
+}
+
+async function saveLogcatFilters(notify = false) {
+  const cleanList = _logcatRules.map(stripRuleInternal);
+  try {
+    localStorage.setItem(LOGCAT_RULES_STORAGE_KEY, JSON.stringify(cleanList));
+  } catch { /* ignore */ }
+  try {
+    const res = await fetch("/api/logcat/filters", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filters: cleanList }),
+    });
+    const data = await res.json();
+    if (data.ok && notify) {
+      toast("Filters Saved ✓", `Saved ${_logcatRules.length} rules to config/logcat_filters.json`, "ok", 3000);
+    }
+  } catch (err) {
+    if (notify) toast("Save Failed", err.message, "err");
+  }
+}
+
+async function saveLogcatModalAndApply() {
+  const rawContainer = $("#logcat-modal-raw-container");
+  const textarea = $("#logcat-modal-raw-textarea");
+  if (rawContainer && !rawContainer.classList.contains("hidden") && textarea) {
+    try {
+      const parsed = JSON.parse(textarea.value);
+      if (!Array.isArray(parsed)) throw new Error("JSON must be an array of rule objects: [ { ... } ]");
+      _logcatRules = parsed.map((r, i) => ({
+        id: r.id || `rule-${Date.now()}-${i}`,
+        name: r.name || `Rule ${i + 1}`,
+        enabled: r.enabled ?? true,
+        level: r.level || "I",
+        tag: r.tag || "",
+        text: r.text || "",
+        pid: r.pid || "",
+      }));
+    } catch (err) {
+      toast("Invalid JSON", err.message, "err", 4000);
+      return;
+    }
+  }
+
+  closeLogcatFiltersModal();
+  updateLogcatFilterBadge();
+  renderLogcat();
+  await saveLogcatFilters(true);
+}
+
+function addLogcatRuleItem() {
+  // If in raw mode, switch back to items mode
+  const rawContainer = $("#logcat-modal-raw-container");
+  if (rawContainer && !rawContainer.classList.contains("hidden")) {
+    toggleLogcatModalRawView();
+  }
+
+  const newRule = {
+    id: `rule-${Date.now()}`,
+    name: `Rule ${_logcatRules.length + 1}`,
+    enabled: true,
+    level: "I",
+    tag: "",
+    text: "",
+    pid: "",
+    _editing: true,
+    _isNew: true,
+  };
+  _logcatRules.unshift(newRule);
+  renderLogcatModalItems();
+}
+
+function downloadLogcatFilters() {
+  const cleanList = _logcatRules.map(stripRuleInternal);
+  const jsonStr = JSON.stringify(cleanList, null, 2);
+  const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "logcat_filters.json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast("Filters Downloaded ✓", `Exported ${_logcatRules.length} rules as logcat_filters.json`, "ok", 2500);
+}
+
+function uploadLogcatFilters(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      if (!Array.isArray(parsed)) {
+        throw new Error("JSON file must be an array of rule objects: [ { ... } ]");
+      }
+      _logcatRules = parsed.map((r, i) => ({
+        id: r.id || `rule-${Date.now()}-${i}`,
+        name: r.name || `Rule ${i + 1}`,
+        enabled: r.enabled ?? true,
+        level: r.level || "I",
+        tag: r.tag || "",
+        text: r.text || "",
+        pid: r.pid || "",
+      }));
+      renderLogcatModalItems();
+      updateLogcatFilterBadge();
+      renderLogcat();
+      saveLogcatFilters(true);
+      toast("Filters Uploaded ✓", `Imported ${_logcatRules.length} filter rules from ${file.name}.`, "ok", 3500);
+    } catch (err) {
+      toast("Upload Failed", err.message, "err", 4000);
+    }
+  };
+  reader.readAsText(file);
+}
+
 function initLogcat() {
   if (_logcatInitialized) return;
   _logcatInitialized = true;
@@ -4275,6 +4848,36 @@ function initLogcat() {
   $("#btn-logcat-clear-device")?.addEventListener("click", clearLogcatDevice);
   $("#btn-logcat-copy")?.addEventListener("click", copyLogcat);
   $("#btn-logcat-export")?.addEventListener("click", exportLogcat);
+
+  // Filter Rules Button on main toolbar
+  $("#btn-open-logcat-filters")?.addEventListener("click", openLogcatFiltersModal);
+
+  // Filter Rules Modal buttons
+  $("#btn-logcat-modal-add-item")?.addEventListener("click", addLogcatRuleItem);
+  $("#btn-logcat-modal-toggle-raw")?.addEventListener("click", toggleLogcatModalRawView);
+  $("#btn-logcat-modal-download")?.addEventListener("click", downloadLogcatFilters);
+  $("#btn-logcat-modal-upload")?.addEventListener("click", () => $("#input-logcat-modal-upload-file")?.click());
+  $("#input-logcat-modal-upload-file")?.addEventListener("change", (e) => {
+    if (e.target.files && e.target.files[0]) {
+      uploadLogcatFilters(e.target.files[0]);
+      e.target.value = "";
+    }
+  });
+  $("#btn-logcat-modal-close")?.addEventListener("click", closeLogcatFiltersModal);
+  $("#btn-logcat-modal-save")?.addEventListener("click", saveLogcatModalAndApply);
+  $("#btn-logcat-modal-format-json")?.addEventListener("click", () => {
+    const ta = $("#logcat-modal-raw-textarea");
+    if (!ta) return;
+    try {
+      const p = JSON.parse(ta.value);
+      ta.value = JSON.stringify(p, null, 2);
+    } catch (err) {
+      toast("Invalid JSON", err.message, "err");
+    }
+  });
+
+  // Load saved rules from server / local storage
+  loadLogcatFilters();
 
   // Auto-scroll management
   autoScrollChk?.addEventListener("change", (e) => {
