@@ -525,6 +525,18 @@ code, .mono { font-family: var(--mono); }
   border-color: #ef4444;
   background: rgba(127, 29, 29, .65);
 }
+/* Auto-close countdown badge (header, next to the status badge):
+   amber pill showing seconds until the dialog auto-closes. */
+.run-badge.autoclose {
+  color: #fde68a;
+  border-color: #f59e0b;
+  background: rgba(120, 53, 15, .55);
+  animation: autoclosePulse 1s ease-in-out infinite;
+}
+@keyframes autoclosePulse {
+  0%, 100% { opacity: .75; }
+  50% { opacity: 1; }
+}
 .info-out.run-terminal {
   background: #051817;
   border: 1.5px solid rgba(45, 212, 191, .45);

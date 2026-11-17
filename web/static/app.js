@@ -976,8 +976,11 @@ function cancelRunAutoClose() {
     clearInterval(_runAutoCloseTimer);
     _runAutoCloseTimer = null;
   }
-  const closeBtn = $("#btn-run-close");
-  if (closeBtn) closeBtn.textContent = "Close";
+  const badge = $("#run-autoclose-badge");
+  if (badge) {
+    badge.classList.add("hidden");
+    badge.textContent = "";
+  }
 }
 
 // Record user activity inside the run modal (used by the auto-close tick).
@@ -990,7 +993,7 @@ function scheduleRunAutoClose(ok) {
   // Only auto-close on success; failures stay open so the user can read the log.
   if (!ok) return;
   const modal = $("#modal-run");
-  const closeBtn = $("#btn-run-close");
+  const badge = $("#run-autoclose-badge");
   if (!modal || modal.classList.contains("hidden")) return;
   let remain = 10;
   const tick = () => {
@@ -999,10 +1002,16 @@ function scheduleRunAutoClose(ok) {
     // reset the countdown back to 10s so it never closes under the cursor.
     if (Date.now() - _runLastActivity < 1500) {
       remain = 10;
-      if (closeBtn) closeBtn.textContent = "Close (10s)";
+      if (badge) {
+        badge.classList.remove("hidden");
+        badge.textContent = "⏳ Auto-close 10s";
+      }
       return;
     }
-    if (closeBtn) closeBtn.textContent = `Close (${remain}s)`;
+    if (badge) {
+      badge.classList.remove("hidden");
+      badge.textContent = `⏳ Auto-close ${remain}s`;
+    }
     if (remain <= 0) {
       cancelRunAutoClose();
       modal.classList.add("hidden");
