@@ -33,6 +33,7 @@
         <button class="tab" id="tab-aosp" title="AOSP Android Build, Deploy &amp; Test Center (tel b, tel test, apk.config)">🤖 AOSP</button>
         <button class="tab" id="tab-terminal"
           title="Interactive Web CLI Terminal — run tel / Linux / Git / ADB commands directly">💻 Terminal</button>
+        <button class="tab" id="tab-logcat" title="Live Android Logcat stream with realtime search, tag &amp; level filter">📱 Logcat</button>
         <button class="tab" id="tab-docs" title="Sphinx Doc-as-Code — WYSIWYG Quill.js &amp; RST Converter">📚 Docs</button>
       </nav>
     </div>
@@ -179,6 +180,78 @@
         <button class="btn primary" id="btn-term-run">▶ Run</button>
         <button class="btn danger" id="btn-term-stop" disabled title="Stop running command (Ctrl+C / SIGINT)">⏹
           Stop</button>
+      </div>
+    </section>
+
+    <!-- ============ Logcat pane (Live Android Logcat with Realtime Filters) ============ -->
+    <section class="editor-pane hidden" id="view-logcat">
+      <div class="editor-head">
+        <div class="editor-title">
+          <span class="mono" style="color:var(--accent);font-weight:700">📱 Logcat Live</span>
+          <span id="logcat-status-badge" class="run-badge">Idle</span>
+          <span id="logcat-stats" class="meta mono">0 lines</span>
+        </div>
+        <div class="editor-actions">
+          <button class="btn primary" id="btn-logcat-toggle">▶ Start</button>
+          <button class="btn" id="btn-logcat-clear-view" title="Clear current logs from screen">🧹 Clear View</button>
+          <button class="btn danger ghost" id="btn-logcat-clear-device" title="Clear device buffer: adb logcat -c">🗑 Clear Device</button>
+          <button class="btn" id="btn-logcat-copy" title="Copy visible logs">📋 Copy</button>
+          <button class="btn" id="btn-logcat-export" title="Download visible logs as .txt">💾 Export</button>
+        </div>
+      </div>
+
+      <!-- Logcat Filter Toolbar -->
+      <div class="logcat-filter-bar">
+        <div class="logcat-input-wrap">
+          <span class="logcat-input-icon">🔍</span>
+          <input type="text" id="logcat-filter-text" class="term-input mono" placeholder="Filter message or regex (e.g. fatal|error or 'onAudioFocus')…" autocomplete="off" spellcheck="false">
+          <button class="logcat-clear-btn hidden" id="btn-logcat-clear-text" title="Clear filter">✕</button>
+        </div>
+
+        <div class="logcat-filter-group">
+          <label class="logcat-filter-lbl" for="logcat-filter-level">Level:</label>
+          <select id="logcat-filter-level" class="theme-select mono logcat-select">
+            <option value="ALL">All Levels</option>
+            <option value="V">V · Verbose +</option>
+            <option value="D">D · Debug +</option>
+            <option value="I" selected>I · Info +</option>
+            <option value="W">W · Warn +</option>
+            <option value="E">E · Error +</option>
+            <option value="F">F · Fatal only</option>
+          </select>
+        </div>
+
+        <div class="logcat-filter-group">
+          <label class="logcat-filter-lbl" for="logcat-filter-tag">Tag:</label>
+          <input type="text" id="logcat-filter-tag" class="term-input mono logcat-input-sm" placeholder="e.g. CarAudio" autocomplete="off" spellcheck="false">
+        </div>
+
+        <div class="logcat-filter-group">
+          <label class="logcat-filter-lbl" for="logcat-filter-pid">PID:</label>
+          <input type="text" id="logcat-filter-pid" class="term-input mono logcat-input-xs" placeholder="PID" autocomplete="off" spellcheck="false">
+        </div>
+
+        <label class="chk" style="white-space:nowrap;margin-left:auto;cursor:pointer;" title="Keep scrolled to the bottom as new logs arrive">
+          <input type="checkbox" id="logcat-autoscroll" checked> Auto-scroll
+        </label>
+      </div>
+
+      <!-- Quick Tag Filter Chips -->
+      <div class="term-quick-bar" id="logcat-tag-bar" style="margin: 0 14px 6px 14px;">
+        <span class="meta">⚡ Quick Tags:</span>
+        <button class="term-chip logcat-tag-chip" data-tag="OemService">OemService</button>
+        <button class="term-chip logcat-tag-chip" data-tag="CarAudioService">CarAudioService</button>
+        <button class="term-chip logcat-tag-chip" data-tag="CarService">CarService</button>
+        <button class="term-chip logcat-tag-chip" data-tag="ActivityManager">ActivityManager</button>
+        <button class="term-chip logcat-tag-chip" data-tag="AndroidRuntime">AndroidRuntime</button>
+        <button class="term-chip logcat-tag-chip" data-tag="FATAL">FATAL/CRASH</button>
+        <button class="term-chip logcat-tag-chip" data-tag="" style="color:var(--text-dim);" title="Clear Tag filter">✕ Clear Tag</button>
+      </div>
+
+      <!-- Logcat Streaming Display -->
+      <div class="logcat-container" id="logcat-container">
+        <div class="logcat-screen mono" id="logcat-screen"></div>
+        <button class="logcat-scroll-pill hidden" id="logcat-scroll-pill" title="Scroll to bottom">↓ Resume Auto-scroll</button>
       </div>
     </section>
 

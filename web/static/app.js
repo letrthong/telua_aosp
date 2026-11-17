@@ -585,17 +585,19 @@ function syncTopTabs() {
   const isFiles = !$("#view-files").classList.contains("hidden");
   const isAosp = !$("#view-aosp")?.classList.contains("hidden");
   const isTerminal = !$("#view-terminal")?.classList.contains("hidden");
+  const isLogcat = !$("#view-logcat")?.classList.contains("hidden");
   const isDocs = !$("#view-docs")?.classList.contains("hidden");
-  const isSystem = !isFiles && !isAosp && !isTerminal && !isDocs && (state.plSource === "system" || state.plSource === "docker");
-  const isPipelines = !isFiles && !isAosp && !isTerminal && !isDocs && !isSystem;
+  const isSystem = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && (state.plSource === "system" || state.plSource === "docker");
+  const isPipelines = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isSystem;
   $("#tab-files")?.classList.toggle("active", isFiles);
   $("#tab-pipelines")?.classList.toggle("active", isPipelines);
   $("#tab-system")?.classList.toggle("active", isSystem);
   $("#tab-aosp")?.classList.toggle("active", isAosp);
   $("#tab-terminal")?.classList.toggle("active", isTerminal);
+  $("#tab-logcat")?.classList.toggle("active", isLogcat);
   $("#tab-docs")?.classList.toggle("active", isDocs);
   try {
-    const activeTabName = isFiles ? "files" : (isAosp ? "aosp" : (isTerminal ? "terminal" : (isDocs ? "docs" : (isSystem ? "system" : "pipelines"))));
+    const activeTabName = isFiles ? "files" : (isAosp ? "aosp" : (isTerminal ? "terminal" : (isLogcat ? "logcat" : (isDocs ? "docs" : (isSystem ? "system" : "pipelines")))));
     localStorage.setItem(LAST_TAB_KEY, activeTabName);
     localStorage.setItem(LAST_SOURCE_KEY, state.plSource);
   } catch { /* ignore */ }
@@ -3862,21 +3864,472 @@ async function stopAospCommand() {
   } catch { /* ignore */ }
 }
 
+/* ---------------- Logcat Controller & Realtime Filtering ---------------- */
+const LOGCAT_MAX_LINES = 3000;
+const LOG_LEVEL_SCORES = { V: 1, D: 2, I: 3, W: 4, E: 5, F: 6 };
+const THREADTIME_RE = /^(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+(\d+)\s+(\d+)\s+([VDIWEF])\s+([^:]+):\s*(.*)$/;
+const BRIEF_RE = /^(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+([VDIWEF])\/([^(]+)\(\s*(\d+)\):\s*(.*)$/;
+
+let _logcatEntries = [];
+let _logcatStreaming = false;
+let _logcatAbortController = null;
+let _logcatRenderPending = false;
+let _logcatAutoScroll = true;
+let _logcatInitialized = false;
+
+function parseLogcatLine(raw) {
+  const line = raw.replace(/\r?\n$/, "");
+  if (!line.trim()) return null;
+
+  let m = THREADTIME_RE.exec(line);
+  if (m) {
+    return {
+      time: m[1],
+      pid: m[2],
+      tid: m[3],
+      level: m[4],
+      levelScore: LOG_LEVEL_SCORES[m[4]] || 1,
+      tag: m[5].trim(),
+      msg: m[6],
+      raw: line,
+    };
+  }
+  m = BRIEF_RE.exec(line);
+  if (m) {
+    return {
+      time: m[1],
+      pid: m[4],
+      tid: "",
+      level: m[2],
+      levelScore: LOG_LEVEL_SCORES[m[2]] || 1,
+      tag: m[3].trim(),
+      msg: m[5],
+      raw: line,
+    };
+  }
+
+  let lvl = "I";
+  if (/\b(FATAL|CRASH)\b/i.test(line)) lvl = "F";
+  else if (/\b(ERROR|Exception|Error:)\b/i.test(line)) lvl = "E";
+  else if (/\b(WARN|Warning)\b/i.test(line)) lvl = "W";
+  else if (/\bDEBUG\b/i.test(line)) lvl = "D";
+
+  return {
+    time: "",
+    pid: "",
+    tid: "",
+    level: lvl,
+    levelScore: LOG_LEVEL_SCORES[lvl] || 1,
+    tag: "",
+    msg: line,
+    raw: line,
+  };
+}
+
+function getLogcatFilters() {
+  const rawText = ($("#logcat-filter-text")?.value || "").trim();
+  const rawLevel = $("#logcat-filter-level")?.value || "I";
+  const rawTag = ($("#logcat-filter-tag")?.value || "").trim().toLowerCase();
+  const rawPid = ($("#logcat-filter-pid")?.value || "").trim();
+
+  let minLevelScore = 1;
+  if (rawLevel !== "ALL") {
+    minLevelScore = LOG_LEVEL_SCORES[rawLevel] || 1;
+  }
+
+  let isRegex = false;
+  let regexObj = null;
+  if (rawText && (rawText.includes("|") || rawText.includes(".*") || rawText.startsWith("^") || rawText.endsWith("$"))) {
+    try {
+      regexObj = new RegExp(rawText, "i");
+      isRegex = true;
+    } catch {
+      isRegex = false;
+    }
+  }
+
+  return {
+    text: rawText.toLowerCase(),
+    isRegex,
+    regexObj,
+    minLevelScore,
+    tag: rawTag,
+    pid: rawPid,
+  };
+}
+
+function isLogcatEntryVisible(entry, filters) {
+  if (!entry) return false;
+  if (entry.levelScore < filters.minLevelScore) return false;
+  if (filters.tag && !entry.tag.toLowerCase().includes(filters.tag)) return false;
+  if (filters.pid && !entry.pid.includes(filters.pid)) return false;
+  if (filters.text) {
+    if (filters.isRegex) {
+      try {
+        if (!filters.regexObj.test(entry.raw)) return false;
+      } catch {
+        return false;
+      }
+    } else {
+      if (!entry.raw.toLowerCase().includes(filters.text)) return false;
+    }
+  }
+  return true;
+}
+
+function createLogcatRowEl(entry) {
+  const row = document.createElement("div");
+  row.className = `logcat-row level-${entry.level}`;
+
+  if (entry.time) {
+    const timeEl = document.createElement("span");
+    timeEl.className = "log-time";
+    timeEl.textContent = entry.time;
+    row.appendChild(timeEl);
+  }
+  if (entry.pid) {
+    const pidEl = document.createElement("span");
+    pidEl.className = "log-pid";
+    pidEl.textContent = entry.tid ? `${entry.pid}/${entry.tid}` : entry.pid;
+    row.appendChild(pidEl);
+  }
+  const badge = document.createElement("span");
+  badge.className = `log-badge level-${entry.level}`;
+  badge.textContent = entry.level;
+  row.appendChild(badge);
+
+  if (entry.tag) {
+    const tagEl = document.createElement("span");
+    tagEl.className = "log-tag";
+    tagEl.textContent = entry.tag + ":";
+    tagEl.title = `Click to filter by tag: ${entry.tag}`;
+    tagEl.addEventListener("click", () => {
+      const tagInput = $("#logcat-filter-tag");
+      if (tagInput) {
+        tagInput.value = entry.tag;
+        renderLogcat();
+      }
+    });
+    row.appendChild(tagEl);
+  }
+
+  const msgEl = document.createElement("span");
+  msgEl.className = "log-msg";
+  msgEl.textContent = entry.msg;
+  row.appendChild(msgEl);
+
+  return row;
+}
+
+function renderLogcat() {
+  const screen = $("#logcat-screen");
+  if (!screen) return;
+  const filters = getLogcatFilters();
+
+  const frag = document.createDocumentFragment();
+  let visibleCount = 0;
+
+  for (let i = 0; i < _logcatEntries.length; i++) {
+    const entry = _logcatEntries[i];
+    if (isLogcatEntryVisible(entry, filters)) {
+      frag.appendChild(createLogcatRowEl(entry));
+      visibleCount++;
+    }
+  }
+
+  screen.innerHTML = "";
+  if (visibleCount === 0) {
+    const empty = document.createElement("div");
+    empty.className = "logcat-empty-msg";
+    empty.innerHTML = `<span>${_logcatEntries.length === 0 ? "No logs yet. Click '▶ Start' to connect to device." : "No logs match current filter criteria."}</span>`;
+    screen.appendChild(empty);
+  } else {
+    screen.appendChild(frag);
+  }
+
+  const statsEl = $("#logcat-stats");
+  if (statsEl) {
+    statsEl.textContent = `${_logcatEntries.length} lines (${visibleCount} visible)`;
+  }
+
+  const clearBtn = $("#btn-logcat-clear-text");
+  if (clearBtn) {
+    clearBtn.classList.toggle("hidden", !filters.text);
+  }
+
+  if (_logcatAutoScroll) {
+    screen.scrollTop = screen.scrollHeight;
+  }
+}
+
+async function startLogcatStream() {
+  if (_logcatStreaming) return;
+  _logcatStreaming = true;
+  updateLogcatControls();
+
+  const badge = $("#logcat-status-badge");
+  if (badge) {
+    badge.textContent = "Streaming";
+    badge.className = "run-badge ok";
+  }
+
+  _logcatAbortController = new AbortController();
+  const screen = $("#logcat-screen");
+
+  try {
+    const res = await fetch("/api/logcat/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+      signal: _logcatAbortController.signal,
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.error || `HTTP ${res.status}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop();
+
+      let added = false;
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        if (line.includes("__TELUA_LOGCAT_DONE__")) break;
+        const entry = parseLogcatLine(line);
+        if (entry) {
+          _logcatEntries.push(entry);
+          if (_logcatEntries.length > LOGCAT_MAX_LINES) {
+            _logcatEntries.shift();
+          }
+          added = true;
+        }
+      }
+
+      if (added && !_logcatRenderPending) {
+        _logcatRenderPending = true;
+        requestAnimationFrame(() => {
+          _logcatRenderPending = false;
+          renderLogcat();
+        });
+      }
+    }
+  } catch (err) {
+    if (err.name !== "AbortError") {
+      toast("Logcat Stream Error", err.message, "err");
+      if (screen) {
+        const errRow = document.createElement("div");
+        errRow.className = "logcat-row level-E";
+        errRow.textContent = `[ERROR] ${err.message}`;
+        screen.appendChild(errRow);
+      }
+    }
+  } finally {
+    _logcatStreaming = false;
+    _logcatAbortController = null;
+    updateLogcatControls();
+    if (badge) {
+      badge.textContent = "Idle";
+      badge.className = "run-badge";
+    }
+  }
+}
+
+async function stopLogcatStream() {
+  if (_logcatAbortController) {
+    try { _logcatAbortController.abort(); } catch { /* ignore */ }
+  }
+  _logcatStreaming = false;
+  try {
+    await fetch("/api/logcat/stop", { method: "POST" });
+  } catch { /* ignore */ }
+  updateLogcatControls();
+}
+
+function updateLogcatControls() {
+  const toggleBtn = $("#btn-logcat-toggle");
+  if (toggleBtn) {
+    if (_logcatStreaming) {
+      toggleBtn.textContent = "⏸ Pause";
+      toggleBtn.className = "btn jade-btn";
+    } else {
+      toggleBtn.textContent = "▶ Start";
+      toggleBtn.className = "btn primary";
+    }
+  }
+}
+
+function clearLogcatView() {
+  _logcatEntries = [];
+  renderLogcat();
+  toast("Logcat View Cleared", "Cleared browser display buffer.", "info", 2000);
+}
+
+async function clearLogcatDevice() {
+  if (!confirm("Clear device circular log buffer (adb logcat -c)?")) return;
+  try {
+    const res = await fetch("/api/logcat/clear", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      toast("Device Buffer Cleared", "adb logcat -c completed successfully.", "ok", 3000);
+      _logcatEntries = [];
+      renderLogcat();
+    } else {
+      throw new Error(data.error || "Failed to clear device buffer");
+    }
+  } catch (err) {
+    toast("Clear Device Failed", err.message, "err");
+  }
+}
+
+function copyLogcat() {
+  const filters = getLogcatFilters();
+  const visibleLines = _logcatEntries
+    .filter(e => isLogcatEntryVisible(e, filters))
+    .map(e => e.raw);
+  if (visibleLines.length === 0) {
+    toast("Nothing to copy", "No visible logs match filter.", "warn");
+    return;
+  }
+  navigator.clipboard.writeText(visibleLines.join("\n"))
+    .then(() => toast("Copied ✓", `Copied ${visibleLines.length} log lines to clipboard.`, "ok", 2500))
+    .catch(err => toast("Copy failed", err.message, "err"));
+}
+
+function exportLogcat() {
+  const filters = getLogcatFilters();
+  const visibleLines = _logcatEntries
+    .filter(e => isLogcatEntryVisible(e, filters))
+    .map(e => e.raw);
+  if (visibleLines.length === 0) {
+    toast("Nothing to export", "No visible logs match filter.", "warn");
+    return;
+  }
+  const blob = new Blob([visibleLines.join("\n")], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  a.href = url;
+  a.download = `logcat_${stamp}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast("Exported ✓", `Downloaded ${visibleLines.length} log lines.`, "ok", 2500);
+}
+
+function initLogcat() {
+  if (_logcatInitialized) return;
+  _logcatInitialized = true;
+
+  const screen = $("#logcat-screen");
+  const scrollPill = $("#logcat-scroll-pill");
+  const autoScrollChk = $("#logcat-autoscroll");
+
+  // Filtering listeners
+  $("#logcat-filter-text")?.addEventListener("input", () => renderLogcat());
+  $("#logcat-filter-level")?.addEventListener("change", () => renderLogcat());
+  $("#logcat-filter-tag")?.addEventListener("input", () => renderLogcat());
+  $("#logcat-filter-pid")?.addEventListener("input", () => renderLogcat());
+
+  $("#btn-logcat-clear-text")?.addEventListener("click", () => {
+    const textInput = $("#logcat-filter-text");
+    if (textInput) {
+      textInput.value = "";
+      renderLogcat();
+    }
+  });
+
+  // Action buttons
+  $("#btn-logcat-toggle")?.addEventListener("click", () => {
+    if (_logcatStreaming) {
+      stopLogcatStream();
+    } else {
+      startLogcatStream();
+    }
+  });
+  $("#btn-logcat-clear-view")?.addEventListener("click", clearLogcatView);
+  $("#btn-logcat-clear-device")?.addEventListener("click", clearLogcatDevice);
+  $("#btn-logcat-copy")?.addEventListener("click", copyLogcat);
+  $("#btn-logcat-export")?.addEventListener("click", exportLogcat);
+
+  // Quick tag chips
+  document.querySelectorAll(".logcat-tag-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const tag = chip.dataset.tag || "";
+      const tagInput = $("#logcat-filter-tag");
+      if (tagInput) {
+        tagInput.value = tag;
+        renderLogcat();
+      }
+    });
+  });
+
+  // Auto-scroll management
+  autoScrollChk?.addEventListener("change", (e) => {
+    _logcatAutoScroll = e.target.checked;
+    if (_logcatAutoScroll && screen) {
+      screen.scrollTop = screen.scrollHeight;
+      scrollPill?.classList.add("hidden");
+    }
+  });
+
+  screen?.addEventListener("scroll", () => {
+    const distanceFromBottom = screen.scrollHeight - screen.scrollTop - screen.clientHeight;
+    if (distanceFromBottom > 50) {
+      if (_logcatAutoScroll) {
+        _logcatAutoScroll = false;
+        if (autoScrollChk) autoScrollChk.checked = false;
+        scrollPill?.classList.remove("hidden");
+      }
+    } else {
+      if (!_logcatAutoScroll) {
+        _logcatAutoScroll = true;
+        if (autoScrollChk) autoScrollChk.checked = true;
+        scrollPill?.classList.add("hidden");
+      }
+    }
+  });
+
+  scrollPill?.addEventListener("click", () => {
+    _logcatAutoScroll = true;
+    if (autoScrollChk) autoScrollChk.checked = true;
+    if (screen) screen.scrollTop = screen.scrollHeight;
+    scrollPill.classList.add("hidden");
+  });
+
+  renderLogcat();
+}
+
 /* ---------------- Wiring ---------------- */
 function switchTab(tab) {
   const isFiles = tab === "files";
   const isAosp = tab === "aosp";
   const isTerminal = tab === "terminal";
+  const isLogcat = tab === "logcat";
   const isDocs = tab === "docs";
-  const isPipelinesView = !isFiles && !isAosp && !isTerminal && !isDocs;
+  const isPipelinesView = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs;
 
-  // Collapse Config Files sidebar in Docs, AOSP & Terminal views to give maximum full-width canvas
-  $(".layout")?.classList.toggle("no-sidebar", isDocs || isAosp || isTerminal);
+  // Collapse Config Files sidebar in Docs, AOSP, Terminal & Logcat views to give maximum full-width canvas
+  $(".layout")?.classList.toggle("no-sidebar", isDocs || isAosp || isTerminal || isLogcat);
 
   $("#view-files")?.classList.toggle("hidden", !isFiles);
   $("#view-aosp")?.classList.toggle("hidden", !isAosp);
   $("#view-pipelines")?.classList.toggle("hidden", !isPipelinesView);
   $("#view-terminal")?.classList.toggle("hidden", !isTerminal);
+  $("#view-logcat")?.classList.toggle("hidden", !isLogcat);
   $("#view-docs")?.classList.toggle("hidden", !isDocs);
   if (tab === "system") {
     switchPipelineSource("system");
@@ -3885,6 +4338,10 @@ function switchTab(tab) {
   }
   syncTopTabs();
   renderFiles($("#search")?.value || "");
+  if (isLogcat) {
+    initLogcat();
+    return;
+  }
   if (isAosp) {
     loadAospConfig();
     return;
@@ -3983,6 +4440,7 @@ function wire() {
   $("#tab-system")?.addEventListener("click", () => { switchTab("system"); renderFiles($("#search")?.value || ""); });
   $("#tab-aosp")?.addEventListener("click", () => switchTab("aosp"));
   $("#tab-terminal")?.addEventListener("click", () => { switchTab("terminal"); renderFiles($("#search")?.value || ""); });
+  $("#tab-logcat")?.addEventListener("click", () => switchTab("logcat"));
   $("#tab-docs")?.addEventListener("click", () => switchTab("docs"));
 
   // AOSP Center wiring
@@ -4410,6 +4868,8 @@ async function boot() {
     switchTab("terminal");
   } else if (savedTab === "aosp") {
     switchTab("aosp");
+  } else if (savedTab === "logcat") {
+    switchTab("logcat");
   } else if (savedTab === "docs") {
     switchTab("docs");
   } else if (savedTab === "files") {

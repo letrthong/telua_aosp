@@ -297,6 +297,22 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         })
         self.assertEqual(res_bad_name.status_code, 400)
 
+    def test_api_logcat_endpoints(self):
+        # 1. Test logcat status endpoint
+        res_status = self.client.get("/api/logcat/status")
+        self.assertEqual(res_status.status_code, 200)
+        data_status = res_status.get_json()
+        self.assertTrue(data_status["ok"])
+        self.assertIn("adb_available", data_status)
+        self.assertIn("streaming", data_status)
+
+        # 2. Test logcat stop endpoint
+        res_stop = self.client.post("/api/logcat/stop")
+        self.assertEqual(res_stop.status_code, 200)
+        data_stop = res_stop.get_json()
+        self.assertTrue(data_stop["ok"])
+        self.assertEqual(data_stop["stopped"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

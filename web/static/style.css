@@ -2627,3 +2627,225 @@ code,
   min-height: 240px;
   margin: 0;
 }
+
+/* ---------------- Logcat Pane & Live Stream ---------------- */
+#view-logcat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.logcat-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--bg-soft);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.logcat-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1.5;
+  min-width: 220px;
+}
+
+.logcat-input-wrap .term-input {
+  padding-left: 28px;
+  padding-right: 24px;
+  width: 100%;
+  height: 30px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.logcat-input-icon {
+  position: absolute;
+  left: 8px;
+  font-size: 12px;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.logcat-clear-btn {
+  position: absolute;
+  right: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
+.logcat-clear-btn:hover {
+  color: var(--text);
+}
+
+.logcat-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.logcat-filter-lbl {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.logcat-select {
+  height: 30px;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.logcat-input-sm {
+  width: 120px;
+  height: 30px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.logcat-input-xs {
+  width: 65px;
+  height: 30px;
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.logcat-container {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-code, #0d1117);
+  border-radius: 6px;
+  margin: 0 14px 10px 14px;
+  border: 1px solid var(--border);
+}
+
+.logcat-screen {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding: 6px 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.42;
+}
+
+.logcat-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  white-space: pre;
+}
+
+.logcat-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.logcat-row.level-V { color: #8b949e; }
+.logcat-row.level-D { color: #a5d6ff; }
+.logcat-row.level-I { color: var(--text); }
+.logcat-row.level-W { color: #e3b341; background: rgba(210, 153, 34, 0.08); }
+.logcat-row.level-E { color: #ff7b72; background: rgba(248, 81, 73, 0.12); }
+.logcat-row.level-F { color: #ffffff; background: #b62324; font-weight: bold; }
+
+.log-time {
+  color: #8b949e;
+  font-size: 11px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.log-pid {
+  color: #6e7681;
+  font-size: 11px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.log-badge {
+  font-weight: 700;
+  width: 16px;
+  text-align: center;
+  border-radius: 3px;
+  font-size: 11px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.log-badge.level-V { color: #8b949e; }
+.log-badge.level-D { color: #58a6ff; }
+.log-badge.level-I { color: #3fb950; }
+.log-badge.level-W { color: #d29922; }
+.log-badge.level-E { color: #f85149; font-weight: 800; }
+.log-badge.level-F { color: #ffffff; background: #f85149; font-weight: 900; }
+
+.log-tag {
+  color: #d2a8ff;
+  font-weight: 600;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.log-tag:hover {
+  text-decoration: underline;
+  color: #e2c5ff;
+}
+
+.log-msg {
+  flex: 1;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.logcat-scroll-pill {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1f6feb;
+  color: #fff;
+  border: 1px solid #58a6ff;
+  border-radius: 20px;
+  padding: 4px 14px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  z-index: 10;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.logcat-scroll-pill:hover {
+  background: #388bfd;
+  transform: translateX(-50%) scale(1.04);
+}
+
+.logcat-empty-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--text-dim);
+  gap: 8px;
+  font-size: 13px;
+  user-select: none;
+}

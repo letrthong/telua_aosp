@@ -1250,6 +1250,153 @@ def api_terminal_stop():
 
 
 # ------------------------------------------------------------------------------
+# REST API — Android Logcat Streaming & Filtering
+# ------------------------------------------------------------------------------
+_ACTIVE_LOGCAT_PROCS = set()
+_ACTIVE_LOGCAT_LOCK = threading.Lock()
+
+
+def _resolve_adb_binary() -> Optional[str]:
+    """Find the adb executable in PATH or standard Android SDK locations."""
+    adb = shutil.which("adb")
+    if adb:
+        return adb
+    candidates = []
+    if os.name == "nt":
+        local_app = os.environ.get("LOCALAPPDATA", "")
+        if local_app:
+            candidates.append(os.path.join(local_app, "Android", "Sdk", "platform-tools", "adb.exe"))
+        user_profile = os.environ.get("USERPROFILE", "")
+        if user_profile:
+            candidates.append(os.path.join(user_profile, "AppData", "Local", "Android", "Sdk", "platform-tools", "adb.exe"))
+        candidates.extend([
+            r"C:\Program Files (x86)\Android\android-sdk\platform-tools\adb.exe",
+            r"C:\Android\platform-tools\adb.exe",
+        ])
+    else:
+        home = os.path.expanduser("~")
+        candidates.extend([
+            os.path.join(home, "Android/Sdk/platform-tools/adb"),
+            "/usr/bin/adb",
+            "/usr/local/bin/adb",
+        ])
+    for cand in candidates:
+        if os.path.isfile(cand) and (os.access(cand, os.X_OK) or os.name == "nt"):
+            return cand
+    return None
+
+
+@app.get("/api/logcat/status")
+def api_logcat_status():
+    """Return status of ADB binary, connected devices, and streaming state."""
+    adb = _resolve_adb_binary()
+    devices = adb_devices()
+    with _ACTIVE_LOGCAT_LOCK:
+        streaming = len(_ACTIVE_LOGCAT_PROCS) > 0
+    return jsonify({
+        "ok": True,
+        "adb_available": bool(adb),
+        "adb_path": adb or "",
+        "devices": devices,
+        "streaming": streaming,
+    })
+
+
+@app.post("/api/logcat/stream")
+def api_logcat_stream():
+    """Stream live Android adb logcat output line-by-line."""
+    adb = _resolve_adb_binary()
+    if not adb:
+        return jsonify({"ok": False, "error": "ADB executable not found in PATH or Android SDK locations."}), 400
+
+    data = request.get_json(silent=True) or {}
+    device = str(data.get("device", "")).strip()
+    buffer = str(data.get("buffer", "")).strip()
+
+    exec_args = [adb]
+    if device:
+        exec_args.extend(["-s", device])
+    exec_args.extend(["logcat", "-v", "threadtime"])
+    if buffer and buffer not in ("all", "default"):
+        exec_args.extend(["-b", buffer])
+
+    def generate():
+        env = dict(os.environ)
+        env["PYTHONUNBUFFERED"] = "1"
+        proc = None
+        try:
+            proc = subprocess.Popen(
+                exec_args,
+                shell=False,
+                cwd=str(ROOT),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                env=env,
+                start_new_session=(os.name != "nt"),
+            )
+            with _ACTIVE_LOGCAT_LOCK:
+                _ACTIVE_LOGCAT_PROCS.add(proc)
+            if proc.stdout is not None:
+                for line in iter(proc.stdout.readline, ""):
+                    yield line
+                proc.stdout.close()
+            code = proc.wait()
+        except Exception as exc:
+            yield "\n[ERROR] Logcat streaming failed: %s\n" % exc
+            code = 1
+        finally:
+            if proc is not None:
+                with _ACTIVE_LOGCAT_LOCK:
+                    _ACTIVE_LOGCAT_PROCS.discard(proc)
+                if proc.poll() is None:
+                    _kill_term_proc(proc)
+        yield "\n__TELUA_LOGCAT_DONE__:%d\n" % (code or 0)
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/plain; charset=utf-8",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+    )
+
+
+@app.post("/api/logcat/stop")
+def api_logcat_stop():
+    """Stop active logcat streaming process."""
+    with _ACTIVE_LOGCAT_LOCK:
+        procs = list(_ACTIVE_LOGCAT_PROCS)
+        _ACTIVE_LOGCAT_PROCS.clear()
+    for p in procs:
+        _kill_term_proc(p)
+    return jsonify({"ok": True, "stopped": len(procs)})
+
+
+@app.post("/api/logcat/clear")
+def api_logcat_clear():
+    """Clear device circular logcat buffer via `adb logcat -c`."""
+    adb = _resolve_adb_binary()
+    if not adb:
+        return jsonify({"ok": False, "error": "ADB binary not found."}), 400
+    data = request.get_json(silent=True) or {}
+    device = str(data.get("device", "")).strip()
+    cmd = [adb]
+    if device:
+        cmd.extend(["-s", device])
+    cmd.extend(["logcat", "-c"])
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        return jsonify({
+            "ok": res.returncode == 0,
+            "exit_code": res.returncode,
+            "output": (res.stdout or "") + (res.stderr or ""),
+        })
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+# ------------------------------------------------------------------------------
 # REST API — Sphinx Docs & RST <-> HTML Conversion (Quill.js integration)
 # ------------------------------------------------------------------------------
 @app.get("/api/docs/files")
