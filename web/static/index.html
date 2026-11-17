@@ -17,27 +17,26 @@
 
 <body>
   <header class="topbar">
-    <div class="brand">
-      <span class="logo">⚙</span>
-      <div>
-        <h1>Telua Web <span class="tag">Config Manager</span></h1>
-        <p class="sub">AOSP &amp; Automotive Toolkit</p>
+    <div class="topbar-main">
+      <div class="brand">
+        <span class="logo">⚙</span>
+        <div>
+          <h1>Telua Web <span class="tag">Config Manager</span></h1>
+          <p class="sub">AOSP &amp; Automotive Toolkit</p>
+        </div>
       </div>
-    </div>
-    <div class="statusbar">
       <nav class="tabs">
         <button class="tab" id="tab-files" title="Browse &amp; edit config files">📄 Files</button>
-        <button class="tab active" id="tab-pipelines" title="Edit MY_CMD_* / MULTI / CAR / DUMP pipelines">⚡
-          Pipelines</button>
+        <button class="tab active" id="tab-pipelines" title="Edit MY_CMD_* / MULTI / CAR / DUMP pipelines">⚡ Pipelines</button>
         <button class="tab" id="tab-system"
-          title="System &amp; Docker CLI pipelines (config/const_system_cli.config — telua system <action>)">🖥
-          System</button>
+          title="System &amp; Docker CLI pipelines (config/const_system_cli.config — telua system <action>)">🖥 System</button>
         <button class="tab" id="tab-aosp" title="AOSP Android Build, Deploy &amp; Test Center (tel b, tel test, apk.config)">🤖 AOSP</button>
         <button class="tab" id="tab-terminal"
           title="Interactive Web CLI Terminal — run tel / Linux / Git / ADB commands directly">💻 Terminal</button>
-        <button class="tab" id="tab-docs" title="Sphinx Doc-as-Code — WYSIWYG Quill.js &amp; RST Converter">📚
-          Docs</button>
+        <button class="tab" id="tab-docs" title="Sphinx Doc-as-Code — WYSIWYG Quill.js &amp; RST Converter">📚 Docs</button>
       </nav>
+    </div>
+    <div class="statusbar">
       <div class="chip hidden" id="chip-draft"
         title="Unsaved edits kept in browser draft (survives refresh). Click to discard.">✎ draft</div>
       <div class="chip" id="chip-version" title="Toolkit version">v—</div>

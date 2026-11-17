@@ -3860,8 +3860,8 @@ function switchTab(tab) {
   const isDocs = tab === "docs";
   const isPipelinesView = !isFiles && !isAosp && !isTerminal && !isDocs;
 
-  // Collapse Config Files sidebar in Docs view to give maximum full-width canvas
-  $(".layout")?.classList.toggle("no-sidebar", isDocs);
+  // Collapse Config Files sidebar in Docs, AOSP & Terminal views to give maximum full-width canvas
+  $(".layout")?.classList.toggle("no-sidebar", isDocs || isAosp || isTerminal);
 
   $("#view-files")?.classList.toggle("hidden", !isFiles);
   $("#view-aosp")?.classList.toggle("hidden", !isAosp);
