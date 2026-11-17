@@ -157,6 +157,7 @@
       <div class="term-quick-bar" id="term-quick-bar">
         <span class="meta">⚡ Quick commands:</span>
         <button class="term-chip" data-cmd="tel --info">tel --info</button>
+        <button class="term-chip" data-cmd="tel update" title="Update toolkit repo: git pull origin main (preserves personal overlays)">tel update</button>
         <button class="term-chip" data-cmd="tel system">tel system</button>
         <button class="term-chip" data-cmd="tel system ram">tel system ram</button>
         <button class="term-chip" data-cmd="tel system os">tel system os</button>
@@ -260,6 +261,7 @@
         <button class="term-chip aosp-chip" data-cmd="tel b -n">tel b -n</button>
         <button class="term-chip aosp-chip" data-cmd="tel test">tel test</button>
         <button class="term-chip aosp-chip" data-cmd="tel info">tel info</button>
+        <button class="term-chip aosp-chip" data-cmd="tel update" title="Update toolkit repo: git pull origin main (preserves personal overlays)">tel update</button>
         <button class="term-chip aosp-chip" data-cmd="tel --help">tel --help</button>
         <button class="term-chip aosp-chip" data-cmd="adb devices -l">adb devices -l</button>
         <button class="term-chip aosp-chip" data-cmd="adb remount">adb remount</button>
@@ -504,7 +506,9 @@
 
           <div class="aosp-form-group">
             <label for="aosp-modal-target-variant" class="aosp-label">Build Variant (<code>CONFIG_TARGET_BUILD_VARIANT</code>)</label>
-            <input type="text" id="aosp-modal-target-variant" class="term-input mono" style="width:100%;box-sizing:border-box;" placeholder="e.g. userdebug or eng">
+            <select id="aosp-modal-target-variant" class="theme-select mono" style="width:100%;box-sizing:border-box;">
+              <option value="userdebug" selected>userdebug</option>
+            </select>
           </div>
         </div>
 

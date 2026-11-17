@@ -3592,7 +3592,17 @@ function openAospConfigModal() {
   }
 
   if ($("#aosp-modal-target-product")) $("#aosp-modal-target-product").value = d.target_product || "";
-  if ($("#aosp-modal-target-variant")) $("#aosp-modal-target-variant").value = d.target_variant || "";
+  const variantSel = $("#aosp-modal-target-variant");
+  if (variantSel) {
+    const val = d.target_variant || "userdebug";
+    if (![...variantSel.options].some(o => o.value === val)) {
+      const opt = document.createElement("option");
+      opt.value = val;
+      opt.textContent = val;
+      variantSel.appendChild(opt);
+    }
+    variantSel.value = val;
+  }
 
   $("#modal-aosp-config")?.classList.remove("hidden");
   setTimeout(() => $("#aosp-modal-root-input")?.focus(), 50);

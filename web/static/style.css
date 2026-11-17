@@ -2459,6 +2459,15 @@ code,
   gap: 12px;
 }
 
+.aosp-modal-form select.theme-select {
+  height: 38px;
+  padding: 8px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+  background: var(--bg);
+  box-sizing: border-box;
+}
+
 .aosp-form-group {
   display: flex;
   flex-direction: column;
