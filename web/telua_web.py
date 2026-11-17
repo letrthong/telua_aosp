@@ -592,6 +592,90 @@ def api_aosp_config_post():
 # ------------------------------------------------------------------------------
 # Crypto & Overlay API
 # ------------------------------------------------------------------------------
+@app.post("/api/overlay/upload")
+def api_overlay_upload():
+    """Upload a private overlay configuration file (apk_overlays.config or const_my_cli.config)."""
+    overlay_dir = ROOT / "config" / "overlay"
+    overlay_dir.mkdir(parents=True, exist_ok=True)
+
+    target_name = None
+    content_str = None
+
+    if "file" in request.files:
+        f = request.files["file"]
+        filename = f.filename or ""
+        target_name = request.form.get("target") or filename
+        raw_bytes = f.read()
+        try:
+            content_str = raw_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            content_str = raw_bytes.decode("latin-1")
+    else:
+        data = request.get_json(silent=True) or {}
+        target_name = data.get("target") or data.get("filename")
+        content_str = data.get("content")
+
+    if not target_name:
+        abort(400, description="Missing file or target overlay name.")
+
+    # Sanitize target name
+    target_name = Path(str(target_name).strip()).name
+    allowed_targets = ("apk_overlays.config", "const_my_cli.config")
+    if target_name not in allowed_targets:
+        if not re.fullmatch(r"[A-Za-z0-9_-]+\.config", target_name):
+            abort(400, description="Invalid overlay file name '%s'. Allowed: %s" % (target_name, ", ".join(allowed_targets)))
+
+    if content_str is None:
+        abort(400, description="Empty file content.")
+
+    # Validate bash syntax
+    err = validate_content("bash", content_str)
+    if err:
+        abort(400, description="File contains invalid bash syntax: %s" % err)
+
+    dest_path = overlay_dir / target_name
+    backup = None
+    if dest_path.is_file():
+        try:
+            bak = dest_path.with_suffix(".config.bak")
+            shutil.copy2(dest_path, bak)
+            backup = str(bak.relative_to(ROOT)).replace("\\", "/")
+        except OSError:
+            pass
+
+    try:
+        with open(dest_path, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(content_str)
+    except OSError as exc:
+        abort(500, description="Failed to write '%s': %s" % (target_name, exc))
+
+    # If apk_overlays.config was uploaded, also sync ACTIVE_PROJECT in apk.config if present
+    if target_name == "apk_overlays.config" and APK_CONFIG.is_file():
+        try:
+            m = re.search(r'^\s*ACTIVE_PROJECT\s*=\s*["\']?(.*?)["\']?\s*$', content_str, re.M)
+            if m:
+                proj = m.group(1).strip()
+                sub = re.match(r'^\$\{[A-Za-z0-9_]+:-(.*?)\}$', proj)
+                if sub:
+                    proj = sub.group(1).strip()
+                if proj:
+                    apk_text = APK_CONFIG.read_text(encoding="utf-8", errors="ignore")
+                    if re.search(r'ACTIVE_PROJECT\s*=', apk_text):
+                        apk_text = re.sub(r'(?m)^([ \t]*ACTIVE_PROJECT\s*=\s*)["\']?.*?["\']?$', r'\g<1>"%s"' % proj, apk_text, count=1)
+                        APK_CONFIG.write_text(apk_text, encoding="utf-8")
+        except OSError:
+            pass
+
+    return jsonify({
+        "ok": True,
+        "filename": target_name,
+        "path": f"config/overlay/{target_name}",
+        "bytes": len(content_str.encode("utf-8")),
+        "backup": backup,
+        "aosp_info": _parse_aosp_info() if target_name == "apk_overlays.config" else None,
+    })
+
+
 @app.get("/api/crypto/status")
 def api_crypto_status():
     return jsonify({

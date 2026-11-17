@@ -114,6 +114,11 @@ def validate_content(kind: str, content: str):
         except ValueError as exc:
             return "Invalid JSON: %s" % exc
     bash = shutil.which("bash")
+    if not bash and os.name == "nt":
+        for cand in (r"C:\Program Files\Git\bin\bash.exe", r"C:\Program Files (x86)\Git\bin\bash.exe"):
+            if os.path.isfile(cand):
+                bash = cand
+                break
     if not bash:
         return None
     tmp = tempfile.NamedTemporaryFile("w", suffix=".config", delete=False, encoding="utf-8")

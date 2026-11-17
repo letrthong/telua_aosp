@@ -78,19 +78,28 @@ find_config_file() {
         fi
         check_dir="$(dirname "$check_dir")"
     done
-    if [ -f "$SCRIPT_DIR/config/$CONFIG_FILE_NAME" ]; then
-        echo "$SCRIPT_DIR/config/$CONFIG_FILE_NAME"
-        return 0
+    # Only fall back to toolkit's default config if running inside the toolkit itself
+    local real_pwd
+    real_pwd="$(pwd -P 2>/dev/null || pwd)"
+    local real_script_dir
+    real_script_dir="$(cd "$SCRIPT_DIR" && pwd -P 2>/dev/null || echo "$SCRIPT_DIR")"
+    local real_master_dir
+    real_master_dir="$(cd "$MASTER_SCRIPT_DIR" && pwd -P 2>/dev/null || echo "$MASTER_SCRIPT_DIR")"
+    if [[ "$real_pwd" == "$real_script_dir"* ]] || [[ "$real_pwd" == "$real_master_dir"* ]]; then
+        if [ -f "$SCRIPT_DIR/config/$CONFIG_FILE_NAME" ]; then
+            echo "$SCRIPT_DIR/config/$CONFIG_FILE_NAME"
+            return 0
+        fi
+        if [ -f "$MASTER_SCRIPT_DIR/config/$CONFIG_FILE_NAME" ]; then
+            echo "$MASTER_SCRIPT_DIR/config/$CONFIG_FILE_NAME"
+            return 0
+        fi
+        if [ -f "$SCRIPT_DIR/$CONFIG_FILE_NAME" ]; then
+            echo "$SCRIPT_DIR/$CONFIG_FILE_NAME"
+            return 0
+        fi
     fi
-    if [ -f "$MASTER_SCRIPT_DIR/config/$CONFIG_FILE_NAME" ]; then
-        echo "$MASTER_SCRIPT_DIR/config/$CONFIG_FILE_NAME"
-        return 0
-    fi
-    if [ -f "$SCRIPT_DIR/$CONFIG_FILE_NAME" ]; then
-        echo "$SCRIPT_DIR/$CONFIG_FILE_NAME"
-        return 0
-    fi
-    echo "$SCRIPT_DIR/config/$CONFIG_FILE_NAME"
+    echo "$PWD/$CONFIG_FILE_NAME"
 }
 
 CONFIG_FILE="$(find_config_file)"

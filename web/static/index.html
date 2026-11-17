@@ -508,6 +508,41 @@
             <input type="text" id="aosp-modal-target-variant" class="term-input mono" style="width:100%;box-sizing:border-box;" placeholder="e.g. userdebug or eng">
           </div>
         </div>
+
+        <!-- Private Overlay Uploads -->
+        <div class="aosp-overlay-upload-section">
+          <div class="aosp-overlay-upload-head">
+            <span>📂 Upload Private Overlays (<code>config/overlay/</code>)</span>
+            <span class="meta mono" style="font-size:11px;">Git-Ignored / Private</span>
+          </div>
+          <p class="aosp-help" style="margin:2px 0 10px 0;">
+            Restore or update your personal workspace and pipeline configs directly into <code>config/overlay/</code>:
+          </p>
+
+          <div class="aosp-overlay-upload-grid">
+            <div class="aosp-upload-card">
+              <div class="aosp-upload-info">
+                <span class="mono aosp-upload-name">apk_overlays.config</span>
+                <span class="aosp-upload-desc">AOSP Root, board target, lunch &amp; project profile</span>
+              </div>
+              <label class="btn ghost aosp-upload-btn" title="Upload apk_overlays.config to config/overlay/">
+                ⬆ Upload
+                <input type="file" id="upload-apk-overlays" accept=".config,.txt,text/*" style="display:none;">
+              </label>
+            </div>
+
+            <div class="aosp-upload-card">
+              <div class="aosp-upload-info">
+                <span class="mono aosp-upload-name">const_my_cli.config</span>
+                <span class="aosp-upload-desc">Personal pipeline macros (<code>telua my</code>)</span>
+              </div>
+              <label class="btn ghost aosp-upload-btn" title="Upload const_my_cli.config to config/overlay/">
+                ⬆ Upload
+                <input type="file" id="upload-const-my-cli" accept=".config,.txt,text/*" style="display:none;">
+              </label>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="modal-actions" style="margin-top:20px;">

@@ -3635,6 +3635,36 @@ async function saveAospConfigFromModal() {
   }
 }
 
+async function uploadOverlayFile(file, targetName) {
+  if (!file) return;
+  const formData = new FormData();
+  formData.append("file", file);
+  if (targetName) formData.append("target", targetName);
+
+  try {
+    const res = await fetch("/api/overlay/upload", {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || data.description || "Upload failed");
+    }
+    toast("Overlay Uploaded 💾", `Saved ${data.filename} to config/overlay/!`, "ok", 4000);
+    if (data.filename === "apk_overlays.config") {
+      await loadAospConfig();
+      openAospConfigModal();
+      refreshStatus();
+    } else if (data.filename === "const_my_cli.config") {
+      if (state.plSource === "my") {
+        await loadPipelines("my");
+      }
+    }
+  } catch (err) {
+    toast("Upload Failed ❌", String(err.message || err), "danger", 5000);
+  }
+}
+
 async function quickSwitchAospProject(projectName) {
   if (!projectName) return;
   try {
@@ -3951,6 +3981,16 @@ function wire() {
   $("#btn-aosp-edit-dialog")?.addEventListener("click", () => openAospConfigModal());
   $("#btn-aosp-modal-cancel")?.addEventListener("click", () => closeAospConfigModal());
   $("#btn-aosp-modal-save")?.addEventListener("click", () => saveAospConfigFromModal());
+  $("#upload-apk-overlays")?.addEventListener("change", (e) => {
+    const f = e.target.files?.[0];
+    if (f) uploadOverlayFile(f, "apk_overlays.config");
+    e.target.value = "";
+  });
+  $("#upload-const-my-cli")?.addEventListener("change", (e) => {
+    const f = e.target.files?.[0];
+    if (f) uploadOverlayFile(f, "const_my_cli.config");
+    e.target.value = "";
+  });
   $("#modal-aosp-config")?.addEventListener("click", (e) => {
     if (e.target === $("#modal-aosp-config")) closeAospConfigModal();
   });

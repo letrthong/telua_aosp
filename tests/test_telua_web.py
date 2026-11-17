@@ -257,6 +257,46 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         # Reset AOSP_ROOT_DIR back to empty
         self.client.post("/api/aosp/config", json={"aosp_root_dir": ""})
 
+    def test_api_overlay_upload(self):
+        import io
+        # 1. Test uploading const_my_cli.config via JSON
+        res_my = self.client.post("/api/overlay/upload", json={
+            "target": "const_my_cli.config",
+            "content": 'MY_GROUP_LIST=("upload_test :: Test upload macro")\nMY_CMD_UPLOAD_TEST=("echo uploaded_ok")\n',
+        })
+        self.assertEqual(res_my.status_code, 200)
+        data_my = res_my.get_json()
+        self.assertTrue(data_my["ok"])
+        self.assertEqual(data_my["filename"], "const_my_cli.config")
+
+        # 2. Test uploading apk_overlays.config via multipart/form-data
+        overlay_content = b'ACTIVE_PROJECT="oem_service"\nCONFIG_TARGET_PRODUCT="uploaded_board"\nCONFIG_TARGET_BUILD_VARIANT="userdebug"\n'
+        data_upload = {
+            "target": "apk_overlays.config",
+            "file": (io.BytesIO(overlay_content), "apk_overlays.config"),
+        }
+        res_ov = self.client.post("/api/overlay/upload", data=data_upload, content_type="multipart/form-data")
+        self.assertEqual(res_ov.status_code, 200)
+        data_ov = res_ov.get_json()
+        self.assertTrue(data_ov["ok"])
+        self.assertEqual(data_ov["filename"], "apk_overlays.config")
+        self.assertIsNotNone(data_ov["aosp_info"])
+        self.assertEqual(data_ov["aosp_info"]["target_product"], "uploaded_board")
+
+        # 3. Test invalid bash syntax (should return 400)
+        res_bad = self.client.post("/api/overlay/upload", json={
+            "target": "apk_overlays.config",
+            "content": 'ACTIVE_PROJECT="oem_service\nunterminated quote',
+        })
+        self.assertEqual(res_bad.status_code, 400)
+
+        # 4. Test invalid target name (should return 400)
+        res_bad_name = self.client.post("/api/overlay/upload", json={
+            "target": "../../../etc/passwd",
+            "content": "echo bad",
+        })
+        self.assertEqual(res_bad_name.status_code, 400)
+
 
 if __name__ == "__main__":
     unittest.main()
