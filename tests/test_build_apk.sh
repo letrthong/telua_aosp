@@ -83,6 +83,14 @@ log_test "Testing car command device offline check (telua car ks)..."
 out_car_ks=$("$MAIN_SCRIPT" car ks 2>&1 || true)
 assert_success "Car ks reports device offline when disconnected" grep -qi "device offline" <<< "$out_car_ks"
 
+# Test 4e: Dumpsys multi-cli pipelines (telua dump / dump help)
+log_test "Testing dumpsys multi-cli pipelines (telua dump / dump help)..."
+out_dump=$("$MAIN_SCRIPT" dump 2>&1 || true)
+assert_success "Dump lists targets" grep -q "audio-all" <<< "$out_dump"
+out_dump_help=$("$MAIN_SCRIPT" dump help 2>&1 || true)
+assert_success "Dump help lists sequential multi-step commands" grep -q "Comprehensive audio diagnostic" <<< "$out_dump_help"
+assert_success "Dump help shows multi-cli steps count" grep -q "3 commands sequential" <<< "$out_dump_help"
+
 # Test 4b: Java utilities (telua java / clean-java)
 log_test "Testing java utilities (telua java / clean-java)..."
 out_clean=$("$MAIN_SCRIPT" java help 2>&1 || true)

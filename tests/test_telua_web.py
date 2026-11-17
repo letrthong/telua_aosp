@@ -196,6 +196,20 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertIn("docker-status", names)
         self.assertIn("ssh-pub", names)
 
+    def test_api_pipelines_dump(self):
+        res = self.client.get("/api/pipelines?source=dump")
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["source"], "dump")
+        names = [p["name"] for p in data["pipelines"]]
+        self.assertIn("audio", names)
+        self.assertIn("car-service", names)
+        self.assertIn("car-audio", names)
+        self.assertIn("audio-all", names)
+        audio_all = next(p for p in data["pipelines"] if p["name"] == "audio-all")
+        self.assertGreaterEqual(len(audio_all["steps"]), 3)
+
     def test_api_terminal_run_and_stream(self):
         script = telua_web._build_terminal_bash_script("tel system")
         self.assertIn("tel()", script)

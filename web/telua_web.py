@@ -641,9 +641,7 @@ PIPELINE_SOURCES = {
     "dump": {
         "file": ROOT / "config" / "const_dumpsys.config",
         "prefix": "DUMP",
-        "list_var": "DUMP_CLI_LIST",
-        "var_prefix": "ADB_SHELL_DUMP_",
-        "label": "Dumpsys diagnostics commands (telua dump <target>)",
+        "label": "Dumpsys diagnostics pipelines (telua dump <target>)",
     },
 }
 
@@ -704,8 +702,14 @@ def parse_pipelines(source="my"):
     except OSError:
         return []
 
-    if key in ("car", "dump"):
+    if key == "car":
         return _parse_cli_list_pipelines(lines, desc["list_var"], desc["var_prefix"])
+    if key == "dump":
+        has_group = any(re.match(r'^\s*DUMP_GROUP_LIST\s*=', l) for l in lines)
+        has_cmd = any(re.match(r'^\s*DUMP_CMD_', l) for l in lines)
+        if has_group or has_cmd:
+            return parse_array_pipelines(lines, "DUMP")
+        return _parse_cli_list_pipelines(lines, "DUMP_CLI_LIST", "ADB_SHELL_DUMP_")
     return parse_array_pipelines(lines, desc["prefix"])
 
 
@@ -721,7 +725,7 @@ def rewrite_pipeline_config(pipelines, source="my"):
     text = path.read_text(encoding="utf-8", errors="replace")
     lines = text.splitlines()
 
-    if key in ("car", "dump"):
+    if key == "car":
         out = _rewrite_cli_list_lines(lines, pipelines, desc["list_var"], desc["var_prefix"])
     else:
         out = rewrite_array_pipeline_lines(lines, pipelines, desc["prefix"])
@@ -817,7 +821,7 @@ def api_pipeline_run():
             "docker": "SYSTEM_GROUP_LIST",
             "system": "SYSTEM_GROUP_LIST",
             "car": "CAR_CLI_LIST",
-            "dump": "DUMP_CLI_LIST",
+            "dump": "DUMP_GROUP_LIST",
         }[key]
         abort(404, description="Pipeline '%s' not found in %s." % (name, group_var))
     script = BUILD_APK_SH
@@ -854,7 +858,7 @@ def api_pipeline_stream():
             "docker": "SYSTEM_GROUP_LIST",
             "system": "SYSTEM_GROUP_LIST",
             "car": "CAR_CLI_LIST",
-            "dump": "DUMP_CLI_LIST",
+            "dump": "DUMP_GROUP_LIST",
         }[key]
         abort(404, description="Pipeline '%s' not found in %s." % (name, group_var))
     script = BUILD_APK_SH

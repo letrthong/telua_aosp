@@ -686,7 +686,7 @@ function pipelineCard(p) {
     }
     p.name = lower;
     card.dataset.name = lower;
-    const prefixMap = { my: "MY_CMD_", multi: "MULTI_CMD_", docker: "SYSTEM_CMD_", system: "SYSTEM_CMD_", car: "ADB_SHELL_CAR_", dump: "ADB_SHELL_DUMP_" };
+    const prefixMap = { my: "MY_CMD_", multi: "MULTI_CMD_", docker: "SYSTEM_CMD_", system: "SYSTEM_CMD_", car: "ADB_SHELL_CAR_", dump: "DUMP_CMD_" };
     const prefix = prefixMap[state.plSource] || "MY_CMD_";
     p.array = prefix + lower.replace(/-/g, "_").toUpperCase();
     if (!p.orphan) tag.textContent = p.array;
@@ -716,7 +716,7 @@ function pipelineCard(p) {
   card.appendChild(head);
 
   // --- steps ---
-  const isSingleStep = (state.plSource === "car" || state.plSource === "dump");
+  const isSingleStep = (state.plSource === "car");
   if (isSingleStep) {
     if (p.steps.length === 0) p.steps = [""];
     else if (p.steps.length > 1) p.steps = [p.steps[0]];
@@ -828,7 +828,7 @@ function pipelineCard(p) {
 }
 
 function stepRow(p, step, idx, stepsBox) {
-  const isSingleStep = (state.plSource === "car" || state.plSource === "dump");
+  const isSingleStep = (state.plSource === "car");
   const isStepEditing = !!(p._editing || p._editingStep === idx);
   const row = document.createElement("div");
   row.className = "pl-step";
@@ -1114,7 +1114,7 @@ function addPipeline() {
   const existing = new Set(state.pipelines.map(p => p.name));
   let name = "new_pipeline";
   while (existing.has(name)) { name = `new_pipeline_${++i}`; }
-  const prefixMap = { my: "MY_CMD_", multi: "MULTI_CMD_", docker: "SYSTEM_CMD_", system: "SYSTEM_CMD_", car: "ADB_SHELL_CAR_", dump: "ADB_SHELL_DUMP_" };
+  const prefixMap = { my: "MY_CMD_", multi: "MULTI_CMD_", docker: "SYSTEM_CMD_", system: "SYSTEM_CMD_", car: "ADB_SHELL_CAR_", dump: "DUMP_CMD_" };
   const prefix = prefixMap[state.plSource] || "MY_CMD_";
   state.pipelines.push({
     name,
