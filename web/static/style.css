@@ -1921,6 +1921,24 @@ code, .mono { font-family: var(--mono); }
   gap: 6px;
 }
 
+/* Highlight the AOSP button/chip whose command is currently running:
+   amber pulsing glow at full opacity so the user can see WHICH button
+   was clicked even while every sibling is dimmed by .btn:disabled. */
+.aosp-action-btn.running-active,
+.aosp-chip.running-active {
+  opacity: 1 !important;
+  cursor: progress;
+  border-color: #e3b341 !important;
+  color: #ffe08a !important;
+  background: rgba(227, 179, 65, .16) !important;
+  animation: aospRunningPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes aospRunningPulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(227, 179, 65, .55), 0 0 8px rgba(227, 179, 65, .30); }
+  50% { box-shadow: 0 0 0 1px rgba(227, 179, 65, .90), 0 0 18px rgba(227, 179, 65, .60); }
+}
+
 .aosp-console-wrap {
   flex: 1;
   margin: 0 16px 16px 16px;

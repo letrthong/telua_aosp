@@ -3592,7 +3592,7 @@ async function quickSwitchAospProject(projectName) {
   }
 }
 
-async function runAospCommand(cmd) {
+async function runAospCommand(cmd, sourceBtn) {
   cmd = (cmd || "").trim();
   if (!cmd) return;
   if (_aospRunning) {
@@ -3614,6 +3614,15 @@ async function runAospCommand(cmd) {
     stopBtn.disabled = false;
     stopBtn.classList.add("danger-solid");
   }
+
+  // Highlight the clicked button/chip (amber pulsing glow) so the user can
+  // always see WHICH command is currently running.
+  let activeBtn = sourceBtn instanceof Element ? sourceBtn : null;
+  if (!activeBtn) {
+    const sel = `.aosp-action-btn[data-cmd="${CSS.escape(cmd)}"], .aosp-chip[data-cmd="${CSS.escape(cmd)}"]`;
+    activeBtn = document.querySelector(sel);
+  }
+  if (activeBtn) activeBtn.classList.add("running-active");
 
   const separator = outEl && outEl.innerHTML.trim() ? "\n" : "";
   const runDir = (_aospLoadedData && _aospLoadedData.source_dir_exists && _aospLoadedData.source_dir)
@@ -3738,6 +3747,7 @@ async function runAospCommand(cmd) {
       stopBtn.disabled = true;
       stopBtn.classList.remove("danger-solid");
     }
+    if (activeBtn) activeBtn.classList.remove("running-active");
     if (outEl) outEl.scrollTop = outEl.scrollHeight;
   }
 }
@@ -3906,13 +3916,13 @@ function wire() {
   document.querySelectorAll(".aosp-action-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       const cmd = btn.dataset.cmd;
-      if (cmd) runAospCommand(cmd);
+      if (cmd) runAospCommand(cmd, btn);
     });
   });
   document.querySelectorAll(".aosp-chip").forEach(chip => {
     chip.addEventListener("click", () => {
       const cmd = chip.dataset.cmd;
-      if (cmd) runAospCommand(cmd);
+      if (cmd) runAospCommand(cmd, chip);
     });
   });
 
