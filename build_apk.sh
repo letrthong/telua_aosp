@@ -562,8 +562,13 @@ parse_early_arguments() {
             # Config-free commands: these run entirely from the toolkit repo
             # (git/web/docs/crypto/find/replace/help/version) and never need
             # apk.config, the personal overlay, or ACTIVE_PROJECT validation.
+            # Pipeline commands (run/my/system/car/dump) are also config-free:
+            # their steps live in const_*.config (loaded by load_and_validate_config
+            # only when NOT config-free... they are sourced here via the const files
+            # below), so a stale/invalid ACTIVE_PROJECT in apk.config no longer
+            # blocks host-only pipelines like 'telua system ram'.
             # Detected early so load_and_validate_config() can be skipped.
-            update|--update|--git-update|git|--git|git-help|--git-help|git-diff|--git-diff|git-amend|--git-amend|docker-help|--docker-help|network-help|--network-help|network|--network|docker|--docker|web|--web|crypto|--crypto|encrypt|--encrypt|enc|decrypt|--decrypt|dec|docs|--docs|doc|java|--java|clean-java|cleanjava|find-file|find_file|f-file|f-f|find-dir|find_dir|f-dir|f-d|find-text|find_text|f-text|f-t|replace|--replace|replace-text|replace_text|-v|--version|version|-h|--help|help|install|--install|unittest|--unittest|unttest|unit-test)
+            update|--update|--git-update|git|--git|git-help|--git-help|git-diff|--git-diff|git-amend|--git-amend|docker-help|--docker-help|network-help|--network-help|network|--network|docker|--docker|web|--web|crypto|--crypto|encrypt|--encrypt|enc|decrypt|--decrypt|dec|docs|--docs|doc|java|--java|clean-java|cleanjava|find-file|find_file|f-file|f-f|find-dir|find_dir|f-dir|f-d|find-text|find_text|f-text|f-t|replace|--replace|replace-text|replace_text|-v|--version|version|-h|--help|help|install|--install|unittest|--unittest|unttest|unit-test|run|--run|--multi|multi|my|--my|proj|--proj|--project|project|system|--system|sys|--sys|car|--car|dump|--dump|vol-up|--vol-up|vol-down|--vol-down|vol-mute|--vol-mute)
                 CLI_CONFIG_FREE="true"
                 ;;
         esac
@@ -1269,14 +1274,43 @@ source_config_safe() {
     source "$cfg"
 }
 
+# Helper: load ONLY the const_*.config step-definition files (car, dumpsys,
+# security, multi-cli, system, personal). Used by config-free commands so
+# pipelines ('telua run', 'telua system ram', 'telua car ks', ...) still have
+# their command arrays without touching apk.config / ACTIVE_PROJECT.
+_load_const_configs_only() {
+    for _pair in "$CAR_CONFIG_FILE|$CAR_CONFIG_FILE_NAME" \
+                 "$DUMP_CONFIG_FILE|$DUMP_CONFIG_FILE_NAME" \
+                 "$SECURITY_CONFIG_FILE|$SECURITY_CONFIG_FILE_NAME" \
+                 "$MULTI_CONFIG_FILE|$MULTI_CONFIG_FILE_NAME" \
+                 "$SYSTEM_CLI_CONFIG_FILE|$SYSTEM_CLI_CONFIG_FILE_NAME" \
+                 "$MY_CONFIG_FILE|$MY_CONFIG_FILE_NAME"; do
+        local _cfg="${_pair%%|*}"
+        local _name="${_pair##*|}"
+        if [ -n "$_cfg" ] && [ -f "$_cfg" ]; then
+            source_config_safe "$_cfg"
+        elif [ -n "$_name" ] && [ -f "$MASTER_SCRIPT_DIR/$_name" ]; then
+            source_config_safe "$MASTER_SCRIPT_DIR/$_name"
+        elif [ -n "$_name" ] && [ -f "$SCRIPT_DIR/$_name" ]; then
+            source_config_safe "$SCRIPT_DIR/$_name"
+        fi
+    done
+    return 0
+}
+
 load_and_validate_config() {
     # Config-free commands (update, git, web, docs, crypto, find/replace, help,
-    # version, install, unittest, ...) run entirely from the toolkit repo and
-    # never read apk.config / apk_overlays.config / ACTIVE_PROJECT. Skipping the
-    # config load makes them work from ANY directory (even without apk.config)
-    # and removes the profile-validation overhead.
+    # version, install, unittest, run/my/system/car/dump pipelines, ...) run
+    # entirely from the toolkit repo and never read apk.config /
+    # apk_overlays.config / ACTIVE_PROJECT. Their step definitions come from
+    # const_*.config, which are loaded below even in config-free mode (only
+    # apk.config + overlay + profile validation are skipped). This makes them
+    # work from ANY directory and immune to a stale ACTIVE_PROJECT.
     if [ "${CLI_CONFIG_FREE:-false}" = "true" ]; then
         log_info "Config-free command detected: skipping apk.config load (no ACTIVE_PROJECT check)."
+        # Still load the const_*.config step definitions so pipelines,
+        # car/dump/system actions and cheatsheets have their commands.
+        _load_const_configs_only
         return 0
     fi
 
