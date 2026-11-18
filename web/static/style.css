@@ -1038,6 +1038,102 @@ code,
   min-height: 0;
 }
 
+/* Bottom Docked Terminal / Console for Pipelines & System view */
+.pl-output-dock-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  transition: all 0.15s ease;
+}
+.pl-output-dock-label:hover {
+  color: var(--text-color);
+  border-color: var(--border-hover, var(--primary));
+  background: var(--bg-hover, var(--bg-card));
+}
+.pl-output-dock-label input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--primary, #3b82f6);
+  margin: 0;
+}
+
+.pl-bottom-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-code, #0d1117);
+  border-top: 2px solid var(--border);
+  height: 280px;
+  min-height: 100px;
+  max-height: 70vh;
+  position: relative;
+  flex-shrink: 0;
+  transition: height 0.15s ease;
+  z-index: 10;
+}
+
+.pl-bottom-panel.maximized {
+  height: 55vh;
+}
+
+.pl-bottom-resizer {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: row-resize;
+  background: transparent;
+  z-index: 20;
+}
+
+.pl-bottom-resizer:hover,
+.pl-bottom-resizer.dragging {
+  background: rgba(31, 111, 235, 0.4);
+}
+
+.pl-bottom-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  background: var(--bg-panel, #161b22);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.pl-bottom-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pl-bottom-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pl-bottom-screen {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding: 10px 14px;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.45;
+  background: var(--bg-code, #0d1117);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .pl-card {
   background: var(--bg-panel);
   border: 1.5px solid #485366;

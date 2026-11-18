@@ -1,6 +1,6 @@
 [
   {
-    "enabled": false,
+    "enabled": true,
     "id": "rule-fatal",
     "level": "E",
     "name": "Fatal & Crashes",
@@ -27,12 +27,12 @@
     "text": ""
   },
   {
-    "enabled": true,
+    "enabled": false,
     "id": "rule-oem",
     "level": "D",
     "name": "OEM Service",
     "pid": "",
-    "tag": "oem",
+    "tag": "Oem.*",
     "text": ""
   },
   {

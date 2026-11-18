@@ -1030,14 +1030,29 @@ function scheduleRunAutoClose(ok) {
   _runAutoCloseTimer = setInterval(tick, 1000);
 }
 
+const PL_OUTPUT_MODE_KEY = "telua_pl_output_mode";
+let _plOutputMode = localStorage.getItem(PL_OUTPUT_MODE_KEY) || "bottom";
+
+function setPipelineOutputMode(mode) {
+  _plOutputMode = mode === "dialog" ? "dialog" : "bottom";
+  try {
+    localStorage.setItem(PL_OUTPUT_MODE_KEY, _plOutputMode);
+  } catch { /* ignore */ }
+  const chk = $("#chk-pl-output-dock");
+  if (chk) chk.checked = (_plOutputMode === "bottom");
+}
+
 async function stopPipelineRun() {
   if (!_runAbortController) return;
   _runStoppedByUser = true;
-  const badge = $("#run-status-badge");
-  if (badge) {
-    badge.textContent = "⏹ Stopping…";
-    badge.className = "run-badge err";
-  }
+  const badge1 = $("#run-status-badge");
+  const badge2 = $("#pl-bottom-status-badge");
+  [badge1, badge2].forEach(b => {
+    if (b) {
+      b.textContent = "⏹ Stopping…";
+      b.className = "run-badge err";
+    }
+  });
   try { await fetch("/api/terminal/stop", { method: "POST" }); } catch { /* ignore */ }
   try { _runAbortController.abort(); } catch { /* ignore */ }
 }
@@ -1048,15 +1063,33 @@ async function runPipeline(name, explicitSource = null) {
   _lastRunPipelineSource = source;
   const cmdMap = { my: "telua my", multi: "telua run", system: "telua system", docker: "telua system", car: "telua car", dump: "telua dump" };
   const cmd = cmdMap[source] || "telua my";
-  $("#run-title").textContent = `${cmd} ${name}`;
-  const outEl = $("#run-output");
+
+  const isBottom = _plOutputMode === "bottom";
+  const modalEl = $("#modal-run");
+  const bottomPanel = $("#pl-bottom-panel");
+
+  if (isBottom) {
+    bottomPanel?.classList.remove("hidden");
+    modalEl?.classList.add("hidden");
+  } else {
+    modalEl?.classList.remove("hidden");
+    bottomPanel?.classList.add("hidden");
+  }
+
+  const outEl = isBottom ? $("#pl-bottom-output") : $("#run-output");
+  const badge = isBottom ? $("#pl-bottom-status-badge") : $("#run-status-badge");
+  const titleEl = isBottom ? $("#pl-bottom-title") : $("#run-title");
+  const rerunBtn = isBottom ? $("#btn-pl-bottom-rerun") : $("#btn-run-again");
+  const runStopBtn = isBottom ? $("#btn-pl-bottom-stop") : $("#btn-run-stop");
+
+  if (titleEl) titleEl.textContent = `${cmd} ${name}`;
+
   const matchedPl = state.pipelines.find(p => p.name === name);
   const stepsHint = matchedPl && matchedPl.steps?.length
     ? matchedPl.steps.map((s, i) => `  [${i + 1}/${matchedPl.steps.length}] ${s}`).join("\n")
     : `  $ ${cmd} ${name}`;
-  outEl.textContent = `⏳ Starting: ${cmd} ${name}…\n${stepsHint}\n`;
+  if (outEl) outEl.textContent = `⏳ Starting: ${cmd} ${name}…\n${stepsHint}\n`;
 
-  const badge = $("#run-status-badge");
   let elapsed = 0;
   if (badge) {
     badge.textContent = "⏳ Running… (0s)";
@@ -1077,15 +1110,14 @@ async function runPipeline(name, explicitSource = null) {
   _runStoppedByUser = false;
   _runAbortController = new AbortController();
   const signal = _runAbortController.signal;
-  const rerunBtn = $("#btn-run-again");
-  const runStopBtn = $("#btn-run-stop");
   if (rerunBtn) rerunBtn.disabled = true;
   if (runStopBtn) {
     runStopBtn.disabled = false;
     runStopBtn.classList.add("danger-solid");
   }
-  cancelRunAutoClose();
-  $("#modal-run").classList.remove("hidden");
+  if (!isBottom) {
+    cancelRunAutoClose();
+  }
 
   try {
     // Try live streaming endpoint first so output lines appear in real time
@@ -1109,25 +1141,31 @@ async function runPipeline(name, explicitSource = null) {
           receivedStreamChunk = true;
           rawBuffer += decoder.decode(value, { stream: true });
           const cleanPreview = rawBuffer.replace(/\n?__TELUA_EXIT_CODE__:\s*-?\d+\s*$/, "");
-          outEl.innerHTML = ansiToHtml(cleanPreview || "Running…");
-          outEl.scrollTop = outEl.scrollHeight;
+          if (outEl) {
+            outEl.innerHTML = ansiToHtml(cleanPreview || "Running…");
+            outEl.scrollTop = outEl.scrollHeight;
+          }
         }
       }
 
       const m = rawBuffer.match(/__TELUA_EXIT_CODE__:(-?\d+)/);
       if (m) exitCode = parseInt(m[1], 10);
       const finalOutput = rawBuffer.replace(/\n?__TELUA_EXIT_CODE__:\s*-?\d+\s*$/, "");
-      outEl.innerHTML = ansiToHtml(
-        (finalOutput || "(no output)") +
-        `\n\n[exit code: ${exitCode} · elapsed: ${elapsed}s]`
-      );
-      outEl.scrollTop = outEl.scrollHeight;
+      if (outEl) {
+        outEl.innerHTML = ansiToHtml(
+          (finalOutput || "(no output)") +
+          `\n\n[exit code: ${exitCode} · elapsed: ${elapsed}s]`
+        );
+        outEl.scrollTop = outEl.scrollHeight;
+      }
       if (badge) {
         const ok = exitCode === 0;
         badge.textContent = ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${exitCode} (${elapsed}s)`;
         badge.className = "run-badge " + (ok ? "ok" : "err");
       }
-      scheduleRunAutoClose(exitCode === 0);
+      if (!isBottom) {
+        scheduleRunAutoClose(exitCode === 0);
+      }
       return;
     }
 
@@ -1138,25 +1176,29 @@ async function runPipeline(name, explicitSource = null) {
       signal,
     });
     receivedStreamChunk = true;
-    outEl.innerHTML = ansiToHtml(
-      (data.output || "(no output)") +
-      `\n\n[exit code: ${data.exit_code} · elapsed: ${elapsed}s]`
-    );
+    if (outEl) {
+      outEl.innerHTML = ansiToHtml(
+        (data.output || "(no output)") +
+        `\n\n[exit code: ${data.exit_code} · elapsed: ${elapsed}s]`
+      );
+    }
     if (badge) {
       const ok = data.exit_code === 0;
       badge.textContent = ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${data.exit_code} (${elapsed}s)`;
       badge.className = "run-badge " + (ok ? "ok" : "err");
     }
-    scheduleRunAutoClose(data.exit_code === 0);
+    if (!isBottom) {
+      scheduleRunAutoClose(data.exit_code === 0);
+    }
   } catch (err) {
     if (_runStoppedByUser || err.name === "AbortError") {
-      outEl.innerHTML += `\n<span style="color:#d29922;font-weight:700">^C [Stopped by user · ${elapsed}s]</span>\n`;
+      if (outEl) outEl.innerHTML += `\n<span style="color:#d29922;font-weight:700">^C [Stopped by user · ${elapsed}s]</span>\n`;
       if (badge) {
         badge.textContent = `⏹ Stopped (${elapsed}s)`;
         badge.className = "run-badge err";
       }
     } else {
-      outEl.textContent = `[ERROR] ${err.message}`;
+      if (outEl) outEl.textContent = `[ERROR] ${err.message}`;
       if (badge) {
         badge.textContent = "✖ Error";
         badge.className = "run-badge err";
@@ -5092,6 +5134,77 @@ function switchTab(tab) {
   }
 }
 
+function initPipelineBottomPanel() {
+  const chk = $("#chk-pl-output-dock");
+  chk?.addEventListener("change", () => {
+    setPipelineOutputMode(chk.checked ? "bottom" : "dialog");
+  });
+  setPipelineOutputMode(_plOutputMode);
+
+  $("#btn-pl-bottom-stop")?.addEventListener("click", stopPipelineRun);
+  $("#btn-pl-bottom-rerun")?.addEventListener("click", () => {
+    if (_lastRunPipelineName) runPipeline(_lastRunPipelineName, _lastRunPipelineSource);
+  });
+  $("#btn-pl-bottom-copy")?.addEventListener("click", async () => {
+    const text = $("#pl-bottom-output")?.innerText || "";
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("Copied ✓", "Pipeline output copied to clipboard.", "ok", 2200);
+    } catch (err) {
+      toast("Copy Failed", err.message, "err");
+    }
+  });
+  $("#btn-pl-bottom-clear")?.addEventListener("click", () => {
+    const out = $("#pl-bottom-output");
+    if (out) out.textContent = "Cleared.";
+    const badge = $("#pl-bottom-status-badge");
+    if (badge) {
+      badge.textContent = "Ready";
+      badge.className = "run-badge";
+    }
+  });
+  $("#btn-pl-bottom-toggle-height")?.addEventListener("click", () => {
+    $("#pl-bottom-panel")?.classList.toggle("maximized");
+  });
+  $("#btn-pl-bottom-close")?.addEventListener("click", () => {
+    $("#pl-bottom-panel")?.classList.add("hidden");
+  });
+
+  // Resizer drag handler
+  const resizer = $("#pl-bottom-resizer");
+  const panel = $("#pl-bottom-panel");
+  if (resizer && panel) {
+    let startY = 0;
+    let startH = 0;
+    const onMouseMove = (e) => {
+      const delta = startY - e.clientY;
+      const newH = Math.max(100, Math.min(window.innerHeight * 0.75, startH + delta));
+      panel.style.height = `${newH}px`;
+      panel.classList.remove("maximized");
+    };
+    const onMouseUp = () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      resizer.classList.remove("dragging");
+      try {
+        localStorage.setItem("telua_pl_bottom_height", panel.style.height);
+      } catch { /* ignore */ }
+    };
+    resizer.addEventListener("mousedown", (e) => {
+      startY = e.clientY;
+      startH = panel.getBoundingClientRect().height;
+      resizer.classList.add("dragging");
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    });
+
+    try {
+      const savedH = localStorage.getItem("telua_pl_bottom_height");
+      if (savedH) panel.style.height = savedH;
+    } catch { /* ignore */ }
+  }
+}
+
 function wire() {
   try { applyTheme(localStorage.getItem(THEME_KEY) || "dark"); } catch { applyTheme("dark"); }
   $("#theme-select")?.addEventListener("change", (e) => {
@@ -5468,6 +5581,9 @@ function wire() {
   // Pipeline source switch (my <-> multi)
   document.querySelectorAll("#pl-source-switch .src-btn").forEach(btn =>
     btn.addEventListener("click", () => switchPipelineSource(btn.dataset.source)));
+
+  // Pipeline / System output destination (Bottom Docked Console vs Dialog)
+  initPipelineBottomPanel();
 
   // Click on the project chip opens the profile switcher
   $("#chip-project")?.addEventListener("click", openProfileModal);
