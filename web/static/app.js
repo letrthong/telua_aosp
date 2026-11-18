@@ -3886,6 +3886,9 @@ let _logcatAutoScroll = true;
 let _logcatInitialized = false;
 
 const LOGCAT_RULES_STORAGE_KEY = "telua_logcat_filters";
+// Remembers an active logcat stream across page refreshes (session-scoped,
+// so a fresh browser tab always starts idle).
+const LOGCAT_AUTOSTART_KEY = "telua_logcat_was_streaming";
 let _logcatRules = [];
 // Bumped every time filter rules change. Log entries parsed before the bump
 // are never hidden by rules, so enabling a rule keeps already-shown logs.
@@ -4184,6 +4187,7 @@ function renderLogcat() {
 async function startLogcatStream() {
   if (_logcatStreaming) return;
   _logcatStreaming = true;
+  try { sessionStorage.setItem(LOGCAT_AUTOSTART_KEY, "1"); } catch { /* ignore */ }
   updateLogcatControls();
   syncTopTabs();
 
@@ -4259,6 +4263,11 @@ async function startLogcatStream() {
   } finally {
     _logcatStreaming = false;
     _logcatAbortController = null;
+    // NOTE: do NOT clear LOGCAT_AUTOSTART_KEY here. When the user refreshes
+    // the page, the browser aborts this fetch, which lands in this finally
+    // block — clearing the flag here would erase the resume marker before
+    // the new page's boot() reads it. The flag is cleared only by an
+    // explicit user stop (stopLogcatStream).
     updateLogcatControls();
     syncTopTabs();
     if (badge) {
@@ -4273,6 +4282,8 @@ async function stopLogcatStream() {
     try { _logcatAbortController.abort(); } catch { /* ignore */ }
   }
   _logcatStreaming = false;
+  // Explicit user stop: clear the resume marker so a refresh stays idle.
+  try { sessionStorage.removeItem(LOGCAT_AUTOSTART_KEY); } catch { /* ignore */ }
   try {
     await fetch("/api/logcat/stop", { method: "POST" });
   } catch { /* ignore */ }
@@ -5592,6 +5603,17 @@ async function boot() {
   } else {
     syncTopTabs();
   }
+
+  // Auto-resume logcat streaming if it was running before the page refresh.
+  // The old adb logcat process died with the page, so start a fresh one.
+  try {
+    if (sessionStorage.getItem(LOGCAT_AUTOSTART_KEY) === "1" && !_logcatStreaming) {
+      sessionStorage.removeItem(LOGCAT_AUTOSTART_KEY);
+      fetch("/api/logcat/stop", { method: "POST" }).catch(() => {}); // kill orphaned adb proc
+      startLogcatStream();
+      toast("Logcat Resumed", "Streaming restarted after page refresh.", "info", 2500);
+    }
+  } catch { /* ignore */ }
 }
 
 boot();
