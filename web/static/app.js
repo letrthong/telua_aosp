@@ -3870,7 +3870,10 @@ async function stopAospCommand() {
 }
 
 /* ---------------- Logcat Controller & Realtime Filtering ---------------- */
-const LOGCAT_MAX_LINES = 3000;
+// ~5 minutes of history at a typical 120 lines/s device log rate.
+// Ring-buffer eviction (shift) is what makes old logs disappear after a
+// while, so this cap directly controls how long logs stay on screen.
+const LOGCAT_MAX_LINES = 36000;
 const LOG_LEVEL_SCORES = { V: 1, D: 2, I: 3, W: 4, E: 5, F: 6 };
 const THREADTIME_RE = /^(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+(\d+)\s+(\d+)\s+([VDIWEF])\s+([^:]+):\s*(.*)$/;
 const BRIEF_RE = /^(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+([VDIWEF])\/([^(]+)\(\s*(\d+)\):\s*(.*)$/;
@@ -3887,6 +3890,13 @@ let _logcatRules = [];
 // Bumped every time filter rules change. Log entries parsed before the bump
 // are never hidden by rules, so enabling a rule keeps already-shown logs.
 let _logcatRuleEpoch = 0;
+// Monotonic count of entries ever parsed. Unlike _logcatEntries.length, it
+// keeps growing when the ring buffer is full (push+shift), letting the
+// renderer know how many new entries arrived since the last paint.
+let _logcatSeenCount = 0;
+// Max DOM rows kept on screen; older rows are trimmed (the buffer still
+// holds them for Copy/Export, which read _logcatEntries directly).
+const LOGCAT_DOM_MAX_ROWS = 15000;
 
 function matchLogcatRule(entry, rule) {
   if (!rule || !rule.enabled) return false;
@@ -4084,6 +4094,52 @@ function renderLogcat() {
   if (!screen) return;
   const filters = getLogcatFilters();
 
+  const filterKey = `${filters.text}|${filters.minLevelScore}|${filters.tag}|${filters.pid}|${_logcatRuleEpoch}|${_logcatRules.filter(r => r.enabled).map(r => r.id + (r.enabled ? 1 : 0)).join(",")}`;
+
+  // Fast path: streaming tick with unchanged filters — append only entries
+  // that arrived since the last render. Uses the monotonic seen-counter so
+  // ring-buffer shifts (which keep _logcatEntries.length constant once full)
+  // never stall rendering of new logs.
+  const renderedCount = parseInt(screen.dataset.renderedCount || "-1", 10);
+  const pending = _logcatSeenCount - renderedCount;
+  if (screen.dataset.filterKey === filterKey
+      && pending >= 0 && pending <= _logcatEntries.length
+      && _logcatEntries.length > 0) {
+    let visibleCount = parseInt(screen.dataset.visibleCount || "0", 10);
+    if (pending > 0) {
+      screen.querySelector(".logcat-empty-msg")?.remove();
+      const frag = document.createDocumentFragment();
+      for (let i = _logcatEntries.length - pending; i < _logcatEntries.length; i++) {
+        const entry = _logcatEntries[i];
+        if (isLogcatEntryVisible(entry, filters)) {
+          frag.appendChild(createLogcatRowEl(entry));
+          visibleCount++;
+        }
+      }
+      if (frag.childElementCount > 0) screen.appendChild(frag);
+    }
+    // Cap DOM rows so long sessions don't grow the DOM unbounded
+    if (screen.childElementCount > LOGCAT_DOM_MAX_ROWS) {
+      const removeCount = screen.childElementCount - LOGCAT_DOM_MAX_ROWS;
+      for (let i = 0; i < removeCount && screen.firstChild; i++) {
+        screen.removeChild(screen.firstChild);
+        visibleCount = Math.max(0, visibleCount - 1);
+      }
+    }
+    screen.dataset.visibleCount = String(visibleCount);
+    screen.dataset.renderedCount = String(_logcatSeenCount);
+    const statsEl = $("#logcat-stats");
+    if (statsEl) {
+      statsEl.textContent = `${_logcatEntries.length} lines (${visibleCount} visible)`;
+    }
+    if (_logcatAutoScroll) {
+      screen.scrollTop = screen.scrollHeight;
+    }
+    return;
+  }
+
+  // Full rebuild (filter changed, tab switch, first render, or after clear)
+  screen.dataset.filterKey = filterKey;
   const frag = document.createDocumentFragment();
   let visibleCount = 0;
 
@@ -4092,6 +4148,9 @@ function renderLogcat() {
     if (isLogcatEntryVisible(entry, filters)) {
       frag.appendChild(createLogcatRowEl(entry));
       visibleCount++;
+      if (frag.childElementCount > LOGCAT_DOM_MAX_ROWS) {
+        frag.removeChild(frag.firstChild);
+      }
     }
   }
 
@@ -4104,6 +4163,8 @@ function renderLogcat() {
   } else {
     screen.appendChild(frag);
   }
+  screen.dataset.renderedCount = String(_logcatSeenCount);
+  screen.dataset.visibleCount = String(visibleCount);
 
   const statsEl = $("#logcat-stats");
   if (statsEl) {
@@ -4169,6 +4230,7 @@ async function startLogcatStream() {
           if (_logcatEntries.length > LOGCAT_MAX_LINES) {
             _logcatEntries.shift();
           }
+          _logcatSeenCount++;
           added = true;
         }
       }
@@ -4233,6 +4295,13 @@ function updateLogcatControls() {
 
 function clearLogcatView() {
   _logcatEntries = [];
+  const screen = $("#logcat-screen");
+  if (screen) {
+    screen.innerHTML = "";
+    delete screen.dataset.filterKey;
+    delete screen.dataset.renderedCount;
+    delete screen.dataset.visibleCount;
+  }
   renderLogcat();
   toast("Logcat View Cleared", "Cleared browser display buffer.", "info", 2000);
 }
@@ -4249,6 +4318,13 @@ async function clearLogcatDevice() {
     if (data.ok) {
       toast("Device Buffer Cleared", "adb logcat -c completed successfully.", "ok", 3000);
       _logcatEntries = [];
+      const screen = $("#logcat-screen");
+      if (screen) {
+        screen.innerHTML = "";
+        delete screen.dataset.filterKey;
+        delete screen.dataset.renderedCount;
+        delete screen.dataset.visibleCount;
+      }
       renderLogcat();
     } else {
       throw new Error(data.error || "Failed to clear device buffer");
