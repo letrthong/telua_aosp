@@ -3884,6 +3884,9 @@ let _logcatInitialized = false;
 
 const LOGCAT_RULES_STORAGE_KEY = "telua_logcat_filters";
 let _logcatRules = [];
+// Bumped every time filter rules change. Log entries parsed before the bump
+// are never hidden by rules, so enabling a rule keeps already-shown logs.
+let _logcatRuleEpoch = 0;
 
 function matchLogcatRule(entry, rule) {
   if (!rule || !rule.enabled) return false;
@@ -3928,6 +3931,7 @@ function parseLogcatLine(raw) {
       tag: m[5].trim(),
       msg: m[6],
       raw: line,
+      epoch: _logcatRuleEpoch,
     };
   }
   m = BRIEF_RE.exec(line);
@@ -3941,6 +3945,7 @@ function parseLogcatLine(raw) {
       tag: m[3].trim(),
       msg: m[5],
       raw: line,
+      epoch: _logcatRuleEpoch,
     };
   }
 
@@ -3959,6 +3964,7 @@ function parseLogcatLine(raw) {
     tag: "",
     msg: line,
     raw: line,
+    epoch: _logcatRuleEpoch,
   };
 }
 
@@ -3999,9 +4005,14 @@ function isLogcatEntryVisible(entry, filters) {
 
   const activeRules = _logcatRules.filter(r => r.enabled);
   if (activeRules.length > 0) {
-    // If user has enabled rules, entry must match at least ONE enabled rule
-    const matched = activeRules.some(r => matchLogcatRule(entry, r));
-    if (!matched) return false;
+    // Rules only filter logs that arrived AFTER the last rule change, so
+    // enabling/disabling a rule never hides the logs already on screen.
+    const entryEpoch = entry.epoch ?? _logcatRuleEpoch;
+    if (entryEpoch >= _logcatRuleEpoch) {
+      // Entry must match at least ONE enabled rule
+      const matched = activeRules.some(r => matchLogcatRule(entry, r));
+      if (!matched) return false;
+    }
   } else {
     // Fall back to top toolbar level, tag, and pid
     if (entry.levelScore < filters.minLevelScore) return false;
@@ -4700,6 +4711,10 @@ function toggleLogcatModalRawView() {
 }
 
 async function saveLogcatFilters(notify = false) {
+  // Rules changed: bump epoch first and re-render so logs already on screen
+  // stay visible; only newly arriving lines follow the updated rules.
+  _logcatRuleEpoch++;
+  renderLogcat();
   const cleanList = _logcatRules.map(stripRuleInternal);
   try {
     localStorage.setItem(LOGCAT_RULES_STORAGE_KEY, JSON.stringify(cleanList));
