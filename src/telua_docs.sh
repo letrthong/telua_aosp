@@ -824,6 +824,15 @@ docs_cmd_start() {
         target_dir="$(resolve_docs_dir "")"
     fi
 
+    # Absolutize target_dir BEFORE any subshell changes the working directory.
+    # The server subshell does 'cd "$target_dir"', so relative paths like
+    # './docs/.telua_docs.pid' or './docs/_build/html' would otherwise be
+    # resolved against the NEW cwd ('./docs') and break (docs/docs/...).
+    target_dir="$(cd "$target_dir" 2>/dev/null && pwd)" || {
+        log_error "Documentation directory not found: $target_dir"
+        return 1
+    }
+
     # If clean mode requested, stop running server, wipe _build cache, and re-compile
     if [ "$clean_mode" -eq 1 ]; then
         log_info "Clean mode enabled: clearing build cache & restarting server..."
@@ -880,7 +889,8 @@ docs_cmd_start() {
     log_info "============================================================"
     echo ""
 
-    # Launch detached server with custom NoCacheHandler so browsers never serve stale pages
+    # Launch detached server with custom NoCacheHandler so browsers never serve stale pages.
+    # All paths are absolute, so the 'cd' inside this subshell cannot break them.
     (
         cd "$target_dir" || exit 1
         _docs_spawn_detached "$log_file" \
