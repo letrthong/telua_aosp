@@ -1131,7 +1131,7 @@ show_info_general() {
     printf "  \033[1;37m%-20s\033[0m \033[0;32m%s\033[0m \033[0;90m(sample interval: %ss)\033[0m\n" "RAM Monitor:" "${ENABLE_RAM_MONITOR:-true}" "${RAM_SAMPLE_INTERVAL:-2}"
     printf "  \033[1;37m%-20s\033[0m \033[1;32m%s\033[0m\n" "Module Name:" "$module_name"
     printf "  \033[1;37m%-20s\033[0m \033[0;37m%s\033[0m\n" "Source Path:" "$SOURCE_CODE_RELATIVE_PATH"
-    printf "  \033[1;37m%-20s\033[0m \033[0;32m%s/%s\033[0m\n" "APK Output:" "$APK_OUTPUT_RELATIVE_PATH" "$APK_FILE_NAME"
+    printf "  \033[1;37m%-20s\033[0m \033[0;32m%s/%s\033[0m\n" "Output Artifact:" "${OUTPUT_RELATIVE_PATH:-$APK_OUTPUT_RELATIVE_PATH}" "${OUTPUT_FILE_NAME:-$APK_FILE_NAME}"
     printf "  \033[1;37m%-20s\033[0m \033[0;35m%s\033[0m\n" "AOSP Root Dir:" "${AOSP_ROOT_DIR:-Auto-detect (ancestor search)}"
     printf "  \033[1;37m%-20s\033[0m \033[0;36m%s\033[0m\n" "Root Dir:" "${ROOT_DIR:-Not found}"
     printf "  \033[1;37m%-20s\033[0m \033[0;90m%s\033[0m\n" "AOSP Top Rel:" "${AOSP_TOP_REL_PATH:-Auto-detect (android/qssi or android)}"
@@ -1157,7 +1157,7 @@ show_info_android() {
     echo -e "\n\033[1;32m=== 2. ANDROID TARGET INFO (ADB) ===\033[0m"
     printf "  \033[1;37m%-20s\033[0m \033[1;36m%s\033[0m\n" "Platform:" "android"
     printf "  \033[1;37m%-20s\033[0m \033[1;32m%s\033[0m\n" "Deploy Enabled:" "$deploy_enabled"
-    printf "  \033[1;37m%-20s\033[0m \033[0;32m%s\033[0m\n" "Deploy Path:" "$APK_DEPLOY_PATH"
+    printf "  \033[1;37m%-20s\033[0m \033[0;32m%s\033[0m\n" "Deploy Path:" "${DEPLOY_PATH:-$APK_DEPLOY_PATH}"
     printf "  \033[1;37m%-20s\033[0m \033[0;33m%s\033[0m\n" "Logcat Enabled:" "$logcat_enabled"
     printf "  \033[1;37m%-20s\033[0m \033[0;37m%s\033[0m\n" "Logcat Filter:" "${LOGCAT_FILTER:-None (full)}"
     printf "  \033[1;37m%-20s\033[0m \033[0;35m%s\033[0m \033[0;90m(Enabled: %s)\033[0m\n" "Debug Tags:" "${DEBUG_LOG_TAGS:-None}" "${ENABLE_DEBUG_LOG:-false}"
@@ -1435,6 +1435,16 @@ load_and_validate_config() {
     if [ -n "$overlay_cfg" ] && [ -f "$overlay_cfg" ]; then
         source_config_safe "$overlay_cfg"
     fi
+
+    # Bridge generic names (OUTPUT_FILE_NAME, OUTPUT_RELATIVE_PATH, DEPLOY_PATH)
+    # and legacy APK names (APK_FILE_NAME, APK_OUTPUT_RELATIVE_PATH, APK_DEPLOY_PATH)
+    OUTPUT_FILE_NAME="${OUTPUT_FILE_NAME:-${MODULE_FILE_NAME:-$APK_FILE_NAME}}"
+    OUTPUT_RELATIVE_PATH="${OUTPUT_RELATIVE_PATH:-${MODULE_OUTPUT_RELATIVE_PATH:-$APK_OUTPUT_RELATIVE_PATH}}"
+    DEPLOY_PATH="${DEPLOY_PATH:-${MODULE_DEPLOY_PATH:-$APK_DEPLOY_PATH}}"
+
+    APK_FILE_NAME="${APK_FILE_NAME:-$OUTPUT_FILE_NAME}"
+    APK_OUTPUT_RELATIVE_PATH="${APK_OUTPUT_RELATIVE_PATH:-$OUTPUT_RELATIVE_PATH}"
+    APK_DEPLOY_PATH="${APK_DEPLOY_PATH:-$DEPLOY_PATH}"
 
     local missing_vars=0
     local required_vars=(

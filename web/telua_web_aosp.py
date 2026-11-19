@@ -196,6 +196,7 @@ def _parse_aosp_info():
     target_variant = get_var("CONFIG_TARGET_BUILD_VARIANT", "")
     aosp_top_rel = get_var("AOSP_TOP_REL_PATH", "")
 
+    module_type = ""
     module_name = ""
     apk_name = ""
     source_path = ""
@@ -209,16 +210,19 @@ def _parse_aosp_info():
             branch_match = re.search(r'^[ \t]*"' + re.escape(active_project) + r'"\)(.*?);;', case_block, re.M | re.S)
             if branch_match:
                 branch_body = branch_match.group(1)
+                m_type = re.search(r'^[ \t]*MODULE_TYPE\s*=\s*"([^"]*)"', branch_body, re.M)
+                if m_type and not module_type:
+                    module_type = m_type.group(1)
                 m_mod = re.search(r'^[ \t]*MODULE_NAME\s*=\s*"([^"]*)"', branch_body, re.M)
                 if m_mod and not module_name:
                     module_name = m_mod.group(1)
-                m_apk = re.search(r'^[ \t]*APK_FILE_NAME\s*=\s*"([^"]*)"', branch_body, re.M)
+                m_apk = re.search(r'^[ \t]*(?:OUTPUT_FILE_NAME|APK_FILE_NAME)\s*=\s*"([^"]*)"', branch_body, re.M)
                 if m_apk and not apk_name:
                     apk_name = m_apk.group(1)
                 m_src = re.search(r'^[ \t]*SOURCE_CODE_RELATIVE_PATH\s*=\s*"([^"]*)"', branch_body, re.M)
                 if m_src and not source_path:
                     source_path = m_src.group(1)
-                m_dep = re.search(r'^[ \t]*APK_DEPLOY_PATH\s*=\s*"([^"]*)"', branch_body, re.M)
+                m_dep = re.search(r'^[ \t]*(?:DEPLOY_PATH|APK_DEPLOY_PATH)\s*=\s*"([^"]*)"', branch_body, re.M)
                 if m_dep and not deploy_path:
                     deploy_path = m_dep.group(1)
         if module_name and apk_name:
@@ -248,6 +252,7 @@ def _parse_aosp_info():
         "target_product": target_product,
         "target_variant": target_variant,
         "module_name": module_name,
+        "module_type": module_type or "apk",
         "apk_name": apk_name,
         "source_path": source_path,
         "deploy_path": deploy_path,

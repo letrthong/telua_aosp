@@ -23,16 +23,26 @@
 ACTIVE_PROJECT="oem_service"
 case "$ACTIVE_PROJECT" in
     "oem_service")
+        MODULE_TYPE="apk"
         MODULE_NAME="OemService"
         SOURCE_CODE_RELATIVE_PATH="packages/apps/Car/OemService"
-        APK_OUTPUT_RELATIVE_PATH="out/target/product/qssi/system/priv-app/OemService"
-        APK_FILE_NAME="OemService.apk"
-        APK_DEPLOY_PATH="/system/priv-app/OemService"
+        OUTPUT_RELATIVE_PATH="out/target/product/qssi/system/priv-app/OemService"
+        OUTPUT_FILE_NAME="OemService.apk"
+        DEPLOY_PATH="/system/priv-app/OemService"
         DEFAULT_LOGCAT_FILTER="OemService"
         DEFAULT_DEBUG_LOG_TAGS="OemService"
         ;;
 
-     
+    "dlt_daemon")
+        MODULE_TYPE="bin"
+        MODULE_NAME="dlt-daemon"
+        SOURCE_CODE_RELATIVE_PATH="external/dlt-daemon"
+        OUTPUT_RELATIVE_PATH="out/target/product/qssi/system/bin"
+        OUTPUT_FILE_NAME="dlt-daemon"
+        DEPLOY_PATH="/system/bin"
+        DEFAULT_LOGCAT_FILTER="DLT|dlt-daemon"
+        DEFAULT_DEBUG_LOG_TAGS="dlt-daemon"
+        ;;
 esac
 
  

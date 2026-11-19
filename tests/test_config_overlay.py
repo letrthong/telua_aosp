@@ -250,16 +250,17 @@ UNSEEN_KEY="custom_value"
                     if label == "*":
                         continue
                     branch_body = "\n".join(branch_info["lines"])
-                    for req_var in (
-                        "SOURCE_CODE_RELATIVE_PATH",
-                        "APK_OUTPUT_RELATIVE_PATH",
-                        "APK_FILE_NAME",
-                        "APK_DEPLOY_PATH",
-                    ):
-                        self.assertIn(
-                            f"{req_var}=",
-                            branch_body,
-                            f"Profile '{label}' in {ov_path} is missing required path variable '{req_var}='!",
+                    required_alternatives = (
+                        ("SOURCE_CODE_RELATIVE_PATH",),
+                        ("OUTPUT_RELATIVE_PATH", "APK_OUTPUT_RELATIVE_PATH"),
+                        ("OUTPUT_FILE_NAME", "APK_FILE_NAME"),
+                        ("DEPLOY_PATH", "APK_DEPLOY_PATH"),
+                    )
+                    for alts in required_alternatives:
+                        has_one = any(f"{v}=" in branch_body for v in alts)
+                        self.assertTrue(
+                            has_one,
+                            f"Profile '{label}' in {ov_path} is missing required path variable from {alts}!",
                         )
 
     def test_fresh_clone_without_apk_overlays_config_until_init(self):

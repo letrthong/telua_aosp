@@ -216,8 +216,13 @@ build_apk() {
     local module_name="${1:-${MODULE_NAME:-${APK_FILE_NAME%.apk}}}"
     local jobs="${2:-}"
 
-    log_info "Cleaning previous build output: $DIR_OUT"
-    rm -rf "$DIR_OUT"
+    if [ "${MODULE_TYPE:-apk}" = "bin" ]; then
+        log_info "Cleaning previous binary artifact: $APK_OUT"
+        rm -f "$APK_OUT"
+    else
+        log_info "Cleaning previous build output: $DIR_OUT"
+        rm -rf "$DIR_OUT"
+    fi
 
     log_info "Navigating to module source directory: $SOURCE_DIR"
     if [ ! -d "$SOURCE_DIR" ]; then
@@ -227,7 +232,7 @@ build_apk() {
 
     cd "$SOURCE_DIR"
     # 'mm' builds every module under the directory, including tests/androidTest,
-    # so build only the APK module (name = APK file name without .apk).
+    # so build only the APK/binary module (name = APK file name without .apk).
     if [ -z "$jobs" ]; then
         resolve_build_jobs
         jobs="$BUILD_JOBS_RESOLVED"
@@ -236,13 +241,13 @@ build_apk() {
     m "$module_name" -j"$jobs"
 
     if [ ! -f "$APK_OUT" ]; then
-        log_error "APK not found at $APK_OUT after build completed."
+        log_error "Build output not found at $APK_OUT after build completed."
         exit 1
     fi
 
     cp -fv "$APK_OUT" "$SCRIPT_DIR/"
     log_success "Build successful!"
-    log_success "APK copied to: $SCRIPT_DIR/$APK_FILE_NAME"
+    log_success "Output copied to: $SCRIPT_DIR/$APK_FILE_NAME"
 }
 
 # --- 7. Device Wait Utility ---
@@ -446,9 +451,13 @@ deploy_android() {
 
     log_info "Pushing $apk_file to $deploy_path/$apk_file"
     adb push "$SCRIPT_DIR/$apk_file" "$deploy_path/$apk_file"
-    adb shell chmod 644 "$deploy_path/$apk_file"
-    # Remove old oat/dex cache if present to ensure updated code runs
-    adb shell rm -rf "$deploy_path/oat" 2>/dev/null || true
+    if [ "${MODULE_TYPE:-apk}" = "bin" ]; then
+        adb shell chmod 755 "$deploy_path/$apk_file"
+    else
+        adb shell chmod 644 "$deploy_path/$apk_file"
+        # Remove old oat/dex cache if present to ensure updated code runs
+        adb shell rm -rf "$deploy_path/oat" 2>/dev/null || true
+    fi
     adb shell sync
 
     if [ "$ENABLE_DEBUG_LOG" = "true" ] && [ -n "$DEBUG_LOG_TAGS" ]; then
@@ -468,7 +477,11 @@ deploy_android() {
         adb logcat -c 2>/dev/null || true
     fi
 
-    if [ "$no_reboot" = "true" ]; then
+    if [ "${MODULE_TYPE:-apk}" = "bin" ]; then
+        log_info "Restarting native binary/daemon '$MODULE_NAME'..."
+        adb shell "killall -9 $MODULE_NAME 2>/dev/null || pkill -9 -f $MODULE_NAME || true"
+        adb shell sync
+    elif [ "$no_reboot" = "true" ]; then
         if ! restart_framework 90; then
             log_error "Fast restart failed. Re-run without --no-reboot for a full reboot."
             exit 1
