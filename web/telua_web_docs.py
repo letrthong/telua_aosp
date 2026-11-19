@@ -674,3 +674,505 @@ def html_to_rst(html_text: str, file_name: Optional[str] = None) -> str:
     # Collapse 3+ consecutive newlines to 2
     result = re.sub(r"\n{3,}", "\n\n", result)
     return result.strip() + "\n"
+
+
+# ==============================================================================
+# Docs REST API & Sphinx Preview Server (Flask Blueprint)
+# ==============================================================================
+from flask import Blueprint, Response, abort, jsonify, request
+
+docs_bp = Blueprint("docs", __name__)
+
+
+def get_root() -> Path:
+    """Dynamically get ROOT from telua_web if loaded, else fallback to toolkit root."""
+    import sys
+    if "telua_web" in sys.modules:
+        tw = sys.modules["telua_web"]
+        if hasattr(tw, "ROOT"):
+            return tw.ROOT
+    return Path(__file__).resolve().parent.parent
+
+
+def open_browser(url: str):
+    import webbrowser
+    try:
+        webbrowser.open(url)
+    except Exception:
+        pass
+
+
+@docs_bp.get("/api/docs/files")
+def api_docs_files():
+    """List all discoverable .rst documentation files."""
+    root = get_root()
+    custom_dir = request.args.get("dir", "").strip()
+    files, effective_dir = scan_docs_files(root, custom_dir=custom_dir or None)
+    return jsonify({"ok": True, "files": files, "dir": effective_dir})
+
+
+@docs_bp.get("/api/docs/file")
+def api_docs_file_read():
+    """Read a specific .rst file, returning both raw RST and converted HTML."""
+    root = get_root()
+    name = request.args.get("name", "").strip()
+    custom_dir = request.args.get("dir", "").strip()
+    if not name or ".." in name or not name.endswith(".rst"):
+        abort(400, description="Invalid .rst file name.")
+    target, full_name = resolve_rst_target(name, root, custom_dir=custom_dir or None)
+    if not target.is_file():
+        abort(404, description=f"File '{name}' not found.")
+    try:
+        content = target.read_text(encoding="utf-8", errors="replace")
+        stat = target.stat()
+        mtime = int(stat.st_mtime)
+    except OSError as exc:
+        abort(500, description=f"Failed to read file: {exc}")
+
+    return jsonify({
+        "ok": True,
+        "name": name,
+        "full_path": full_name,
+        "rst": content,
+        "html": rst_to_html(content),
+        "mtime": mtime,
+        "readonly": not os.access(str(target), os.W_OK),
+    })
+
+
+@docs_bp.post("/api/docs/file")
+def api_docs_file_write():
+    """Write/save a .rst file from either raw RST or Quill.js HTML."""
+    root = get_root()
+    payload = request.get_json(silent=True) or {}
+    name = payload.get("name", "").strip()
+    custom_dir = payload.get("dir", "").strip()
+    content = payload.get("content", "")
+    fmt = payload.get("format", "rst").lower()
+
+    if not name or ".." in name or not name.endswith(".rst"):
+        abort(400, description="Invalid .rst file name.")
+    target, full_name = resolve_rst_target(name, root, custom_dir=custom_dir or None)
+
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        abort(500, description=f"Failed to create directory: {exc}")
+
+    # If incoming format is HTML, convert to RST first
+    if fmt == "html":
+        rst_content = html_to_rst(content, file_name=name)
+    else:
+        rst_content = content
+
+    # Create backup .bak if target exists
+    if target.is_file():
+        try:
+            bak = target.with_suffix(".rst.bak")
+            shutil.copyfile(str(target), str(bak))
+        except OSError:
+            pass
+
+    try:
+        target.write_text(rst_content, encoding="utf-8")
+        stat = target.stat()
+    except OSError as exc:
+        abort(500, description=f"Failed to write file: {exc}")
+
+    return jsonify({
+        "ok": True,
+        "name": name,
+        "full_path": full_name,
+        "rst": rst_content,
+        "html": rst_to_html(rst_content),
+        "mtime": int(stat.st_mtime),
+    })
+
+
+@docs_bp.post("/api/docs/convert")
+def api_docs_convert():
+    """Convert on-the-fly between RST and HTML."""
+    payload = request.get_json(silent=True) or {}
+    content = payload.get("content", "")
+    direction = payload.get("direction", "rst2html").lower()
+
+    if direction in ("rst2html", "rst_to_html"):
+        return jsonify({"ok": True, "html": rst_to_html(content)})
+    elif direction in ("html2rst", "html_to_rst"):
+        file_name = payload.get("name", "")
+        return jsonify({"ok": True, "rst": html_to_rst(content, file_name=file_name)})
+    abort(400, description="Unknown conversion direction. Use 'rst2html' or 'html2rst'.")
+
+
+_PLANTUML_CACHE = {}
+
+
+@docs_bp.route("/api/docs/plantuml/svg", methods=["GET", "POST"])
+def api_docs_plantuml_svg():
+    """Render PlantUML code to SVG using local plantuml, jar, or server proxy with cache."""
+    import urllib.request
+
+    if request.method == "POST":
+        payload = request.get_json(silent=True) or {}
+        code = payload.get("code", "")
+    else:
+        code = request.args.get("code", "")
+
+    code = (code or "").strip()
+    if not code:
+        return Response('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="30"></svg>', mimetype="image/svg+xml")
+
+    if code in _PLANTUML_CACHE:
+        return Response(_PLANTUML_CACHE[code], mimetype="image/svg+xml")
+
+    # 1. Local plantuml or jar if available
+    plantuml_bin = shutil.which("plantuml")
+    if plantuml_bin:
+        try:
+            p = subprocess.run([plantuml_bin, "-tsvg", "-pipe"], input=code.encode("utf-8"), capture_output=True, timeout=10)
+            if p.returncode == 0 and p.stdout and b"<svg" in p.stdout:
+                svg_text = p.stdout.decode("utf-8", errors="replace")
+                _PLANTUML_CACHE[code] = svg_text
+                return Response(svg_text, mimetype="image/svg+xml")
+        except Exception:
+            pass
+
+    # 2. Online plantuml server via backend proxy (avoids client-side hotlink/referer blocking)
+    try:
+        url = get_plantuml_url(code)
+        if url:
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "image/svg+xml,image/*,*/*;q=0.8",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                svg_data = resp.read().decode("utf-8", errors="replace")
+                if "<svg" in svg_data and "HUFFMAN" not in svg_data and "bad URL" not in svg_data:
+                    _PLANTUML_CACHE[code] = svg_data
+                    return Response(svg_data, mimetype="image/svg+xml")
+    except Exception:
+        pass
+
+    # 3. Fallback SVG: generate clean vector diagram
+    lines = [l.strip() for l in code.splitlines() if l.strip() and not l.strip().startswith("@")]
+    h = max(120, 60 + len(lines) * 24)
+    escaped_lines = "\n".join(
+        f'<text x="24" y="{45 + idx * 24}" fill="#e2e8f0" font-family="monospace" font-size="12">{l.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")}</text>'
+        for idx, l in enumerate(lines[:20])
+    )
+    fallback_svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="600" height="{h}">'
+        f'<rect width="100%" height="100%" fill="#1e1e2e" stroke="#a855f7" stroke-width="2" rx="8"/>'
+        f'<rect x="0" y="0" width="100%" height="28" fill="#2d1b4e" rx="8"/>'
+        f'<text x="14" y="19" fill="#c084fc" font-family="sans-serif" font-size="12" font-weight="bold">📐 PlantUML Architecture Diagram</text>'
+        f'{escaped_lines}'
+        f'</svg>'
+    )
+    return Response(fallback_svg, mimetype="image/svg+xml")
+
+
+@docs_bp.route("/api/docs/plantuml/url", methods=["GET", "POST"])
+def api_docs_plantuml_url():
+    """Generate PlantUML SVG URL from code."""
+    if request.method == "POST":
+        payload = request.get_json(silent=True) or {}
+        code = payload.get("code", "")
+    else:
+        code = request.args.get("code", "")
+    if not code:
+        return jsonify({"ok": False, "error": "No PlantUML code provided"}), 400
+    url = get_plantuml_url(code)
+    return jsonify({"ok": True, "url": url})
+
+
+_DOCS_SERVER_PROC = None
+_DOCS_SERVER_DIR = None
+_DOCS_SERVER_PORT = None
+
+
+def _build_sphinx_docs_py(target_dir: Path):
+    """Compile Sphinx documentation into target_dir/_build/html with staging, merge, and fallbacks."""
+    import sys
+    root = get_root()
+    out_html = target_dir / "_build" / "html"
+    staging_dir = target_dir / "_build" / ".staging"
+    merge_script = root / "sphinx" / "scripts" / "merge_docs.py"
+
+    if staging_dir.is_dir():
+        shutil.rmtree(staging_dir, ignore_errors=True)
+    staging_dir.mkdir(parents=True, exist_ok=True)
+
+    for item in target_dir.iterdir():
+        if item.name not in ("_build", ".git"):
+            dest = staging_dir / item.name
+            if item.is_dir():
+                shutil.copytree(item, dest, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, dest)
+
+    # Fallback conf.py if missing in staging
+    if not (staging_dir / "conf.py").is_file():
+        for candidate in [
+            root / "sphinx" / "templates" / "basic" / "conf.py",
+            root / "sphinx" / "templates" / "architecture" / "conf.py",
+            root / "sphinx" / "conf.py",
+        ]:
+            if candidate.is_file():
+                shutil.copy2(candidate, staging_dir / "conf.py")
+                break
+
+    # Fallback _static if missing in staging
+    if not (staging_dir / "_static").is_dir():
+        for candidate in [
+            root / "sphinx" / "templates" / "basic" / "_static",
+            root / "sphinx" / "templates" / "architecture" / "_static",
+        ]:
+            if candidate.is_dir():
+                shutil.copytree(candidate, staging_dir / "_static", dirs_exist_ok=True)
+                break
+
+    # Fallback asset directory if missing in staging
+    if not (staging_dir / "asset").is_dir():
+        for candidate in [
+            root / "sphinx" / "templates" / "basic" / "asset",
+            root / "sphinx" / "templates" / "architecture" / "asset",
+        ]:
+            if candidate.is_dir():
+                shutil.copytree(candidate, staging_dir / "asset", dirs_exist_ok=True)
+                break
+
+    # Ensure PlantUML support in staging (auto-upgrades legacy conf.py; source untouched)
+    inject_script = root / "sphinx" / "scripts" / "inject_plantuml.py"
+    if inject_script.is_file():
+        subprocess.run([sys.executable, str(inject_script), str(staging_dir)], capture_output=True, timeout=30)
+
+    if (staging_dir / "metadata.json").is_file() and merge_script.is_file():
+        subprocess.run([sys.executable, str(merge_script), str(staging_dir)], capture_output=True, timeout=30)
+
+    cmd = [sys.executable, "-m", "sphinx", "-E", "-a", "-b", "html", str(staging_dir), str(out_html)]
+    proc = subprocess.run(cmd, cwd=str(root), capture_output=True, text=True, timeout=60)
+    return (proc.returncode == 0, proc.returncode, proc.stdout, proc.stderr, target_dir, out_html)
+
+
+@docs_bp.post("/api/docs/build")
+def api_docs_build():
+    """Trigger Sphinx build for target docs directory."""
+    import sys
+    root = get_root()
+    payload = request.get_json(silent=True) or {}
+    custom_dir = payload.get("dir", "").strip()
+    current_file = payload.get("current_file", "").strip()
+
+    target_dir = detect_docs_project_dir(current_file=current_file, custom_dir=custom_dir, root=root)
+
+    if not target_dir.is_dir():
+        return jsonify({"ok": False, "error": f"Documentation directory '{target_dir}' does not exist"}), 404
+
+    # On Linux/macOS with build_apk.sh, delegate to bash build_apk.sh docs build <target_dir>
+    if (root / "build_apk.sh").is_file() and not sys.platform.startswith("win"):
+        cmd = ["bash", "build_apk.sh", "docs", "build", str(target_dir)]
+        try:
+            proc = subprocess.run(cmd, cwd=str(root), capture_output=True, text=True, timeout=60)
+            return jsonify({
+                "ok": proc.returncode == 0,
+                "exit_code": proc.returncode,
+                "stdout": proc.stdout,
+                "stderr": proc.stderr,
+                "target_dir": str(target_dir),
+                "html_dir": str(target_dir / "_build" / "html"),
+            })
+        except Exception as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 500
+
+    # Cross-platform / Windows fallback
+    try:
+        ok, ret, stdout, stderr, tdir, ohtml = _build_sphinx_docs_py(target_dir)
+        return jsonify({
+            "ok": ok,
+            "exit_code": ret,
+            "stdout": stdout,
+            "stderr": stderr,
+            "target_dir": str(tdir),
+            "html_dir": str(ohtml),
+        })
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@docs_bp.post("/api/docs/clean")
+def api_docs_clean():
+    """Remove _build directory and cached doctrees for target docs project."""
+    root = get_root()
+    payload = request.get_json(silent=True) or {}
+    custom_dir = payload.get("dir", "").strip()
+    current_file = payload.get("current_file", "").strip()
+
+    target_dir = detect_docs_project_dir(current_file=current_file, custom_dir=custom_dir, root=root)
+    if not target_dir.is_dir():
+        return jsonify({"ok": False, "error": f"Documentation directory '{target_dir}' does not exist"}), 404
+
+    build_dir = target_dir / "_build"
+    cleaned = False
+    if build_dir.is_dir():
+        try:
+            shutil.rmtree(build_dir, ignore_errors=True)
+            cleaned = True
+        except Exception as exc:
+            return jsonify({"ok": False, "error": f"Failed to clean _build: {exc}"}), 500
+
+    return jsonify({
+        "ok": True,
+        "target_dir": str(target_dir),
+        "cleaned_dir": str(build_dir),
+        "was_present": cleaned,
+    })
+
+
+def _kill_docs_server(target_dir: Optional[Path] = None, port: int = 8789):
+    """Ensure any running docs preview server is terminated before restart."""
+    import sys
+    global _DOCS_SERVER_PROC
+    import telua_web
+    proc = _DOCS_SERVER_PROC or getattr(telua_web, "_DOCS_SERVER_PROC", None)
+    if proc is not None:
+        try:
+            if proc.poll() is None:
+                proc.terminate()
+                proc.wait(timeout=2)
+        except Exception:
+            pass
+        _DOCS_SERVER_PROC = None
+        telua_web._DOCS_SERVER_PROC = None
+
+    if target_dir is not None:
+        pid_file = target_dir / ".telua_docs.pid"
+        if pid_file.is_file():
+            try:
+                raw_pid = pid_file.read_text(encoding="utf-8").strip()
+                pid = int(raw_pid)
+                if pid > 0 and pid != os.getpid():
+                    if sys.platform.startswith("win"):
+                        subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True)
+                    else:
+                        os.kill(pid, 9)
+            except Exception:
+                pass
+            try:
+                pid_file.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    if sys.platform.startswith("win"):
+        try:
+            out = subprocess.check_output(f"netstat -ano | findstr :{port}", shell=True, text=True, errors="ignore")
+            for line in out.splitlines():
+                parts = line.strip().split()
+                if len(parts) >= 5 and "LISTENING" in parts:
+                    pid = int(parts[-1])
+                    if pid > 0 and pid != os.getpid():
+                        subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True)
+        except Exception:
+            pass
+    else:
+        try:
+            subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True)
+        except Exception:
+            pass
+
+
+@docs_bp.post("/api/docs/start")
+def api_docs_start():
+    """Launch Sphinx HTTP preview server (telua docs start) and open in browser."""
+    import sys
+    import time
+    global _DOCS_SERVER_PROC, _DOCS_SERVER_DIR, _DOCS_SERVER_PORT
+    import telua_web
+    root = get_root()
+    payload = request.get_json(silent=True) or {}
+    custom_dir = payload.get("dir", "").strip()
+    current_file = payload.get("current_file", "").strip()
+    port = int(payload.get("port", 8789))
+    clean_requested = bool(payload.get("clean", False))
+
+    target_dir = detect_docs_project_dir(current_file=current_file, custom_dir=custom_dir, root=root)
+    if not target_dir.is_dir():
+        return jsonify({"ok": False, "error": f"Documentation directory '{target_dir}' does not exist"}), 404
+    html_dir = target_dir / "_build" / "html"
+
+    # If clean requested, wipe _build completely
+    if clean_requested:
+        build_dir = target_dir / "_build"
+        if build_dir.is_dir():
+            shutil.rmtree(build_dir, ignore_errors=True)
+
+    # Always restart: terminate running server process or port occupier
+    _kill_docs_server(target_dir=target_dir, port=port)
+
+    # Always re-compile docs to ensure http://localhost:8789 serves 100% fresh content
+    if (root / "build_apk.sh").is_file() and not sys.platform.startswith("win"):
+        try:
+            subprocess.run(["bash", "build_apk.sh", "docs", "build", str(target_dir)], cwd=str(root), capture_output=True, timeout=60)
+        except Exception:
+            pass
+    else:
+        try:
+            _build_sphinx_docs_py(target_dir)
+        except Exception:
+            pass
+
+    if not html_dir.is_dir():
+        html_dir.mkdir(parents=True, exist_ok=True)
+        (html_dir / "index.html").write_text("<h1>Sphinx Docs Preview</h1><p>Ready to build.</p>", encoding="utf-8")
+
+    url = f"http://localhost:{port}"
+
+    try:
+        server_script = (
+            "import http.server, sys, os, mimetypes\n"
+            "mimetypes.add_type('image/svg+xml', '.svg')\n"
+            "port = int(sys.argv[1])\n"
+            "directory = os.path.abspath(sys.argv[2])\n"
+            "class NoCacheHandler(http.server.SimpleHTTPRequestHandler):\n"
+            "    extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map, '.svg': 'image/svg+xml'}\n"
+            "    def __init__(self, *args, **kwargs):\n"
+            "        super().__init__(*args, directory=directory, **kwargs)\n"
+            "    def end_headers(self):\n"
+            "        self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0')\n"
+            "        self.send_header('Pragma', 'no-cache')\n"
+            "        self.send_header('Expires', '0')\n"
+            "        super().end_headers()\n"
+            "    def send_head(self):\n"
+            "        if 'If-Modified-Since' in self.headers:\n"
+            "            del self.headers['If-Modified-Since']\n"
+            "        if 'If-None-Match' in self.headers:\n"
+            "            del self.headers['If-None-Match']\n"
+            "        return super().send_head()\n"
+            "server = http.server.ThreadingHTTPServer(('', port), NoCacheHandler)\n"
+            "server.serve_forever()\n"
+        )
+        _DOCS_SERVER_PROC = subprocess.Popen(
+            [sys.executable, "-c", server_script, str(port), str(html_dir)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        telua_web._DOCS_SERVER_PROC = _DOCS_SERVER_PROC
+        _DOCS_SERVER_DIR = str(html_dir)
+        _DOCS_SERVER_PORT = port
+    except Exception as exc:
+        abort(500, description=f"Failed to start docs server: {exc}")
+
+    cache_bust_url = f"{url}/?_t={int(time.time())}"
+    open_browser(cache_bust_url)
+
+    return jsonify({
+        "ok": True,
+        "url": url,
+        "cache_bust_url": cache_bust_url,
+        "port": port,
+        "pid": _DOCS_SERVER_PROC.pid if _DOCS_SERVER_PROC else None,
+        "target_dir": str(target_dir),
+        "html_dir": str(html_dir),
+    })

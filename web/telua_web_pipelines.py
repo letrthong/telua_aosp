@@ -3,12 +3,352 @@
 # telua_web_pipelines.py — Parsing, serialization & rewriting of pipeline configs
 # ==============================================================================
 
+import os
 import re
+import shutil
+import subprocess
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, Any
+
+from flask import Blueprint, Response, abort, jsonify, request, stream_with_context
+from telua_web_core import validate_content
+from telua_web_terminal import _ACTIVE_TERM_LOCK, _ACTIVE_TERM_PROCS, _kill_term_proc
+
+pipelines_bp = Blueprint("pipelines", __name__)
 
 MY_GROUP_RE = re.compile(r'^\s*"([A-Za-z0-9_-]+)\s*::\s*([^"]*)"\s*$')
 MY_STEP_RE = re.compile(r'^\s*"(.*)"\s*$')
 CAR_VAR_RE = re.compile(r'^\s*(ADB_SHELL_[A-Z0-9_]+)\s*=\s*"((?:\\.|[^"\\])*)"\s*$')
 CAR_ROW_RE = re.compile(r'^\s*"([A-Za-z0-9_-]+)\s*::\s*([^:]*?)\s*::\s*([^"]*)"\s*$')
+
+
+def get_root() -> Path:
+    """Dynamically get ROOT from telua_web if loaded, else fallback to toolkit root."""
+    import sys
+    if "telua_web" in sys.modules:
+        tw = sys.modules["telua_web"]
+        if hasattr(tw, "ROOT"):
+            return tw.ROOT
+    return Path(__file__).resolve().parent.parent
+
+
+def get_pipeline_sources() -> Dict[str, Any]:
+    root = get_root()
+    my_cli = (
+        (root / "config" / "overlay" / "const_my_cli.config")
+        if (root / "config" / "overlay" / "const_my_cli.config").is_file()
+        or not (root / "config" / "const_my_cli.config").is_file()
+        else (root / "config" / "const_my_cli.config")
+    )
+    return {
+        "my": {
+            "file": my_cli,
+            "prefix": "MY",
+            "label": "Personal pipelines (telua my <name>)",
+        },
+        "multi": {
+            "file": root / "config" / "const_multi_cli.config",
+            "prefix": "MULTI",
+            "label": "Multi-CLI pipelines (telua run <group>)",
+        },
+        "system": {
+            "file": root / "config" / "const_system_cli.config",
+            "prefix": "SYSTEM",
+            "label": "System CLI pipelines (telua system <action>)",
+        },
+        "docker": {
+            "file": root / "config" / "const_system_cli.config",
+            "prefix": "SYSTEM",
+            "label": "Docker CLI pipelines (telua system <action>)",
+        },
+        "car": {
+            "file": root / "config" / "const_car.config",
+            "prefix": "CAR",
+            "label": "Android Car pipelines (telua car <action>)",
+            "list_var": "CAR_CLI_LIST",
+            "var_prefix": "ADB_SHELL_CAR_",
+        },
+        "dump": {
+            "file": root / "config" / "const_dumpsys.config",
+            "prefix": "DUMP",
+            "label": "Android Dumpsys pipelines (telua dump <service>)",
+            "list_var": "DUMP_CLI_LIST",
+            "var_prefix": "ADB_SHELL_DUMP_",
+        },
+    }
+
+
+PIPELINE_SOURCES = get_pipeline_sources()
+
+
+def _pipeline_source(source):
+    """Resolve a pipeline source key ('my' | 'multi' | 'system' | 'docker' | 'car' | 'dump') to its descriptor."""
+    key = (source or "my").strip().lower()
+    sources = get_pipeline_sources()
+    if key not in sources:
+        abort(400, description="Unknown pipeline source '%s' (use 'my', 'multi', 'system', 'car', or 'dump')." % key)
+    return key, sources[key]
+
+
+def _pipeline_config_path(source):
+    """Resolve the config file for a source (fall back to the .example)."""
+    root = get_root()
+    key, _ = _pipeline_source(source)
+    if key == "my":
+        candidates = [
+            root / "config" / "overlay" / "const_my_cli.config",
+            root / "config" / "const_my_cli.config",
+            root / "config" / "overlay" / "const_my_cli.config.example",
+            root / "config" / "const_my_cli.config.example",
+        ]
+    elif key in ("docker", "system"):
+        candidates = [
+            root / "config" / "overlay" / "const_system_cli.config",
+            root / "config" / "const_system_cli.config",
+            root / "const_system_cli.config",
+        ]
+    elif key == "car":
+        candidates = [
+            root / "config" / "overlay" / "const_car.config",
+            root / "config" / "const_car.config",
+            root / "const_car.config",
+        ]
+    elif key == "dump":
+        candidates = [
+            root / "config" / "overlay" / "const_dumpsys.config",
+            root / "config" / "const_dumpsys.config",
+            root / "const_dumpsys.config",
+        ]
+    else:
+        path = root / "config" / "const_multi_cli.config"
+        candidates = [path, path.with_suffix(".config.example")]
+    for cand in candidates:
+        if cand.is_file():
+            return cand
+    return None
+
+
+def parse_pipelines(source="my"):
+    """Parse <PREFIX>_GROUP_LIST + <PREFIX>_CMD_* arrays (or CAR_CLI_LIST / DUMP_CLI_LIST) into pipeline dicts."""
+    key, desc = _pipeline_source(source)
+    path = _pipeline_config_path(source)
+    if not path:
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+
+    if key == "car":
+        return _parse_cli_list_pipelines(lines, desc["list_var"], desc["var_prefix"])
+    if key == "dump":
+        has_group = any(re.match(r'^\s*DUMP_GROUP_LIST\s*=', l) for l in lines)
+        has_cmd = any(re.match(r'^\s*DUMP_CMD_', l) for l in lines)
+        if has_group or has_cmd:
+            return parse_array_pipelines(lines, "DUMP")
+        return _parse_cli_list_pipelines(lines, "DUMP_CLI_LIST", "ADB_SHELL_DUMP_")
+    return parse_array_pipelines(lines, desc["prefix"])
+
+
+def rewrite_pipeline_config(pipelines, source="my"):
+    """Rewrite <PREFIX>_GROUP_LIST and every <PREFIX>_CMD_* array in the file."""
+    root = get_root()
+    key, desc = _pipeline_source(source)
+    path = _pipeline_config_path(source)
+    if not path:
+        abort(404, description="Pipeline config for '%s' not found (run 'telua init' first)." % source)
+    if not os.access(path, os.W_OK):
+        abort(403, description="%s is read-only." % path.name)
+
+    text = path.read_text(encoding="utf-8", errors="replace")
+    lines = text.splitlines()
+
+    if key == "car":
+        out = _rewrite_cli_list_lines(lines, pipelines, desc["list_var"], desc["var_prefix"])
+    else:
+        out = rewrite_array_pipeline_lines(lines, pipelines, desc["prefix"])
+
+    new_text = "\n".join(out)
+    if text.endswith("\n") or not text:
+        new_text += "\n"
+
+    error = validate_content("bash", new_text)
+    if error:
+        abort(400, description="Rewrite would break bash syntax: %s" % error)
+
+    backup = None
+    try:
+        backup_path = path.with_suffix(path.suffix + ".bak")
+        shutil.copy2(path, backup_path)
+        backup = str(backup_path.relative_to(root)).replace(os.sep, "/")
+    except OSError:
+        backup = None
+
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(new_text)
+    return backup
+
+
+@pipelines_bp.get("/api/pipelines")
+def api_pipelines():
+    root = get_root()
+    source = request.args.get("source", "my")
+    _, desc = _pipeline_source(source)
+    path = _pipeline_config_path(source)
+    return jsonify({
+        "ok": True,
+        "source": _pipeline_source(source)[0],
+        "label": desc["label"],
+        "file": str(path.relative_to(root)).replace(os.sep, "/") if path else None,
+        "pipelines": parse_pipelines(source),
+    })
+
+
+@pipelines_bp.post("/api/pipelines")
+def api_pipelines_save():
+    data = request.get_json(silent=True) or {}
+    source = data.get("source", "my")
+    pipelines = data.get("pipelines")
+    if not isinstance(pipelines, list):
+        abort(400, description="Missing 'pipelines' list in request body.")
+
+    cleaned = []
+    names = set()
+    for p in pipelines:
+        if not isinstance(p, dict):
+            abort(400, description="Each pipeline must be an object.")
+        name = str(p.get("name", "")).strip().lower()
+        if not name or not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+            abort(400, description="Invalid pipeline name '%s' (use letters, digits, - _)." % name)
+        if name in names:
+            abort(400, description="Duplicate pipeline name '%s'." % name)
+        names.add(name)
+        steps = p.get("steps", [])
+        if not isinstance(steps, list) or not all(isinstance(s, str) for s in steps):
+            abort(400, description="Pipeline '%s': 'steps' must be a list of strings." % name)
+        cleaned.append({
+            "name": name,
+            "description": str(p.get("description", "")).strip(),
+            "steps": steps,
+            "orphan": bool(p.get("orphan", False)),
+        })
+
+    backup = rewrite_pipeline_config(cleaned, source)
+    return jsonify({
+        "ok": True,
+        "source": _pipeline_source(source)[0],
+        "count": len(cleaned),
+        "backup": backup,
+        "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    })
+
+
+@pipelines_bp.post("/api/pipeline/run")
+def api_pipeline_run():
+    """Execute one pipeline via 'telua my <name>' or 'telua run <group>'."""
+    root = get_root()
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("name", "")).strip()
+    source = data.get("source", "my")
+    if not name or not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+        abort(400, description="Invalid pipeline name.")
+    key, _ = _pipeline_source(source)
+    known = {p["name"] for p in parse_pipelines(key)}
+    if name not in known:
+        group_var = {
+            "my": "MY_GROUP_LIST",
+            "multi": "MULTI_GROUP_LIST",
+            "docker": "SYSTEM_GROUP_LIST",
+            "system": "SYSTEM_GROUP_LIST",
+            "car": "CAR_CLI_LIST",
+            "dump": "DUMP_GROUP_LIST",
+        }[key]
+        abort(404, description="Pipeline '%s' not found in %s." % (name, group_var))
+    script = root / "build_apk.sh"
+    if not script.is_file():
+        abort(404, description="build_apk.sh not found in %s" % root)
+    subcommand = {"my": "my", "multi": "run", "docker": "system", "system": "system", "car": "car", "dump": "dump"}[key]
+    try:
+        proc = subprocess.run(
+            ["bash", str(script), subcommand, name],
+            cwd=str(root), stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=300)
+        output = (proc.stdout or "") + (proc.stderr or "")
+        code = proc.returncode
+    except subprocess.TimeoutExpired:
+        output, code = "[ERROR] Pipeline '%s' timed out after 300s." % name, 124
+    except Exception as exc:  # pragma: no cover
+        output, code = "[ERROR] Failed to run pipeline: %s" % exc, 1
+    return jsonify({"ok": code == 0, "exit_code": code, "output": output})
+
+
+@pipelines_bp.post("/api/pipeline/stream")
+def api_pipeline_stream():
+    """Stream pipeline execution output line-by-line in real time."""
+    root = get_root()
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("name", "")).strip()
+    source = data.get("source", "my")
+    if not name or not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+        abort(400, description="Invalid pipeline name.")
+    key, _ = _pipeline_source(source)
+    known = {p["name"] for p in parse_pipelines(key)}
+    if name not in known:
+        group_var = {
+            "my": "MY_GROUP_LIST",
+            "multi": "MULTI_GROUP_LIST",
+            "docker": "SYSTEM_GROUP_LIST",
+            "system": "SYSTEM_GROUP_LIST",
+            "car": "CAR_CLI_LIST",
+            "dump": "DUMP_GROUP_LIST",
+        }[key]
+        abort(404, description="Pipeline '%s' not found in %s." % (name, group_var))
+    script = root / "build_apk.sh"
+    if not script.is_file():
+        abort(404, description="build_apk.sh not found in %s" % root)
+    subcommand = {"my": "my", "multi": "run", "docker": "system", "system": "system", "car": "car", "dump": "dump"}[key]
+
+    def generate():
+        env = dict(os.environ)
+        env["PYTHONUNBUFFERED"] = "1"
+        proc = None
+        try:
+            proc = subprocess.Popen(
+                ["bash", str(script), subcommand, name],
+                cwd=str(root),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                errors="replace",
+                bufsize=1,
+                env=env,
+                start_new_session=(os.name != "nt"),
+            )
+            with _ACTIVE_TERM_LOCK:
+                _ACTIVE_TERM_PROCS.add(proc)
+            if proc.stdout is not None:
+                for line in iter(proc.stdout.readline, ""):
+                    yield line
+                proc.stdout.close()
+            code = proc.wait(timeout=300)
+        except Exception as exc:  # pragma: no cover
+            yield "\n[ERROR] Failed to stream pipeline: %s\n" % exc
+            code = 1
+        finally:
+            if proc is not None:
+                with _ACTIVE_TERM_LOCK:
+                    _ACTIVE_TERM_PROCS.discard(proc)
+                if proc.poll() is None:
+                    _kill_term_proc(proc)
+        yield "\n__TELUA_EXIT_CODE__:%d\n" % code
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/plain; charset=utf-8",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+    )
+
 
 
 def _bash_quote(step: str) -> str:
