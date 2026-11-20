@@ -2855,42 +2855,62 @@ function insertMermaidDiagram(diagramType = "flowchart") {
 
 // ===== JSON → Mermaid Chart converter (mirrors sphinx/scripts/json_to_chart.py) =====
 const JSON_CHART_SAMPLES = {
-  pie: {
-    title: "Audio Usage by Context",
-    type: "pie",
+  combo: {
+    title: "Audio Latency (Bar) vs Drops (Line)",
+    type: "combo",
     json: {
-      media: 12, navigation: 8, call: 5, tts: 3, "fm_tuner": 7
+      x: ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"],
+      bar: [45, 60, 95, 110, 80, 50],
+      line: [40, 55, 85, 105, 75, 45],
+      y_label: "Latency (ms) / Drops"
     }
   },
   bar: {
-    title: "Focus Enforcement Events / Week",
+    title: "AOSP Module Build Duration (Seconds)",
     type: "bar",
-    json: { x: ["mon", "tue", "wed", "thu", "fri"], y: [12, 25, 8, 31, 19] }
+    json: {
+      x: ["OemService", "CarAudio", "VehicleSvc", "dlt-daemon", "Settings"],
+      y: [35, 75, 48, 22, 60]
+    }
   },
   line: {
-    title: "Media Volume Trend",
+    title: "CarAudioService RAM Trend (MB)",
     type: "line",
-    json: { x: ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00"], y: [8, 12, 10, 14, 11, 15] }
+    json: {
+      x: ["10m", "20m", "30m", "40m", "50m", "60m"],
+      y: [120, 145, 190, 185, 210, 215]
+    }
+  },
+  pie: {
+    title: "Audio Routing Context Distribution",
+    type: "pie",
+    json: {
+      media: 45, navigation: 25, phone_call: 15, assistant: 10, chime: 5
+    }
+  },
+  timeline: {
+    title: "Automotive Platform Milestones",
+    type: "timeline",
+    json: {
+      "2024 Q3": ["AOSP 13 Baseline", "CarAudio Initial Bringup"],
+      "2024 Q4": ["Qualcomm SA8155 BSP", "Vehicle HAL v2.0"],
+      "2025 Q1": ["COVESA DLT Logging", "Audio Zone Routing"],
+      "2025 Q2": ["Production Release", "OTA Firmware Update"]
+    }
   },
   flow: {
-    title: "Bosch Audio Architecture",
+    title: "AOSP Audio HAL & CarService Flow",
     type: "flow",
     json: {
       nodes: [
-        "CarAudioService", "OemCarService", "AudioControl HAL", "Audio HW HAL"
+        "CarAudioService", "OemCarService", "AudioControl HAL", "Audio HW HAL", "DSP Driver"
       ],
       edges: [
         ["CarAudioService", "OemCarService", "AIDL evaluate"],
         ["CarAudioService", "AudioControl HAL", "IAudioControl/default"],
-        ["AudioControl HAL", "Audio HW HAL", "setParameters"]
+        ["AudioControl HAL", "Audio HW HAL", "setParameters()"],
+        ["Audio HW HAL", "DSP Driver", "ALSA / TinyALSA"]
       ]
-    }
-  },
-  focus: {
-    title: "Focus Enforcement Results",
-    type: "pie",
-    json: {
-      silenced: 5, unsilenced: 12, rejected: 3, "do_not_silence": 8
     }
   }
 };
@@ -2923,6 +2943,55 @@ function _jsonChartPairs(data) {
 
 function jsonToMermaid(data, type, title) {
   const t = type || _jsonChartDetectType(data);
+
+  // 1. Combo chart (Bar + Line together in xychart-beta)
+  if (t === "combo") {
+    if (!data || typeof data !== "object") {
+      throw new Error("Combo chart JSON must be {\"x\": [...], \"bar\": [...], \"line\": [...]}");
+    }
+    const xLabels = (data.x || []).map(x => `"${_jsonChartSanitize(x)}"`).join(", ");
+    const barVals = (data.bar || []).map(v => Number(v) || 0);
+    const lineVals = (data.line || []).map(v => Number(v) || 0);
+    if (!barVals.length && !lineVals.length) {
+      throw new Error("Combo chart must provide 'bar' and/or 'line' numeric arrays");
+    }
+    const allVals = [...barVals, ...lineVals];
+    const yMax = Math.max(...allVals, 1);
+    const yMin = Math.min(0, ...allVals);
+    const lines = ["xychart-beta"];
+    if (title) lines.push(`    title "${_jsonChartSanitize(title)}"`);
+    lines.push(`    x-axis [${xLabels}]`);
+    lines.push(`    y-axis "${_jsonChartSanitize(data.y_label || 'Value')}" ${yMin} --> ${yMax}`);
+    if (barVals.length) lines.push(`    bar [${barVals.join(", ")}]`);
+    if (lineVals.length) lines.push(`    line [${lineVals.join(", ")}]`);
+    return lines;
+  }
+
+  // 2. Timeline Roadmap
+  if (t === "timeline") {
+    const lines = ["timeline"];
+    if (title) lines.push(`    title ${_jsonChartSanitize(title)}`);
+    if (Array.isArray(data)) {
+      data.forEach(item => {
+        if (typeof item === "object") {
+          Object.entries(item).forEach(([period, events]) => {
+            lines.push(`    section ${_jsonChartSanitize(period)}`);
+            const evs = Array.isArray(events) ? events : [events];
+            evs.forEach(ev => lines.push(`        ${_jsonChartSanitize(ev)}`));
+          });
+        }
+      });
+    } else if (data && typeof data === "object") {
+      Object.entries(data).forEach(([period, events]) => {
+        lines.push(`    section ${_jsonChartSanitize(period)}`);
+        const evs = Array.isArray(events) ? events : [events];
+        evs.forEach(ev => lines.push(`        ${_jsonChartSanitize(ev)}`));
+      });
+    }
+    return lines;
+  }
+
+  // 3. Flowchart
   if (t === "flow") {
     if (!data || typeof data !== "object" || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
       throw new Error("Flow chart JSON must be {\"nodes\": [...], \"edges\": [[src, dst, label?], ...]}");
@@ -2952,7 +3021,8 @@ function jsonToMermaid(data, type, title) {
     });
     return lines;
   }
-  // pie / bar / line share the pairs normalization
+
+  // 4. Pie chart
   const pairs = _jsonChartPairs(data).map(([label, value]) => {
     const num = Number(value);
     if (value === null || value === "" || Number.isNaN(num)) {
@@ -2966,7 +3036,8 @@ function jsonToMermaid(data, type, title) {
     pairs.forEach(([label, value]) => lines.push(`    "${label}" : ${value}`));
     return lines;
   }
-  // xychart-beta (bar / line)
+
+  // 5. xychart-beta (single bar or single line)
   const labels = pairs.map(p => `"${p[0]}"`).join(", ");
   const values = pairs.map(p => p[1]);
   const yMax = Math.max(...values, 1);
@@ -2980,10 +3051,19 @@ function jsonToMermaid(data, type, title) {
 }
 
 function _jsonChartDetectType(data) {
-  if (data && typeof data === "object" && !Array.isArray(data)
-      && Array.isArray(data.nodes) && Array.isArray(data.edges)) return "flow";
-  if (data && typeof data === "object" && !Array.isArray(data)
-      && Array.isArray(data.x) && Array.isArray(data.y)) return "bar";
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    if (Array.isArray(data.nodes) && Array.isArray(data.edges)) return "flow";
+    if (Array.isArray(data.x) && (Array.isArray(data.bar) || Array.isArray(data.line))) {
+      if (Array.isArray(data.bar) && Array.isArray(data.line)) return "combo";
+      if (Array.isArray(data.bar)) return "bar";
+      if (Array.isArray(data.line)) return "line";
+    }
+    if (Array.isArray(data.x) && Array.isArray(data.y)) return "bar";
+    const values = Object.values(data);
+    if (values.length && values.every(v => Array.isArray(v) && v.every(item => typeof item === "string"))) {
+      return "timeline";
+    }
+  }
   return "pie";
 }
 

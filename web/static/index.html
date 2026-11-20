@@ -610,9 +610,11 @@
         <span class="meta">Chart type:</span>
         <select id="json-chart-type" class="theme-select" style="margin-left:8px;">
           <option value="auto" selected>🔍 Auto-detect</option>
-          <option value="pie">🥧 Pie</option>
+          <option value="combo">📊📈 Combo (Bar + Line)</option>
           <option value="bar">📊 Bar (xychart)</option>
           <option value="line">📈 Line (xychart)</option>
+          <option value="pie">🥧 Pie</option>
+          <option value="timeline">📅 Timeline (Milestones)</option>
           <option value="flow">🔀 Flowchart</option>
         </select>
         <input id="json-chart-title" type="text" class="term-input" style="margin-left:8px;width:220px;"
@@ -620,22 +622,26 @@
       </div>
       <div style="margin:10px 0;">
         <span class="meta">⚡ Sample data (click to load):</span>
-        <div class="term-quick-bar" style="margin-top:6px;border:none;padding:0;">
-          <button class="term-chip btn-json-sample" data-sample="pie">🥧 Pie — Audio Usage</button>
-          <button class="term-chip btn-json-sample" data-sample="bar">📊 Bar — Weekly Events</button>
-          <button class="term-chip btn-json-sample" data-sample="line">📈 Line — Volume Trend</button>
-          <button class="term-chip btn-json-sample" data-sample="flow">🔀 Flow — Audio Architecture</button>
-          <button class="term-chip btn-json-sample" data-sample="focus">🎯 Pie — Focus Enforcement</button>
+        <div class="term-quick-bar" style="margin-top:6px;border:none;padding:0;gap:6px;flex-wrap:wrap;">
+          <button class="term-chip btn-json-sample" data-sample="combo">📊📈 Combo — Latency vs Drops</button>
+          <button class="term-chip btn-json-sample" data-sample="bar">📊 Bar — Build Duration</button>
+          <button class="term-chip btn-json-sample" data-sample="line">📈 Line — RAM Trend</button>
+          <button class="term-chip btn-json-sample" data-sample="pie">🥧 Pie — Audio Focus</button>
+          <button class="term-chip btn-json-sample" data-sample="timeline">📅 Timeline — Milestones</button>
+          <button class="term-chip btn-json-sample" data-sample="flow">🔀 Flow — Audio HAL</button>
         </div>
       </div>
       <div style="margin:10px 0;">
         <textarea id="json-chart-input" class="term-input mono" spellcheck="false"
           style="width:100%;box-sizing:border-box;height:180px;font-size:12px;"
-          placeholder='{&quot;media&quot;: 12, &quot;navigation&quot;: 8, &quot;call&quot;: 5}
+          placeholder='// Combo (Bar + Line):
+{"x": ["08:00","12:00","16:00"], "bar": [45, 95, 80], "line": [40, 85, 75]}
 
-Other shapes:
-{"x": ["mon","tue"], "y": [12, 25]}          → Bar
-{"nodes": ["A","B"], "edges": [["A","B","label"]]} → Flowchart'></textarea>
+// Other shapes:
+{"media": 12, "navigation": 8, "call": 5}             → Pie
+{"x": ["mon","tue"], "y": [12, 25]}                    → Bar / Line
+{"2025 Q1": ["Feature A", "Feature B"]}                → Timeline
+{"nodes": ["A","B"], "edges": [["A","B","IPC AIDL"]]} → Flowchart'></textarea>
       </div>
       <div style="margin:10px 0;display:none;" id="json-chart-preview-wrap">
         <span class="meta">Mermaid preview:</span>
