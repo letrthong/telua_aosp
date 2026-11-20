@@ -9,6 +9,10 @@ still succeeds) are:
      its own line. The previous node and the target must be on the same line.
   2. DANGLING-EDGE : a line that ends with an arrow (optionally with a label)
      while the target node is on the next line.
+  3. SEMICOLON : a ';' inside a sequenceDiagram message/note text. Mermaid
+     treats ';' as a statement separator: the text is truncated and the
+     remainder is parsed as a new statement → browser parse error
+     ("Expecting 'NEWLINE', 'AS', ... got 'INVALID'").
 
 Usage:
     python check_mermaid.py <docs_dir>
@@ -31,6 +35,14 @@ LEADING_ARROW = re.compile(r'^\s*' + ARROWS)
 # (target node is on the next line)
 DANGLING_EDGE = re.compile(ARROWS + r'\s*(?:\|[^|]*\|)?\s*$')
 
+# sequenceDiagram message (A->>B: text) and Note text — used for the
+# semicolon check (';' is a mermaid statement separator)
+SEQ_MSG = re.compile(
+    r'^\s*[A-Za-z_][\w-]*\s*(?:-{1,2}>>|--\)|-\)|-\)\)|->>)'
+    r'\s*[A-Za-z_][\w-]*\s*:\s*(.+)$')
+SEQ_NOTE = re.compile(
+    r'^\s*Note\s+(?:over|left of|right of)\s+[^:]+:\s*(.+)$', re.IGNORECASE)
+
 
 def check_rst_file(rst_path):
     """Return a list of (line_number, kind, line_text) issues in one rst file."""
@@ -39,18 +51,30 @@ def check_rst_file(rst_path):
         lines = f.read().split('\n')
 
     in_block = False
+    dtype_known = False
+    is_sequence = False
     for i, line in enumerate(lines, 1):
         stripped = line.strip()
         if stripped == '.. mermaid::':
             in_block = True
+            dtype_known = False
+            is_sequence = False
             continue
         if in_block:
             # Blank line or indented content belongs to the mermaid block
             if stripped == '' or line.startswith(('   ', '\t')):
+                if not dtype_known and stripped:
+                    # first content line decides the diagram type
+                    is_sequence = stripped.startswith('sequenceDiagram')
+                    dtype_known = True
                 if LEADING_ARROW.match(line):
                     issues.append((i, 'LEADING-ARROW', stripped))
                 if DANGLING_EDGE.search(line):
                     issues.append((i, 'DANGLING-EDGE', stripped))
+                if is_sequence:
+                    msg = SEQ_MSG.match(line) or SEQ_NOTE.match(line)
+                    if msg and ';' in msg.group(1):
+                        issues.append((i, 'SEMICOLON', stripped))
             else:
                 # First non-indented line ends the mermaid block
                 in_block = False
