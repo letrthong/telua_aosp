@@ -48,6 +48,13 @@ exclude_patterns = ['_build']
 html_theme = 'furo'
 source_encoding = 'utf-8-sig'
 
+# Mermaid.js version loaded in the browser.
+# xychart-beta requires mermaid >= 10.3; 10.9.x is the last v10 line that
+# still ships the UMD build (dist/mermaid.min.js) used by older
+# sphinxcontrib-mermaid (0.9.x). Newer extensions (>=1.0) load the ESM build
+# for the same version, so this pin works with both.
+mermaid_version = '10.9.3'
+
 # Custom static files (CSS & JS for modern aesthetics & interactive diagrams)
 html_static_path = ['_static'] if os.path.isdir('_static') else []
 html_css_files = ['custom.css'] if os.path.isfile(os.path.join('_static', 'custom.css')) else []
