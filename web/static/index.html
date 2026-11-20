@@ -464,6 +464,14 @@
                   <span class="dropdown-item-desc">stateDiagram-v2 (Lifecycle & States)</span>
                 </div>
               </div>
+              <div class="dropdown-separator"></div>
+              <div class="dropdown-item" data-type="json-chart">
+                <span class="dropdown-item-icon">📥</span>
+                <div class="dropdown-item-content">
+                  <span class="dropdown-item-title">JSON → Chart (Pie / Bar / Line / Flow)</span>
+                  <span class="dropdown-item-desc">Paste JSON data, auto-convert to Mermaid</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -587,6 +595,56 @@
       <div class="modal-actions">
         <button class="btn" id="btn-docs-dir-cancel">Cancel</button>
         <button class="btn primary" id="btn-docs-dir-apply">✔ Apply &amp; Scan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ JSON to Chart Modal ============ -->
+  <div class="modal hidden" id="modal-json-chart">
+    <div class="modal-box wide">
+      <h3>📥 JSON → Mermaid Chart</h3>
+      <p class="meta">Paste your JSON data below. The chart type is auto-detected
+        (object → <strong>Pie</strong>, <code>{x,y}</code> arrays → <strong>Bar</strong>,
+        <code>{nodes,edges}</code> → <strong>Flowchart</strong>) or pick one manually.</p>
+      <div style="margin:10px 0;">
+        <span class="meta">Chart type:</span>
+        <select id="json-chart-type" class="theme-select" style="margin-left:8px;">
+          <option value="auto" selected>🔍 Auto-detect</option>
+          <option value="pie">🥧 Pie</option>
+          <option value="bar">📊 Bar (xychart)</option>
+          <option value="line">📈 Line (xychart)</option>
+          <option value="flow">🔀 Flowchart</option>
+        </select>
+        <input id="json-chart-title" type="text" class="term-input" style="margin-left:8px;width:220px;"
+          placeholder="Chart title (optional)">
+      </div>
+      <div style="margin:10px 0;">
+        <span class="meta">⚡ Sample data (click to load):</span>
+        <div class="term-quick-bar" style="margin-top:6px;border:none;padding:0;">
+          <button class="term-chip btn-json-sample" data-sample="pie">🥧 Pie — Audio Usage</button>
+          <button class="term-chip btn-json-sample" data-sample="bar">📊 Bar — Weekly Events</button>
+          <button class="term-chip btn-json-sample" data-sample="line">📈 Line — Volume Trend</button>
+          <button class="term-chip btn-json-sample" data-sample="flow">🔀 Flow — Audio Architecture</button>
+          <button class="term-chip btn-json-sample" data-sample="focus">🎯 Pie — Focus Enforcement</button>
+        </div>
+      </div>
+      <div style="margin:10px 0;">
+        <textarea id="json-chart-input" class="term-input mono" spellcheck="false"
+          style="width:100%;box-sizing:border-box;height:180px;font-size:12px;"
+          placeholder='{&quot;media&quot;: 12, &quot;navigation&quot;: 8, &quot;call&quot;: 5}
+
+Other shapes:
+{"x": ["mon","tue"], "y": [12, 25]}          → Bar
+{"nodes": ["A","B"], "edges": [["A","B","label"]]} → Flowchart'></textarea>
+      </div>
+      <div style="margin:10px 0;display:none;" id="json-chart-preview-wrap">
+        <span class="meta">Mermaid preview:</span>
+        <pre id="json-chart-preview" class="mono" style="background:var(--bg-soft, #1e1e2e);padding:10px;border-radius:6px;font-size:11px;max-height:140px;overflow:auto;white-space:pre-wrap;"></pre>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="btn-json-chart-cancel">Cancel</button>
+        <button class="btn ghost" id="btn-json-chart-preview">👁 Preview</button>
+        <button class="btn primary" id="btn-json-chart-insert">✔ Insert Chart</button>
       </div>
     </div>
   </div>

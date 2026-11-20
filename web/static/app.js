@@ -2821,6 +2821,11 @@ const PLANTUML_TEMPLATES = {
 };
 
 function insertMermaidDiagram(diagramType = "flowchart") {
+  // JSON → Chart: open the import modal instead of inserting a template
+  if (diagramType === "json-chart") {
+    openJsonChartModal();
+    return;
+  }
   const tmpl = MERMAID_TEMPLATES[diagramType] || MERMAID_TEMPLATES.flowchart;
   const defaultCode = tmpl.code;
 
@@ -2845,6 +2850,254 @@ function insertMermaidDiagram(diagramType = "flowchart") {
     setDocsDirty(true);
     if (_docsSplit) updateDocsPreview();
     toast("Mermaid Diagram Added 📊", `Inserted ${tmpl.title} into Visual editor.`, "ok");
+  }
+}
+
+// ===== JSON → Mermaid Chart converter (mirrors sphinx/scripts/json_to_chart.py) =====
+const JSON_CHART_SAMPLES = {
+  pie: {
+    title: "Audio Usage by Context",
+    type: "pie",
+    json: {
+      media: 12, navigation: 8, call: 5, tts: 3, "fm_tuner": 7
+    }
+  },
+  bar: {
+    title: "Focus Enforcement Events / Week",
+    type: "bar",
+    json: { x: ["mon", "tue", "wed", "thu", "fri"], y: [12, 25, 8, 31, 19] }
+  },
+  line: {
+    title: "Media Volume Trend",
+    type: "line",
+    json: { x: ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00"], y: [8, 12, 10, 14, 11, 15] }
+  },
+  flow: {
+    title: "Bosch Audio Architecture",
+    type: "flow",
+    json: {
+      nodes: [
+        "CarAudioService", "OemCarService", "AudioControl HAL", "Audio HW HAL"
+      ],
+      edges: [
+        ["CarAudioService", "OemCarService", "AIDL evaluate"],
+        ["CarAudioService", "AudioControl HAL", "IAudioControl/default"],
+        ["AudioControl HAL", "Audio HW HAL", "setParameters"]
+      ]
+    }
+  },
+  focus: {
+    title: "Focus Enforcement Results",
+    type: "pie",
+    json: {
+      silenced: 5, unsilenced: 12, rejected: 3, "do_not_silence": 8
+    }
+  }
+};
+
+function _jsonChartSanitize(text, fallback = "item") {
+  if (text === null || text === undefined) text = fallback;
+  return String(text).replace(/"/g, "'").replace(/\n/g, " ").trim() || fallback;
+}
+
+function _jsonChartPairs(data) {
+  if (Array.isArray(data)) {
+    return data.map(item => {
+      if (!Array.isArray(item) || item.length !== 2) {
+        throw new Error("Array form must be [[label, value], ...] pairs");
+      }
+      return item;
+    });
+  }
+  if (data && typeof data === "object") {
+    if (Array.isArray(data.x) && Array.isArray(data.y)) {
+      if (data.x.length !== data.y.length) {
+        throw new Error("'x' and 'y' arrays must have the same length");
+      }
+      return data.x.map((x, i) => [x, data.y[i]]);
+    }
+    return Object.entries(data);
+  }
+  throw new Error("Unsupported JSON shape for pie/bar/line charts");
+}
+
+function jsonToMermaid(data, type, title) {
+  const t = type || _jsonChartDetectType(data);
+  if (t === "flow") {
+    if (!data || typeof data !== "object" || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
+      throw new Error("Flow chart JSON must be {\"nodes\": [...], \"edges\": [[src, dst, label?], ...]}");
+    }
+    const lines = ["flowchart LR"];
+    if (title) lines.push(`    %% ${_jsonChartSanitize(title)}`);
+    const idByLabel = {};
+    data.nodes.forEach((node, idx) => {
+      const id = `N${idx}`;
+      idByLabel[String(node)] = id;
+      lines.push(`    ${id}["${_jsonChartSanitize(node)}"]`);
+    });
+    data.edges.forEach(edge => {
+      if (!Array.isArray(edge) || edge.length < 2) {
+        throw new Error(`Edge must be [src, dst] or [src, dst, label]: ${JSON.stringify(edge)}`);
+      }
+      const srcId = idByLabel[String(edge[0])];
+      const dstId = idByLabel[String(edge[1])];
+      if (srcId === undefined || dstId === undefined) {
+        throw new Error(`Edge references unknown node: ${JSON.stringify(edge)}. All endpoints must be listed in 'nodes'.`);
+      }
+      if (edge.length >= 3 && edge[2]) {
+        lines.push(`    ${srcId} -->|"${_jsonChartSanitize(edge[2])}"| ${dstId}`);
+      } else {
+        lines.push(`    ${srcId} --> ${dstId}`);
+      }
+    });
+    return lines;
+  }
+  // pie / bar / line share the pairs normalization
+  const pairs = _jsonChartPairs(data).map(([label, value]) => {
+    const num = Number(value);
+    if (value === null || value === "" || Number.isNaN(num)) {
+      throw new Error(`Expected numeric value for key '${label}', got: ${JSON.stringify(value)}`);
+    }
+    return [_jsonChartSanitize(label), num];
+  });
+  if (t === "pie") {
+    const lines = ["pie showData"];
+    if (title) lines.push(`    title ${_jsonChartSanitize(title)}`);
+    pairs.forEach(([label, value]) => lines.push(`    "${label}" : ${value}`));
+    return lines;
+  }
+  // xychart-beta (bar / line)
+  const labels = pairs.map(p => `"${p[0]}"`).join(", ");
+  const values = pairs.map(p => p[1]);
+  const yMax = Math.max(...values, 1);
+  const yMin = Math.min(0, ...values);
+  const lines = ["xychart-beta"];
+  if (title) lines.push(`    title "${_jsonChartSanitize(title)}"`);
+  lines.push(`    x-axis [${labels}]`);
+  lines.push(`    y-axis "Value" ${yMin} --> ${yMax}`);
+  lines.push(`    ${t} [${values.join(", ")}]`);
+  return lines;
+}
+
+function _jsonChartDetectType(data) {
+  if (data && typeof data === "object" && !Array.isArray(data)
+      && Array.isArray(data.nodes) && Array.isArray(data.edges)) return "flow";
+  if (data && typeof data === "object" && !Array.isArray(data)
+      && Array.isArray(data.x) && Array.isArray(data.y)) return "bar";
+  return "pie";
+}
+
+function openJsonChartModal() {
+  const modal = $("#modal-json-chart");
+  if (!modal) return;
+  const input = $("#json-chart-input");
+  const typeSel = $("#json-chart-type");
+  const titleIn = $("#json-chart-title");
+  const previewWrap = $("#json-chart-preview-wrap");
+  if (input) input.value = "";
+  if (typeSel) typeSel.value = "auto";
+  if (titleIn) titleIn.value = "";
+  if (previewWrap) previewWrap.style.display = "none";
+  modal.classList.remove("hidden");
+  setTimeout(() => input?.focus(), 40);
+}
+
+function wireJsonChartModal() {
+  const modal = $("#modal-json-chart");
+  if (!modal || modal.dataset.wired === "1") return;
+  modal.dataset.wired = "1";
+
+  const input = $("#json-chart-input");
+  const typeSel = $("#json-chart-type");
+  const titleIn = $("#json-chart-title");
+  const previewWrap = $("#json-chart-preview-wrap");
+  const previewPre = $("#json-chart-preview");
+
+  function buildLines() {
+    const raw = input?.value.trim() || "";
+    if (!raw) throw new Error("JSON input is empty");
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      throw new Error("Invalid JSON: " + e.message);
+    }
+    const type = typeSel?.value === "auto" ? null : typeSel?.value;
+    return jsonToMermaid(data, type, titleIn?.value.trim() || null);
+  }
+
+  $("#btn-json-chart-cancel")?.addEventListener("click", () => modal.classList.add("hidden"));
+  $("#btn-json-chart-preview")?.addEventListener("click", () => {
+    try {
+      const lines = buildLines();
+      if (previewPre) previewPre.textContent = lines.join("\n");
+      if (previewWrap) previewWrap.style.display = "block";
+    } catch (e) {
+      toast("JSON Chart Error ⚠️", e.message, "err");
+    }
+  });
+  $("#btn-json-chart-insert")?.addEventListener("click", () => {
+    let lines;
+    try {
+      lines = buildLines();
+    } catch (e) {
+      toast("JSON Chart Error ⚠️", e.message, "err");
+      return;
+    }
+    modal.classList.add("hidden");
+    insertMermaidCode(lines.join("\n"), "JSON Chart");
+  });
+
+  // Ctrl+Enter in textarea inserts directly
+  input?.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      $("#btn-json-chart-insert")?.click();
+    }
+  });
+
+  // Sample chips: load predefined JSON into the textarea
+  modal.querySelectorAll(".btn-json-sample").forEach(chip => {
+    chip.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const key = chip.dataset.sample;
+      const sample = JSON_CHART_SAMPLES[key];
+      if (!sample || !input) return;
+      input.value = JSON.stringify(sample.json, null, 2);
+      if (typeSel) typeSel.value = sample.type;
+      if (titleIn) titleIn.value = sample.title;
+      // Auto-preview so the user immediately sees the mermaid output
+      try {
+        const lines = jsonToMermaid(sample.json, sample.type, sample.title);
+        if (previewPre) previewPre.textContent = lines.join("\n");
+        if (previewWrap) previewWrap.style.display = "block";
+      } catch { /* ignore preview errors */ }
+    });
+  });
+}
+
+function insertMermaidCode(code, label = "Mermaid Diagram") {
+  if (_docsEditorType === "raw") {
+    const ta = $("#docs-raw-rst");
+    if (!ta) return;
+    const insertText = `\n.. mermaid::\n\n    ${code.replace(/\n/g, "\n    ")}\n\n`;
+    const start = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
+    ta.value = ta.value.substring(0, start) + insertText + ta.value.substring(start);
+    ta.selectionStart = ta.selectionEnd = start + insertText.length;
+    ta.focus();
+    setDocsDirty(true);
+    if (_docsSplit) updateDocsPreview();
+    toast("Mermaid Diagram Added 📊", `Inserted ${label} into RST source.`, "ok");
+  } else {
+    initQuill();
+    if (!_quill) return;
+    const range = _quill.getSelection(true) || { index: _quill.getLength() };
+    _quill.insertEmbed(range.index, "mermaidBlock", code, Quill.sources.USER);
+    _quill.setSelection(range.index + 1, Quill.sources.SILENT);
+    renderAllMermaidBlocks(_quill.root);
+    setDocsDirty(true);
+    if (_docsSplit) updateDocsPreview();
+    toast("Mermaid Diagram Added 📊", `Inserted ${label} into Visual editor.`, "ok");
   }
 }
 
@@ -5381,6 +5634,9 @@ function wire() {
       insertMermaidDiagram(type);
     });
   });
+
+  // JSON → Chart modal wiring (one-time)
+  wireJsonChartModal();
 
   btnPlantuml?.addEventListener("click", (e) => {
     e.stopPropagation();

@@ -2433,6 +2433,13 @@ code,
   color: var(--accent);
 }
 
+.dropdown-separator {
+  height: 1px;
+  margin: 6px 8px;
+  background: var(--border, rgba(255, 255, 255, 0.12));
+  opacity: 0.6;
+}
+
 .dropdown-item-icon {
   font-size: 16px;
   line-height: 1.2;
