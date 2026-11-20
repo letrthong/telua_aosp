@@ -300,13 +300,14 @@ telua replace "old_str" "new_str" src/app.c # Replace text in specific file
 ### 5.1 Project Profiles (`ACTIVE_PROJECT`)
 
 ```bash
-ACTIVE_PROJECT="oem_service"   # "oem_service" | "car_audio" | "vehicle_service"
+ACTIVE_PROJECT="oem_service"   # "oem_service" | "car_audio" | "vehicle_service" | "boschCarInputService"
 ```
 
 Each profile case defines the module parameters:
 
 | Variable | Description |
 |---|---|
+| `MODULE_TYPE` | Artifact type: `"apk"` (default) for Android APK, or `"bin"` for native binary/daemon (`cc_binary` in `Android.bp`). Controls clean strategy, `chmod` mode (755 vs 644) and post-deploy restart behavior (killall daemon vs reboot framework) |
 | `MODULE_NAME` | AOSP compilation module identifier passed to `m <MODULE_NAME>`. Corresponds to `name:` in `Android.bp` or `LOCAL_PACKAGE_NAME` in `Android.mk`. If omitted, defaults to `${APK_FILE_NAME%.apk}` |
 | `SOURCE_CODE_RELATIVE_PATH` | Path to module source directory relative to `ANDROID_TOP` (see details below) |
 | `APK_OUTPUT_RELATIVE_PATH` | Target output directory relative to `ANDROID_TOP` (**cleaned before each build**) |
@@ -325,6 +326,13 @@ The directory specified by `SOURCE_CODE_RELATIVE_PATH` must contain the build an
   Defines package name, shared user IDs (`android:sharedUserId="android.uid.system"`), system permissions, and services. Changes here require a full device reboot.
 
 *To add a new service profile:* Copy an existing `"..." ) ... ;;` case block, update the paths, and set `ACTIVE_PROJECT` to your new profile name.
+
+#### 💡 Native Binary Profiles (`MODULE_TYPE="bin"`):
+For native daemons/binaries (`cc_binary` in `Android.bp`, e.g. `dlt-daemon`, `inc-log-adapter`), set `MODULE_TYPE="bin"` in the profile case. Differences vs `"apk"`:
+* **Build:** cleans only the previous artifact file (`rm -f`) instead of the whole output directory (`rm -rf`)
+* **Deploy:** `adb push` + `chmod 755` (executable) instead of `chmod 644` + oat cache cleanup
+* **Restart:** kills & restarts the daemon via `killall`/`pkill` instead of rebooting the Android framework
+* **Output:** binary lands in `out/target/product/<device>/system/bin` (or `vendor/bin` for `vendor: true` modules)
 
 ### 5.1b Softlink Target Workspace
 
@@ -595,7 +603,7 @@ source ~/.bashrc
 - **Nhận diện cả 2 alias & Tự động Reload:** Hoạt động bình đẳng khi gõ `telua ` hoặc `tel `, tự kiểm tra timestamp (`mtime`) của `src/telua_completion.sh` để nạp lại ngay khi có thay đổi mà không cần `source ~/.bashrc` lại.
 - **Gợi ý cấp 1 (Subcommands & Options):** Gõ `tel <Tab><Tab>` hiển thị danh sách toàn bộ lệnh chính (`build`, `b`, `test`, `t`, `sync`, `reset`, `car`, `dump`, `sec`, `java`, `docs`, `web`, `crypto`, `enc`, `dec`, `run`, `my`, `replace`, `info`, `init`, ...).
 - **Gợi ý ngữ cảnh chuyên sâu (Context-aware):**
-  - `tel b -p <Tab><Tab>` / `tel --profile <Tab><Tab>`: Tự động đọc danh sách profile từ `apk.config` / `config/apk.config` (`oem_service`, `car_audio`, `vehicle_service`, ...).
+  - `tel b -p <Tab><Tab>` / `tel --profile <Tab><Tab>`: Tự động đọc danh sách profile từ `apk.config` / `config/apk.config` (`oem_service`, `car_audio`, `vehicle_service`, `boschCarInputService`, ...).
   - `tel web <Tab><Tab>`: Gợi ý `start`, `stop`, `status`, `restart`, `log`, `help`.
   - `tel crypto <Tab><Tab>`: Gợi ý `status`, `check`, `encrypt`, `decrypt`, `enc`, `dec`, `help`.
   - `tel java <Tab><Tab>`: Gợi ý `clean`, `diff`, `all`, `report`, `skill`, `help`.
