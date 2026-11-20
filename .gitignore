@@ -245,3 +245,4 @@ apk_overlays.config
 sphinx/templates/basic/_build
 sphinx/templates/architecture/_build
 sphinx/templates/api/_build
+sphinx/templates/minimal/_build
