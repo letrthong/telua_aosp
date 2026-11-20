@@ -300,7 +300,7 @@ telua replace "old_str" "new_str" src/app.c # Replace text in specific file
 ### 5.1 Project Profiles (`ACTIVE_PROJECT`)
 
 ```bash
-ACTIVE_PROJECT="oem_service"   # "oem_service" | "car_audio" | "vehicle_service" | "boschCarInputService"
+ACTIVE_PROJECT="oem_service"   # "oem_service" | "car_audio" | "vehicle_service"  
 ```
 
 Each profile case defines the module parameters:
@@ -603,7 +603,7 @@ source ~/.bashrc
 - **Nhận diện cả 2 alias & Tự động Reload:** Hoạt động bình đẳng khi gõ `telua ` hoặc `tel `, tự kiểm tra timestamp (`mtime`) của `src/telua_completion.sh` để nạp lại ngay khi có thay đổi mà không cần `source ~/.bashrc` lại.
 - **Gợi ý cấp 1 (Subcommands & Options):** Gõ `tel <Tab><Tab>` hiển thị danh sách toàn bộ lệnh chính (`build`, `b`, `test`, `t`, `sync`, `reset`, `car`, `dump`, `sec`, `java`, `docs`, `web`, `crypto`, `enc`, `dec`, `run`, `my`, `replace`, `info`, `init`, ...).
 - **Gợi ý ngữ cảnh chuyên sâu (Context-aware):**
-  - `tel b -p <Tab><Tab>` / `tel --profile <Tab><Tab>`: Tự động đọc danh sách profile từ `apk.config` / `config/apk.config` (`oem_service`, `car_audio`, `vehicle_service`, `boschCarInputService`, ...).
+  - `tel b -p <Tab><Tab>` / `tel --profile <Tab><Tab>`: Tự động đọc danh sách profile từ `apk.config` / `config/apk.config` (`oem_service`, `car_audio`, `vehicle_service` , ...).
   - `tel web <Tab><Tab>`: Gợi ý `start`, `stop`, `status`, `restart`, `log`, `help`.
   - `tel crypto <Tab><Tab>`: Gợi ý `status`, `check`, `encrypt`, `decrypt`, `enc`, `dec`, `help`.
   - `tel java <Tab><Tab>`: Gợi ý `clean`, `diff`, `all`, `report`, `skill`, `help`.
