@@ -3444,10 +3444,62 @@ code,
   overflow: hidden;
   box-shadow: var(--shadow);
   min-height: 320px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
 
 .bi-visual-card.wide {
   grid-column: 1 / -1;
+}
+
+.bi-visual-card.dragging {
+  opacity: 0.45;
+  border: 2px dashed var(--accent) !important;
+}
+
+.bi-visual-card.drag-over {
+  border: 2px solid var(--accent) !important;
+  box-shadow: 0 0 14px rgba(30, 167, 253, 0.4);
+  transform: translateY(-2px);
+}
+
+.bi-drag-handle {
+  cursor: grab;
+  padding: 0 4px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  user-select: none;
+  opacity: 0.75;
+  transition: opacity 0.15s ease;
+}
+
+.bi-drag-handle:hover {
+  opacity: 1;
+}
+
+.bi-drag-handle:active {
+  cursor: grabbing;
+}
+
+.bi-bar-rect,
+.bi-donut-slice {
+  cursor: pointer;
+  transition: opacity 0.2s ease, filter 0.2s ease, stroke 0.2s ease;
+}
+
+.bi-bar-rect:hover,
+.bi-donut-slice:hover {
+  filter: brightness(1.28);
+}
+
+.bi-donut-legend-item {
+  cursor: pointer;
+  transition: background 0.15s ease;
+  border-radius: 4px;
+}
+
+.bi-donut-legend-item:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .bi-visual-head {

@@ -594,6 +594,7 @@
           <button class="btn jade-btn" id="btn-bi-cross-report"
             title="Generate multi-tab comparison &amp; relational report">📑 Multi-Tab Report</button>
           <button class="btn" id="btn-bi-view-json" title="View &amp; export converted JSON data">{} JSON</button>
+          <button class="btn" id="btn-bi-calc-col-open" title="Add a calculated column using simple math expressions">fx Measure</button>
           <button class="btn jade-btn" id="btn-bi-add-visual" title="Add a new custom visual chart or table">＋ Add
             Visual</button>
           <button class="btn ghost" id="btn-bi-reset-filters" title="Reset all active slicers and search">↺
@@ -610,6 +611,7 @@
           <div class="bi-fields-head">
             <span class="bi-fields-title">📐 Fields &amp; Columns</span>
             <span id="bi-fields-count" class="meta" style="font-size:11px;">0 fields</span>
+            <button class="btn btn-xs ghost" id="btn-bi-calc-col-fields" title="New Measure / Calculated Column (fx)" style="color:var(--accent);font-weight:700;">fx</button>
             <button class="btn btn-xs ghost" id="btn-bi-fields-toggle" title="Toggle Fields panel">◀</button>
           </div>
           <div class="bi-fields-filter">
@@ -1169,6 +1171,54 @@ RANK,FASKey,BRAND,Vehicle Series,Vehicle Type,Latest Popul.,MY,% of VIO,MVP,Bran
       <div class="modal-actions"
         style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-shrink:0;">
         <button class="btn" id="btn-bi-report-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ BI Calculated Column / Measure Modal ============ -->
+  <div class="modal hidden" id="modal-bi-calc-col">
+    <div class="modal-box wide" style="max-width:650px;">
+      <div class="editor-head" style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);">
+        <div class="editor-title">
+          <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;">fx New Measure / Calculated Column</span>
+          <span class="meta">Power BI Mini-DAX Formulas</span>
+        </div>
+      </div>
+      <p class="meta" style="margin-bottom:12px;">Create custom calculated fields by combining existing numeric columns with math operators (<code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>( )</code>).</p>
+      
+      <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:14px;">
+        <div>
+          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Column Name</label>
+          <input id="bi-calc-name" type="text" class="term-input" style="width:100%;box-sizing:border-box;" placeholder="e.g. Profit_Margin_Pct, Net_Revenue, Cost_Variance">
+        </div>
+        
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <label style="font-size:12px;font-weight:600;">Formula Expression</label>
+            <span class="meta" style="font-size:11px;">Use <code>[Column_Name]</code> syntax</span>
+          </div>
+          <input id="bi-calc-expr" type="text" class="term-input mono" style="width:100%;box-sizing:border-box;font-size:13px;" placeholder="e.g. ([Profit] / [Revenue]) * 100">
+        </div>
+
+        <div>
+          <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px;">Quick Formula Templates:</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;" id="bi-calc-templates">
+            <button type="button" class="btn btn-xs ghost" data-template="(([A] / [B]) * 100)">Ratio / Margin %: (([A] / [B]) * 100)</button>
+            <button type="button" class="btn btn-xs ghost" data-template="([A] - [B])">Difference / Variance: ([A] - [B])</button>
+            <button type="button" class="btn btn-xs ghost" data-template="([A] * [B])">Multiply: ([A] * [B])</button>
+            <button type="button" class="btn btn-xs ghost" data-template="([A] + [B])">Sum: ([A] + [B])</button>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px;">Click Column to Insert into Formula:</label>
+          <div id="bi-calc-columns-chips" style="display:flex;gap:5px;flex-wrap:wrap;max-height:100px;overflow-y:auto;padding:6px;background:rgba(0,0,0,0.15);border-radius:6px;border:1px solid var(--border);"></div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn" id="btn-bi-calc-cancel">Cancel</button>
+        <button class="btn jade-btn" id="btn-bi-calc-submit">✔ Add Column</button>
       </div>
     </div>
   </div>

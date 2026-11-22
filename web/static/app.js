@@ -6223,6 +6223,12 @@ function initBIDashboard() {
   $("#btn-bi-visual-cancel")?.addEventListener("click", () => $("#modal-bi-add-visual")?.classList.add("hidden"));
   $("#btn-bi-visual-save")?.addEventListener("click", () => biSaveNewVisual());
 
+  // Calculated Column / Measure modal (Mini-DAX)
+  $("#btn-bi-calc-col-open")?.addEventListener("click", () => biOpenCalcColModal());
+  $("#btn-bi-calc-col-fields")?.addEventListener("click", () => biOpenCalcColModal());
+  $("#btn-bi-calc-cancel")?.addEventListener("click", () => $("#modal-bi-calc-col")?.classList.add("hidden"));
+  $("#btn-bi-calc-submit")?.addEventListener("click", () => biCreateCalculatedColumn());
+
   // Visual type chip picker in modal
   document.querySelectorAll("#bi-visual-type-select .term-chip").forEach((btn) => {
     btn.addEventListener("click", (e) => {
@@ -6708,7 +6714,8 @@ function biRenderFieldsList(filterText = "") {
     .map((c) => {
       let icon = "🔤";
       let badgeText = "TXT";
-      if (c.type === "number") { icon = "🔢"; badgeText = "NUM"; }
+      if (c.isCustom) { icon = "fx"; badgeText = "CALC"; }
+      else if (c.type === "number") { icon = "🔢"; badgeText = "NUM"; }
       else if (c.type === "date") { icon = "📅"; badgeText = "DATE"; }
       else if (c.type === "boolean") { icon = "🔘"; badgeText = "BOOL"; }
 
@@ -6762,12 +6769,13 @@ function biRenderSlicers() {
   const container = $("#bi-slicers-container");
   if (!container) return;
 
-  // Pick categorical columns with 2 to 12 distinct values
+  // Pick categorical columns with 2 to 12 distinct values, OR columns with an active filter
   const slicerCols = biState.columns.filter((c) => {
+    if (biState.activeSlicers[c.name] && biState.activeSlicers[c.name].size > 0) return true;
     if (c.type !== "string" && c.type !== "boolean") return false;
     const distinctVals = new Set(biState.rawData.map((r) => String(r[c.name] ?? ""))).size;
     return distinctVals >= 2 && distinctVals <= 12;
-  }).slice(0, 3); // top 3 slicer categories
+  }).slice(0, 4);
 
   if (slicerCols.length === 0) {
     container.innerHTML = `<span class="meta" style="font-size:11px;">No categorical slicer fields available for this sheet.</span>`;
@@ -6930,6 +6938,158 @@ function biAggregate(data, xCol, yCol, agg = "sum") {
   });
 }
 
+function biToggleChartFilter(colName, value) {
+  if (!colName || value === undefined || value === null) return;
+  const strVal = String(value);
+
+  if (!biState.activeSlicers[colName]) {
+    biState.activeSlicers[colName] = new Set();
+  }
+  const set = biState.activeSlicers[colName];
+  if (set.has(strVal)) {
+    set.delete(strVal);
+    if (set.size === 0) delete biState.activeSlicers[colName];
+    toast("Filter Cleared", `Cleared filter on '${colName}'.`, "info", 1800);
+  } else {
+    // Power BI behavior: clicking a category isolates that category
+    set.clear();
+    set.add(strVal);
+    toast("Cross-Filtered", `Filtered dashboard by ${colName} = "${strVal}"`, "ok", 2200);
+  }
+
+  biRenderSlicers();
+  biApplyFilters();
+}
+
+function biOpenCalcColModal() {
+  const modal = $("#modal-bi-calc-col");
+  if (!modal) return;
+  const nameInput = $("#bi-calc-name");
+  const exprInput = $("#bi-calc-expr");
+  const chipsContainer = $("#bi-calc-columns-chips");
+  if (nameInput) nameInput.value = "";
+  if (exprInput) exprInput.value = "";
+
+  if (chipsContainer) {
+    chipsContainer.innerHTML = biState.columns.map((c) => {
+      const isNum = c.type === "number";
+      return `
+        <span class="chip" data-col="${c.name}" style="cursor:pointer;font-size:11px;background:${isNum ? 'rgba(30,167,253,0.15)' : 'rgba(255,255,255,0.06)'};color:${isNum ? 'var(--accent)' : 'var(--text)'};">
+          ${isNum ? '🔢' : '🔤'} [${c.name}]
+        </span>
+      `;
+    }).join("");
+
+    chipsContainer.querySelectorAll(".chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const col = chip.dataset.col;
+        if (exprInput) {
+          exprInput.value += `[${col}]`;
+          exprInput.focus();
+        }
+      });
+    });
+  }
+
+  // Quick formula template buttons
+  $("#bi-calc-templates")?.querySelectorAll("button").forEach((btn) => {
+    btn.onclick = () => {
+      const numCols = biState.columns.filter((c) => c.type === "number").map((c) => c.name);
+      const colA = numCols[0] || "ColA";
+      const colB = numCols[1] || numCols[0] || "ColB";
+      let tmpl = btn.dataset.template.replace(/\[A\]/g, `[${colA}]`).replace(/\[B\]/g, `[${colB}]`);
+      if (exprInput) {
+        exprInput.value = tmpl;
+        exprInput.focus();
+      }
+    };
+  });
+
+  modal.classList.remove("hidden");
+}
+
+function biCreateCalculatedColumn() {
+  const nameInput = $("#bi-calc-name");
+  const exprInput = $("#bi-calc-expr");
+  const colName = (nameInput?.value || "").trim().replace(/\s+/g, "_");
+  const expr = (exprInput?.value || "").trim();
+
+  if (!colName) {
+    toast("Column Name Required", "Please enter a name for the calculated measure/column.", "err", 3000);
+    return;
+  }
+  if (!expr) {
+    toast("Formula Expression Required", "Please enter a valid formula expression (e.g. ([Revenue] - [Cost])).", "err", 3000);
+    return;
+  }
+
+  // Parse [Column_Name] references
+  const usedCols = [];
+  const colPattern = /\[([^\]]+)\]/g;
+  let match;
+  while ((match = colPattern.exec(expr)) !== null) {
+    usedCols.push(match[1]);
+  }
+
+  if (usedCols.length === 0) {
+    toast("Invalid Expression", "Expression must reference at least one [Column_Name].", "err", 3000);
+    return;
+  }
+
+  for (const c of usedCols) {
+    if (!biState.columns.some((col) => col.name === c)) {
+      toast("Column Not Found", `Referenced column '[${c}]' does not exist in dataset.`, "err", 3500);
+      return;
+    }
+  }
+
+  const evalRow = (row) => {
+    let sanitized = expr;
+    for (const c of usedCols) {
+      const rawVal = row[c];
+      const numVal = (typeof rawVal === "number") ? rawVal : (parseFloat(rawVal) || 0);
+      sanitized = sanitized.split(`[${c}]`).join(String(numVal));
+    }
+    if (!/^[0-9\.\+\-\*\/\(\)\s]+$/.test(sanitized)) {
+      throw new Error("Formula contains invalid characters. Only math operators allowed (+, -, *, /, ()).");
+    }
+    try {
+      const res = Function(`"use strict"; return (${sanitized});`)();
+      if (!isFinite(res) || isNaN(res)) return 0;
+      return Number(res.toFixed(2));
+    } catch {
+      return 0;
+    }
+  };
+
+  try {
+    let successCount = 0;
+    biState.rawData.forEach((row) => {
+      row[colName] = evalRow(row);
+      successCount++;
+    });
+
+    if (biState.activeSheet && biState.allSheets[biState.activeSheet]) {
+      const sheetData = biState.allSheets[biState.activeSheet].data || [];
+      sheetData.forEach((row) => {
+        row[colName] = evalRow(row);
+      });
+    }
+
+    if (!biState.columns.some((c) => c.name === colName)) {
+      biState.columns.push({ name: colName, type: "number", isCustom: true, count: successCount, non_null_count: successCount });
+    }
+
+    $("#modal-bi-calc-col")?.classList.add("hidden");
+    toast("Measure Created", `Calculated column '${colName}' computed for ${successCount} records.`, "ok", 3500);
+
+    biRenderFieldsList();
+    biApplyFilters();
+  } catch (err) {
+    toast("Calculation Error", err.message, "err", 4000);
+  }
+}
+
 function biRenderVisuals() {
   const grid = $("#bi-visuals-grid");
   if (!grid) return;
@@ -6939,7 +7099,7 @@ function biRenderVisuals() {
     return;
   }
 
-  grid.innerHTML = biState.visuals.map((vis) => {
+  grid.innerHTML = biState.visuals.map((vis, idx) => {
     let typeIcon = "📊";
     if (vis.type === "combo") typeIcon = "📊📈";
     else if (vis.type === "hbar") typeIcon = "📶";
@@ -6947,15 +7107,17 @@ function biRenderVisuals() {
     else if (vis.type === "pie") typeIcon = "🍩";
     else if (vis.type === "table") typeIcon = "▦";
 
+    const isWide = !!vis.isWide;
     return `
-      <div class="bi-visual-card" id="card-${vis.id}" data-id="${vis.id}">
+      <div class="bi-visual-card ${isWide ? 'wide' : ''}" id="card-${vis.id}" data-id="${vis.id}" data-idx="${idx}" draggable="true">
         <div class="bi-visual-head">
           <div class="bi-visual-title">
+            <span class="bi-drag-handle" title="Drag to reorder card">⋮⋮</span>
             <span>${typeIcon}</span>
             <span>${vis.title || "Visual"}</span>
           </div>
           <div class="bi-visual-actions">
-            <button class="btn btn-xs ghost btn-vis-focus" title="Expand / Focus mode" data-id="${vis.id}">⛶</button>
+            <button class="btn btn-xs ghost btn-vis-focus" title="Toggle 1-column / 2-column width" data-id="${vis.id}">⤢</button>
             <button class="btn btn-xs ghost btn-vis-del" title="Remove visual" data-id="${vis.id}">✕</button>
           </div>
         </div>
@@ -6970,17 +7132,66 @@ function biRenderVisuals() {
     `;
   }).join("");
 
-  // Attach card header actions
+  // Attach card header actions: toggle 1x / 2x width
   grid.querySelectorAll(".btn-vis-focus").forEach((b) => {
     b.addEventListener("click", () => {
-      const card = $(`#card-${b.dataset.id}`);
-      card?.classList.toggle("wide");
+      const vis = biState.visuals.find((v) => v.id === b.dataset.id);
+      if (vis) {
+        vis.isWide = !vis.isWide;
+        const card = $(`#card-${b.dataset.id}`);
+        card?.classList.toggle("wide", vis.isWide);
+        toast("Card Resized", vis.isWide ? "Expanded visual to full width (2 columns)." : "Collapsed visual to standard width (1 column).", "info", 1500);
+      }
     });
   });
+
+  // Delete card
   grid.querySelectorAll(".btn-vis-del").forEach((b) => {
     b.addEventListener("click", () => {
       biState.visuals = biState.visuals.filter((v) => v.id !== b.dataset.id);
       biRenderVisuals();
+    });
+  });
+
+  // Drag and Drop card reordering
+  let draggedCardId = null;
+  grid.querySelectorAll(".bi-visual-card").forEach((card) => {
+    card.addEventListener("dragstart", (e) => {
+      draggedCardId = card.dataset.id;
+      card.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", draggedCardId);
+    });
+
+    card.addEventListener("dragend", () => {
+      card.classList.remove("dragging");
+      grid.querySelectorAll(".bi-visual-card").forEach((c) => c.classList.remove("drag-over"));
+    });
+
+    card.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      card.classList.add("drag-over");
+    });
+
+    card.addEventListener("dragleave", () => {
+      card.classList.remove("drag-over");
+    });
+
+    card.addEventListener("drop", (e) => {
+      e.preventDefault();
+      card.classList.remove("drag-over");
+      const targetId = card.dataset.id;
+      if (!draggedCardId || draggedCardId === targetId) return;
+
+      const fromIdx = biState.visuals.findIndex((v) => v.id === draggedCardId);
+      const toIdx = biState.visuals.findIndex((v) => v.id === targetId);
+      if (fromIdx !== -1 && toIdx !== -1) {
+        const [moved] = biState.visuals.splice(fromIdx, 1);
+        biState.visuals.splice(toIdx, 0, moved);
+        biRenderVisuals();
+        toast("Layout Updated", `Reordered '${moved.title}' card.`, "info", 1500);
+      }
     });
   });
 
@@ -7057,17 +7268,24 @@ function biRenderComboChart(container, vis) {
 
   // Bars (Measure 1)
   const linePoints = [];
+  const activeFilterSet = biState.activeSlicers[vis.x];
+  const isFiltered = activeFilterSet && activeFilterSet.size > 0;
+
   categories.forEach((cat, idx) => {
     const xCenter = pad.left + (chartW / categories.length) * (idx + 0.5);
     const bHeight = (cat.val / maxBar) * chartH;
     const yTop = pad.top + chartH - bHeight;
     const xBar = xCenter - barW / 2;
+    const isSelected = isFiltered && activeFilterSet.has(cat.key);
+    const opacity = isFiltered ? (isSelected ? "1.0" : "0.25") : "0.85";
+    const strokeAttr = isSelected ? `stroke="#ffffff" stroke-width="2.5"` : "";
 
     svg += `
       <rect class="bi-bar-rect" x="${xBar}" y="${yTop}" width="${barW}" height="${bHeight}" fill="${BI_PALETTES[0]}" rx="3"
-        data-cat="${cat.key}" data-val1="${cat.val}" data-val2="${map2[cat.key] || 0}" style="cursor:pointer;transition:fill 0.15s;opacity:0.85;">
+        ${strokeAttr}
+        data-cat="${cat.key}" data-val1="${cat.val}" data-val2="${map2[cat.key] || 0}" style="cursor:pointer;transition:all 0.15s;opacity:${opacity};">
       </rect>
-      <text x="${xCenter}" y="${h - pad.bottom + 16}" fill="var(--text-dim)" font-size="10" text-anchor="middle"
+      <text x="${xCenter}" y="${h - pad.bottom + 16}" fill="${isSelected ? 'var(--text)' : 'var(--text-dim)'}" font-size="10" font-weight="${isSelected ? '700' : '400'}" text-anchor="middle"
         transform="rotate(0, ${xCenter}, ${h - pad.bottom + 16})">${cat.key.length > 9 ? cat.key.substring(0, 8) + '…' : cat.key}</text>
     `;
 
@@ -7094,8 +7312,11 @@ function biRenderComboChart(container, vis) {
   svg += `</svg>`;
   container.innerHTML = svg;
 
-  // Tooltip wiring
+  // Tooltip & Cross-Filter click wiring
   container.querySelectorAll(".bi-bar-rect, circle").forEach((el) => {
+    el.addEventListener("click", () => {
+      if (el.dataset.cat) biToggleChartFilter(vis.x, el.dataset.cat);
+    });
     el.addEventListener("mouseenter", (e) => {
       const cat = el.dataset.cat;
       const v1 = el.dataset.val1 ? `${vis.y}: <b>${biFormatNumber(Number(el.dataset.val1))}</b>` : "";
@@ -7127,6 +7348,9 @@ function biRenderBarChart(container, vis, isHorizontal = false) {
   const w = 500;
   const h = 260;
 
+  const activeFilterSet = biState.activeSlicers[vis.x];
+  const isFiltered = activeFilterSet && activeFilterSet.size > 0;
+
   if (isHorizontal) {
     const pad = { top: 20, right: 50, bottom: 20, left: 110 };
     const chartW = w - pad.left - pad.right;
@@ -7137,11 +7361,15 @@ function biRenderBarChart(container, vis, isHorizontal = false) {
       const yCenter = pad.top + ((h - pad.top - pad.bottom) / items.length) * (idx + 0.5);
       const bWidth = (item.val / maxVal) * chartW;
       const color = BI_PALETTES[idx % BI_PALETTES.length];
+      const isSelected = isFiltered && activeFilterSet.has(item.key);
+      const opacity = isFiltered ? (isSelected ? "1.0" : "0.25") : "0.9";
+      const strokeAttr = isSelected ? `stroke="#ffffff" stroke-width="2.5"` : "";
 
       svg += `
-        <text x="${pad.left - 8}" y="${yCenter + 4}" fill="var(--text-dim)" font-size="10.5" text-anchor="end">${item.key.length > 14 ? item.key.slice(0, 13) + '…' : item.key}</text>
+        <text x="${pad.left - 8}" y="${yCenter + 4}" fill="${isSelected ? 'var(--text)' : 'var(--text-dim)'}" font-size="10.5" font-weight="${isSelected ? '700' : '400'}" text-anchor="end">${item.key.length > 14 ? item.key.slice(0, 13) + '…' : item.key}</text>
         <rect class="bi-bar-rect" x="${pad.left}" y="${yCenter - barH / 2}" width="${bWidth}" height="${barH}" fill="${color}" rx="3"
-          data-cat="${item.key}" data-val="${item.val}" style="cursor:pointer;opacity:0.9;"></rect>
+          ${strokeAttr}
+          data-cat="${item.key}" data-val="${item.val}" style="cursor:pointer;opacity:${opacity};transition:all 0.15s;"></rect>
         <text x="${pad.left + bWidth + 6}" y="${yCenter + 4}" fill="var(--text)" font-size="10" font-weight="600">${biFormatNumber(item.val)}</text>
       `;
     });
@@ -7168,19 +7396,26 @@ function biRenderBarChart(container, vis, isHorizontal = false) {
       const bHeight = (item.val / maxVal) * chartH;
       const yTop = pad.top + chartH - bHeight;
       const color = BI_PALETTES[idx % BI_PALETTES.length];
+      const isSelected = isFiltered && activeFilterSet.has(item.key);
+      const opacity = isFiltered ? (isSelected ? "1.0" : "0.25") : "0.9";
+      const strokeAttr = isSelected ? `stroke="#ffffff" stroke-width="2.5"` : "";
 
       svg += `
         <rect class="bi-bar-rect" x="${xCenter - barW / 2}" y="${yTop}" width="${barW}" height="${bHeight}" fill="${color}" rx="3"
-          data-cat="${item.key}" data-val="${item.val}" style="cursor:pointer;opacity:0.9;"></rect>
-        <text x="${xCenter}" y="${h - pad.bottom + 16}" fill="var(--text-dim)" font-size="10" text-anchor="middle">${item.key.length > 9 ? item.key.slice(0, 8) + '…' : item.key}</text>
+          ${strokeAttr}
+          data-cat="${item.key}" data-val="${item.val}" style="cursor:pointer;opacity:${opacity};transition:all 0.15s;"></rect>
+        <text x="${xCenter}" y="${h - pad.bottom + 16}" fill="${isSelected ? 'var(--text)' : 'var(--text-dim)'}" font-size="10" font-weight="${isSelected ? '700' : '400'}" text-anchor="middle">${item.key.length > 9 ? item.key.slice(0, 8) + '…' : item.key}</text>
       `;
     });
     svg += `</svg>`;
     container.innerHTML = svg;
   }
 
-  // Tooltip wiring
+  // Tooltip & Cross-Filter click wiring
   container.querySelectorAll(".bi-bar-rect").forEach((el) => {
+    el.addEventListener("click", () => {
+      if (el.dataset.cat) biToggleChartFilter(vis.x, el.dataset.cat);
+    });
     el.addEventListener("mouseenter", (e) => {
       biShowTooltip(e, el.dataset.cat, `${vis.y}: <b>${biFormatNumber(Number(el.dataset.val))}</b>`);
     });
@@ -7292,6 +7527,9 @@ function biRenderDonutChart(container, vis) {
   const r = 90;
   const innerR = 55;
 
+  const activeFilterSet = biState.activeSlicers[vis.x];
+  const isFiltered = activeFilterSet && activeFilterSet.size > 0;
+
   let currentAngle = -Math.PI / 2;
   let svg = `<svg class="bi-chart-svg" viewBox="0 0 460 260">`;
 
@@ -7323,10 +7561,13 @@ function biRenderDonutChart(container, vis) {
 
     const color = BI_PALETTES[idx % BI_PALETTES.length];
     const pct = ((item.val / total) * 100).toFixed(1);
+    const isSelected = isFiltered && activeFilterSet.has(item.key);
+    const opacity = isFiltered ? (isSelected ? "1.0" : "0.25") : "0.92";
+    const strokeAttr = isSelected ? `stroke="#ffffff" stroke-width="3"` : `stroke="#1e1e2e" stroke-width="2"`;
 
     svg += `
-      <path class="bi-donut-slice" d="${pathData}" fill="${color}" stroke="#1e1e2e" stroke-width="2"
-        data-cat="${item.key}" data-val="${item.val}" data-pct="${pct}" style="cursor:pointer;opacity:0.92;"></path>
+      <path class="bi-donut-slice" d="${pathData}" fill="${color}" ${strokeAttr}
+        data-cat="${item.key}" data-val="${item.val}" data-pct="${pct}" style="cursor:pointer;opacity:${opacity};transition:all 0.15s;"></path>
     `;
   });
 
@@ -7342,19 +7583,26 @@ function biRenderDonutChart(container, vis) {
     const ly = 40 + idx * 26;
     const color = BI_PALETTES[idx % BI_PALETTES.length];
     const pct = ((item.val / total) * 100).toFixed(1);
+    const isSelected = isFiltered && activeFilterSet.has(item.key);
+    const opacity = isFiltered ? (isSelected ? "1.0" : "0.35") : "1.0";
 
     svg += `
-      <rect x="${legendX}" y="${ly - 9}" width="12" height="12" rx="3" fill="${color}"/>
-      <text x="${legendX + 18}" y="${ly}" fill="var(--text)" font-size="11" font-weight="500">${item.key.length > 15 ? item.key.slice(0, 14) + '…' : item.key}</text>
-      <text x="${legendX + 170}" y="${ly}" fill="var(--text-dim)" font-size="10.5" text-anchor="end">${pct}% (${biFormatNumber(item.val)})</text>
+      <g class="bi-donut-legend-item" data-cat="${item.key}" style="cursor:pointer;opacity:${opacity};">
+        <rect x="${legendX}" y="${ly - 9}" width="12" height="12" rx="3" fill="${color}"/>
+        <text x="${legendX + 18}" y="${ly}" fill="var(--text)" font-size="11" font-weight="${isSelected ? '700' : '500'}">${item.key.length > 15 ? item.key.slice(0, 14) + '…' : item.key}</text>
+        <text x="${legendX + 170}" y="${ly}" fill="var(--text-dim)" font-size="10.5" text-anchor="end">${pct}% (${biFormatNumber(item.val)})</text>
+      </g>
     `;
   });
 
   svg += `</svg>`;
   container.innerHTML = svg;
 
-  // Tooltip
-  container.querySelectorAll(".bi-donut-slice").forEach((el) => {
+  // Tooltip & Cross-Filter click wiring
+  container.querySelectorAll(".bi-donut-slice, .bi-donut-legend-item").forEach((el) => {
+    el.addEventListener("click", () => {
+      if (el.dataset.cat) biToggleChartFilter(vis.x, el.dataset.cat);
+    });
     el.addEventListener("mouseenter", (e) => {
       biShowTooltip(e, el.dataset.cat, `Value: <b>${biFormatNumber(Number(el.dataset.val))}</b>`, `Share: <b>${el.dataset.pct}%</b>`);
     });
