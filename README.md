@@ -797,6 +797,31 @@ tel web stop                          # Dừng Web UI server
    - **Palette 5 Chủ Đề Màu Sắc (Theme Selector)**: Hỗ trợ chuyển đổi tức thì giữa 🌙 *Dark (Mặc định)*, 💎 *Jade (Emerald)*, 🌊 *Ocean (Deep Blue)*, 🔮 *Amethyst (Purple)*, và ☀️ *Light*, tự động ghi nhớ sở thích giao diện của từng người dùng.
    - **Quick Actions Bar**: Nút tắt chạy nhanh `tel info` (thông tin môi trường/thiết bị) và `tel run unittest` (chạy toàn bộ 120+ unit test suite của cả Python và Shell) với modal xem log chi tiết.
 
+7. **📊 BI Studio Tab — Power BI-Style Analytics Engine (Phân Tích Dữ Liệu Đa Chiều)**:
+   - **Tự động nhận diện Schema & Kiểu dữ liệu (Schema-Agnostic)**: Hỗ trợ kéo thả / tải lên bất kỳ file Excel (.xlsx, .xls), CSV, TSV hoặc dán trực tiếp dữ liệu bảng từ clipboard. Tự động nhận diện và phân loại kiểu dữ liệu từng cột: Số (🔢 NUM), Chữ (🔤 TXT), Ngày tháng (📅 DATE), Boolean (🔘 BOOL).
+   - **4 Thẻ Chỉ Số KPI Động**: Tự động tính toán và hiển thị tức thì Tổng số bản ghi (Total Records), Tổng chỉ số số học chính (Numeric Metric Sum), Số lượng phân nhóm danh mục (Categorical Groups), và Tổng số trường dữ liệu (Total Columns).
+   - **Thanh Slicers Lọc Cắt Lát Đa Chiều**: Tự động tạo các chip lọc tương tác thời gian thực cho các cột phân loại; hỗ trợ chọn nhiều điều kiện đồng thời với cơ chế lọc chéo (Cross-filtering) tự động cập nhật toàn bộ biểu đồ và bảng dữ liệu.
+   - **Click Biểu Đồ Để Lọc Chéo (Interactive Chart Cross-Highlighting)**: Nhấp chuột trực tiếp vào bất kỳ cột nào trên Column Chart / Bar Chart hoặc miếng bánh trên Donut Chart:
+     - Phần tử được click sẽ **sáng rõ và có viền nổi bật (glow border)**.
+     - Tất cả các phần tử còn lại sẽ **tự động mờ đi (dimmed opacity)** hệt như cơ chế Cross-Highlighting của Power BI Desktop.
+     - Toàn bộ dashboard (KPI, Table, các visual khác) lập tức lọc dữ liệu theo giá trị được chọn; click lại lần nữa để bỏ lọc.
+   - **Kéo Thả & Thay Đổi Kích Thước Biểu Đồ (Drag & Drop Canvas)**:
+     - **Kéo thả sắp xếp**: Giữ tay cầm kéo thả **⋮⋮** trên tiêu đề thẻ biểu đồ để di chuyển hoán đổi vị trí widget tùy ý trên lưới dashboard (HTML5 Drag & Drop).
+     - **Co giãn kích thước**: Nút **⤢** cho phép chuyển đổi linh hoạt giữa kích thước chuẩn 1 cột (50%) và kích thước mở rộng 2 cột (100% full width) phù hợp cho bảng số liệu chi tiết hay biểu đồ xu hướng.
+   - **Công Thức Tính Toán Tùy Biến (Mini-DAX / Calculated Columns & Measures)**:
+     - Nút **fx Measure** cho phép tạo các cột chỉ số đo lường tùy biến bằng các phép toán số học: `+`, `-`, `*`, `/`, `( )` kết hợp cú pháp `[Tên_Cột]`.
+     - Tích hợp các mẫu công thức 1-click: Biên lợi nhuận / Tỷ lệ (([Profit] / [Revenue]) * 100), Chênh lệch ngân sách ([Actual] - [Budget]), Tích số ([Price] * [Quantity]).
+     - Cột tính toán mới được gắn huy hiệu **fx CALC** trong danh sách Fields và có thể sử dụng ngay trong các biểu đồ, Slicers và bảng dữ liệu.
+   - **Thanh Điều Hướng Sheet Đa Tab (Multi-Tab Sheet Tabs Bar)**:
+     - Đặt tại chân dashboard tương tự Excel / Power BI, cho phép chuyển đổi mượt mà giữa các Worksheet trong file Excel.
+     - Tự động sinh sheet tổng hợp **All_Sheets (Combined)** hợp nhất dữ liệu từ tất cả các sheet kèm cột nguồn gốc Sheet.
+   - **Báo Cáo Quan Hệ Đa Bảng (Cross-Tab Relational Report & Sphinx Docs)**:
+     - Nút **📑 Multi-Tab Report** tự động phân tích đối chiếu giữa các sheet, phát hiện khóa chung (Join Keys), lập bảng ma trận so sánh, vẽ sơ đồ thực thể liên kết **Mermaid ER Diagram**, biểu đồ tròn tỷ trọng và biểu đồ cột so sánh khối lượng.
+     - Hỗ trợ nút 1-click **📚 Open in Docs** để tự động lưu báo cáo vào docs/cross_sheet_report.rst và chuyển sang xem trực tiếp trên tab Docs / Sphinx.
+   - **Visual Builder Linh Hoạt**: Nút **＋ Add Visual** cho phép tạo thêm không giới hạn các biểu đồ tùy biến: Combo Chart (Cột + Đường xu hướng), Column Chart, Horizontal Bar, Line Chart, Donut Chart, hoặc Bảng dữ liệu tương tác.
+   - **Bộ Thư Viện Mẫu Nghiệp Vụ Chuẩn `bi_studio/`**: Tự động phát hiện và hiển thị các file Excel mẫu nghiệp vụ chung (Bán lẻ global_retail_sales.xlsx, Quản trị nhân sự hr_workforce_analytics.xlsx, Dự án công nghệ it_project_portfolio.xlsx, Tài chính vận hành financial_budget_opex.xlsx), menu dropdown tự cập nhật động mà không cần can thiệp mã nguồn HTML.
+   - **Xuất Dữ Liệu Hai Chiều**: Hỗ trợ xem/sao chép/tải xuống dữ liệu dưới dạng JSON ({} JSON) hoặc xuất ngược tập dữ liệu đã lọc ra file Excel .xlsx (⬇ Excel).
+
 #### 🤖 AOSP Center — Build/Deploy/Test theo đúng thư mục source của project
 
 > **⚠️ Quan trọng — `tel b` phụ thuộc thư mục hiện tại:** `build_apk.sh` tìm `apk.config` từ thư mục hiện tại duyệt ngược lên cây AOSP. Vì vậy **phải `cd` vào thư mục source của project trước** (ví dụ `cd <AOSP_TOP>/vendor/bosch/services/car/oemcarservice`) rồi mới chạy `tel b`; nếu không, script sẽ rơi vào template `config/apk.config` của toolkit và báo `ERROR: Unknown ACTIVE_PROJECT ...` với danh sách profile không khớp.
