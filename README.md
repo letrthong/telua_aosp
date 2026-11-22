@@ -25,7 +25,9 @@ An automated developer workflow script for building and deploying privileged sys
 | `src/telua_clean.sh` | Java source code hygiene, style auto-fixer, static report & AI skill linker (`tel java`) |
 | `python/clean_java.py` | Enforces Java whitespace, tab expansion, keyword spacing, K&R braces & Google Java Style |
 | `python/unused_methods_report.py` | 6-in-1 static Java report: unused methods, unused params, whitespace, `google-java-format`, unused imports & unused private fields (`tel java report`) |
-| `src/telua_web.sh` & `web/telua_web.py` | Config Manager Web UI (Flask backend + vanilla JS frontend, `tel web start`) |
+| `src/telua_web.sh` & `web/telua_web.py` | Config Manager & BI Studio Web UI (Flask backend + vanilla JS frontend, `tel web start`) |
+| `web/telua_web_bi.py` | BI Studio backend: Excel/CSV to JSON converter, multi-sheet consolidator & cross-tab report engine |
+| `bi_studio/` | Sample multi-tab generic business Excel workbooks (Retail, HR, IT, Finance) with dynamic auto-discovery |
 | `src/telua_docs.sh` & `sphinx/` | Sphinx Doc-as-Code manager with 4 project templates & live preview (`tel docs`) |
 | `src/telua_completion.sh` | Bash and Zsh Tab Auto-completion engine with auto-reload (`tel <Tab><Tab>`) |
 | `requirements.txt` | Python package dependencies (`cryptography`, `flask`, `sphinx`) |
@@ -109,7 +111,8 @@ Maintain **a single golden copy of `build_apk.sh`** shared across multiple indep
 │   ├── unused_methods_report.py        ← 6-in-1 static Java analyzer
 │   ├── config_overlay.py               ← Smart overlay merge engine (merges overrides into apk.config)
 │   └── config_crypto.py                ← Private overlay encryption utility (PBKDF2 + Fernet AES)
-├── web/                                ← Config Manager Web UI (telua_web.py + static/)
+├── web/                                ← Config Manager Web UI & BI Studio (telua_web.py + telua_web_bi.py)
+├── bi_studio/                          ← Generic multi-tab Excel workbooks (Retail, HR, IT, Finance)
 ├── sphinx/                             ← Sphinx Doc-as-Code templates & build scripts
 ├── requirements.txt                    ← Python dependencies
 ├── AI.md                               ← AI Assistant & LLM instruction reference
