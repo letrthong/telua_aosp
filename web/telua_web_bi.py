@@ -463,11 +463,13 @@ def get_real_workspace_datasets() -> Dict[str, Any]:
             key = f.stem.lower().replace(" ", "_")
             try:
                 parsed = parse_excel_or_csv_bytes(f.read_bytes(), f.name)
+                sheets = parsed.get("sheets", [])
                 real_datasets[key] = {
                     "title": f.name,
-                    "description": f"Generic Excel workbook ({parsed.get('rows_count', 0)} records, {len(parsed.get('sheets', []))} sheets)",
+                    "description": f"Generic Excel workbook ({parsed.get('rows_count', 0)} records, {len(sheets)} sheets)",
                     "filename": f"bi_studio/{f.name}",
-                    "sheets": parsed.get("sheets", []),
+                    "sheets": sheets,
+                    "sheets_count": len(sheets),
                     "active_sheet": parsed.get("active_sheet", ""),
                     "columns": parsed.get("columns", []),
                     "rows_count": parsed.get("rows_count", 0),
@@ -576,6 +578,7 @@ def api_bi_samples():
             "title": v["title"],
             "description": v["description"],
             "filename": v["filename"],
+            "sheets_count": v.get("sheets_count") or len(v.get("sheets", [])),
             "rows_count": len(v.get("data", [])),
             "columns_count": len(v.get("columns", [])),
         })

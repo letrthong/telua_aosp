@@ -6234,9 +6234,38 @@ function initBIDashboard() {
     });
   });
 
-  // Auto-load generic business Excel file if no data is loaded yet
-  if (!biState.rawData || biState.rawData.length === 0) {
-    biLoadSample("ws:bi_studio/global_retail_sales.xlsx");
+  // Dynamically load available datasets from bi_studio directory
+  biFetchAvailableDatasets();
+}
+
+async function biFetchAvailableDatasets() {
+  const sel = $("#bi-sample-select");
+  if (!sel) return;
+  try {
+    const res = await fetch("/api/bi/samples");
+    const data = await res.json();
+    if (!res.ok || !data.ok) return;
+
+    // Reset dropdown to only placeholder
+    sel.innerHTML = '<option value="">📁 Select Excel Dataset…</option>';
+
+    const samples = data.samples || [];
+    samples.forEach((s) => {
+      const opt = document.createElement("option");
+      opt.value = `ws:${s.filename}`;
+      const cleanTitle = s.title.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+      const sheetsCount = s.sheets_count || 1;
+      const rowsCount = s.rows_count || 0;
+      opt.textContent = `📊 ${cleanTitle} (${sheetsCount} Sheets · ${rowsCount} Rows)`;
+      sel.appendChild(opt);
+    });
+
+    // Auto-load first dataset if none is loaded yet
+    if ((!biState.rawData || biState.rawData.length === 0) && samples.length > 0) {
+      biLoadSample(`ws:${samples[0].filename}`);
+    }
+  } catch (err) {
+    console.warn("Failed to fetch available datasets from bi_studio:", err);
   }
 }
 

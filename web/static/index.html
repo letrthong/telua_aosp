@@ -568,31 +568,38 @@
     <section class="editor-pane hidden" id="view-bi">
       <div class="editor-head bi-head">
         <div class="editor-title" style="gap:10px;align-items:center;">
-          <span class="mono" style="color:var(--accent);font-weight:700;display:flex;align-items:center;gap:6px;font-size:14px;">
-            <span>📊</span> BI Studio <span class="tag" style="background:var(--accent-soft, rgba(30,167,253,0.15));color:var(--accent);font-size:10px;padding:2px 6px;border-radius:4px;">Power BI Engine</span>
+          <span class="mono"
+            style="color:var(--accent);font-weight:700;display:flex;align-items:center;gap:6px;font-size:14px;">
+            <span>📊</span> BI Studio <span class="tag"
+              style="background:var(--accent-soft, rgba(30,167,253,0.15));color:var(--accent);font-size:10px;padding:2px 6px;border-radius:4px;">Power
+              BI Engine</span>
           </span>
           <span id="bi-active-file-badge" class="chip" style="font-size:11px;">No dataset loaded</span>
-          <select id="bi-sheet-select" class="theme-select hidden" title="Select Excel Worksheet" style="max-width:200px;font-size:12px;"></select>
-          <select id="bi-sample-select" class="theme-select" title="Select Workspace Excel Dataset" style="font-size:12px;">
+          <select id="bi-sheet-select" class="theme-select hidden" title="Select Excel Worksheet"
+            style="max-width:200px;font-size:12px;"></select>
+          <select id="bi-sample-select" class="theme-select" title="Select Workspace Excel Dataset"
+            style="font-size:12px;">
             <option value="">📁 Select Excel Dataset…</option>
-            <option value="ws:bi_studio/global_retail_sales.xlsx">💼 Retail Sales &amp; Margin (4 Sheets · 150 Rows)</option>
-            <option value="ws:bi_studio/hr_workforce_analytics.xlsx">👥 HR &amp; Workforce Analytics (3 Sheets · 90 Rows)</option>
-            <option value="ws:bi_studio/it_project_portfolio.xlsx">💻 IT Projects &amp; Sprints (3 Sheets · 12 Projects)</option>
-            <option value="ws:bi_studio/financial_budget_opex.xlsx">📈 Financial Budget &amp; OpEx (2 Sheets · 200 Rows)</option>
           </select>
         </div>
         <div class="editor-actions" style="gap:8px;align-items:center;">
-          <input id="bi-search-input" type="search" placeholder="🔍 Search records…" autocomplete="off" class="term-input" style="width:170px;height:30px;font-size:12px;" title="Filter across all records">
+          <input id="bi-search-input" type="search" placeholder="🔍 Search records…" autocomplete="off"
+            class="term-input" style="width:170px;height:30px;font-size:12px;" title="Filter across all records">
           <label class="btn primary" style="cursor:pointer;" title="Upload Excel (.xlsx, .xls) or CSV file">
             📂 Upload Excel / CSV
             <input type="file" id="bi-file-input" accept=".xlsx,.xls,.csv,.tsv,.txt" style="display:none;">
           </label>
-          <button class="btn" id="btn-bi-paste-open" title="Paste raw CSV, TSV or table text directly">📋 Paste Data</button>
-          <button class="btn jade-btn" id="btn-bi-cross-report" title="Generate multi-tab comparison &amp; relational report">📑 Multi-Tab Report</button>
+          <button class="btn" id="btn-bi-paste-open" title="Paste raw CSV, TSV or table text directly">📋 Paste
+            Data</button>
+          <button class="btn jade-btn" id="btn-bi-cross-report"
+            title="Generate multi-tab comparison &amp; relational report">📑 Multi-Tab Report</button>
           <button class="btn" id="btn-bi-view-json" title="View &amp; export converted JSON data">{} JSON</button>
-          <button class="btn jade-btn" id="btn-bi-add-visual" title="Add a new custom visual chart or table">＋ Add Visual</button>
-          <button class="btn ghost" id="btn-bi-reset-filters" title="Reset all active slicers and search">↺ Reset</button>
-          <button class="btn ghost" id="btn-bi-export-excel" title="Download current filtered dataset as Excel .xlsx">⬇ Excel</button>
+          <button class="btn jade-btn" id="btn-bi-add-visual" title="Add a new custom visual chart or table">＋ Add
+            Visual</button>
+          <button class="btn ghost" id="btn-bi-reset-filters" title="Reset all active slicers and search">↺
+            Reset</button>
+          <button class="btn ghost" id="btn-bi-export-excel" title="Download current filtered dataset as Excel .xlsx">⬇
+            Excel</button>
         </div>
       </div>
 
@@ -606,10 +613,12 @@
             <button class="btn btn-xs ghost" id="btn-bi-fields-toggle" title="Toggle Fields panel">◀</button>
           </div>
           <div class="bi-fields-filter">
-            <input id="bi-fields-search" type="search" placeholder="Filter fields…" class="term-input" style="width:100%;font-size:11px;padding:4px 8px;box-sizing:border-box;">
+            <input id="bi-fields-search" type="search" placeholder="Filter fields…" class="term-input"
+              style="width:100%;font-size:11px;padding:4px 8px;box-sizing:border-box;">
           </div>
           <div id="bi-fields-list" class="bi-fields-list">
-            <div class="meta" style="padding:16px 10px;text-align:center;">Upload an Excel file or select workspace dataset to view fields.</div>
+            <div class="meta" style="padding:16px 10px;text-align:center;">Upload an Excel file or select workspace
+              dataset to view fields.</div>
           </div>
           <!-- Selected field quick summary -->
           <div id="bi-field-details" class="bi-field-details hidden">
@@ -625,8 +634,10 @@
             <div class="bi-dropzone-inner">
               <span class="bi-dropzone-icon">📊</span>
               <h3>Drag &amp; Drop Excel or CSV File Here</h3>
-              <p class="meta">Supports <code>.xlsx</code>, <code>.xls</code>, <code>.csv</code> with automatic multi-sheet parsing, column data typing and instant Power BI dashboard creation.</p>
-              <div class="bi-dropzone-actions" style="display:flex;gap:10px;align-items:center;justify-content:center;margin-top:16px;">
+              <p class="meta">Supports <code>.xlsx</code>, <code>.xls</code>, <code>.csv</code> with automatic
+                multi-sheet parsing, column data typing and instant Power BI dashboard creation.</p>
+              <div class="bi-dropzone-actions"
+                style="display:flex;gap:10px;align-items:center;justify-content:center;margin-top:16px;">
                 <label class="btn primary" style="cursor:pointer;">
                   Browse Excel File
                   <input type="file" id="bi-file-input-hero" accept=".xlsx,.xls,.csv,.tsv,.txt" style="display:none;">
@@ -712,7 +723,8 @@
       <h3>📥 JSON → Mermaid Chart</h3>
       <p class="meta">Paste your JSON data below. The chart type is auto-detected
         (object → <strong>Pie</strong>, <code>{x,y}</code> arrays → <strong>Bar</strong>,
-        <code>{nodes,edges}</code> → <strong>Flowchart</strong>) or pick one manually.</p>
+        <code>{nodes,edges}</code> → <strong>Flowchart</strong>) or pick one manually.
+      </p>
       <div style="margin:10px 0;">
         <span class="meta">Chart type:</span>
         <select id="json-chart-type" class="theme-select" style="margin-left:8px;">
@@ -740,8 +752,7 @@
       </div>
       <div style="margin:10px 0;">
         <textarea id="json-chart-input" class="term-input mono" spellcheck="false"
-          style="width:100%;box-sizing:border-box;height:180px;font-size:12px;"
-          placeholder='// Combo (Bar + Line):
+          style="width:100%;box-sizing:border-box;height:180px;font-size:12px;" placeholder='// Combo (Bar + Line):
 {"x": ["08:00","12:00","16:00"], "bar": [45, 95, 80], "line": [40, 85, 75]}
 
 // Other shapes:
@@ -752,7 +763,8 @@
       </div>
       <div style="margin:10px 0;display:none;" id="json-chart-preview-wrap">
         <span class="meta">Mermaid preview:</span>
-        <pre id="json-chart-preview" class="mono" style="background:var(--bg-soft, #1e1e2e);padding:10px;border-radius:6px;font-size:11px;max-height:140px;overflow:auto;white-space:pre-wrap;"></pre>
+        <pre id="json-chart-preview" class="mono"
+          style="background:var(--bg-soft, #1e1e2e);padding:10px;border-radius:6px;font-size:11px;max-height:140px;overflow:auto;white-space:pre-wrap;"></pre>
       </div>
       <div class="modal-actions">
         <button class="btn" id="btn-json-chart-cancel">Cancel</button>
@@ -1011,7 +1023,8 @@
     <div class="modal-box wide" style="max-width:650px;">
       <div class="editor-head" style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);">
         <div class="editor-title">
-          <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;">📊 Power BI Visual Builder</span>
+          <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;">📊 Power BI Visual
+            Builder</span>
           <span class="meta">Configure Chart Widget</span>
         </div>
       </div>
@@ -1030,12 +1043,14 @@
 
         <div>
           <label for="bi-visual-title-input" class="meta" style="display:block;margin-bottom:4px;">Visual Title:</label>
-          <input id="bi-visual-title-input" type="text" class="term-input" style="width:100%;box-sizing:border-box;" placeholder="e.g. Revenue & Profit by Product">
+          <input id="bi-visual-title-input" type="text" class="term-input" style="width:100%;box-sizing:border-box;"
+            placeholder="e.g. Revenue & Profit by Product">
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div>
-            <label for="bi-visual-x-select" class="meta" style="display:block;margin-bottom:4px;">X-Axis (Category / Dimension):</label>
+            <label for="bi-visual-x-select" class="meta" style="display:block;margin-bottom:4px;">X-Axis (Category /
+              Dimension):</label>
             <select id="bi-visual-x-select" class="theme-select" style="width:100%;"></select>
           </div>
           <div>
@@ -1052,11 +1067,13 @@
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div>
-            <label for="bi-visual-y-select" class="meta" style="display:block;margin-bottom:4px;">Y-Axis 1 (Measure):</label>
+            <label for="bi-visual-y-select" class="meta" style="display:block;margin-bottom:4px;">Y-Axis 1
+              (Measure):</label>
             <select id="bi-visual-y-select" class="theme-select" style="width:100%;"></select>
           </div>
           <div id="bi-visual-y2-group">
-            <label for="bi-visual-y2-select" class="meta" style="display:block;margin-bottom:4px;">Y-Axis 2 (Line Measure for Combo):</label>
+            <label for="bi-visual-y2-select" class="meta" style="display:block;margin-bottom:4px;">Y-Axis 2 (Line
+              Measure for Combo):</label>
             <select id="bi-visual-y2-select" class="theme-select" style="width:100%;">
               <option value="">(None)</option>
             </select>
@@ -1074,19 +1091,24 @@
   <!-- ============ BI JSON Viewer Modal ============ -->
   <div class="modal hidden" id="modal-bi-json">
     <div class="modal-box wide" style="max-width:850px;max-height:90vh;display:flex;flex-direction:column;">
-      <div class="editor-head" style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <div class="editor-head"
+        style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);flex-shrink:0;">
         <div class="editor-title">
-          <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;">{} Converted JSON Dataset</span>
+          <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;">{} Converted JSON
+            Dataset</span>
           <span id="bi-json-stats-badge" class="chip" style="font-size:11px;">0 rows · 0 KB</span>
         </div>
         <div class="editor-actions" style="gap:6px;">
           <button class="btn btn-xs ghost" id="btn-bi-json-copy" title="Copy JSON to clipboard">📋 Copy JSON</button>
           <button class="btn btn-xs ghost" id="btn-bi-json-download" title="Download .json file">💾 Download</button>
-          <button class="btn btn-xs jade-btn" id="btn-bi-json-to-mermaid" title="Send to Sphinx Docs Mermaid modal">📊 Convert to Mermaid</button>
+          <button class="btn btn-xs jade-btn" id="btn-bi-json-to-mermaid" title="Send to Sphinx Docs Mermaid modal">📊
+            Convert to Mermaid</button>
         </div>
       </div>
-      <pre id="bi-json-viewer-content" class="editor mono" style="flex:1;min-height:300px;max-height:55vh;overflow:auto;font-size:11px;padding:12px;background:var(--bg-soft,#1e1e2e);border-radius:6px;"></pre>
-      <div class="modal-actions" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-shrink:0;">
+      <pre id="bi-json-viewer-content" class="editor mono"
+        style="flex:1;min-height:300px;max-height:55vh;overflow:auto;font-size:11px;padding:12px;background:var(--bg-soft,#1e1e2e);border-radius:6px;"></pre>
+      <div class="modal-actions"
+        style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-shrink:0;">
         <button class="btn" id="btn-bi-json-close">Close</button>
       </div>
     </div>
@@ -1097,14 +1119,19 @@
     <div class="modal-box wide" style="max-width:750px;">
       <div class="editor-head" style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);">
         <div class="editor-title">
-          <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;">📋 Paste Excel / CSV Table Data</span>
+          <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;">📋 Paste Excel / CSV Table
+            Data</span>
           <span class="meta">Zero Dependencies (Standard Library Parser)</span>
         </div>
       </div>
-      <p class="meta" style="margin-bottom:10px;">Paste copied cells from Excel, Google Sheets, or CSV text below. Multi-section tables (like Thailand &amp; Indonesia market data) are automatically split into worksheets!</p>
+      <p class="meta" style="margin-bottom:10px;">Paste copied cells from Excel, Google Sheets, or CSV text below.
+        Multi-section tables (like Thailand &amp; Indonesia market data) are automatically split into worksheets!</p>
       <div style="margin-bottom:10px;">
-        <input id="bi-paste-name" type="text" class="term-input" style="width:100%;box-sizing:border-box;margin-bottom:8px;" placeholder="Dataset Name (e.g. vehicle_fleet_market.csv)">
-        <textarea id="bi-paste-input" class="editor mono" style="width:100%;min-height:260px;box-sizing:border-box;font-size:11px;padding:10px;" placeholder="Paste CSV or tab-separated Excel rows here...
+        <input id="bi-paste-name" type="text" class="term-input"
+          style="width:100%;box-sizing:border-box;margin-bottom:8px;"
+          placeholder="Dataset Name (e.g. vehicle_fleet_market.csv)">
+        <textarea id="bi-paste-input" class="editor mono"
+          style="width:100%;min-height:260px;box-sizing:border-box;font-size:11px;padding:10px;" placeholder="Paste CSV or tab-separated Excel rows here...
 RANK,FASKey,BRAND,Vehicle Series,Vehicle Type,Latest Popul.,MY,% of VIO,MVP,Brand Category
 1,ISU0111709,ISUZU,D-Max,D-Max III 1.9 DDi Pickup,499460,2019,0.0254,Y,A
 2,TOY0004180,TOYOTA,Hilux,Hilux VIII 2.4 Pickup 4WD,301650,2015,0.0153,Y,A"></textarea>
@@ -1119,22 +1146,28 @@ RANK,FASKey,BRAND,Vehicle Series,Vehicle Type,Latest Popul.,MY,% of VIO,MVP,Bran
   <!-- ============ BI Cross-Tab Executive Report Modal ============ -->
   <div class="modal hidden" id="modal-bi-cross-report">
     <div class="modal-box wide" style="max-width:920px;max-height:92vh;display:flex;flex-direction:column;">
-      <div class="editor-head" style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <div class="editor-head"
+        style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);flex-shrink:0;">
         <div class="editor-title">
-          <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;">📑 Multi-Tab Cross-Relational Report</span>
+          <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;">📑 Multi-Tab Cross-Relational
+            Report</span>
           <span id="bi-report-sheets-badge" class="chip" style="font-size:11px;">0 Tabs Analyzed</span>
         </div>
         <div class="editor-actions" style="gap:6px;">
-          <button class="btn btn-xs ghost" id="btn-bi-report-copy-md" title="Copy Markdown Report to clipboard">📋 Copy Markdown</button>
-          <button class="btn btn-xs jade-btn" id="btn-bi-report-to-docs" title="Save &amp; View in Sphinx Docs tab">📚 Open in Docs</button>
+          <button class="btn btn-xs ghost" id="btn-bi-report-copy-md" title="Copy Markdown Report to clipboard">📋 Copy
+            Markdown</button>
+          <button class="btn btn-xs jade-btn" id="btn-bi-report-to-docs" title="Save &amp; View in Sphinx Docs tab">📚
+            Open in Docs</button>
         </div>
       </div>
 
-      <div id="bi-cross-report-body" style="flex:1;overflow-y:auto;padding-right:4px;display:flex;flex-direction:column;gap:14px;">
+      <div id="bi-cross-report-body"
+        style="flex:1;overflow-y:auto;padding-right:4px;display:flex;flex-direction:column;gap:14px;">
         <!-- Report content dynamically injected here -->
       </div>
 
-      <div class="modal-actions" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-shrink:0;">
+      <div class="modal-actions"
+        style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-shrink:0;">
         <button class="btn" id="btn-bi-report-close">Close</button>
       </div>
     </div>
