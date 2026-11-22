@@ -87,6 +87,9 @@ from telua_web_aosp import (  # noqa: E402
     _upsert_bash_var,
     _project_source_dir,
 )
+from telua_web_bi import (  # noqa: E402
+    bi_bp,
+)
 
 try:
     from flask import Flask, abort, jsonify, request, send_from_directory
@@ -129,6 +132,7 @@ app.register_blueprint(logcat_bp)
 app.register_blueprint(pipelines_bp)
 app.register_blueprint(docs_bp)
 app.register_blueprint(aosp_bp)
+app.register_blueprint(bi_bp)
 
 
 @app.errorhandler(HTTPException)
