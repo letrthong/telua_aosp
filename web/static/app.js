@@ -4076,6 +4076,94 @@ async function quickSwitchAospProject(projectName) {
   }
 }
 
+/**
+ * Upload a locally-built APK to the connected device via the Web backend.
+ * Flow: validate filename vs OUTPUT_FILE_NAME -> POST /api/aosp/upload-apk
+ *       (backend adb push to DEPLOY_PATH + chmod + rm oat cache) -> framework restart.
+ * restartMode: "framework" (stop && start, fast) or "reboot" (full device reboot).
+ */
+async function uploadAospApk(file, restartMode = "framework") {
+  if (_aospRunning) {
+    toast("AOSP busy", "Please wait for current command to complete or click ⏹ Stop.", "warn");
+    return;
+  }
+  const outEl = $("#aosp-output");
+  const badge = $("#aosp-status-badge");
+  const stopBtn = $("#btn-aosp-stop");
+  const uploadBtn = $("#btn-aosp-upload-apk");
+  const actionBtns = document.querySelectorAll(".aosp-action-btn");
+
+  const appendOut = (html) => {
+    if (!outEl) return;
+    outEl.innerHTML += html + "\n";
+    outEl.scrollTop = outEl.scrollHeight;
+  };
+
+  // Client-side pre-check against the loaded AOSP meta (OUTPUT_FILE_NAME)
+  const expected = (_aospLoadedData && _aospLoadedData.apk_name) || "";
+  if (expected && file.name.toLowerCase() !== expected.toLowerCase()) {
+    appendOut(`<span style="color:#f85149;font-weight:700">✕ Filename mismatch:</span> uploaded <b>${esc(file.name)}</b> but active project expects <b>${esc(expected)}</b> (OUTPUT_FILE_NAME).`);
+    toast("Filename mismatch", `Expected "${expected}", got "${file.name}".`, "danger", 5000);
+    return;
+  }
+
+  _aospRunning = true;
+  actionBtns.forEach(b => b.disabled = true);
+  if (uploadBtn) uploadBtn.classList.add("running-active");
+  if (stopBtn) { stopBtn.disabled = false; stopBtn.classList.add("danger-solid"); }
+  if (badge) { badge.textContent = "📤 Uploading…"; badge.className = "run-badge running"; }
+
+  appendOut(`<span style="color:#3fb950;font-weight:700">tel:aosp $</span> <span style="color:#c4b5fd;font-weight:700">📤 upload-apk ${esc(file.name)} (${(file.size / 1048576).toFixed(1)} MB) → deploy + ${restartMode === "reboot" ? "reboot" : "restart framework"}</span>`);
+
+  const startedAt = Date.now();
+  try {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("restart", restartMode);
+    const res = await fetch("/api/aosp/upload-apk", { method: "POST", body: fd });
+    const data = await res.json().catch(() => ({}));
+    const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
+
+    if (res.ok && data.ok) {
+      const sizeMb = data.bytes ? (data.bytes / 1048576).toFixed(2) : null;
+      const devMb = data.device_bytes ? (data.device_bytes / 1048576).toFixed(2) : null;
+      const ig = data.integrity || {};
+      let sizeStr = sizeMb ? ` · 📦 ${sizeMb} MB` : "";
+      if (devMb && sizeMb && devMb !== sizeMb) {
+        sizeStr += ` <span style="color:#f0883e">(⚠️ on-device: ${devMb} MB)</span>`;
+      } else if (devMb) {
+        sizeStr += ` <span style="opacity:.75">(on-device ✔ ${devMb} MB)</span>`;
+      }
+      // Integrity: SHA-256 local vs on-device
+      let integrityStr = "";
+      if (ig.hash_match === true) {
+        const short = (data.sha256 || "").slice(0, 12);
+        integrityStr = ` · 🔒 SHA-256 <span style="opacity:.75;font-family:monospace">${esc(short)}…</span> <span style="color:#3fb950">verified ✔</span>`;
+      } else if (ig.hash_match === false) {
+        integrityStr = ` · 🔒 <span style="color:#f85149">SHA-256 MISMATCH</span>`;
+      }
+      appendOut(`<pre style="margin:4px 0;white-space:pre-wrap;color:#9aa4b2">${esc(data.output || "")}</pre>`);
+      appendOut(`<span style="color:#3fb950;font-weight:700">✔ Deployed in ${secs}s:</span> ${esc(data.filename)}${sizeStr}${integrityStr} → <b>${esc(data.deploy_path)}/</b> · ${esc(data.restart)}`);
+      if (badge) { badge.textContent = `✔ Deployed ${sizeMb ? sizeMb + "MB · " : ""}(${secs}s)`; badge.className = "run-badge done"; }
+      toast("APK Deployed ✓", `${data.filename}${sizeMb ? " (" + sizeMb + " MB" + (devMb && devMb !== sizeMb ? " → device " + devMb + " MB" : "") + ")" : ""} · SHA-256 verified & ${data.restart}.`, "ok", 4500);
+    } else {
+      const msg = data.error || data.description || `HTTP ${res.status}`;
+      appendOut(`<span style="color:#f85149;font-weight:700">✕ Upload failed:</span> ${esc(msg)}`);
+      if (badge) { badge.textContent = "✕ Failed"; badge.className = "run-badge error"; }
+      toast("Upload failed", msg, "danger", 6000);
+    }
+  } catch (err) {
+    appendOut(`<span style="color:#f85149;font-weight:700">✕ Upload error:</span> ${esc(String(err.message || err))}`);
+    if (badge) { badge.textContent = "✕ Failed"; badge.className = "run-badge error"; }
+    toast("Upload error", String(err.message || err), "danger");
+  } finally {
+    _aospRunning = false;
+    actionBtns.forEach(b => b.disabled = false);
+    if (uploadBtn) uploadBtn.classList.remove("running-active");
+    if (stopBtn) { stopBtn.disabled = true; stopBtn.classList.remove("danger-solid"); }
+  }
+}
+
 async function runAospCommand(cmd, sourceBtn) {
   cmd = (cmd || "").trim();
   if (!cmd) return;
@@ -5658,6 +5746,13 @@ function wire() {
     }
   });
   $("#btn-aosp-stop")?.addEventListener("click", () => stopAospCommand());
+  // Upload APK: pick file -> validate name vs OUTPUT_FILE_NAME -> push + restart
+  $("#btn-aosp-upload-apk")?.addEventListener("click", () => $("#aosp-apk-file-input")?.click());
+  $("#aosp-apk-file-input")?.addEventListener("change", (e) => {
+    const f = e.target.files?.[0];
+    if (f) uploadAospApk(f);
+    e.target.value = "";
+  });
   document.querySelectorAll(".aosp-action-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       const cmd = btn.dataset.cmd;

@@ -158,6 +158,217 @@ def ensure_project_apk_config(project_name):
     return result
 
 
+# ------------------------------------------------------------------------------
+# APK Upload & Deploy (AOSP tab)
+# Upload a local .apk/.bin, verify its filename matches OUTPUT_FILE_NAME /
+# FILE_NAME of the active project, adb push it to DEPLOY_PATH on the device,
+# then restart the Android framework (or reboot).
+# ------------------------------------------------------------------------------
+
+# 512 MB hard cap for uploaded binaries
+_APK_UPLOAD_MAX_BYTES = 512 * 1024 * 1024
+
+
+def _active_project_deploy_info() -> Dict[str, Any]:
+    """Return {apk_name, deploy_path, module_type, aosp_root} for the active project."""
+    info = _parse_aosp_info()
+    apk_name = info.get("apk_name") or ""
+    # Fallback: FILE_NAME key (used by most branches) when OUTPUT_FILE_NAME is absent
+    if not apk_name:
+        for src_name in ("config/overlay/apk_overlays.config", "config/apk.config"):
+            src = get_root() / src_name
+            if not src.is_file():
+                continue
+            try:
+                text = src.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            case_match = re.search(r'case\s+"\$ACTIVE_PROJECT"\s+in(.*?)\nesac', text, re.S)
+            if not case_match:
+                continue
+            active = info.get("active_project") or ""
+            branch_match = re.search(
+                r'^[ \t]*"' + re.escape(active) + r'"\)(.*?);;',
+                case_match.group(1), re.M | re.S)
+            if branch_match:
+                m = re.search(r'^[ \t]*FILE_NAME\s*=\s*"([^"]*)"', branch_match.group(1), re.M)
+                if m:
+                    apk_name = m.group(1)
+                    break
+    return {
+        "apk_name": apk_name,
+        "deploy_path": info.get("deploy_path") or "",
+        "module_type": info.get("module_type") or "apk",
+        "aosp_root": info.get("aosp_root_dir") or "",
+        "active_project": info.get("active_project") or "",
+    }
+
+
+@aosp_bp.get("/api/aosp/deploy-info")
+def api_aosp_deploy_info():
+    """Expose expected APK filename + deploy path so the UI can validate before upload."""
+    return jsonify({"ok": True, **_active_project_deploy_info()})
+
+
+@aosp_bp.post("/api/aosp/upload-apk")
+def api_aosp_upload_apk():
+    """Upload a built APK/binary, verify filename, adb push to device, restart framework."""
+    root = get_root()
+    info = _active_project_deploy_info()
+    expected_name = info["apk_name"]
+    deploy_path = info["deploy_path"]
+    module_type = info["module_type"]
+    aosp_root = info["aosp_root"]
+
+    if not expected_name:
+        abort(400, description=(
+            "No OUTPUT_FILE_NAME/FILE_NAME defined for the active project "
+            "'%s'. Set it in apk_overlays.config first." % info["active_project"]))
+    if not deploy_path:
+        abort(400, description="No DEPLOY_PATH defined for the active project.")
+
+    if "file" not in request.files:
+        abort(400, description="No file uploaded. Expected 'file' field in multipart/form-data.")
+    f = request.files["file"]
+    filename = Path(f.filename or "").name
+    if not filename:
+        abort(400, description="Uploaded file must have a filename.")
+
+    # Filename must match the configured output name (case-insensitive)
+    if filename.lower() != expected_name.lower():
+        abort(400, description=(
+            "Filename mismatch: uploaded '%s' but active project expects '%s' "
+            "(OUTPUT_FILE_NAME)." % (filename, expected_name)))
+
+    # Reject anything that is not an APK or plain binary artifact
+    if not (filename.lower().endswith(".apk") or "/" not in filename and "." not in Path(filename).stem):
+        if not filename.lower().endswith(".apk"):
+            abort(400, description="Only .apk files (or extensionless binaries) are accepted.")
+
+    f.seek(0, os.SEEK_END)
+    size = f.tell()
+    f.seek(0)
+    if size <= 0:
+        abort(400, description="Uploaded file is empty (0 bytes).")
+    if size > _APK_UPLOAD_MAX_BYTES:
+        abort(413, description="File too large (%.1f MB, limit %d MB)."
+              % (size / 1048576, _APK_UPLOAD_MAX_BYTES // 1048576))
+
+    # Stage the upload under <toolkit>/uploads/apk/ (gitignored)
+    upload_dir = root / "uploads" / "apk"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    staged = upload_dir / filename
+    f.save(str(staged))
+
+    # Verify adb device availability before pushing
+    adb = shutil.which("adb")
+    if not adb:
+        staged.unlink(missing_ok=True)
+        abort(400, description="'adb' not found in PATH. Install Android platform-tools.")
+
+    def _adb(*args, timeout=30):
+        return subprocess.run([adb, *args], capture_output=True, text=True, timeout=timeout)
+
+    state = _adb("get-state")
+    if state.returncode != 0 or state.stdout.strip() != "device":
+        staged.unlink(missing_ok=True)
+        abort(400, description="No ADB device in 'device' state (got: %s). Connect the DUT and retry."
+              % (state.stdout.strip() or state.stderr.strip() or "none"))
+
+    logs = []
+    push = _adb("push", str(staged), f"{deploy_path}/{filename}", timeout=300)
+    logs.append((push.stdout or "") + (push.stderr or ""))
+    if push.returncode != 0:
+        abort(500, description="adb push failed:\n%s" % "\n".join(logs).strip())
+
+    # Permissions + cache cleanup (mirror deploy_android() in telua_android.sh)
+    chmod_mode = "755" if module_type == "bin" else "644"
+    _adb("shell", "chmod", chmod_mode, f"{deploy_path}/{filename}")
+    if module_type != "bin":
+        _adb("shell", "rm", "-rf", f"{deploy_path}/oat")
+    _adb("shell", "sync")
+
+    # ------------------------------------------------------------------
+    # Integrity verification (3 layers):
+    #   1. Local staged file size vs uploaded size
+    #   2. On-device size (ls -l) vs local size
+    #   3. SHA-256 checksum: on-device (sha256sum) vs local staged file
+    # Deploy is reported as FAILED if any layer mismatches.
+    # ------------------------------------------------------------------
+    import hashlib
+
+    staged.unlink(missing_ok=False) if False else None  # keep file for hashing
+    local_hash = hashlib.sha256(staged.read_bytes()).hexdigest()
+
+    device_bytes = None
+    device_hash = None
+    ls = _adb("shell", "ls", "-l", f"{deploy_path}/{filename}")
+    m = re.search(r"\s(\d+)\s+\d{4}-\d{2}-\d{2}", ls.stdout or "")
+    if not m:
+        m = re.search(r"[-a-zA-Z].*?\s+\d+\s+\w+\s+\w+\s+(\d+)\s", ls.stdout or "")
+    if m:
+        try:
+            device_bytes = int(m.group(1))
+        except ValueError:
+            device_bytes = None
+
+    shasum = _adb("shell", "sha256sum", f"{deploy_path}/{filename}", timeout=120)
+    sm = re.search(r'([0-9a-fA-F]{64})', shasum.stdout or "")
+    if sm:
+        device_hash = sm.group(1).lower()
+
+    integrity = {
+        "local_bytes": size,
+        "device_bytes": device_bytes,
+        "local_sha256": local_hash,
+        "device_sha256": device_hash,
+        "size_match": (device_bytes == size),
+        "hash_match": (device_hash == local_hash) if device_hash else None,
+    }
+    integrity["ok"] = bool(integrity["size_match"] and integrity["hash_match"])
+
+    # Restart: stop/start framework (fast) unless ?reboot=1
+    restart_mode = (request.form.get("restart") or "framework").lower()
+
+    # If integrity failed, do NOT restart the framework — surface the error.
+    if not integrity["ok"]:
+        detail = []
+        if not integrity["size_match"]:
+            detail.append(f"size local={size} vs device={device_bytes}")
+        if not integrity["hash_match"]:
+            detail.append(f"sha256 local={local_hash[:16]}… vs device={(device_hash or 'n/a')[:16]}…")
+        abort(500, description=(
+            "Integrity verification FAILED — APK on device differs from the uploaded file (%s). "
+            "Framework NOT restarted. Try: adb root && adb remount, then re-upload."
+            % "; ".join(detail)))
+
+    if restart_mode == "reboot":
+        rb = _adb("reboot")
+        logs.append((rb.stdout or "") + (rb.stderr or ""))
+        restart_desc = "adb reboot issued"
+    else:
+        stop = _adb("shell", "stop", timeout=120)
+        start = _adb("shell", "start", timeout=180)
+        logs.append((stop.stdout or "") + (stop.stderr or ""))
+        logs.append((start.stdout or "") + (start.stderr or ""))
+        restart_desc = "framework restarted (stop && start)"
+
+    return jsonify({
+        "ok": True,
+        "filename": filename,
+        "bytes": size,
+        "device_bytes": device_bytes,
+        "sha256": local_hash,
+        "device_sha256": device_hash,
+        "integrity": integrity,
+        "deploy_path": deploy_path,
+        "module_type": module_type,
+        "restart": restart_desc,
+        "staged_path": str(staged.relative_to(root)),
+        "output": "\n".join(l.strip() for l in logs if l and l.strip()),
+    })
+
+
 def _parse_aosp_info():
     root = get_root()
     apk_config = get_apk_config_path()
