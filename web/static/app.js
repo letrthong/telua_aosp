@@ -4906,6 +4906,12 @@ function stripRuleInternal(r) {
   return clean;
 }
 
+function isLogcatRuleLocked(rule) {
+  // Locked rules (from the shared template) can only be enabled/disabled,
+  // never edited or deleted. New user-created rules are never locked.
+  return Boolean(rule && rule.locked && !rule._isNew);
+}
+
 function renderLogcatModalItems() {
   const container = $("#logcat-modal-items-container");
   if (!container) return;
@@ -5156,35 +5162,45 @@ function renderLogcatModalItems() {
       }
       head.appendChild(badges);
 
-      // Right: Actions (Edit & Delete)
+      // Right: Actions (Edit & Delete — locked rules: enable/disable only)
       const actions = document.createElement("div");
       actions.className = "logcat-item-actions";
 
+      const isLocked = isLogcatRuleLocked(rule);
+
       const editBtn = document.createElement("button");
       editBtn.className = "btn btn-xs ghost";
-      editBtn.textContent = "✎ Edit";
-      editBtn.title = "Edit this filter rule";
-      editBtn.addEventListener("click", () => {
-        rule._editing = true;
-        renderLogcatModalItems();
-      });
+      editBtn.textContent = isLocked ? "🔒 Locked" : "✎ Edit";
+      editBtn.title = isLocked
+        ? "Template rule: only enable/disable is allowed (edit & delete disabled)"
+        : "Edit this filter rule";
+      if (isLocked) {
+        editBtn.disabled = true;
+      } else {
+        editBtn.addEventListener("click", () => {
+          rule._editing = true;
+          renderLogcatModalItems();
+        });
+      }
 
-      const delBtn = document.createElement("button");
-      delBtn.className = "btn btn-xs danger ghost";
-      delBtn.textContent = "🗑 Delete";
-      delBtn.title = "Delete this filter rule";
-      delBtn.addEventListener("click", () => {
-        if (!confirm(`Delete filter rule '${rule.name}'?`)) return;
-        _logcatRules = _logcatRules.filter(r => r.id !== rule.id);
-        renderLogcatModalItems();
-        updateLogcatFilterBadge();
-        renderLogcat();
-        saveLogcatFilters(false);
-        toast("Rule Deleted", `Removed '${rule.name}'.`, "info", 2000);
-      });
+      if (!isLocked) {
+        const delBtn = document.createElement("button");
+        delBtn.className = "btn btn-xs danger ghost";
+        delBtn.textContent = "🗑 Delete";
+        delBtn.title = "Delete this filter rule";
+        delBtn.addEventListener("click", () => {
+          if (!confirm(`Delete filter rule '${rule.name}'?`)) return;
+          _logcatRules = _logcatRules.filter(r => r.id !== rule.id);
+          renderLogcatModalItems();
+          updateLogcatFilterBadge();
+          renderLogcat();
+          saveLogcatFilters(false);
+          toast("Rule Deleted", `Removed '${rule.name}'.`, "info", 2000);
+        });
+        actions.appendChild(delBtn);
+      }
 
       actions.appendChild(editBtn);
-      actions.appendChild(delBtn);
       head.appendChild(actions);
 
       card.appendChild(head);
@@ -5242,6 +5258,7 @@ function toggleLogcatModalRawView() {
         tag: r.tag || "",
         text: r.text || "",
         pid: r.pid || "",
+        locked: r.locked ?? false,
       }));
       rawContainer.classList.add("hidden");
       itemsContainer.classList.remove("hidden");
@@ -5279,7 +5296,8 @@ async function saveLogcatFilters(notify = false) {
     });
     const data = await res.json();
     if (data.ok && notify) {
-      toast("Filters Saved ✓", `Saved ${_logcatRules.length} rules to config/logcat_filters.json`, "ok", 3000);
+      const savedPath = data.path || "config/overlay/logcat_filters.json";
+      toast("Filters Saved ✓", `Saved ${_logcatRules.length} rules to ${savedPath}${data.personal ? " (personal, git-ignored)" : ""}`, "ok", 3000);
     }
   } catch (err) {
     if (notify) toast("Save Failed", err.message, "err");
@@ -5301,6 +5319,7 @@ async function saveLogcatModalAndApply() {
         tag: r.tag || "",
         text: r.text || "",
         pid: r.pid || "",
+        locked: r.locked ?? false,
       }));
     } catch (err) {
       toast("Invalid JSON", err.message, "err", 4000);
@@ -5329,6 +5348,7 @@ function addLogcatRuleItem() {
     tag: "",
     text: "",
     pid: "",
+    locked: false,
     _editing: true,
     _isNew: true,
   };
@@ -5368,6 +5388,7 @@ function uploadLogcatFilters(file) {
         tag: r.tag || "",
         text: r.text || "",
         pid: r.pid || "",
+        locked: r.locked ?? false,
       }));
       renderLogcatModalItems();
       updateLogcatFilterBadge();

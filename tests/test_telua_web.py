@@ -3,6 +3,7 @@
 # Unit tests for web/telua_web_core.py, web/telua_web_pipelines.py, and web/telua_web.py
 # ==============================================================================
 
+import json
 import os
 import shutil
 import sys
@@ -320,7 +321,7 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertTrue(data_filters["ok"])
         self.assertIsInstance(data_filters["filters"], list)
 
-        # 4. Test logcat filters post
+        # 4. Test logcat filters post — saves to PERSONAL overlay by default
         sample_filters = [
             {"id": "test-1", "name": "UnitTest Rule", "enabled": True, "level": "W", "tag": "TestTag", "text": "error", "pid": "123"}
         ]
@@ -329,16 +330,75 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         data_post = res_post_filters.get_json()
         self.assertTrue(data_post["ok"])
         self.assertEqual(data_post["count"], 1)
+        self.assertTrue(data_post["personal"])
+        self.assertEqual(data_post["path"], "config/overlay/logcat_filters.json")
+        overlay_file = telua_web.ROOT / "config" / "overlay" / "logcat_filters.json"
+        self.assertTrue(overlay_file.is_file())
 
-        # Verify saved
+        # Verify saved — GET now reads from the personal overlay
         res_verify = self.client.get("/api/logcat/filters")
         self.assertEqual(res_verify.status_code, 200)
         data_verify = res_verify.get_json()
         self.assertEqual(len(data_verify["filters"]), 1)
         self.assertEqual(data_verify["filters"][0]["name"], "UnitTest Rule")
+        self.assertTrue(data_verify["personal"])
+        self.assertEqual(data_verify["path"], "config/overlay/logcat_filters.json")
 
-        # Restore default filters
+        # 5. Test shared=true — writes the Git-tracked template instead
+        res_shared = self.client.post("/api/logcat/filters", json={"filters": sample_filters, "shared": True})
+        self.assertEqual(res_shared.status_code, 200)
+        data_shared = res_shared.get_json()
+        self.assertTrue(data_shared["ok"])
+        self.assertFalse(data_shared["personal"])
+        self.assertEqual(data_shared["path"], "config/logcat_filters.json")
+
+        # Restore default filters (personal overlay + shared template)
         self.client.post("/api/logcat/filters", json={"filters": telua_web.DEFAULT_LOGCAT_FILTERS})
+        self.client.post("/api/logcat/filters", json={"filters": telua_web.DEFAULT_LOGCAT_FILTERS, "shared": True})
+
+    def test_api_logcat_filters_overlay_priority_and_migration(self):
+        """Personal overlay wins over shared template; one-time migration copies
+        a customized shared file into the overlay."""
+        overlay_file = telua_web.ROOT / "config" / "overlay" / "logcat_filters.json"
+        shared_file = telua_web.ROOT / "config" / "logcat_filters.json"
+        saved_overlay = saved_shared = None
+        try:
+            saved_overlay = overlay_file.read_bytes() if overlay_file.is_file() else None
+            saved_shared = shared_file.read_bytes() if shared_file.is_file() else None
+
+            # --- Migration: customized shared file + no overlay -> auto-copy ---
+            if overlay_file.exists():
+                overlay_file.unlink()
+            custom = [{"id": "rule-custom", "name": "My Bosch Rule", "enabled": True,
+                       "level": "D", "tag": "BOSCH_CAR_AUDIO", "text": "", "pid": ""}]
+            shared_file.parent.mkdir(parents=True, exist_ok=True)
+            shared_file.write_text(json.dumps(custom), encoding="utf-8")
+
+            res = self.client.get("/api/logcat/filters")
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            self.assertTrue(data["personal"])
+            self.assertEqual(data["path"], "config/overlay/logcat_filters.json")
+            self.assertTrue(overlay_file.is_file(), "migration should create overlay file")
+            self.assertEqual(data["filters"][0]["name"], "My Bosch Rule")
+
+            # --- Priority: overlay beats shared when both exist ---
+            overlay_rules = [{"id": "rule-ov", "name": "Overlay Rule", "enabled": True,
+                              "level": "I", "tag": "Ov.*", "text": "", "pid": ""}]
+            overlay_file.write_text(json.dumps(overlay_rules), encoding="utf-8")
+            res2 = self.client.get("/api/logcat/filters")
+            data2 = res2.get_json()
+            self.assertEqual(data2["filters"][0]["name"], "Overlay Rule")
+        finally:
+            # Restore original state
+            if saved_overlay is not None:
+                overlay_file.write_bytes(saved_overlay)
+            elif overlay_file.exists():
+                overlay_file.unlink()
+            if saved_shared is not None:
+                shared_file.write_bytes(saved_shared)
+            elif shared_file.exists():
+                shared_file.unlink()
 
 
 if __name__ == "__main__":
