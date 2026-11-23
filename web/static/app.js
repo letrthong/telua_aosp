@@ -4354,6 +4354,9 @@ const LOGCAT_RULES_STORAGE_KEY = "telua_logcat_filters";
 // Remembers an active logcat stream across page refreshes (session-scoped,
 // so a fresh browser tab always starts idle).
 const LOGCAT_AUTOSTART_KEY = "telua_logcat_was_streaming";
+// Persists the top toolbar quick filters (message/regex, level, tag, PID)
+// across page refreshes so the user doesn't have to retype them.
+const LOGCAT_TOOLBAR_KEY = "telua_logcat_toolbar_filters";
 let _logcatRules = [];
 // Bumped every time filter rules change. Log entries parsed before the bump
 // are never hidden by rules, so enabling a rule keeps already-shown logs.
@@ -4556,6 +4559,7 @@ function createLogcatRowEl(entry) {
       const tagInput = $("#logcat-filter-tag");
       if (tagInput) {
         tagInput.value = entry.tag;
+        saveLogcatToolbarFilters();
         renderLogcat();
       }
     });
@@ -5439,6 +5443,39 @@ function uploadLogcatFilters(file) {
   reader.readAsText(file);
 }
 
+// Save/restore the quick filter toolbar so a page refresh keeps whatever the
+// user typed (message/regex, level, tag, PID). Best-effort: private mode or a
+// full localStorage simply skips persistence.
+function saveLogcatToolbarFilters() {
+  try {
+    localStorage.setItem(LOGCAT_TOOLBAR_KEY, JSON.stringify({
+      text: $("#logcat-filter-text")?.value || "",
+      level: $("#logcat-filter-level")?.value || "I",
+      tag: $("#logcat-filter-tag")?.value || "",
+      pid: $("#logcat-filter-pid")?.value || "",
+    }));
+  } catch { /* best-effort */ }
+}
+
+function restoreLogcatToolbarFilters() {
+  try {
+    const raw = localStorage.getItem(LOGCAT_TOOLBAR_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (!saved || typeof saved !== "object") return;
+    const textInput = $("#logcat-filter-text");
+    const levelSel = $("#logcat-filter-level");
+    const tagInput = $("#logcat-filter-tag");
+    const pidInput = $("#logcat-filter-pid");
+    if (textInput && typeof saved.text === "string") textInput.value = saved.text;
+    if (levelSel && saved.level && levelSel.querySelector(`option[value="${saved.level}"]`)) {
+      levelSel.value = saved.level;
+    }
+    if (tagInput && typeof saved.tag === "string") tagInput.value = saved.tag;
+    if (pidInput && typeof saved.pid === "string") pidInput.value = saved.pid;
+  } catch { /* ignore corrupt saved data */ }
+}
+
 function initLogcat() {
   if (_logcatInitialized) return;
   _logcatInitialized = true;
@@ -5447,16 +5484,20 @@ function initLogcat() {
   const scrollPill = $("#logcat-scroll-pill");
   const autoScrollChk = $("#logcat-autoscroll");
 
-  // Filtering listeners
-  $("#logcat-filter-text")?.addEventListener("input", () => renderLogcat());
-  $("#logcat-filter-level")?.addEventListener("change", () => renderLogcat());
-  $("#logcat-filter-tag")?.addEventListener("input", () => renderLogcat());
-  $("#logcat-filter-pid")?.addEventListener("input", () => renderLogcat());
+  // Restore previously typed filters BEFORE wiring listeners / first render
+  restoreLogcatToolbarFilters();
+
+  // Filtering listeners (also persist on every change)
+  $("#logcat-filter-text")?.addEventListener("input", () => { saveLogcatToolbarFilters(); renderLogcat(); });
+  $("#logcat-filter-level")?.addEventListener("change", () => { saveLogcatToolbarFilters(); renderLogcat(); });
+  $("#logcat-filter-tag")?.addEventListener("input", () => { saveLogcatToolbarFilters(); renderLogcat(); });
+  $("#logcat-filter-pid")?.addEventListener("input", () => { saveLogcatToolbarFilters(); renderLogcat(); });
 
   $("#btn-logcat-clear-text")?.addEventListener("click", () => {
     const textInput = $("#logcat-filter-text");
     if (textInput) {
       textInput.value = "";
+      saveLogcatToolbarFilters();
       renderLogcat();
     }
   });
