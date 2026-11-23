@@ -1,0 +1,22 @@
+[   
+  {
+    "enabled": false,
+    "id": "rule-carservice",
+    "level": "I",
+    "locked": true,
+    "name": "Car Service",
+    "pid": "",
+    "tag": "CarService|CarProperty.*",
+    "text": ""
+  },
+  {
+    "enabled": false,
+    "id": "rule-oem",
+    "level": "D",
+    "locked": true,
+    "name": "OEM Service",
+    "pid": "",
+    "tag": "Oem.*",
+    "text": ""
+  }
+]
