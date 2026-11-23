@@ -20,6 +20,8 @@
 # ==============================================================================
 # Telua AOSP & Automotive Toolkit - Python Dependencies
 # Used by: config_crypto.py (PBKDF2-HMAC-SHA256 & Fernet AES encryption)
+# Used by: web/telua_web_bi.py (BI Studio - Excel .xlsx/.xls parsing)
 # ==============================================================================
 
 cryptography>=3.4.8
+openpyxl>=3.0.0
