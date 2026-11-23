@@ -1,6 +1,6 @@
 [
   {
-    "enabled": true,
+    "enabled": false,
     "id": "rule-fatal",
     "level": "E",
     "name": "Fatal & Crashes",
@@ -27,7 +27,7 @@
     "text": ""
   },
   {
-    "enabled": false,
+    "enabled": true,
     "id": "rule-oem",
     "level": "D",
     "name": "OEM Service",
