@@ -4366,6 +4366,19 @@ let _logcatSeenCount = 0;
 // holds them for Copy/Export, which read _logcatEntries directly).
 const LOGCAT_DOM_MAX_ROWS = 15000;
 
+// Regex cache for logcat rules: compiling a RegExp per entry (36k lines x
+// multiple rules) is extremely expensive and freezes the UI when toggling
+// filters. Cache compiled regexes keyed by pattern string.
+const _logcatRuleRegexCache = new Map();
+function getLogcatRuleRegex(pattern) {
+  let re = _logcatRuleRegexCache.get(pattern);
+  if (re === undefined) {
+    try { re = new RegExp(pattern, "i"); } catch { re = null; }
+    _logcatRuleRegexCache.set(pattern, re);
+  }
+  return re;
+}
+
 function matchLogcatRule(entry, rule) {
   if (!rule || !rule.enabled) return false;
   if (rule.level && rule.level !== "ALL") {
@@ -4373,22 +4386,22 @@ function matchLogcatRule(entry, rule) {
     if (entry.levelScore < minScore) return false;
   }
   if (rule.tag) {
-    try {
-      const re = new RegExp(rule.tag, "i");
+    const re = getLogcatRuleRegex(rule.tag);
+    if (re) {
       if (!re.test(entry.tag)) return false;
-    } catch {
-      if (!entry.tag.toLowerCase().includes(rule.tag.toLowerCase())) return false;
+    } else if (!entry.tag.toLowerCase().includes(rule.tag.toLowerCase())) {
+      return false;
     }
   }
   if (rule.pid) {
     if (!String(entry.pid).includes(String(rule.pid).trim())) return false;
   }
   if (rule.text) {
-    try {
-      const re = new RegExp(rule.text, "i");
+    const re = getLogcatRuleRegex(rule.text);
+    if (re) {
       if (!re.test(entry.msg) && !re.test(entry.tag) && !re.test(entry.raw)) return false;
-    } catch {
-      if (!entry.raw.toLowerCase().includes(rule.text.toLowerCase())) return false;
+    } else if (!entry.raw.toLowerCase().includes(rule.text.toLowerCase())) {
+      return false;
     }
   }
   return true;
@@ -5084,7 +5097,6 @@ function renderLogcatModalItems() {
         delete rule._isNew;
         renderLogcatModalItems();
         updateLogcatFilterBadge();
-        renderLogcat();
         saveLogcatFilters(false);
       });
 
@@ -5118,7 +5130,6 @@ function renderLogcatModalItems() {
         rule.enabled = e.target.checked;
         card.className = `logcat-item-card ${rule.enabled ? "active" : "disabled"}`;
         updateLogcatFilterBadge();
-        renderLogcat();
         saveLogcatFilters(false);
       });
       checkWrap.appendChild(chk);
@@ -5193,7 +5204,6 @@ function renderLogcatModalItems() {
           _logcatRules = _logcatRules.filter(r => r.id !== rule.id);
           renderLogcatModalItems();
           updateLogcatFilterBadge();
-          renderLogcat();
           saveLogcatFilters(false);
           toast("Rule Deleted", `Removed '${rule.name}'.`, "info", 2000);
         });
@@ -5279,15 +5289,42 @@ function toggleLogcatModalRawView() {
   }
 }
 
+// Debounce state for filter-rule persistence: toggling a checkbox triggers a
+// POST + full re-render; rapid toggles (or many rules) would queue multiple
+// heavy rebuilds and freeze the tab.
+let _logcatSaveTimer = null;
+
 async function saveLogcatFilters(notify = false) {
   // Rules changed: bump epoch first and re-render so logs already on screen
   // stay visible; only newly arriving lines follow the updated rules.
   _logcatRuleEpoch++;
-  renderLogcat();
+  // Defer the heavy full rebuild to the next frame so the checkbox toggles
+  // instantly instead of blocking on a 36k-line re-render.
+  if (!_logcatRenderPending) {
+    _logcatRenderPending = true;
+    requestAnimationFrame(() => {
+      _logcatRenderPending = false;
+      renderLogcat();
+    });
+  }
   const cleanList = _logcatRules.map(stripRuleInternal);
   try {
     localStorage.setItem(LOGCAT_RULES_STORAGE_KEY, JSON.stringify(cleanList));
   } catch { /* ignore */ }
+  // Debounce the network POST: coalesce bursts of toggles into one request.
+  if (_logcatSaveTimer) clearTimeout(_logcatSaveTimer);
+  if (notify) {
+    // Explicit save (Save button / modal apply): flush immediately.
+    await _postLogcatFilters(cleanList, true);
+    return;
+  }
+  _logcatSaveTimer = setTimeout(async () => {
+    _logcatSaveTimer = null;
+    await _postLogcatFilters(_logcatRules.map(stripRuleInternal), false);
+  }, 500);
+}
+
+async function _postLogcatFilters(cleanList, notify) {
   try {
     const res = await fetch("/api/logcat/filters", {
       method: "POST",
@@ -5297,7 +5334,7 @@ async function saveLogcatFilters(notify = false) {
     const data = await res.json();
     if (data.ok && notify) {
       const savedPath = data.path || "config/overlay/logcat_filters.json";
-      toast("Filters Saved ✓", `Saved ${_logcatRules.length} rules to ${savedPath}${data.personal ? " (personal, git-ignored)" : ""}`, "ok", 3000);
+      toast("Filters Saved ✓", `Saved ${cleanList.length} rules to ${savedPath}${data.personal ? " (personal, git-ignored)" : ""}`, "ok", 3000);
     }
   } catch (err) {
     if (notify) toast("Save Failed", err.message, "err");
