@@ -1085,6 +1085,13 @@ async function runPipeline(name, explicitSource = null) {
   const runStopBtn = isBottom ? $("#btn-pl-bottom-stop") : $("#btn-run-stop");
 
   if (titleEl) titleEl.textContent = `${cmd} ${name}`;
+  const popTitle = `📟 ${cmd} ${name}`;
+  const broadcastIfPopped = (html, badge) => {
+    if (_popoutWin && !_popoutWin.closed) {
+      _popoutBroadcast({ type: "output", title: popTitle, html, badge });
+      _popoutSnapshot(popTitle, html, badge);
+    }
+  };
 
   const matchedPl = state.pipelines.find(p => p.name === name);
   const stepsHint = matchedPl && matchedPl.steps?.length
@@ -1147,6 +1154,7 @@ async function runPipeline(name, explicitSource = null) {
             outEl.innerHTML = ansiToHtml(cleanPreview || "Running…");
             outEl.scrollTop = outEl.scrollHeight;
           }
+          if (isBottom) broadcastIfPopped(outEl ? outEl.innerHTML : "", { text: `⏳ Running… (${elapsed}s)`, cls: "running" });
         }
       }
 
@@ -1160,6 +1168,7 @@ async function runPipeline(name, explicitSource = null) {
         );
         outEl.scrollTop = outEl.scrollHeight;
       }
+      if (isBottom) broadcastIfPopped(outEl ? outEl.innerHTML : "", { text: exitCode === 0 ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${exitCode} (${elapsed}s)`, cls: exitCode === 0 ? "ok" : "err" });
       if (badge) {
         const ok = exitCode === 0;
         badge.textContent = ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${exitCode} (${elapsed}s)`;
@@ -1184,6 +1193,7 @@ async function runPipeline(name, explicitSource = null) {
         `\n\n[exit code: ${data.exit_code} · elapsed: ${elapsed}s]`
       );
     }
+    if (isBottom) broadcastIfPopped(outEl ? outEl.innerHTML : "", { text: data.exit_code === 0 ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${data.exit_code} (${elapsed}s)`, cls: data.exit_code === 0 ? "ok" : "err" });
     if (badge) {
       const ok = data.exit_code === 0;
       badge.textContent = ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${data.exit_code} (${elapsed}s)`;
@@ -1199,12 +1209,14 @@ async function runPipeline(name, explicitSource = null) {
         badge.textContent = `⏹ Stopped (${elapsed}s)`;
         badge.className = "run-badge err";
       }
+      if (isBottom) broadcastIfPopped(outEl ? outEl.innerHTML : "", { text: `⏹ Stopped (${elapsed}s)`, cls: "err" });
     } else {
       if (outEl) outEl.textContent = `[ERROR] ${err.message}`;
       if (badge) {
         badge.textContent = "✖ Error";
         badge.className = "run-badge err";
       }
+      if (isBottom) broadcastIfPopped(outEl ? outEl.innerHTML : "", { text: "✖ Error", cls: "err" });
     }
   } finally {
     clearInterval(timerId);
@@ -1451,6 +1463,44 @@ const TERM_HISTORY_KEY = "telua_web_term_history";
 const TERM_CWD_KEY = "telua_web_term_cwd";
 let _termHistory = [];
 let _termHistoryIdx = -1;
+/* ---------------- Pop-out Console (màn hình riêng) ---------------- */
+// Cửa sổ pop-out (popout.html) nhận output realtime từ tab chính qua
+// BroadcastChannel (fallback: localStorage 'storage' event) — cho phép kéo
+// console Pipeline / Terminal sang màn hình thứ 2.
+let _popoutWin = null;
+let _popoutBc = null;
+try { _popoutBc = new BroadcastChannel("telua_console"); } catch { /* older browser */ }
+
+function _popoutBroadcast(msg) {
+  try {
+    if (_popoutBc) _popoutBc.postMessage(msg);
+    localStorage.setItem("telua_console_mirror", JSON.stringify(msg));
+  } catch { /* ignore */ }
+}
+
+function _popoutSnapshot(title, html, badge) {
+  try {
+    localStorage.setItem("telua_console_snapshot", JSON.stringify({ title, html, badge }));
+  } catch { /* ignore */ }
+}
+
+function openConsolePopout(defaultTitle) {
+  if (_popoutWin && !_popoutWin.closed) {
+    _popoutWin.focus();
+    return;
+  }
+  _popoutWin = window.open("/static/popout.html", "telua_popout_console",
+    "width=980,height=640,left=100,top=100");
+  if (_popoutWin) {
+    _popoutWin.addEventListener("load", () => {
+      _popoutWin.document.title = defaultTitle || "Telua Pop-out Console";
+    });
+    toast("Pop-out opened 🖥", "Kéo cửa sổ console sang màn hình thứ 2 — output sẽ hiển thị realtime tại đó.", "info", 4000);
+  } else {
+    toast("Popup blocked", "Trình duyệt đã chặn popup — hãy cho phép popup cho trang này.", "warn", 4000);
+  }
+}
+
 let _termRunning = false;
 let _termCwd = "";
 let _termAbortController = null;
@@ -1734,6 +1784,12 @@ async function runTerminalCommand(explicitCmd = null) {
   const promptLabel = shortDir ? `tel:${shortDir} $` : "tel $";
   const baseHtml = (outEl ? outEl.innerHTML : "") +
     `${separator}<span style="color:#3fb950;font-weight:700">${esc(promptLabel)}</span> <span style="color:#58a6ff;font-weight:700">${esc(cmd)}</span>\n`;
+  const broadcastTerm = (html, badge) => {
+    if (_popoutWin && !_popoutWin.closed) {
+      _popoutBroadcast({ type: "output", title: "💻 Web CLI Terminal", html, badge });
+      _popoutSnapshot("💻 Web CLI Terminal", html, badge);
+    }
+  };
   if (outEl) {
     outEl.innerHTML = baseHtml + `<span style="opacity:.7">⏳ Running… (press Ctrl+C or click ⏹ Stop to abort)</span>\n`;
     outEl.scrollTop = outEl.scrollHeight;
@@ -1777,6 +1833,7 @@ async function runTerminalCommand(explicitCmd = null) {
             outEl.innerHTML = baseHtml + ansiToHtml(cleanPreview);
             outEl.scrollTop = outEl.scrollHeight;
           }
+          broadcastTerm(outEl ? outEl.innerHTML : "", { text: `⏳ Running… (${elapsed}s)`, cls: "running" });
         }
       }
 
@@ -1793,6 +1850,7 @@ async function runTerminalCommand(explicitCmd = null) {
           (stoppedSuffix || `<span style="color:${statusColor};opacity:.85">[exit code: ${exitCode} · ${elapsed}s]</span>\n`);
         outEl.scrollTop = outEl.scrollHeight;
       }
+      broadcastTerm(outEl ? outEl.innerHTML : "", { text: _termStoppedByUser ? `⏹ Stopped (${elapsed}s)` : (exitCode === 0 ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${exitCode} (${elapsed}s)`), cls: _termStoppedByUser ? "err" : (exitCode === 0 ? "ok" : "err") });
       if (badge) {
         if (_termStoppedByUser) {
           badge.textContent = `⏹ Stopped (Ctrl+C · ${elapsed}s)`;
@@ -1817,6 +1875,7 @@ async function runTerminalCommand(explicitCmd = null) {
             (stoppedSuffix || `<span style="color:${statusColor};opacity:.85">[exit code: ${fb.exit_code} · ${elapsed}s]</span>\n`);
           outEl.scrollTop = outEl.scrollHeight;
         }
+        broadcastTerm(outEl ? outEl.innerHTML : "", { text: fb.ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${fb.exit_code} (${elapsed}s)`, cls: fb.ok ? "ok" : "err" });
         if (badge) {
           if (_termStoppedByUser) {
             badge.textContent = `⏹ Stopped (Ctrl+C · ${elapsed}s)`;
@@ -1849,6 +1908,7 @@ async function runTerminalCommand(explicitCmd = null) {
         `<span style="color:${statusColor};opacity:.85">[exit code: ${data.exit_code} · ${elapsed}s]</span>\n`;
       outEl.scrollTop = outEl.scrollHeight;
     }
+    broadcastTerm(outEl ? outEl.innerHTML : "", { text: ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${data.exit_code} (${elapsed}s)`, cls: ok ? "ok" : "err" });
     if (badge) {
       badge.textContent = ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${data.exit_code} (${elapsed}s)`;
       badge.className = "run-badge " + (ok ? "ok" : "err");
@@ -1861,6 +1921,7 @@ async function runTerminalCommand(explicitCmd = null) {
           `<span style="color:#d29922;font-weight:700">^C [Stopped by Ctrl+C · ${elapsed}s]</span>\n`;
         outEl.scrollTop = outEl.scrollHeight;
       }
+      broadcastTerm(outEl ? outEl.innerHTML : "", { text: `⏹ Stopped (Ctrl+C · ${elapsed}s)`, cls: "err" });
       if (badge) {
         badge.textContent = `⏹ Stopped (Ctrl+C · ${elapsed}s)`;
         badge.className = "run-badge err";
@@ -1870,6 +1931,7 @@ async function runTerminalCommand(explicitCmd = null) {
         outEl.innerHTML = baseHtml + `<span style="color:#f85149">[ERROR] ${esc(err.message)}</span>\n`;
         outEl.scrollTop = outEl.scrollHeight;
       }
+      broadcastTerm(outEl ? outEl.innerHTML : "", { text: "✖ Error", cls: "err" });
       if (badge) {
         badge.textContent = "✖ Error";
         badge.className = "run-badge err";
@@ -5693,6 +5755,19 @@ function initPipelineBottomPanel() {
   $("#btn-pl-bottom-toggle-height")?.addEventListener("click", () => {
     $("#pl-bottom-panel")?.classList.toggle("maximized");
   });
+  $("#btn-pl-bottom-popout")?.addEventListener("click", () => {
+    openConsolePopout("Telua Pipeline Console");
+    // Gửi ngay snapshot hiện tại sang popout vừa mở
+    setTimeout(() => {
+      const html = $("#pl-bottom-output")?.innerHTML || "";
+      const badge = $("#pl-bottom-status-badge");
+      const title = $("#pl-bottom-title")?.textContent || "Pipeline Output";
+      if (html) {
+        _popoutBroadcast({ type: "output", title: `📟 ${title}`, html, badge: badge ? { text: badge.textContent, cls: badge.className.replace("run-badge", "").trim() } : null });
+        _popoutSnapshot(`📟 ${title}`, html, badge ? { text: badge.textContent, cls: badge.className.replace("run-badge", "").trim() } : null);
+      }
+    }, 600);
+  });
   $("#btn-pl-bottom-close")?.addEventListener("click", () => {
     $("#pl-bottom-panel")?.classList.add("hidden");
   });
@@ -6061,6 +6136,17 @@ function wire() {
     });
   }
   $("#btn-term-clear")?.addEventListener("click", clearTerminalOutput);
+  $("#btn-term-popout")?.addEventListener("click", () => {
+    openConsolePopout("Telua Web CLI Terminal");
+    setTimeout(() => {
+      const html = $("#term-output")?.innerHTML || "";
+      const badge = $("#term-status-badge");
+      if (html) {
+        _popoutBroadcast({ type: "output", title: "💻 Web CLI Terminal", html, badge: badge ? { text: badge.textContent, cls: badge.className.replace("run-badge", "").trim() } : null });
+        _popoutSnapshot("💻 Web CLI Terminal", html, badge ? { text: badge.textContent, cls: badge.className.replace("run-badge", "").trim() } : null);
+      }
+    }, 600);
+  });
   $("#btn-term-copy")?.addEventListener("click", async () => {
     const text = $("#term-output")?.innerText || "";
     try {

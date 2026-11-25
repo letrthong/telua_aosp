@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Telua Pop-out Terminal</title>
+<style>
+  :root {
+    --bg: #0d1117; --bg-panel: #161b22; --border: #30363d;
+    --accent: #58a6ff; --text: #e6edf3; --muted: #8b949e;
+    --ok: #3fb950; --err: #f85149; --warn: #d29922;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 14px; background: var(--bg-panel);
+    border-bottom: 1px solid var(--border); flex-shrink: 0; gap: 10px;
+  }
+  .title-wrap { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  #pop-title {
+    font-weight: 700; font-size: 13px; color: var(--accent);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px;
+    background: rgba(110,118,129,.3); color: var(--muted); white-space: nowrap;
+  }
+  .badge.running { background: rgba(210,153,34,.2); color: var(--warn); }
+  .badge.ok { background: rgba(63,185,80,.2); color: var(--ok); }
+  .badge.err { background: rgba(248,81,73,.2); color: var(--err); }
+  .actions { display: flex; gap: 6px; flex-shrink: 0; }
+  button {
+    background: var(--bg-panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 10px; font-size: 12px; cursor: pointer; font-family: inherit;
+  }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.danger { color: var(--err); border-color: var(--err); }
+  #screen {
+    flex: 1; overflow-y: auto; padding: 10px 14px;
+    font-size: 13px; line-height: 1.45; white-space: pre-wrap;
+    word-break: break-word; min-height: 0;
+  }
+  .input-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px; background: var(--bg-panel);
+    border-top: 1px solid var(--border); flex-shrink: 0;
+  }
+  .prompt { color: var(--ok); font-weight: 700; font-size: 13px; white-space: nowrap; }
+  #cmd-input {
+    flex: 1; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 10px; font-size: 13px; font-family: inherit; outline: none;
+  }
+  #cmd-input:focus { border-color: var(--accent); }
+  .hint {
+    padding: 4px 14px; font-size: 11px; color: var(--muted);
+    background: var(--bg-panel); border-top: 1px solid var(--border);
+  }
+  .mode-tabs { display: flex; gap: 4px; }
+  .mode-tabs button.active { border-color: var(--accent); color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <div class="title-wrap">
+    <span id="pop-title">📟 Pop-out Console</span>
+    <span id="pop-badge" class="badge">Ready</span>
+  </div>
+  <div class="actions">
+    <div class="mode-tabs">
+      <button id="mode-mirror" class="active" title="Nhận output trực tiếp từ tab chính (Pipelines / Terminal)">🪞 Mirror</button>
+      <button id="mode-standalone" title="Chạy lệnh / pipeline độc lập ngay tại cửa sổ này">⚡ Standalone</button>
+    </div>
+    <button id="btn-copy" title="Copy toàn bộ output">📋 Copy</button>
+    <button id="btn-clear" title="Xóa màn hình">🧹 Clear</button>
+    <button id="btn-stop" class="danger" disabled title="Stop lệnh đang chạy (Ctrl+C)">⏹ Stop</button>
+  </div>
+</header>
+<pre id="screen">Đang chờ output từ tab chính…
+• Mode 🪞 Mirror: output của Pipeline / Terminal ở tab chính sẽ hiển thị realtime tại đây.
+• Mode ⚡ Standalone: gõ lệnh bên dưới để chạy độc lập (không ảnh hưởng tab chính).
+• Kéo cửa sổ này sang màn hình thứ 2 và phóng to thoải mái!</pre>
+<div class="input-bar" id="input-bar" style="display:none">
+  <span class="prompt" id="prompt">tel $</span>
+  <input id="cmd-input" type="text" placeholder="Ví dụ: tel system ram · git status -s · adb devices -l … (Enter để chạy, Ctrl+C để stop)">
+</div>
+<div class="hint">💡 Tip: kéo cửa sổ này sang màn hình thứ 2 (Win+Shift+←/→ trên Windows, hoặc drag ra ngoài) để theo dõi pipeline trên màn hình riêng.</div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (sel) => document.querySelector(sel);
+  const screenEl = $("#screen");
+  const badgeEl = $("#pop-badge");
+  const titleEl = $("#pop-title");
+  const inputBar = $("#input-bar");
+  const cmdInput = $("#cmd-input");
+  const promptEl = $("#prompt");
+  const stopBtn = $("#btn-stop");
+
+  const ANSI_COLOR_MAP = {
+    30: "#8b949e", 90: "#8b949e",
+    31: "#f85149", 91: "#ff7b72",
+    32: "#3fb950", 92: "#56d364",
+    33: "#d29922", 93: "#e3b341",
+    34: "#58a6ff", 94: "#79c0ff",
+    35: "#bc8cff", 95: "#d2a8ff",
+    36: "#39c5cf", 96: "#56d4dd",
+    37: "#e6edf3", 97: "#ffffff",
+  };
+  function esc(text) {
+    const div = document.createElement("div");
+    div.textContent = text == null ? "" : String(text);
+    return div.innerHTML;
+  }
+  function ansiToHtml(text) {
+    const cleaned = String(text == null ? "" : text).replace(/\x1b\[[0-9;?]*[A-LN-Za-ln-z]/g, "");
+    const safe = esc(cleaned);
+    let openSpans = 0;
+    const html = safe.replace(/(?:\x1b\[|\[(?=(?:0|[012];[39][0-7])m))([0-9;]*)m/g, (_, codesStr) => {
+      const codes = (codesStr || "0").split(";").map(Number);
+      let out = "";
+      if (openSpans > 0) { out += "</span>".repeat(openSpans); openSpans = 0; }
+      if (codes.length === 1 && codes[0] === 0) return out;
+      const styles = [];
+      for (const c of codes) {
+        if (c === 1) styles.push("font-weight:700");
+        else if (c === 2) styles.push("opacity:.75");
+        else if (ANSI_COLOR_MAP[c]) styles.push(`color:${ANSI_COLOR_MAP[c]}`);
+      }
+      if (styles.length > 0) { openSpans++; out += `<span style="${styles.join(";")}">`; }
+      return out;
+    });
+    return html + (openSpans > 0 ? "</span>".repeat(openSpans) : "");
+  }
+  function scrollBottom() { screenEl.scrollTop = screenEl.scrollHeight; }
+  function setBadge(text, cls) {
+    badgeEl.textContent = text;
+    badgeEl.className = "badge" + (cls ? " " + cls : "");
+  }
+
+  /* ---------- Mode switching ---------- */
+  let mode = "mirror";
+  function setMode(m) {
+    mode = m;
+    $("#mode-mirror").classList.toggle("active", m === "mirror");
+    $("#mode-standalone").classList.toggle("active", m === "standalone");
+    inputBar.style.display = m === "standalone" ? "flex" : "none";
+    if (m === "standalone") {
+      titleEl.textContent = "⚡ Standalone Console";
+      screenEl.innerHTML = ansiToHtml("⚡ Standalone mode — lệnh chạy độc lập tại cửa sổ này.\n");
+      fetch("/api/status").then(r => r.json()).then(s => {
+        if (s && s.root) { promptEl.textContent = "tel $"; }
+      }).catch(() => {});
+      cmdInput.focus();
+    } else {
+      titleEl.textContent = "🪞 Mirror Console";
+      screenEl.innerHTML = ansiToHtml("🪞 Mirror mode — đang chờ output từ tab chính…\n");
+    }
+  }
+  $("#mode-mirror").addEventListener("click", () => setMode("mirror"));
+  $("#mode-standalone").addEventListener("click", () => setMode("standalone"));
+
+  /* ---------- Mirror mode: nhận output từ tab chính ---------- */
+  // Ưu tiên BroadcastChannel (realtime, cùng origin); fallback sang localStorage event.
+  let bc = null;
+  try { bc = new BroadcastChannel("telua_console"); } catch { /* older browser */ }
+  function handleMirror(msg) {
+    if (!msg || msg.type !== "output") return;
+    if (mode !== "mirror") return;
+    if (msg.title) titleEl.textContent = msg.title;
+    if (msg.badge) setBadge(msg.badge.text, msg.badge.cls);
+    if (msg.html != null) { screenEl.innerHTML = msg.html; scrollBottom(); }
+    else if (msg.text != null) { screenEl.innerHTML = ansiToHtml(msg.text); scrollBottom(); }
+  }
+  if (bc) bc.onmessage = (ev) => handleMirror(ev.data);
+  window.addEventListener("storage", (ev) => {
+    if (ev.key === "telua_console_mirror" && ev.newValue) {
+      try { handleMirror(JSON.parse(ev.newValue)); } catch { /* ignore */ }
+    }
+  });
+  // Khôi phục output gần nhất khi mở popout (tab chính lưu snapshot)
+  try {
+    const snap = localStorage.getItem("telua_console_snapshot");
+    if (snap && mode === "mirror") {
+      const s = JSON.parse(snap);
+      if (s.title) titleEl.textContent = s.title;
+      if (s.html != null) { screenEl.innerHTML = s.html; scrollBottom(); }
+      else if (s.text != null) { screenEl.innerHTML = ansiToHtml(s.text); scrollBottom(); }
+      if (s.badge) setBadge(s.badge.text, s.badge.cls);
+    }
+  } catch { /* ignore */ }
+
+  /* ---------- Standalone mode: chạy lệnh độc lập ---------- */
+  let running = false;
+  let abortCtrl = null;
+  const history = [];
+  let histIdx = 0;
+
+  async function runStandalone(cmd) {
+    if (running) return;
+    running = true;
+    stopBtn.disabled = false;
+    abortCtrl = new AbortController();
+    const sep = screenEl.innerHTML.trim() ? "\n" : "";
+    const baseHtml = screenEl.innerHTML + `${sep}<span style="color:#3fb950;font-weight:700">tel $</span> <span style="color:#58a6ff;font-weight:700">${esc(cmd)}</span>\n`;
+    screenEl.innerHTML = baseHtml + `<span style="opacity:.7">⏳ Running…</span>\n`;
+    scrollBottom();
+    setBadge("⏳ Running…", "running");
+    let elapsed = 0;
+    const timer = setInterval(() => { elapsed++; setBadge(`⏳ Running… (${elapsed}s)`, "running"); }, 1000);
+    try {
+      const res = await fetch("/api/terminal/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: cmd }),
+        signal: abortCtrl.signal,
+      });
+      if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let raw = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) {
+          raw += decoder.decode(value, { stream: true });
+          const preview = raw
+            .replace(/\n?__TELUA_EXIT_CODE__:\s*-?\d+\s*$/, "")
+            .replace(/\n?__TELUA_PWD__:[^\r\n]+\r?\n?/g, "\n");
+          screenEl.innerHTML = baseHtml + ansiToHtml(preview);
+          scrollBottom();
+        }
+      }
+      const m = raw.match(/__TELUA_EXIT_CODE__:(-?\d+)/);
+      const code = m ? parseInt(m[1], 10) : 0;
+      const finalOut = (raw
+        .replace(/\n?__TELUA_EXIT_CODE__:\s*-?\d+\s*$/, "")
+        .replace(/\n?__TELUA_PWD__:[^\r\n]+\r?\n?/g, "\n")
+        .trim() || "(no output)") + "\n";
+      const color = code === 0 ? "#3fb950" : "#f85149";
+      screenEl.innerHTML = baseHtml + ansiToHtml(finalOut) +
+        `<span style="color:${color};opacity:.85">[exit code: ${code} · ${elapsed}s]</span>\n`;
+      scrollBottom();
+      setBadge(code === 0 ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${code} (${elapsed}s)`, code === 0 ? "ok" : "err");
+    } catch (err) {
+      if (err.name === "AbortError") {
+        screenEl.innerHTML += `\n<span style="color:#d29922;font-weight:700">^C [Stopped]</span>\n`;
+        setBadge("⏹ Stopped", "err");
+      } else {
+        screenEl.innerHTML += `\n<span style="color:#f85149">[ERROR] ${esc(err.message)}</span>\n`;
+        setBadge("✖ Error", "err");
+      }
+      scrollBottom();
+    } finally {
+      clearInterval(timer);
+      running = false;
+      abortCtrl = null;
+      stopBtn.disabled = true;
+      cmdInput.focus();
+    }
+  }
+
+  cmdInput.addEventListener("keydown", async (e) => {
+    if (e.key === "Enter" && cmdInput.value.trim()) {
+      const cmd = cmdInput.value.trim();
+      cmdInput.value = "";
+      if (cmd === "clear" || cmd === "cls") { screenEl.innerHTML = ""; return; }
+      if (history[history.length - 1] !== cmd) history.push(cmd);
+      histIdx = history.length;
+      await runStandalone(cmd);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (histIdx > 0) { histIdx--; cmdInput.value = history[histIdx] || ""; }
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (histIdx < history.length - 1) { histIdx++; cmdInput.value = history[histIdx] || ""; }
+      else { histIdx = history.length; cmdInput.value = ""; }
+    } else if (e.ctrlKey && e.key.toLowerCase() === "c" && running) {
+      e.preventDefault();
+      try { await fetch("/api/terminal/stop", { method: "POST" }); } catch { /* ignore */ }
+      try { abortCtrl && abortCtrl.abort(); } catch { /* ignore */ }
+    }
+  });
+
+  /* ---------- Common buttons ---------- */
+  stopBtn.addEventListener("click", async () => {
+    try { await fetch("/api/terminal/stop", { method: "POST" }); } catch { /* ignore */ }
+    try { abortCtrl && abortCtrl.abort(); } catch { /* ignore */ }
+  });
+  $("#btn-copy").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(screenEl.innerText);
+      setBadge("📋 Copied", "ok");
+      setTimeout(() => setBadge("Ready", ""), 1500);
+    } catch { /* ignore */ }
+  });
+  $("#btn-clear").addEventListener("click", () => { screenEl.innerHTML = ""; });
+})();
+</script>
+</body>
+</html>
