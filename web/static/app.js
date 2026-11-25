@@ -1069,8 +1069,15 @@ async function runPipeline(name, explicitSource = null) {
   const isBottom = _plOutputMode === "bottom";
   const modalEl = $("#modal-run");
   const bottomPanel = $("#pl-bottom-panel");
+  // Khi pop-out console đang mở → output chỉ hiển thị ở pop-out,
+  // không hiện lại bottom panel / dialog ở tab chính.
+  const popoutOpen = _popoutIsOpen();
 
-  if (isBottom) {
+  if (popoutOpen) {
+    bottomPanel?.classList.add("hidden");
+    bottomPanel.dataset.popoutHidden = "1";
+    modalEl?.classList.add("hidden");
+  } else if (isBottom) {
     bottomPanel?.classList.remove("hidden");
     modalEl?.classList.add("hidden");
   } else {
@@ -1087,7 +1094,7 @@ async function runPipeline(name, explicitSource = null) {
   if (titleEl) titleEl.textContent = `${cmd} ${name}`;
   const popTitle = `📟 ${cmd} ${name}`;
   const broadcastIfPopped = (html, badge) => {
-    if (_popoutWin && !_popoutWin.closed) {
+    if (_popoutIsOpen()) {
       _popoutBroadcast({ type: "output", title: popTitle, html, badge });
       _popoutSnapshot(popTitle, html, badge);
     }
@@ -1154,7 +1161,7 @@ async function runPipeline(name, explicitSource = null) {
             outEl.innerHTML = ansiToHtml(cleanPreview || "Running…");
             outEl.scrollTop = outEl.scrollHeight;
           }
-          if (isBottom) broadcastIfPopped(outEl ? outEl.innerHTML : "", { text: `⏳ Running… (${elapsed}s)`, cls: "running" });
+          broadcastIfPopped(outEl ? outEl.innerHTML : "", { text: `⏳ Running… (${elapsed}s)`, cls: "running" });
         }
       }
 
@@ -1168,13 +1175,13 @@ async function runPipeline(name, explicitSource = null) {
         );
         outEl.scrollTop = outEl.scrollHeight;
       }
-      if (isBottom) broadcastIfPopped(outEl ? outEl.innerHTML : "", { text: exitCode === 0 ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${exitCode} (${elapsed}s)`, cls: exitCode === 0 ? "ok" : "err" });
+      broadcastIfPopped(outEl ? outEl.innerHTML : "", { text: exitCode === 0 ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${exitCode} (${elapsed}s)`, cls: exitCode === 0 ? "ok" : "err" });
       if (badge) {
         const ok = exitCode === 0;
         badge.textContent = ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${exitCode} (${elapsed}s)`;
         badge.className = "run-badge " + (ok ? "ok" : "err");
       }
-      if (!isBottom) {
+      if (!isBottom && !popoutOpen) {
         scheduleRunAutoClose(exitCode === 0);
       }
       return;
@@ -1193,13 +1200,13 @@ async function runPipeline(name, explicitSource = null) {
         `\n\n[exit code: ${data.exit_code} · elapsed: ${elapsed}s]`
       );
     }
-    if (isBottom) broadcastIfPopped(outEl ? outEl.innerHTML : "", { text: data.exit_code === 0 ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${data.exit_code} (${elapsed}s)`, cls: data.exit_code === 0 ? "ok" : "err" });
+    broadcastIfPopped(outEl ? outEl.innerHTML : "", { text: data.exit_code === 0 ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${data.exit_code} (${elapsed}s)`, cls: data.exit_code === 0 ? "ok" : "err" });
     if (badge) {
       const ok = data.exit_code === 0;
       badge.textContent = ok ? `✔ Exit 0 (${elapsed}s)` : `✖ Exit ${data.exit_code} (${elapsed}s)`;
       badge.className = "run-badge " + (ok ? "ok" : "err");
     }
-    if (!isBottom) {
+    if (!isBottom && !popoutOpen) {
       scheduleRunAutoClose(data.exit_code === 0);
     }
   } catch (err) {
@@ -1209,14 +1216,14 @@ async function runPipeline(name, explicitSource = null) {
         badge.textContent = `⏹ Stopped (${elapsed}s)`;
         badge.className = "run-badge err";
       }
-      if (isBottom) broadcastIfPopped(outEl ? outEl.innerHTML : "", { text: `⏹ Stopped (${elapsed}s)`, cls: "err" });
+      broadcastIfPopped(outEl ? outEl.innerHTML : "", { text: `⏹ Stopped (${elapsed}s)`, cls: "err" });
     } else {
       if (outEl) outEl.textContent = `[ERROR] ${err.message}`;
       if (badge) {
         badge.textContent = "✖ Error";
         badge.className = "run-badge err";
       }
-      if (isBottom) broadcastIfPopped(outEl ? outEl.innerHTML : "", { text: "✖ Error", cls: "err" });
+      broadcastIfPopped(outEl ? outEl.innerHTML : "", { text: "✖ Error", cls: "err" });
     }
   } finally {
     clearInterval(timerId);
@@ -1495,10 +1502,77 @@ function openConsolePopout(defaultTitle) {
     _popoutWin.addEventListener("load", () => {
       _popoutWin.document.title = defaultTitle || "Telua Pop-out Console";
     });
-    toast("Pop-out opened 🖥", "Kéo cửa sổ console sang màn hình thứ 2 — output sẽ hiển thị realtime tại đó.", "info", 4000);
+    // Theo dõi đóng cửa sổ pop-out → hiện lại console ở tab chính
+    _startPopoutWatchdog();
+    toast("Pop-out opened 🖥", "Console đã chuyển sang cửa sổ riêng — kéo sang màn hình thứ 2. Đóng cửa sổ đó để hiện lại tại đây.", "info", 4500);
   } else {
     toast("Popup blocked", "Trình duyệt đã chặn popup — hãy cho phép popup cho trang này.", "warn", 4000);
   }
+}
+
+// ---- Hide/restore console ở tab chính khi pop-out đang mở ----
+let _popoutHideTimer = null;
+
+function _popoutIsOpen() {
+  return Boolean(_popoutWin && !_popoutWin.closed);
+}
+
+function _startPopoutWatchdog() {
+  if (_popoutHideTimer) return;
+  _popoutHideTimer = setInterval(() => {
+    if (!_popoutIsOpen()) {
+      clearInterval(_popoutHideTimer);
+      _popoutHideTimer = null;
+      _popoutWin = null;
+      _restorePoppedConsoles();
+    }
+  }, 500);
+}
+
+// Ẩn bottom panel pipeline khi pop-out
+function _hidePipelineBottomForPopout() {
+  const panel = $("#pl-bottom-panel");
+  if (!panel || panel.classList.contains("hidden")) return;
+  panel.dataset.popoutHidden = "1";
+  panel.classList.add("hidden");
+}
+
+// Ẩn terminal view khi pop-out (thay bằng placeholder)
+function _hideTerminalForPopout() {
+  const view = $("#view-terminal");
+  if (!view || view.classList.contains("hidden")) return;
+  view.dataset.popoutHidden = "1";
+  view.classList.add("hidden");
+  // Nếu terminal là tab đang active → chuyển sang placeholder pipelines
+  if (!$("#tab-terminal")?.classList.contains("active")) return;
+  const ph = $("#view-pipelines");
+  if (ph) {
+    ph.classList.remove("hidden");
+    ph.dataset.popoutPlaceholder = "1";
+  }
+  syncTopTabs();
+}
+
+// Khôi phục console khi pop-out bị đóng
+function _restorePoppedConsoles() {
+  const panel = $("#pl-bottom-panel");
+  if (panel && panel.dataset.popoutHidden === "1") {
+    delete panel.dataset.popoutHidden;
+    panel.classList.remove("hidden");
+  }
+  const view = $("#view-terminal");
+  if (view && view.dataset.popoutHidden === "1") {
+    delete view.dataset.popoutHidden;
+    view.classList.remove("hidden");
+    // Trả lại tab terminal nếu trước đó nó đang active
+    const ph = $("#view-pipelines");
+    if (ph && ph.dataset.popoutPlaceholder === "1") {
+      delete ph.dataset.popoutPlaceholder;
+      ph.classList.add("hidden");
+      syncTopTabs();
+    }
+  }
+  toast("Console restored 💻", "Cửa sổ pop-out đã đóng — console hiện lại ở tab chính.", "info", 3000);
 }
 
 let _termRunning = false;
@@ -5766,6 +5840,8 @@ function initPipelineBottomPanel() {
         _popoutBroadcast({ type: "output", title: `📟 ${title}`, html, badge: badge ? { text: badge.textContent, cls: badge.className.replace("run-badge", "").trim() } : null });
         _popoutSnapshot(`📟 ${title}`, html, badge ? { text: badge.textContent, cls: badge.className.replace("run-badge", "").trim() } : null);
       }
+      // Ẩn bottom panel ở tab chính khi pop-out đã mở thành công
+      if (_popoutIsOpen()) _hidePipelineBottomForPopout();
     }, 600);
   });
   $("#btn-pl-bottom-close")?.addEventListener("click", () => {
@@ -6145,6 +6221,8 @@ function wire() {
         _popoutBroadcast({ type: "output", title: "💻 Web CLI Terminal", html, badge: badge ? { text: badge.textContent, cls: badge.className.replace("run-badge", "").trim() } : null });
         _popoutSnapshot("💻 Web CLI Terminal", html, badge ? { text: badge.textContent, cls: badge.className.replace("run-badge", "").trim() } : null);
       }
+      // Ẩn terminal view ở tab chính khi pop-out đã mở thành công
+      if (_popoutIsOpen()) _hideTerminalForPopout();
     }, 600);
   });
   $("#btn-term-copy")?.addEventListener("click", async () => {
