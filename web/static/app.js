@@ -1859,7 +1859,7 @@ async function runTerminalCommand(explicitCmd = null) {
   const baseHtml = (outEl ? outEl.innerHTML : "") +
     `${separator}<span style="color:#3fb950;font-weight:700">${esc(promptLabel)}</span> <span style="color:#58a6ff;font-weight:700">${esc(cmd)}</span>\n`;
   const broadcastTerm = (html, badge) => {
-    if (_popoutWin && !_popoutWin.closed) {
+    if (_popoutIsOpen()) {
       _popoutBroadcast({ type: "output", title: "💻 Web CLI Terminal", html, badge });
       _popoutSnapshot("💻 Web CLI Terminal", html, badge);
     }
