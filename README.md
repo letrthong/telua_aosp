@@ -800,11 +800,15 @@ tel web stop                          # Dừng Web UI server
 7. **📊 BI Studio Tab — Power BI-Style Analytics Engine (Phân Tích Dữ Liệu Đa Chiều)**:
    - **Tự động nhận diện Schema & Kiểu dữ liệu (Schema-Agnostic)**: Hỗ trợ kéo thả / tải lên bất kỳ file Excel (.xlsx, .xls), CSV, TSV hoặc dán trực tiếp dữ liệu bảng từ clipboard. Tự động nhận diện và phân loại kiểu dữ liệu từng cột: Số (🔢 NUM), Chữ (🔤 TXT), Ngày tháng (📅 DATE), Boolean (🔘 BOOL).
    - **4 Thẻ Chỉ Số KPI Động**: Tự động tính toán và hiển thị tức thì Tổng số bản ghi (Total Records), Tổng chỉ số số học chính (Numeric Metric Sum), Số lượng phân nhóm danh mục (Categorical Groups), và Tổng số trường dữ liệu (Total Columns).
-   - **Thanh Slicers Lọc Cắt Lát Đa Chiều**: Tự động tạo các chip lọc tương tác thời gian thực cho các cột phân loại; hỗ trợ chọn nhiều điều kiện đồng thời với cơ chế lọc chéo (Cross-filtering) tự động cập nhật toàn bộ biểu đồ và bảng dữ liệu.
+   - **Thanh Slicers Lọc Cắt Lát Đa Chiều & Bộ Lọc Nhập Liệu (Input Filter & Multi-Select)**:
+     - **Ô điền giá trị lọc linh hoạt (Input Filter)**: Người dùng có thể tự tay điền giá trị muốn lọc (ví dụ gõ tên Hãng xe như `TOYOTA`, `VinFast`, `BMW`...) với tính năng tự động gợi ý giá trị (Autocomplete datalist) và phím tắt Enter.
+     - **Bộ chọn đa năng cấp 2 (Cascade Multi-Select Serial)**: Dropdown danh sách cho phép tick chọn một hoặc nhiều Vehicle Series / Serials cụ thể; tự động đồng bộ theo hãng xe đã lọc và hiển thị huy hiệu đếm số lượng (ví dụ: `2 / 10`).
+     - Tự động tạo các chip lọc tương tác thời gian thực cho các cột phân loại; hỗ trợ chọn nhiều điều kiện đồng thời với cơ chế lọc chéo (Cross-filtering) tự động cập nhật toàn bộ biểu đồ và bảng dữ liệu.
    - **Click Biểu Đồ Để Lọc Chéo (Interactive Chart Cross-Highlighting)**: Nhấp chuột trực tiếp vào bất kỳ cột nào trên Column Chart / Bar Chart hoặc miếng bánh trên Donut Chart:
      - Phần tử được click sẽ **sáng rõ và có viền nổi bật (glow border)**.
      - Tất cả các phần tử còn lại sẽ **tự động mờ đi (dimmed opacity)** hệt như cơ chế Cross-Highlighting của Power BI Desktop.
      - Toàn bộ dashboard (KPI, Table, các visual khác) lập tức lọc dữ liệu theo giá trị được chọn; click lại lần nữa để bỏ lọc.
+     - **Tỷ Lệ Phần Được Chọn vs Phần Còn Lại (Selected vs. Remaining 20% / 80%)**: Khi chọn lọc một nhóm phân cấp (ví dụ Slicer chọn hãng `TOYOTA` có 10 Serial, sau đó chọn 2 Serial cụ thể): biểu đồ Donut tự động chuyển sang chế độ phân tích tổng thể — hiển thị rõ ràng phần đã chọn **20% (2 Serial)** và phần còn lại **80% (8 Serial)**, trung tâm biểu đồ hiển thị huy hiệu `ĐÃ CHỌN 20% (2 / 10)` chuẩn xác.
    - **Kéo Thả & Thay Đổi Kích Thước Biểu Đồ (Drag & Drop Canvas)**:
      - **Kéo thả sắp xếp**: Giữ tay cầm kéo thả **⋮⋮** trên tiêu đề thẻ biểu đồ để di chuyển hoán đổi vị trí widget tùy ý trên lưới dashboard (HTML5 Drag & Drop).
      - **Co giãn kích thước**: Nút **⤢** cho phép chuyển đổi linh hoạt giữa kích thước chuẩn 1 cột (50%) và kích thước mở rộng 2 cột (100% full width) phù hợp cho bảng số liệu chi tiết hay biểu đồ xu hướng.
@@ -819,6 +823,21 @@ tel web stop                          # Dừng Web UI server
      - Nút **📑 Multi-Tab Report** tự động phân tích đối chiếu giữa các sheet, phát hiện khóa chung (Join Keys), lập bảng ma trận so sánh, vẽ sơ đồ thực thể liên kết **Mermaid ER Diagram**, biểu đồ tròn tỷ trọng và biểu đồ cột so sánh khối lượng.
      - Hỗ trợ nút 1-click **📚 Open in Docs** để tự động lưu báo cáo vào docs/cross_sheet_report.rst và chuyển sang xem trực tiếp trên tab Docs / Sphinx.
    - **Visual Builder Linh Hoạt**: Nút **＋ Add Visual** cho phép tạo thêm không giới hạn các biểu đồ tùy biến: Combo Chart (Cột + Đường xu hướng), Column Chart, Horizontal Bar, Line Chart, Donut Chart, hoặc Bảng dữ liệu tương tác.
+   - **Cấu Hình Biểu Đồ Hướng Dữ Liệu (Config-Driven Visuals & GUI Chart Manager)**:
+     - BI Studio **không tự ý vẽ biểu đồ ngẫu nhiên** khi mở dataset; hệ thống yêu cầu hoặc chờ file cấu hình JSON (`bi_dashboard_config.json`) định nghĩa chính xác biểu đồ nào cần vẽ (loại biểu đồ, trục X, trục Y, hàm tổng hợp `agg`, kích thước `isWide`).
+     - **Giao Diện Đồ Họa Quản Lý Biểu Đồ (Visual GUI Manager)**: Không cần phải gõ hay sửa code JSON thủ công! Cửa sổ `⚙️ Config JSON` tích hợp sẵn giao diện GUI trực quan:
+       - **Thêm biểu đồ mới**: Chọn chip loại biểu đồ, nhập tiêu đề, chọn trục X, trục Y, trục Y2 và hàm gom nhóm (`SUM`, `AVG`, `COUNT`, `MIN`, `MAX`) từ dropdown cột của dataset.
+       - **Sửa biểu đồ (✏️ Edit)**: Nhấp nút sửa trên bất kỳ biểu đồ nào để nạp lại vào form và điều chỉnh thông số.
+       - **Xóa biểu đồ (🗑️ Delete)**: Xóa từng biểu đồ khỏi danh sách cấu hình bằng 1 click.
+       - **Sắp xếp thứ tự (⬆ / ⬇)**: Di chuyển biểu đồ lên hoặc xuống trong mảng cấu hình JSON.
+       - **Đổi kích thước (⤢ Width)**: Chuyển đổi linh hoạt giữa 1 cột và 2 cột (full width).
+       - **Đồng bộ hai chiều với Raw JSON**: Tự động sinh và cập nhật mã JSON khi thao tác trên GUI; hỗ trợ tab `📝 Raw JSON Code` cho người dùng muốn xem hoặc sao chép mã.
+     - Hỗ trợ đầy đủ hai chiều **Upload (Import JSON)** và **Download (Export JSON)**: người dùng có thể lưu lại layout dashboard thành file `.json` để tái sử dụng hoặc chia sẻ.
+     - **Biểu Đồ Donut Tỷ Trọng Phân Bổ (Share-of-Context & Hover Tooltip Chi Tiết)**:
+       - Khi lọc theo hãng (Brand/OEM) và chọn 1 số Serial (ví dụ chọn 2 trong tổng 14 serials), biểu đồ Donut tự động giữ ngữ cảnh của hãng và chia lát cắt: **Đã chọn** vs **Phần còn lại**, tâm tròn hiển thị huy hiệu thống kê `ĐÃ CHỌN 2 / 14`.
+       - **Hover hiển thị danh sách còn lại**: Khi rê chuột vào lát cắt hoặc mục chú giải `⚪ Phần còn lại (12 mục khác)`, Tooltip sẽ hiển thị danh sách chi tiết các mã serial chưa chọn dưới dạng thẻ huy hiệu (Pill badges) kèm số lượng và tỷ trọng.
+       - Khi rê chuột vào tâm hình tròn (Center badge), Tooltip hiển thị tổng quan đối chiếu cả 2 nhóm `🟢 Đã chọn (2)` và `⚪ Phần còn lại (12)`.
+     - Tích hợp nút **🪄 Gợi ý biểu đồ mẫu** (Auto-Suggest) khi người dùng muốn nhanh chóng tạo bộ biểu đồ mặc định mà không cần thiết lập thủ công.
    - **Bộ Thư Viện Mẫu Nghiệp Vụ Chuẩn `bi_studio/`**: Tự động phát hiện và hiển thị các file Excel mẫu nghiệp vụ chung (Bán lẻ global_retail_sales.xlsx, Quản trị nhân sự hr_workforce_analytics.xlsx, Dự án công nghệ it_project_portfolio.xlsx, Tài chính vận hành financial_budget_opex.xlsx), menu dropdown tự cập nhật động mà không cần can thiệp mã nguồn HTML.
    - **Xuất Dữ Liệu Hai Chiều**: Hỗ trợ xem/sao chép/tải xuống dữ liệu dưới dạng JSON ({} JSON) hoặc xuất ngược tập dữ liệu đã lọc ra file Excel .xlsx (⬇ Excel).
 

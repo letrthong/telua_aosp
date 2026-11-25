@@ -233,6 +233,30 @@ class TestTeluaWebBI(unittest.TestCase):
         self.assertIn("CONFIG_EXCEL_TOTAL_ROWS=500", data["bash_config"])
         self.assertIn("\"Q1_Sales\"", data["bash_config"])
 
+    def test_api_bi_visual_config(self):
+        sample_visuals = [
+            {"id": "vis_1", "type": "bar", "title": "Test Bar", "x": "Category", "y": "Amount", "agg": "sum"}
+        ]
+        # POST
+        resp = self.app.post(
+            "/api/bi/visual-config",
+            data=json.dumps({"dataset": "test.xlsx", "visuals": sample_visuals}),
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["visuals_count"], 1)
+
+        # GET
+        resp_get = self.app.get("/api/bi/visual-config")
+        self.assertEqual(resp_get.status_code, 200)
+        data_get = resp_get.get_json()
+        self.assertTrue(data_get["ok"])
+        self.assertTrue(data_get["exists"])
+        self.assertEqual(len(data_get["config"]["visuals"]), 1)
+
+
 
 if __name__ == "__main__":
     unittest.main()

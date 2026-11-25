@@ -6423,6 +6423,116 @@ function initBIDashboard() {
   $("#btn-bi-calc-cancel")?.addEventListener("click", () => $("#modal-bi-calc-col")?.classList.add("hidden"));
   $("#btn-bi-calc-submit")?.addEventListener("click", () => biCreateCalculatedColumn());
 
+  // Dashboard Visuals Config JSON & GUI Manager modal & actions
+  $("#btn-bi-config-open")?.addEventListener("click", () => biOpenConfigModal("gui"));
+  $("#btn-bi-config-close")?.addEventListener("click", () => $("#modal-bi-config")?.classList.add("hidden"));
+  $("#btn-bi-cfg-tab-gui")?.addEventListener("click", () => biSwitchConfigTab("gui"));
+  $("#btn-bi-cfg-tab-raw")?.addEventListener("click", () => biSwitchConfigTab("raw"));
+  $("#btn-bi-gui-save-item")?.addEventListener("click", () => biSaveConfigItemFromForm());
+  $("#btn-bi-gui-cancel-edit")?.addEventListener("click", () => biResetConfigForm());
+
+  // Type chips in Config GUI form
+  document.querySelectorAll("#bi-gui-type-chips .term-chip").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#bi-gui-type-chips .term-chip").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const vtype = btn.dataset.vtype;
+      const y2Group = $("#bi-gui-y2-group");
+      if (y2Group) y2Group.style.display = vtype === "combo" ? "block" : "none";
+    });
+  });
+
+  $("#btn-bi-config-apply")?.addEventListener("click", () => {
+    const isRawActive = $("#btn-bi-cfg-tab-raw")?.classList.contains("active");
+    if (isRawActive) {
+      const val = $("#bi-config-editor-content")?.value || "";
+      biApplyConfigJson(val);
+    } else {
+      biRenderVisuals();
+      $("#modal-bi-config")?.classList.add("hidden");
+      toast("Đã áp dụng", `Đã cập nhật ${biState.visuals.length} biểu đồ lên Dashboard.`, "ok", 2500);
+      try {
+        fetch("/api/bi/visual-config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dataset: biState.filename,
+            sheet: biState.activeSheet,
+            visuals: biState.visuals,
+          }),
+        }).catch(() => {});
+      } catch {}
+    }
+  });
+
+  $("#btn-bi-config-copy")?.addEventListener("click", () => {
+    const val = $("#bi-config-editor-content")?.value || "";
+    navigator.clipboard.writeText(val).then(() => {
+      toast("JSON Copied", "Config JSON copied to clipboard.", "ok", 2000);
+    });
+  });
+  $("#btn-bi-config-download")?.addEventListener("click", () => biExportConfigJson());
+  $("#btn-bi-config-download-btn")?.addEventListener("click", () => biExportConfigJson());
+  $("#bi-config-file-input")?.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (file) biImportConfigJson(file);
+    e.target.value = "";
+  });
+  $("#bi-modal-config-upload")?.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (file) biImportConfigJson(file);
+    e.target.value = "";
+  });
+  $("#btn-bi-config-clear")?.addEventListener("click", () => {
+    biState.visuals = [];
+    biRenderVisuals();
+    biRenderConfigGuiList();
+    toast("Đã xóa biểu đồ", "Toàn bộ biểu đồ đã được xóa khỏi danh sách cấu hình.", "info", 2000);
+  });
+  $("#btn-bi-config-sample")?.addEventListener("click", () => {
+    const numCols = biState.columns.filter((c) => c.type === "number");
+    const strCols = biState.columns.filter((c) => c.type !== "number");
+    const cat = strCols[0]?.name || biState.columns[0]?.name || "Category";
+    const num = numCols[0]?.name || "Value";
+    const sample = {
+      version: "1.0",
+      generator: "telua_bi_studio",
+      dataset: biState.filename || "dataset.xlsx",
+      sheet: biState.activeSheet || "Sheet1",
+      visuals: [
+        {
+          id: "vis_1",
+          type: "combo",
+          title: `Revenue vs Margin by ${cat}`,
+          x: cat,
+          y: num,
+          y2: numCols[1]?.name || num,
+          agg: "sum",
+          isWide: false
+        },
+        {
+          id: "vis_2",
+          type: "pie",
+          title: `Phân bố tỷ trọng theo ${cat}`,
+          x: cat,
+          y: num,
+          agg: "sum",
+          isWide: false
+        },
+        {
+          id: "vis_3",
+          type: "table",
+          title: `Bảng dữ liệu chi tiết (${biState.activeSheet || 'Sheet1'})`,
+          limit: 15,
+          isWide: true
+        }
+      ]
+    };
+    biState.visuals = sample.visuals;
+    biRenderConfigGuiList();
+    toast("Template Loaded", "Đã nạp mẫu 3 biểu đồ chuẩn vào danh sách cấu hình.", "info", 2500);
+  });
+
   // Visual type chip picker in modal
   document.querySelectorAll("#bi-visual-type-select .term-chip").forEach((btn) => {
     btn.addEventListener("click", (e) => {
@@ -6432,6 +6542,32 @@ function initBIDashboard() {
       const y2Group = $("#bi-visual-y2-group");
       if (y2Group) y2Group.style.display = vtype === "combo" ? "block" : "none";
     });
+  });
+
+  // Multi-select serial dropdown toggle
+  const msTrigger = $("#btn-bi-slicer-multiselect-trigger");
+  const msMenu = $("#menu-bi-slicer-multiselect");
+  const msWrap = $("#wrap-bi-slicer-multiselect");
+
+  msTrigger?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isShown = msMenu?.classList.contains("show");
+    if (isShown) {
+      msMenu?.classList.remove("show");
+      msWrap?.classList.remove("open");
+    } else {
+      msMenu?.classList.add("show");
+      msWrap?.classList.add("open");
+    }
+  });
+
+  // Prevent closing when clicking inside the multi-select menu
+  msMenu?.addEventListener("click", (e) => e.stopPropagation());
+
+  // Close multi-select menu when clicking outside
+  document.addEventListener("click", () => {
+    msMenu?.classList.remove("show");
+    msWrap?.classList.remove("open");
   });
 
   // Dynamically load available datasets from bi_studio directory
@@ -6725,11 +6861,11 @@ function biSetDataset(payload) {
   // Render fields list
   biRenderFieldsList();
 
-  // Auto-generate visuals (or use default_visuals from payload)
+  // Visuals initialization: prioritize payload.default_visuals, keep existing if already configured, otherwise start empty (waiting for Config JSON)
   if (payload.default_visuals && payload.default_visuals.length > 0) {
     biState.visuals = payload.default_visuals.map((v, idx) => ({ ...v, id: `vis_${idx + 1}` }));
-  } else {
-    biAutoGenerateVisuals();
+  } else if (!biState.visuals) {
+    biState.visuals = [];
   }
 
   // Render Slicers
@@ -6762,7 +6898,6 @@ function biSwitchSheet(sheetName) {
   });
 
   biRenderFieldsList();
-  biAutoGenerateVisuals();
   biRenderSlicers();
   biApplyFilters();
   toast("Sheet Switched", `Viewing worksheet '${sheetName}'.`, "info", 2000);
@@ -6856,6 +6991,25 @@ function biAutoGenerateVisuals() {
   });
 
   biState.visuals = visuals;
+  biRenderVisuals();
+}
+
+function biGetContextData(excludeCol = null) {
+  let filtered = [...biState.rawData];
+  if (biState.searchQuery) {
+    const q = biState.searchQuery.toLowerCase();
+    filtered = filtered.filter((row) =>
+      Object.values(row).some((val) => val !== null && val !== undefined && String(val).toLowerCase().includes(q))
+    );
+  }
+  const normExclude = (excludeCol || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+  for (const [col, selectedSet] of Object.entries(biState.activeSlicers)) {
+    const normCol = (col || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+    if (normCol !== normExclude && selectedSet && selectedSet.size > 0) {
+      filtered = filtered.filter((row) => selectedSet.has(String(row[col] ?? "")));
+    }
+  }
+  return filtered;
 }
 
 function biApplyFilters() {
@@ -7016,8 +7170,185 @@ function biRenderSlicers() {
       }
       btn.classList.toggle("active", set.has(val));
       biApplyFilters();
+      biUpdateMultiSelectDropdown();
     });
   });
+
+  biPopulateSlicerControls();
+  biUpdateMultiSelectDropdown();
+}
+
+function biPopulateSlicerControls() {
+  const colSelect = $("#bi-slicer-col-select");
+  const valInput = $("#bi-slicer-val-input");
+  const datalist = $("#bi-slicer-val-datalist");
+  const btnApply = $("#btn-bi-slicer-apply-input");
+  const btnClear = $("#btn-bi-slicer-clear-input");
+
+  if (!colSelect || !valInput || !datalist) return;
+
+  const strCols = biState.columns.filter((c) => c.type === "string" || c.type === "boolean");
+  if (strCols.length === 0) return;
+
+  const prevCol = colSelect.value;
+  colSelect.innerHTML = strCols.map((c) => `<option value="${c.name}">${c.name}</option>`).join("");
+
+  if (prevCol && strCols.some((c) => c.name === prevCol)) {
+    colSelect.value = prevCol;
+  } else {
+    const brandCol = strCols.find((c) => /oem|brand|hang|vendor|make|car/i.test(c.name));
+    if (brandCol) colSelect.value = brandCol.name;
+    else colSelect.value = strCols[0].name;
+  }
+
+  const updateDatalist = () => {
+    const activeCol = colSelect.value;
+    const vals = Array.from(new Set(biState.rawData.map((r) => String(r[activeCol] ?? "")))).filter(Boolean);
+    vals.sort();
+    datalist.innerHTML = vals.slice(0, 50).map((v) => `<option value="${v}">`).join("");
+    valInput.placeholder = `Nhập ${activeCol} (e.g. Toyota)…`;
+
+    const activeSet = biState.activeSlicers[activeCol];
+    if (activeSet && activeSet.size > 0) {
+      valInput.value = Array.from(activeSet).join(", ");
+      if (btnClear) btnClear.style.display = "inline-block";
+    } else {
+      valInput.value = "";
+      if (btnClear) btnClear.style.display = "none";
+    }
+  };
+
+  colSelect.onchange = updateDatalist;
+  updateDatalist();
+
+  const applyInputFilter = () => {
+    const activeCol = colSelect.value;
+    const rawText = (valInput.value || "").trim();
+    if (!rawText) {
+      delete biState.activeSlicers[activeCol];
+      if (btnClear) btnClear.style.display = "none";
+    } else {
+      const exactOrSimilar = Array.from(new Set(biState.rawData.map((r) => String(r[activeCol] ?? ""))))
+        .find((v) => v.toLowerCase() === rawText.toLowerCase()) || rawText;
+      biState.activeSlicers[activeCol] = new Set([exactOrSimilar]);
+      valInput.value = exactOrSimilar;
+      if (btnClear) btnClear.style.display = "inline-block";
+      toast("Đã lọc", `Lọc ${activeCol} = "${exactOrSimilar}".`, "ok", 2000);
+    }
+    biApplyFilters();
+    biUpdateMultiSelectDropdown();
+  };
+
+  if (btnApply) btnApply.onclick = applyInputFilter;
+  valInput.onkeydown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      applyInputFilter();
+    }
+  };
+
+  if (btnClear) {
+    btnClear.onclick = () => {
+      const activeCol = colSelect.value;
+      delete biState.activeSlicers[activeCol];
+      valInput.value = "";
+      btnClear.style.display = "none";
+      toast("Đã xóa lọc", `Đã xóa bộ lọc trên '${activeCol}'.`, "info", 1800);
+      biApplyFilters();
+      biUpdateMultiSelectDropdown();
+    };
+  }
+}
+
+function biUpdateMultiSelectDropdown() {
+  const container = $("#bi-multiselect-items");
+  const badge = $("#bi-multiselect-badge");
+  const title = $("#bi-multiselect-title");
+  const searchInput = $("#bi-multiselect-search");
+  const btnAll = $("#btn-bi-multiselect-all");
+  const btnClear = $("#btn-bi-multiselect-clear");
+
+  if (!container) return;
+
+  const strCols = biState.columns.filter((c) => c.type === "string" || c.type === "boolean");
+  const serialColObj = strCols.find((c) => /serial|vin|vehicle|model|series|code|item/i.test(c.name)) || strCols[1] || strCols[0];
+  if (!serialColObj) {
+    $("#wrap-bi-slicer-multiselect")?.classList.add("hidden");
+    return;
+  }
+  $("#wrap-bi-slicer-multiselect")?.classList.remove("hidden");
+
+  const serialCol = serialColObj.name;
+  if (title) title.textContent = `${serialCol}:`;
+
+  const contextData = biGetContextData(serialCol);
+  const uniqueSerials = Array.from(new Set(contextData.map((r) => String(r[serialCol] ?? "")))).filter(Boolean);
+  uniqueSerials.sort();
+
+  const activeSet = biState.activeSlicers[serialCol] || new Set();
+
+  if (badge) {
+    badge.textContent = `${activeSet.size} / ${uniqueSerials.length}`;
+  }
+
+  const renderItems = (filterQuery = "") => {
+    const q = filterQuery.toLowerCase();
+    const filteredList = uniqueSerials.filter((s) => !q || s.toLowerCase().includes(q));
+
+    if (filteredList.length === 0) {
+      container.innerHTML = `<span class="meta" style="font-size:11px;padding:6px;">Không tìm thấy serial nào.</span>`;
+      return;
+    }
+
+    container.innerHTML = filteredList.map((val) => {
+      const isChecked = activeSet.has(val);
+      return `
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;padding:3px 6px;border-radius:4px;background:${isChecked ? 'rgba(30,167,253,0.1)' : 'transparent'};">
+          <input type="checkbox" class="bi-ms-chk" value="${val}" ${isChecked ? 'checked' : ''} style="cursor:pointer;">
+          <span style="${isChecked ? 'font-weight:600;color:var(--accent);' : ''}">${val}</span>
+        </label>
+      `;
+    }).join("");
+
+    container.querySelectorAll(".bi-ms-chk").forEach((chk) => {
+      chk.addEventListener("change", () => {
+        const val = chk.value;
+        if (!biState.activeSlicers[serialCol]) {
+          biState.activeSlicers[serialCol] = new Set();
+        }
+        const set = biState.activeSlicers[serialCol];
+        if (chk.checked) set.add(val);
+        else set.delete(val);
+        if (set.size === 0) delete biState.activeSlicers[serialCol];
+        if (badge) badge.textContent = `${set.size} / ${uniqueSerials.length}`;
+        biApplyFilters();
+      });
+    });
+  };
+
+  renderItems(searchInput?.value || "");
+
+  if (searchInput) {
+    searchInput.oninput = () => renderItems(searchInput.value);
+  }
+
+  if (btnAll) {
+    btnAll.onclick = () => {
+      biState.activeSlicers[serialCol] = new Set(uniqueSerials);
+      if (badge) badge.textContent = `${uniqueSerials.length} / ${uniqueSerials.length}`;
+      renderItems(searchInput?.value || "");
+      biApplyFilters();
+    };
+  }
+
+  if (btnClear) {
+    btnClear.onclick = () => {
+      delete biState.activeSlicers[serialCol];
+      if (badge) badge.textContent = `0 / ${uniqueSerials.length}`;
+      renderItems(searchInput?.value || "");
+      biApplyFilters();
+    };
+  }
 }
 
 function biRenderKPICards() {
@@ -7111,23 +7442,36 @@ function biRenderKPICards() {
 
 function biAggregate(data, xCol, yCol, agg = "sum") {
   const map = {};
+  const yColObj = biState.columns.find((c) => c.name === yCol);
+  const isNumeric = yColObj ? yColObj.type === "number" : false;
+  // If column is text or not numeric, default to 'count' rather than 'sum'
+  const effectiveAgg = (!isNumeric && (!agg || agg === "sum")) ? "count" : (agg || "sum");
+
   data.forEach((r) => {
     const key = String(r[xCol] ?? "—");
     const num = Number(r[yCol]) || 0;
-    if (!map[key]) map[key] = { key, count: 0, sum: 0, min: Infinity, max: -Infinity };
+    const rawVal = r[yCol];
+    if (!map[key]) map[key] = { key, count: 0, sum: 0, min: Infinity, max: -Infinity, distinctSet: new Set() };
     map[key].count += 1;
     map[key].sum += num;
+    if (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== "") {
+      map[key].distinctSet.add(String(rawVal));
+    }
     if (num < map[key].min) map[key].min = num;
     if (num > map[key].max) map[key].max = num;
   });
 
   return Object.values(map).map((g) => {
     let val = 0;
-    if (agg === "sum") val = g.sum;
-    else if (agg === "avg") val = g.count > 0 ? g.sum / g.count : 0;
-    else if (agg === "count") val = g.count;
-    else if (agg === "min") val = g.min !== Infinity ? g.min : 0;
-    else if (agg === "max") val = g.max !== -Infinity ? g.max : 0;
+    if (effectiveAgg === "sum") {
+      // If sum resulted in 0 but records exist, fall back to record count
+      val = g.sum !== 0 ? g.sum : g.count;
+    }
+    else if (effectiveAgg === "avg") val = g.count > 0 ? (g.sum !== 0 ? g.sum / g.count : 1) : 0;
+    else if (effectiveAgg === "count") val = g.count;
+    else if (effectiveAgg === "distinct" || effectiveAgg === "distinct_count") val = g.distinctSet.size;
+    else if (effectiveAgg === "min") val = g.min !== Infinity ? g.min : 0;
+    else if (effectiveAgg === "max") val = g.max !== -Infinity ? g.max : 0;
     return { key: g.key, val: Math.round(val * 100) / 100, count: g.count };
   });
 }
@@ -7288,8 +7632,35 @@ function biRenderVisuals() {
   const grid = $("#bi-visuals-grid");
   if (!grid) return;
 
-  if (biState.visuals.length === 0) {
-    grid.innerHTML = `<div class="meta" style="grid-column:1/-1;text-align:center;padding:40px;">Click '＋ Add Visual' to create dashboard widgets.</div>`;
+  if (!biState.visuals || biState.visuals.length === 0) {
+    grid.innerHTML = `
+      <div class="bi-empty-visuals-banner" style="grid-column:1/-1;text-align:center;padding:48px 24px;background:var(--bg-card,rgba(255,255,255,0.02));border:1px dashed var(--border);border-radius:10px;margin:16px 0;">
+        <div style="font-size:38px;margin-bottom:12px;">⚙️</div>
+        <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px;">Chưa có cấu hình biểu đồ (No Visuals Configured)</div>
+        <div class="meta" style="font-size:12px;max-width:540px;margin:0 auto 18px auto;line-height:1.6;">
+          BI Studio không tự ý vẽ biểu đồ ngẫu nhiên. Hãy tải lên file cấu hình JSON của bạn, tự thêm biểu đồ theo ý muốn, hoặc bấm <strong>Gợi ý biểu đồ mẫu</strong> để tạo nhanh bộ biểu đồ.
+        </div>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+          <label class="btn primary" style="cursor:pointer;font-size:12px;" title="Upload JSON config file">
+            📂 Tải lên Config JSON
+            <input type="file" id="bi-config-file-input-banner" accept=".json" style="display:none;">
+          </label>
+          <button type="button" class="btn" id="btn-bi-add-visual-banner" style="font-size:12px;">＋ Thêm biểu đồ tùy biến</button>
+          <button type="button" class="btn ghost" id="btn-bi-auto-generate-banner" style="font-size:12px;" title="Gợi ý tự động 4 biểu đồ mẫu theo các cột số và phân loại">🪄 Gợi ý biểu đồ mẫu</button>
+        </div>
+      </div>
+    `;
+
+    // Attach listeners for banner buttons
+    $("#bi-config-file-input-banner")?.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (file) biImportConfigJson(file);
+    });
+    $("#btn-bi-add-visual-banner")?.addEventListener("click", () => biOpenAddVisualModal());
+    $("#btn-bi-auto-generate-banner")?.addEventListener("click", () => {
+      biAutoGenerateVisuals();
+      toast("Đã tạo biểu đồ mẫu", "Tự động sinh 4 biểu đồ mẫu dựa trên dữ liệu hiện tại.", "ok", 2500);
+    });
     return;
   }
 
@@ -7410,15 +7781,40 @@ function biRenderVisuals() {
   });
 }
 
-function biShowTooltip(e, title, val1, val2 = null) {
+function biPositionTooltip(e, tip) {
+  const rect = tip.getBoundingClientRect();
+  const tipW = rect.width || 240;
+  const tipH = rect.height || 80;
+  let left = e.clientX + 14;
+  let top = e.clientY + 14;
+  if (left + tipW > window.innerWidth - 12) {
+    left = Math.max(10, e.clientX - tipW - 14);
+  }
+  if (top + tipH > window.innerHeight - 12) {
+    top = Math.max(10, e.clientY - tipH - 14);
+  }
+  tip.style.left = `${left}px`;
+  tip.style.top = `${top}px`;
+}
+
+function biShowTooltip(e, title, val1, val2 = null, extraHtml = "") {
   const tip = biState.tooltipEl;
   if (!tip) return;
-  let html = `<div style="font-weight:700;margin-bottom:2px;">${title}</div><div>${val1}</div>`;
+  let html = `<div style="font-weight:700;margin-bottom:2px;">${title}</div>`;
+  if (val1) html += `<div>${val1}</div>`;
   if (val2) html += `<div>${val2}</div>`;
+  if (extraHtml) {
+    html += `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.15);">${extraHtml}</div>`;
+  }
   tip.innerHTML = html;
   tip.style.display = "block";
-  tip.style.left = `${e.clientX + 12}px`;
-  tip.style.top = `${e.clientY + 12}px`;
+  biPositionTooltip(e, tip);
+}
+
+function biMoveTooltip(e) {
+  const tip = biState.tooltipEl;
+  if (!tip || tip.style.display === "none") return;
+  biPositionTooltip(e, tip);
 }
 
 function biHideTooltip() {
@@ -7705,14 +8101,114 @@ function biRenderLineChart(container, vis) {
 }
 
 function biRenderDonutChart(container, vis) {
-  const data = biState.filteredData;
-  const groups = biAggregate(data, vis.x, vis.y, vis.agg);
-  groups.sort((a, b) => b.val - a.val);
-  const items = groups.slice(0, 7);
+  // Check active filter on vis.x or matching key case-insensitively
+  let filterKey = vis.x;
+  let activeFilterSet = biState.activeSlicers[vis.x];
+  if (!activeFilterSet || activeFilterSet.size === 0) {
+    const normX = (vis.x || "").toLowerCase().replace(/[\s_-]+/g, "");
+    const k = Object.keys(biState.activeSlicers).find(
+      (key) => key.toLowerCase().replace(/[\s_-]+/g, "") === normX
+    );
+    if (k) {
+      filterKey = k;
+      activeFilterSet = biState.activeSlicers[k];
+    }
+  }
+  const isFiltered = activeFilterSet && activeFilterSet.size > 0;
 
-  const total = items.reduce((acc, i) => acc + i.val, 0);
+  // Context data without the filter on filterKey (e.g. preserves OEM='TOYOTA', but keeps all 14 serials)
+  const contextData = biGetContextData(filterKey);
+  const contextGroups = biAggregate(contextData, vis.x, vis.y, vis.agg);
+  contextGroups.sort((a, b) => b.val - a.val);
+
+  const hasMetric = Boolean(vis.y && vis.y !== vis.x);
+  const unitLabel = /serial|series/i.test(vis.x) ? "serials" : (/vin/i.test(vis.x) ? "VINs" : "mục");
+
+  let items = [];
+  let total = 0;
+  let isSelectionRatioMode = false;
+  let selectedVal = 0;
+  let remainingVal = 0;
+
+  if (isFiltered && contextGroups.length > activeFilterSet.size) {
+    isSelectionRatioMode = true;
+    const selectedList = contextGroups.filter((g) => activeFilterSet.has(g.key));
+    const remainingList = contextGroups.filter((g) => !activeFilterSet.has(g.key));
+
+    if (hasMetric) {
+      selectedVal = selectedList.reduce((acc, i) => acc + i.val, 0);
+      remainingVal = remainingList.reduce((acc, i) => acc + i.val, 0);
+      total = selectedVal + remainingVal;
+    } else {
+      // Measuring proportion of distinct items/serials (e.g. 7 selected out of 14 total serials = 50%)
+      selectedVal = selectedList.length;
+      remainingVal = remainingList.length;
+      total = contextGroups.length;
+    }
+
+    if (selectedList.length <= 4) {
+      items = [
+        ...selectedList.map((s, idx) => ({
+          ...s,
+          val: hasMetric ? s.val : 1,
+          isSelected: true,
+          color: BI_PALETTES[idx % BI_PALETTES.length],
+          subKeys: [s.key],
+        })),
+        {
+          key: `Remaining (${remainingList.length} other ${unitLabel})`,
+          val: remainingVal,
+          isSelected: false,
+          isRemaining: true,
+          color: "#475569",
+          subKeys: remainingList.map((r) => r.key),
+        },
+      ];
+    } else {
+      items = [
+        {
+          key: `Selected (${selectedList.length} ${unitLabel})`,
+          val: selectedVal,
+          isSelected: true,
+          color: "#10b981",
+          subKeys: selectedList.map((s) => s.key),
+        },
+        {
+          key: `Remaining (${remainingList.length} ${unitLabel})`,
+          val: remainingVal,
+          isSelected: false,
+          isRemaining: true,
+          color: "#475569",
+          subKeys: remainingList.map((r) => r.key),
+        },
+      ];
+    }
+  } else {
+    // Normal mode (no selection subset): show distribution of all or top items
+    if (contextGroups.length <= 7) {
+      items = contextGroups.map((item) => ({
+        ...item,
+        subKeys: [item.key],
+      }));
+    } else {
+      const top6 = contextGroups.slice(0, 6);
+      const rest = contextGroups.slice(6);
+      const restVal = rest.reduce((acc, i) => acc + i.val, 0);
+      items = [
+        ...top6.map((item) => ({ ...item, subKeys: [item.key] })),
+        {
+          key: `Other (${rest.length} ${unitLabel})`,
+          val: restVal,
+          color: "#475569",
+          subKeys: rest.map((r) => r.key),
+        },
+      ];
+    }
+    total = contextGroups.reduce((acc, i) => acc + i.val, 0);
+  }
+
   if (total <= 0) {
-    container.innerHTML = `<span class="meta">No distribution data available.</span>`;
+    container.innerHTML = `<span class="meta" style="display:block;text-align:center;padding:40px 10px;">No distribution data available.</span>`;
     return;
   }
 
@@ -7720,9 +8216,6 @@ function biRenderDonutChart(container, vis) {
   const cy = 130;
   const r = 90;
   const innerR = 55;
-
-  const activeFilterSet = biState.activeSlicers[vis.x];
-  const isFiltered = activeFilterSet && activeFilterSet.size > 0;
 
   let currentAngle = -Math.PI / 2;
   let svg = `<svg class="bi-chart-svg" viewBox="0 0 460 260">`;
@@ -7753,38 +8246,54 @@ function biRenderDonutChart(container, vis) {
       Z
     `;
 
-    const color = BI_PALETTES[idx % BI_PALETTES.length];
+    const color = item.color || BI_PALETTES[idx % BI_PALETTES.length];
     const pct = ((item.val / total) * 100).toFixed(1);
-    const isSelected = isFiltered && activeFilterSet.has(item.key);
-    const opacity = isFiltered ? (isSelected ? "1.0" : "0.25") : "0.92";
-    const strokeAttr = isSelected ? `stroke="#ffffff" stroke-width="3"` : `stroke="#1e1e2e" stroke-width="2"`;
+    const isSelected = item.isRemaining ? false : (isFiltered ? activeFilterSet.has(item.key) : false);
+    const opacity = isSelectionRatioMode ? (item.isRemaining ? "0.45" : "1.0") : (isFiltered ? (isSelected ? "1.0" : "0.25") : "0.92");
+    const strokeAttr = (isSelected || (isSelectionRatioMode && !item.isRemaining)) ? `stroke="#ffffff" stroke-width="2.5"` : `stroke="#1e1e2e" stroke-width="2"`;
 
     svg += `
       <path class="bi-donut-slice" d="${pathData}" fill="${color}" ${strokeAttr}
-        data-cat="${item.key}" data-val="${item.val}" data-pct="${pct}" style="cursor:pointer;opacity:${opacity};transition:all 0.15s;"></path>
+        data-cat="${item.key}" data-val="${item.val}" data-pct="${pct}" data-idx="${idx}" style="cursor:pointer;opacity:${opacity};transition:all 0.15s;"></path>
     `;
   });
 
-  // Center text
-  svg += `
-    <text x="${cx}" y="${cy - 2}" fill="var(--text-dim)" font-size="11" text-anchor="middle">TOTAL</text>
-    <text x="${cx}" y="${cy + 16}" fill="var(--text)" font-size="14" font-weight="700" text-anchor="middle">${biFormatNumber(total)}</text>
-  `;
+  // Center text & badge (English labels)
+  if (isSelectionRatioMode) {
+    const selectedPct = total > 0 ? ((selectedVal / total) * 100).toFixed(0) : 0;
+    const centerDisplayVal = hasMetric
+      ? `${biFormatNumber(selectedVal)} / ${biFormatNumber(total)}`
+      : `${selectedVal} / ${total} ${unitLabel}`;
+    svg += `
+      <g class="bi-donut-center" style="cursor:pointer;">
+        <circle cx="${cx}" cy="${cy}" r="${innerR - 2}" fill="transparent" pointer-events="all"/>
+        <text x="${cx}" y="${cy - 4}" fill="#10b981" font-size="11" font-weight="700" text-anchor="middle" pointer-events="none">SELECTED ${selectedPct}%</text>
+        <text x="${cx}" y="${cy + 15}" fill="var(--text)" font-size="12" font-weight="700" text-anchor="middle" pointer-events="none">${centerDisplayVal}</text>
+      </g>
+    `;
+  } else {
+    svg += `
+      <g class="bi-donut-center">
+        <text x="${cx}" y="${cy - 2}" fill="var(--text-dim)" font-size="11" text-anchor="middle">TOTAL</text>
+        <text x="${cx}" y="${cy + 16}" fill="var(--text)" font-size="14" font-weight="700" text-anchor="middle">${biFormatNumber(total)}</text>
+      </g>
+    `;
+  }
 
   // Legend on right
   const legendX = 250;
   items.forEach((item, idx) => {
     const ly = 40 + idx * 26;
-    const color = BI_PALETTES[idx % BI_PALETTES.length];
+    const color = item.color || BI_PALETTES[idx % BI_PALETTES.length];
     const pct = ((item.val / total) * 100).toFixed(1);
-    const isSelected = isFiltered && activeFilterSet.has(item.key);
-    const opacity = isFiltered ? (isSelected ? "1.0" : "0.35") : "1.0";
+    const isSelected = item.isRemaining ? false : (isFiltered ? activeFilterSet.has(item.key) : false);
+    const opacity = isSelectionRatioMode ? (item.isRemaining ? "0.65" : "1.0") : (isFiltered ? (isSelected ? "1.0" : "0.35") : "1.0");
 
     svg += `
-      <g class="bi-donut-legend-item" data-cat="${item.key}" style="cursor:pointer;opacity:${opacity};">
+      <g class="bi-donut-legend-item" data-cat="${item.key}" data-idx="${idx}" style="cursor:pointer;opacity:${opacity};">
         <rect x="${legendX}" y="${ly - 9}" width="12" height="12" rx="3" fill="${color}"/>
-        <text x="${legendX + 18}" y="${ly}" fill="var(--text)" font-size="11" font-weight="${isSelected ? '700' : '500'}">${item.key.length > 15 ? item.key.slice(0, 14) + '…' : item.key}</text>
-        <text x="${legendX + 170}" y="${ly}" fill="var(--text-dim)" font-size="10.5" text-anchor="end">${pct}% (${biFormatNumber(item.val)})</text>
+        <text x="${legendX + 18}" y="${ly}" fill="var(--text)" font-size="11" font-weight="${isSelected || (isSelectionRatioMode && !item.isRemaining) ? '700' : '500'}">${item.key.length > 17 ? item.key.slice(0, 16) + '…' : item.key}</text>
+        <text x="${legendX + 175}" y="${ly}" fill="var(--text-dim)" font-size="10.5" text-anchor="end">${pct}% (${biFormatNumber(item.val)})</text>
       </g>
     `;
   });
@@ -7795,19 +8304,103 @@ function biRenderDonutChart(container, vis) {
   // Tooltip & Cross-Filter click wiring
   container.querySelectorAll(".bi-donut-slice, .bi-donut-legend-item").forEach((el) => {
     el.addEventListener("click", () => {
-      if (el.dataset.cat) biToggleChartFilter(vis.x, el.dataset.cat);
-    });
-    el.addEventListener("mouseenter", (e) => {
-      biShowTooltip(e, el.dataset.cat, `Value: <b>${biFormatNumber(Number(el.dataset.val))}</b>`, `Share: <b>${el.dataset.pct}%</b>`);
-    });
-    el.addEventListener("mousemove", (e) => {
-      if (biState.tooltipEl) {
-        biState.tooltipEl.style.left = `${e.clientX + 12}px`;
-        biState.tooltipEl.style.top = `${e.clientY + 12}px`;
+      const cat = el.dataset.cat;
+      if (cat && !cat.startsWith("Remaining") && !cat.startsWith("Phần còn lại") && !cat.startsWith("Other") && !cat.startsWith("Khác")) {
+        biToggleChartFilter(vis.x, cat);
       }
     });
+
+    el.addEventListener("mouseenter", (e) => {
+      const idx = Number(el.dataset.idx);
+      const item = items[idx];
+      if (!item) return;
+
+      const pct = ((item.val / total) * 100).toFixed(1);
+      let extraHtml = "";
+
+      if (item.subKeys && item.subKeys.length > 0) {
+        const keys = item.subKeys;
+        if (item.isRemaining) {
+          const maxShow = 20;
+          const showKeys = keys.slice(0, maxShow);
+          const extraCount = keys.length - maxShow;
+          const badges = showKeys
+            .map((k) => `<span style="background:rgba(255,255,255,0.12);color:#e2e8f0;padding:2px 6px;border-radius:4px;font-size:10px;font-family:monospace;display:inline-block;">${k}</span>`)
+            .join(" ");
+          extraHtml = `
+            <div style="margin-top:2px;">
+              <div style="color:var(--text-dim);font-weight:600;margin-bottom:5px;font-size:10.5px;">Remaining items (${keys.length}):</div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;max-height:160px;overflow-y:auto;padding-right:2px;">
+                ${badges}
+                ${extraCount > 0 ? `<span style="color:var(--accent);font-size:10px;padding:2px 4px;font-style:italic;">+${extraCount} more…</span>` : ""}
+              </div>
+            </div>
+          `;
+        } else if (item.isSelected && keys.length > 1) {
+          const badges = keys
+            .slice(0, 15)
+            .map((k) => `<span style="background:rgba(16,185,129,0.22);color:#34d399;padding:2px 6px;border-radius:4px;font-size:10px;font-family:monospace;display:inline-block;">${k}</span>`)
+            .join(" ");
+          extraHtml = `
+            <div style="margin-top:2px;">
+              <div style="color:#10b981;font-weight:600;margin-bottom:5px;font-size:10.5px;">Selected items (${keys.length}):</div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;max-height:140px;overflow-y:auto;padding-right:2px;">${badges}</div>
+            </div>
+          `;
+        }
+      }
+
+      const titlePrefix = item.isRemaining ? "⚪ " : "🟢 ";
+      biShowTooltip(
+        e,
+        `${titlePrefix}${item.key}`,
+        `Value: <b>${biFormatNumber(item.val)}</b>`,
+        `Share: <b>${pct}%</b>`,
+        extraHtml
+      );
+    });
+
+    el.addEventListener("mousemove", (e) => biMoveTooltip(e));
     el.addEventListener("mouseleave", () => biHideTooltip());
   });
+
+  // Center circle tooltip (summary of selected vs remaining)
+  const centerEl = container.querySelector(".bi-donut-center");
+  if (centerEl && isSelectionRatioMode) {
+    centerEl.addEventListener("mouseenter", (e) => {
+      const selectedList = contextGroups.filter((g) => activeFilterSet.has(g.key));
+      const remainingList = contextGroups.filter((g) => !activeFilterSet.has(g.key));
+      const selectedPct = ((selectedVal / total) * 100).toFixed(0);
+
+      const selBadges = selectedList
+        .slice(0, 8)
+        .map((g) => `<span style="background:rgba(16,185,129,0.22);color:#34d399;padding:2px 5px;border-radius:4px;font-size:10px;font-family:monospace;">${g.key}</span>`)
+        .join(" ");
+      const remBadges = remainingList
+        .slice(0, 12)
+        .map((g) => `<span style="background:rgba(255,255,255,0.12);color:#cbd5e1;padding:2px 5px;border-radius:4px;font-size:10px;font-family:monospace;">${g.key}</span>`)
+        .join(" ");
+
+      const extra = `
+        <div style="margin-top:2px;">
+          <div style="color:#10b981;font-weight:600;margin-bottom:4px;font-size:10.5px;">🟢 Selected (${selectedList.length}):</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${selBadges}${selectedList.length > 8 ? ` <span style="font-size:9.5px;color:var(--text-dim);">+${selectedList.length - 8}…</span>` : ""}</div>
+          <div style="color:var(--text-dim);font-weight:600;margin-bottom:4px;font-size:10.5px;">⚪ Remaining (${remainingList.length}):</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;max-height:120px;overflow-y:auto;">${remBadges}${remainingList.length > 12 ? ` <span style="font-size:9.5px;color:var(--text-dim);">+${remainingList.length - 12}…</span>` : ""}</div>
+        </div>
+      `;
+
+      biShowTooltip(
+        e,
+        `📊 Selection Overview (${vis.x})`,
+        `Selected: <b>${biFormatNumber(selectedVal)} / ${biFormatNumber(total)} (${selectedPct}%)</b>`,
+        `Remaining: <b>${biFormatNumber(remainingVal)} / ${biFormatNumber(total)} (${(100 - Number(selectedPct)).toFixed(0)}%)</b>`,
+        extra
+      );
+    });
+    centerEl.addEventListener("mousemove", (e) => biMoveTooltip(e));
+    centerEl.addEventListener("mouseleave", () => biHideTooltip());
+  }
 }
 
 function biRenderTable(container, vis) {
@@ -7850,6 +8443,446 @@ function biOpenJsonModal() {
   modal.classList.remove("hidden");
 }
 
+function biOpenConfigModal(activeTab = "gui") {
+  const modal = $("#modal-bi-config");
+  if (!modal) return;
+
+  // Populate column selectors for GUI form
+  const xSelect = $("#bi-gui-x-select");
+  const ySelect = $("#bi-gui-y-select");
+  const y2Select = $("#bi-gui-y2-select");
+
+  const numCols = biState.columns.filter((c) => c.type === "number");
+  const strCols = biState.columns.filter((c) => c.type !== "number");
+  const allCols = biState.columns;
+
+  if (xSelect) {
+    xSelect.innerHTML = allCols.map((c) => `<option value="${c.name}">${c.name} (${c.type})</option>`).join("");
+    if (strCols.length > 0) xSelect.value = strCols[0].name;
+  }
+  if (ySelect) {
+    ySelect.innerHTML = allCols.map((c) => `<option value="${c.name}">${c.name}${c.type === 'number' ? ' (num)' : ''}</option>`).join("");
+    if (numCols.length > 0) ySelect.value = numCols[0].name;
+  }
+  if (y2Select) {
+    y2Select.innerHTML = `<option value="">(None)</option>` +
+      numCols.map((c) => `<option value="${c.name}">${c.name}</option>`).join("");
+  }
+
+  biResetConfigForm();
+  biSwitchConfigTab(activeTab);
+  biRenderConfigGuiList();
+
+  modal.classList.remove("hidden");
+}
+
+function biSwitchConfigTab(tabName) {
+  const isGui = tabName === "gui";
+  const btnGui = $("#btn-bi-cfg-tab-gui");
+  const btnRaw = $("#btn-bi-cfg-tab-raw");
+  const paneGui = $("#bi-config-pane-gui");
+  const paneRaw = $("#bi-config-pane-raw");
+
+  if (isGui) {
+    // If switching from Raw to GUI, try to parse raw JSON
+    const rawVal = $("#bi-config-editor-content")?.value;
+    if (rawVal && rawVal.trim()) {
+      try {
+        const parsed = JSON.parse(rawVal);
+        let rawVisuals = [];
+        if (Array.isArray(parsed)) rawVisuals = parsed;
+        else if (parsed && typeof parsed === "object" && Array.isArray(parsed.visuals)) rawVisuals = parsed.visuals;
+        if (rawVisuals.length > 0) {
+          biState.visuals = rawVisuals.map((v, idx) => ({
+            id: v.id || `vis_${idx + 1}`,
+            type: v.type || "bar",
+            title: v.title || `Visual ${idx + 1}`,
+            x: v.x || "",
+            y: v.y || "",
+            y2: v.y2 || undefined,
+            agg: v.agg || "sum",
+            isWide: !!v.isWide,
+            limit: v.limit || 15,
+          }));
+        }
+      } catch {}
+    }
+    btnGui?.classList.add("active");
+    btnRaw?.classList.remove("active");
+    paneGui?.classList.remove("hidden");
+    paneRaw?.classList.add("hidden");
+    biRenderConfigGuiList();
+  } else {
+    // Switching from GUI to Raw, sync latest visuals to JSON textarea
+    biSyncVisualsToRawEditor();
+    btnRaw?.classList.add("active");
+    btnGui?.classList.remove("active");
+    paneRaw?.classList.remove("hidden");
+    paneGui?.classList.add("hidden");
+  }
+}
+
+function biSyncVisualsToRawEditor() {
+  const visuals = biState.visuals || [];
+  const configPayload = {
+    version: "1.0",
+    generator: "telua_bi_studio",
+    dataset: biState.filename || "dataset.xlsx",
+    sheet: biState.activeSheet || "Sheet1",
+    exported_at: new Date().toISOString(),
+    visuals: visuals.map((v) => ({
+      id: v.id,
+      type: v.type,
+      title: v.title,
+      x: v.x,
+      y: v.y,
+      ...(v.y2 ? { y2: v.y2 } : {}),
+      agg: v.agg || "sum",
+      isWide: !!v.isWide,
+      ...(v.limit ? { limit: v.limit } : {}),
+    })),
+  };
+  const editor = $("#bi-config-editor-content");
+  if (editor) {
+    editor.value = JSON.stringify(configPayload, null, 2);
+  }
+}
+
+function biRenderConfigGuiList() {
+  const listEl = $("#bi-gui-visuals-list");
+  if (!listEl) return;
+
+  const visuals = biState.visuals || [];
+  const countEl = $("#bi-gui-list-count");
+  if (countEl) countEl.textContent = `${visuals.length} biểu đồ`;
+
+  const badge = $("#bi-config-stats-badge");
+  if (badge) badge.textContent = `${visuals.length} visual${visuals.length === 1 ? "" : "s"}`;
+
+  biSyncVisualsToRawEditor();
+
+  if (visuals.length === 0) {
+    listEl.innerHTML = `
+      <div class="meta" style="text-align:center;padding:24px;border:1px dashed var(--border);border-radius:6px;">
+        Chưa có biểu đồ nào trong cấu hình. Hãy điền thông tin vào biểu mẫu ở trên và nhấn <strong>＋ Thêm vào danh sách</strong>, hoặc nhấn <strong>💡 Load Template</strong>.
+      </div>
+    `;
+    return;
+  }
+
+  listEl.innerHTML = visuals.map((vis, idx) => {
+    let typeIcon = "📊";
+    if (vis.type === "combo") typeIcon = "📊📈";
+    else if (vis.type === "hbar") typeIcon = "📶";
+    else if (vis.type === "line") typeIcon = "📈";
+    else if (vis.type === "pie") typeIcon = "🍩";
+    else if (vis.type === "table") typeIcon = "▦";
+
+    const widthLabel = vis.isWide ? "2 cột (Full)" : "1 cột";
+    const dimMeasure = vis.type === "table"
+      ? `Grid · Top ${vis.limit || 15} rows`
+      : `X: <strong>${vis.x || '—'}</strong> · Y: <strong>${vis.y || '—'}</strong> (${(vis.agg || 'sum').toUpperCase()})${vis.y2 ? ` · Y2: <strong>${vis.y2}</strong>` : ''}`;
+
+    const isFirst = idx === 0;
+    const isLast = idx === visuals.length - 1;
+
+    return `
+      <div class="bi-gui-item" data-id="${vis.id}" data-idx="${idx}">
+        <div class="bi-gui-item-info">
+          <span style="font-size:16px;">${typeIcon}</span>
+          <div style="display:flex;flex-direction:column;gap:2px;overflow:hidden;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="bi-gui-item-title">${vis.title || "Visual " + (idx + 1)}</span>
+              <span class="tag" style="font-size:10px;text-transform:uppercase;padding:1px 5px;background:var(--border);border-radius:3px;">${vis.type}</span>
+              <span class="tag" style="font-size:10px;padding:1px 5px;background:rgba(30,167,253,0.12);color:var(--accent);border-radius:3px;">${widthLabel}</span>
+            </div>
+            <span class="bi-gui-item-meta">${dimMeasure}</span>
+          </div>
+        </div>
+        <div class="bi-gui-item-actions">
+          <button type="button" class="btn btn-xs ghost btn-gui-up" title="Move Up (Lên)" data-idx="${idx}" ${isFirst ? 'disabled' : ''}>⬆</button>
+          <button type="button" class="btn btn-xs ghost btn-gui-down" title="Move Down (Xuống)" data-idx="${idx}" ${isLast ? 'disabled' : ''}>⬇</button>
+          <button type="button" class="btn btn-xs ghost btn-gui-width" title="Toggle 1x/2x Width (Đổi kích thước)" data-id="${vis.id}">⤢</button>
+          <button type="button" class="btn btn-xs ghost btn-gui-edit" title="Edit this chart (Sửa)" data-id="${vis.id}">✏️</button>
+          <button type="button" class="btn btn-xs ghost danger btn-gui-del" title="Remove this chart (Xóa)" data-id="${vis.id}">🗑️</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  // Attach button event listeners in GUI list
+  listEl.querySelectorAll(".btn-gui-up").forEach((b) => {
+    b.addEventListener("click", () => {
+      const idx = parseInt(b.dataset.idx, 10);
+      if (idx > 0) {
+        const temp = biState.visuals[idx];
+        biState.visuals[idx] = biState.visuals[idx - 1];
+        biState.visuals[idx - 1] = temp;
+        biRenderConfigGuiList();
+        biRenderVisuals();
+      }
+    });
+  });
+
+  listEl.querySelectorAll(".btn-gui-down").forEach((b) => {
+    b.addEventListener("click", () => {
+      const idx = parseInt(b.dataset.idx, 10);
+      if (idx < biState.visuals.length - 1) {
+        const temp = biState.visuals[idx];
+        biState.visuals[idx] = biState.visuals[idx + 1];
+        biState.visuals[idx + 1] = temp;
+        biRenderConfigGuiList();
+        biRenderVisuals();
+      }
+    });
+  });
+
+  listEl.querySelectorAll(".btn-gui-width").forEach((b) => {
+    b.addEventListener("click", () => {
+      const v = biState.visuals.find((item) => item.id === b.dataset.id);
+      if (v) {
+        v.isWide = !v.isWide;
+        biRenderConfigGuiList();
+        biRenderVisuals();
+      }
+    });
+  });
+
+  listEl.querySelectorAll(".btn-gui-edit").forEach((b) => {
+    b.addEventListener("click", () => biEditConfigVisual(b.dataset.id));
+  });
+
+  listEl.querySelectorAll(".btn-gui-del").forEach((b) => {
+    b.addEventListener("click", () => {
+      biState.visuals = biState.visuals.filter((item) => item.id !== b.dataset.id);
+      biRenderConfigGuiList();
+      biRenderVisuals();
+      toast("Đã xóa", "Đã xóa biểu đồ khỏi cấu hình.", "info", 1500);
+    });
+  });
+}
+
+function biEditConfigVisual(id) {
+  const vis = biState.visuals.find((v) => v.id === id);
+  if (!vis) return;
+
+  biState._editingVisualId = id;
+
+  // Set type chips
+  document.querySelectorAll("#bi-gui-type-chips .term-chip").forEach((chip) => {
+    const isMatch = chip.dataset.vtype === vis.type;
+    chip.classList.toggle("active", isMatch);
+  });
+  const y2Group = $("#bi-gui-y2-group");
+  if (y2Group) y2Group.style.display = vis.type === "combo" ? "block" : "none";
+
+  const titleInput = $("#bi-gui-title-input");
+  if (titleInput) titleInput.value = vis.title || "";
+
+  const wideBox = $("#bi-gui-wide-checkbox");
+  if (wideBox) wideBox.checked = !!vis.isWide;
+
+  const xSel = $("#bi-gui-x-select");
+  if (xSel && vis.x) xSel.value = vis.x;
+
+  const ySel = $("#bi-gui-y-select");
+  if (ySel && vis.y) ySel.value = vis.y;
+
+  const y2Sel = $("#bi-gui-y2-select");
+  if (y2Sel && vis.y2) y2Sel.value = vis.y2;
+
+  const aggSel = $("#bi-gui-agg-select");
+  if (aggSel && vis.agg) aggSel.value = vis.agg;
+
+  const formTitle = $("#bi-gui-form-title");
+  if (formTitle) formTitle.textContent = `✏️ Chỉnh Sửa Biểu Đồ: ${vis.title || 'Chart'}`;
+
+  const saveBtn = $("#btn-bi-gui-save-item");
+  if (saveBtn) saveBtn.textContent = "💾 Cập nhật biểu đồ";
+
+  $("#btn-bi-gui-cancel-edit")?.classList.remove("hidden");
+}
+
+function biResetConfigForm() {
+  biState._editingVisualId = null;
+
+  const titleInput = $("#bi-gui-title-input");
+  if (titleInput) titleInput.value = "";
+
+  const wideBox = $("#bi-gui-wide-checkbox");
+  if (wideBox) wideBox.checked = false;
+
+  // Default to combo or bar
+  document.querySelectorAll("#bi-gui-type-chips .term-chip").forEach((chip, idx) => {
+    chip.classList.toggle("active", idx === 0);
+  });
+  const y2Group = $("#bi-gui-y2-group");
+  if (y2Group) y2Group.style.display = "block";
+
+  const formTitle = $("#bi-gui-form-title");
+  if (formTitle) formTitle.textContent = "＋ Thêm Biểu Đồ Mới (Add Chart)";
+
+  const saveBtn = $("#btn-bi-gui-save-item");
+  if (saveBtn) saveBtn.textContent = "＋ Thêm vào danh sách";
+
+  $("#btn-bi-gui-cancel-edit")?.classList.add("hidden");
+}
+
+function biSaveConfigItemFromForm() {
+  const activeChip = $("#bi-gui-type-chips .term-chip.active");
+  const type = activeChip?.dataset.vtype || "bar";
+  let title = ($("#bi-gui-title-input")?.value || "").trim();
+  const isWide = !!$("#bi-gui-wide-checkbox")?.checked;
+  const x = $("#bi-gui-x-select")?.value || "";
+  const y = $("#bi-gui-y-select")?.value || "";
+  const y2 = $("#bi-gui-y2-select")?.value || "";
+  const agg = $("#bi-gui-agg-select")?.value || "sum";
+
+  if (!title) {
+    if (type === "table") title = `Data Grid (${biState.activeSheet || 'Table'})`;
+    else if (type === "combo") title = `${y} vs ${y2 || 'Line'} by ${x}`;
+    else title = `${y} by ${x}`;
+  }
+
+  if (biState._editingVisualId) {
+    const idx = biState.visuals.findIndex((v) => v.id === biState._editingVisualId);
+    if (idx !== -1) {
+      biState.visuals[idx] = {
+        ...biState.visuals[idx],
+        type,
+        title,
+        x,
+        y,
+        ...(y2 ? { y2 } : { y2: undefined }),
+        agg,
+        isWide,
+      };
+      toast("Đã cập nhật", `Đã lưu thay đổi cho biểu đồ '${title}'.`, "ok", 2000);
+    }
+  } else {
+    const newVis = {
+      id: `vis_${Date.now()}`,
+      type,
+      title,
+      x,
+      y,
+      ...(y2 ? { y2 } : {}),
+      agg,
+      isWide,
+      limit: 15,
+    };
+    biState.visuals.push(newVis);
+    toast("Đã thêm biểu đồ", `Đã thêm biểu đồ '${title}' vào danh sách cấu hình.`, "ok", 2000);
+  }
+
+  biResetConfigForm();
+  biRenderConfigGuiList();
+  biRenderVisuals();
+}
+
+function biApplyConfigJson(jsonStr) {
+  if (!jsonStr || !jsonStr.trim()) {
+    toast("Config Empty", "Please provide a valid JSON configuration.", "err", 3000);
+    return false;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch (err) {
+    toast("Invalid JSON", "Syntax error in JSON: " + err.message, "err", 4000);
+    return false;
+  }
+
+  let rawVisuals = [];
+  if (Array.isArray(parsed)) {
+    rawVisuals = parsed;
+  } else if (parsed && typeof parsed === "object" && Array.isArray(parsed.visuals)) {
+    rawVisuals = parsed.visuals;
+  } else {
+    toast("Invalid Schema", "Config JSON must either be an array of visuals or an object with a 'visuals' array property.", "err", 4500);
+    return false;
+  }
+
+  biState.visuals = rawVisuals.map((v, idx) => ({
+    id: v.id || `vis_${idx + 1}`,
+    type: v.type || "bar",
+    title: v.title || `Visual ${idx + 1}`,
+    x: v.x || "",
+    y: v.y || "",
+    y2: v.y2 || undefined,
+    agg: v.agg || "sum",
+    isWide: !!v.isWide,
+    limit: v.limit || 15,
+  }));
+
+  biRenderVisuals();
+  $("#modal-bi-config")?.classList.add("hidden");
+  toast("Config Applied", `Successfully loaded ${biState.visuals.length} visual(s) from JSON config.`, "ok", 3000);
+
+  // Optionally persist config to backend
+  try {
+    fetch("/api/bi/visual-config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dataset: biState.filename,
+        sheet: biState.activeSheet,
+        visuals: biState.visuals,
+      }),
+    }).catch(() => {});
+  } catch {}
+
+  return true;
+}
+
+function biExportConfigJson() {
+  const visuals = biState.visuals || [];
+  const configPayload = {
+    version: "1.0",
+    generator: "telua_bi_studio",
+    dataset: biState.filename || "dataset.xlsx",
+    sheet: biState.activeSheet || "Sheet1",
+    exported_at: new Date().toISOString(),
+    visuals: visuals.map((v) => ({
+      id: v.id,
+      type: v.type,
+      title: v.title,
+      x: v.x,
+      y: v.y,
+      ...(v.y2 ? { y2: v.y2 } : {}),
+      agg: v.agg || "sum",
+      isWide: !!v.isWide,
+      ...(v.limit ? { limit: v.limit } : {}),
+    })),
+  };
+
+  const jsonStr = JSON.stringify(configPayload, null, 2);
+  const blob = new Blob([jsonStr], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const baseName = biState.filename ? biState.filename.replace(/\.[^/.]+$/, "") : "bi_dashboard";
+  a.href = url;
+  a.download = `${baseName}_visuals_config.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast("Config Downloaded", `Saved ${a.download} (${visuals.length} visual${visuals.length === 1 ? "" : "s"}).`, "ok", 2500);
+}
+
+function biImportConfigJson(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const content = e.target.result;
+      biApplyConfigJson(content);
+    } catch (err) {
+      toast("Import Error", "Failed to parse JSON file: " + err.message, "err", 4000);
+    }
+  };
+  reader.readAsText(file);
+}
+
 function biOpenAddVisualModal() {
   const modal = $("#modal-bi-add-visual");
   if (!modal) return;
@@ -7865,9 +8898,8 @@ function biOpenAddVisualModal() {
     xSelect.innerHTML = allCols.map((c) => `<option value="${c.name}">${c.name} (${c.type})</option>`).join("");
   }
   if (ySelect) {
-    ySelect.innerHTML = numCols.length > 0
-      ? numCols.map((c) => `<option value="${c.name}">${c.name}</option>`).join("")
-      : allCols.map((c) => `<option value="${c.name}">${c.name}</option>`).join("");
+    ySelect.innerHTML = allCols.map((c) => `<option value="${c.name}">${c.name}${c.type === 'number' ? ' (num)' : ''}</option>`).join("");
+    if (numCols.length > 0) ySelect.value = numCols[0].name;
   }
   if (y2Select) {
     y2Select.innerHTML = `<option value="">(None)</option>` +

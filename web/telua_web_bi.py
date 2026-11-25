@@ -895,3 +895,35 @@ CONFIG_EXCEL_COLUMNS=({cols_str})
         "json_config": json_content,
     })
 
+
+@bi_bp.route("/api/bi/visual-config", methods=["GET", "POST"])
+def api_bi_visual_config():
+    """Get or save dashboard visual configuration JSON."""
+    root = get_root()
+    cfg_file = root / "config" / "bi_dashboard_config.json"
+
+    if request.method == "POST":
+        payload = request.get_json(silent=True) or {}
+        visuals = payload.get("visuals")
+        if visuals is None:
+            abort(400, description="Missing 'visuals' array in request body.")
+
+        cfg_file.parent.mkdir(parents=True, exist_ok=True)
+        cfg_file.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        return jsonify({
+            "ok": True,
+            "message": "Visual config saved successfully",
+            "path": "config/bi_dashboard_config.json",
+            "visuals_count": len(visuals),
+        })
+
+    # GET
+    if not cfg_file.is_file():
+        return jsonify({"ok": True, "exists": False, "visuals": []})
+
+    try:
+        data = json.loads(cfg_file.read_text(encoding="utf-8"))
+        return jsonify({"ok": True, "exists": True, "config": data})
+    except Exception as e:
+        abort(500, description=f"Failed to read visual config: {str(e)}")
+

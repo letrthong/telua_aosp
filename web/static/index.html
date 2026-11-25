@@ -599,6 +599,12 @@
           <button class="btn jade-btn" id="btn-bi-cross-report"
             title="Generate multi-tab comparison &amp; relational report">📑 Multi-Tab Report</button>
           <button class="btn" id="btn-bi-view-json" title="View &amp; export converted JSON data">{} JSON</button>
+          <button class="btn" id="btn-bi-config-open" title="View, edit, import or export Dashboard Visuals Config (JSON)">⚙️ Config JSON</button>
+          <label class="btn ghost" style="cursor:pointer;" title="Upload Dashboard Visuals Config (.json)">
+            ⬆ Upload Config
+            <input type="file" id="bi-config-file-input" accept=".json" style="display:none;">
+          </label>
+          <button class="btn ghost" id="btn-bi-config-download-btn" title="Download current Visuals Config as .json">⬇ Download Config</button>
           <button class="btn" id="btn-bi-calc-col-open" title="Add a calculated column using simple math expressions">fx Measure</button>
           <button class="btn jade-btn" id="btn-bi-add-visual" title="Add a new custom visual chart or table">＋ Add
             Visual</button>
@@ -664,10 +670,41 @@
             </div>
 
             <!-- Power BI Slicers Bar (Filters) -->
-            <div id="bi-slicers-bar" class="bi-slicers-bar">
+            <div id="bi-slicers-bar" class="bi-slicers-bar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
               <div class="bi-slicer-label">
                 <span>⚡ Slicers:</span>
               </div>
+
+              <!-- Quick input filter (Điền giá trị lọc, e.g. Hãng xe / Brand / Toyota) -->
+              <div class="bi-slicer-input-wrap" style="display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.03);padding:2px 8px;border-radius:6px;border:1px solid var(--border);">
+                <span class="meta" style="font-size:11px;font-weight:600;color:var(--accent);">🔍 Điền Brand:</span>
+                <select id="bi-slicer-col-select" class="theme-select" style="font-size:11px;height:24px;padding:2px 6px;" title="Chọn cột để điền giá trị lọc (e.g. OEM, Brand)"></select>
+                <input id="bi-slicer-val-input" list="bi-slicer-val-datalist" type="text" placeholder="Nhập tên (e.g. Toyota)…" class="term-input" style="font-size:11px;height:24px;padding:2px 8px;width:130px;">
+                <datalist id="bi-slicer-val-datalist"></datalist>
+                <button class="btn btn-xs primary" id="btn-bi-slicer-apply-input" type="button" title="Áp dụng giá trị lọc">Lọc</button>
+                <button class="btn btn-xs ghost" id="btn-bi-slicer-clear-input" type="button" title="Xóa bộ lọc cột này" style="display:none;">✕</button>
+              </div>
+
+              <!-- Multi-select Serial / Value Picker Dropdown -->
+              <div class="dropdown-wrapper" id="wrap-bi-slicer-multiselect">
+                <button class="btn btn-xs ghost dropdown-trigger" id="btn-bi-slicer-multiselect-trigger" type="button" title="Chọn danh sách Vehicle Serials đa chọn">
+                  <span>☑ Chọn Serial</span> <span id="bi-multiselect-badge" class="tag" style="font-size:10px;padding:1px 5px;margin-left:4px;background:var(--accent-soft);color:var(--accent);">0</span> <span class="dropdown-arrow">▼</span>
+                </button>
+                <div class="dropdown-menu" id="menu-bi-slicer-multiselect" style="width:280px;max-height:320px;overflow-y:auto;padding:10px;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.5);">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <span class="meta" style="font-size:11px;font-weight:700;" id="bi-multiselect-title">Vehicle Serials:</span>
+                    <div style="display:flex;gap:4px;">
+                      <button class="btn btn-xs ghost" id="btn-bi-multiselect-all" type="button" style="font-size:10px;">Tất cả</button>
+                      <button class="btn btn-xs ghost" id="btn-bi-multiselect-clear" type="button" style="font-size:10px;">Bỏ chọn</button>
+                    </div>
+                  </div>
+                  <input type="search" id="bi-multiselect-search" placeholder="🔍 Tìm serial…" class="term-input" style="width:100%;font-size:11px;height:24px;margin-bottom:8px;box-sizing:border-box;">
+                  <div id="bi-multiselect-items" style="display:flex;flex-direction:column;gap:3px;max-height:180px;overflow-y:auto;">
+                    <!-- Checkbox items: [☑ Serial 1] [☑ Serial 2] ... -->
+                  </div>
+                </div>
+              </div>
+
               <div id="bi-slicers-container" class="bi-slicers-container">
                 <!-- Slicer chips dynamically inserted here -->
               </div>
@@ -1064,8 +1101,9 @@
             <label for="bi-visual-agg-select" class="meta" style="display:block;margin-bottom:4px;">Aggregation:</label>
             <select id="bi-visual-agg-select" class="theme-select" style="width:100%;">
               <option value="sum" selected>SUM (Total)</option>
-              <option value="avg">AVG (Average)</option>
               <option value="count">COUNT (Records)</option>
+              <option value="distinct">DISTINCT (Unique Count)</option>
+              <option value="avg">AVG (Average)</option>
               <option value="min">MIN (Lowest)</option>
               <option value="max">MAX (Highest)</option>
             </select>
@@ -1117,6 +1155,132 @@
       <div class="modal-actions"
         style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-shrink:0;">
         <button class="btn" id="btn-bi-json-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ BI Visuals Config JSON & GUI Manager Modal ============ -->
+  <div class="modal hidden" id="modal-bi-config">
+    <div class="modal-box wide" style="max-width:920px;max-height:92vh;display:flex;flex-direction:column;">
+      <div class="editor-head"
+        style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);flex-shrink:0;">
+        <div class="editor-title" style="gap:10px;align-items:center;flex-wrap:wrap;">
+          <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;">⚙️ Visuals Manager &amp; Config</span>
+          <div class="src-switch">
+            <button class="src-btn active" id="btn-bi-cfg-tab-gui" type="button">🎨 Visual GUI Manager</button>
+            <button class="src-btn" id="btn-bi-cfg-tab-raw" type="button">📝 Raw JSON Code</button>
+          </div>
+          <span id="bi-config-stats-badge" class="chip" style="font-size:11px;">0 visuals</span>
+        </div>
+        <div class="editor-actions" style="gap:6px;">
+          <label class="btn btn-xs ghost" style="cursor:pointer;" title="Upload JSON config file">
+            📂 Upload JSON
+            <input type="file" id="bi-modal-config-upload" accept=".json" style="display:none;">
+          </label>
+          <button class="btn btn-xs ghost" id="btn-bi-config-download" title="Download .json file">⬇ Download JSON</button>
+          <button class="btn btn-xs ghost" id="btn-bi-config-sample" title="Load sample visual config template">💡 Load Template</button>
+        </div>
+      </div>
+
+      <!-- TAB 1: Visual GUI Manager -->
+      <div id="bi-config-pane-gui" style="display:flex;flex-direction:column;gap:12px;overflow-y:auto;max-height:65vh;padding-right:4px;">
+        <!-- Add / Edit Form Card -->
+        <div style="background:var(--bg-card, rgba(255,255,255,0.02));border:1px solid var(--border);border-radius:8px;padding:12px 14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <span id="bi-gui-form-title" style="font-weight:700;font-size:13px;color:var(--accent);">＋ Thêm Biểu Đồ Mới (Add Chart)</span>
+            <button class="btn btn-xs ghost hidden" id="btn-bi-gui-cancel-edit" type="button">✕ Hủy chỉnh sửa</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <!-- Type chips -->
+            <div>
+              <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;">Loại biểu đồ (Chart Type):</label>
+              <div class="term-quick-bar" id="bi-gui-type-chips" style="border:none;padding:0;gap:6px;flex-wrap:wrap;">
+                <button type="button" class="term-chip active" data-vtype="combo">📊📈 Combo (Bar + Line)</button>
+                <button type="button" class="term-chip" data-vtype="bar">📊 Column (Bar)</button>
+                <button type="button" class="term-chip" data-vtype="hbar">📶 Horizontal Bar</button>
+                <button type="button" class="term-chip" data-vtype="line">📈 Line (Trend)</button>
+                <button type="button" class="term-chip" data-vtype="pie">🍩 Donut / Pie</button>
+                <button type="button" class="term-chip" data-vtype="table">▦ Data Table</button>
+              </div>
+            </div>
+
+            <!-- Title & Width -->
+            <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;">
+              <div>
+                <label for="bi-gui-title-input" class="meta" style="display:block;margin-bottom:4px;font-size:11px;">Tiêu đề biểu đồ (Title):</label>
+                <input id="bi-gui-title-input" type="text" class="term-input" style="width:100%;box-sizing:border-box;font-size:12px;" placeholder="e.g. Doanh Thu Theo Khu Vực">
+              </div>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;margin-bottom:4px;">
+                <input type="checkbox" id="bi-gui-wide-checkbox">
+                <span>⤢ Mở rộng 2 cột (Wide)</span>
+              </label>
+            </div>
+
+            <!-- Dimensions & Measures -->
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;">
+              <div>
+                <label for="bi-gui-x-select" class="meta" style="display:block;margin-bottom:4px;font-size:11px;">Trục X (Phân loại):</label>
+                <select id="bi-gui-x-select" class="theme-select" style="width:100%;font-size:12px;"></select>
+              </div>
+              <div>
+                <label for="bi-gui-y-select" class="meta" style="display:block;margin-bottom:4px;font-size:11px;">Trục Y (Chỉ số):</label>
+                <select id="bi-gui-y-select" class="theme-select" style="width:100%;font-size:12px;"></select>
+              </div>
+              <div id="bi-gui-y2-group">
+                <label for="bi-gui-y2-select" class="meta" style="display:block;margin-bottom:4px;font-size:11px;">Trục Y2 (Combo Line):</label>
+                <select id="bi-gui-y2-select" class="theme-select" style="width:100%;font-size:12px;">
+                  <option value="">(None)</option>
+                </select>
+              </div>
+              <div>
+                <label for="bi-gui-agg-select" class="meta" style="display:block;margin-bottom:4px;font-size:11px;">Hàm gom nhóm (Agg):</label>
+                <select id="bi-gui-agg-select" class="theme-select" style="width:100%;font-size:12px;">
+                  <option value="sum" selected>SUM (Tổng)</option>
+                  <option value="count">COUNT (Đếm bản ghi)</option>
+                  <option value="distinct">DISTINCT (Đếm giá trị duy nhất)</option>
+                  <option value="avg">AVG (Trung bình)</option>
+                  <option value="min">MIN (Nhỏ nhất)</option>
+                  <option value="max">MAX (Lớn nhất)</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end;margin-top:2px;">
+              <button class="btn primary" id="btn-bi-gui-save-item" type="button" style="font-size:12px;">＋ Thêm vào danh sách</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Configured Visuals List Section -->
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span class="meta" style="font-weight:700;font-size:12px;text-transform:uppercase;">Danh sách biểu đồ trong cấu hình:</span>
+            <span id="bi-gui-list-count" class="meta" style="font-size:11px;">0 biểu đồ</span>
+          </div>
+          <div id="bi-gui-visuals-list" style="display:flex;flex-direction:column;gap:8px;">
+            <!-- Injected dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: Raw JSON Editor -->
+      <div id="bi-config-pane-raw" class="hidden" style="display:flex;flex-direction:column;flex:1;min-height:320px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span class="meta" style="font-size:12px;">Chỉnh sửa trực tiếp mã JSON (hoặc sao chép để chia sẻ):</span>
+          <button class="btn btn-xs ghost" id="btn-bi-config-copy" title="Copy Config JSON to clipboard">📋 Copy JSON</button>
+        </div>
+        <textarea id="bi-config-editor-content" class="editor mono"
+          style="flex:1;min-height:280px;max-height:55vh;overflow:auto;font-size:12px;padding:12px;background:var(--bg-soft,#1e1e2e);border:1px solid var(--border);border-radius:6px;resize:vertical;"
+          spellcheck="false" placeholder="Paste or edit dashboard JSON config here…"></textarea>
+      </div>
+
+      <div class="modal-actions"
+        style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);flex-shrink:0;display:flex;justify-content:space-between;align-items:center;">
+        <button class="btn ghost danger" id="btn-bi-config-clear">🧹 Xóa tất cả biểu đồ</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" id="btn-bi-config-close">Đóng (Close)</button>
+          <button class="btn primary" id="btn-bi-config-apply">✅ Áp Dụng Cấu Hình (Apply)</button>
+        </div>
       </div>
     </div>
   </div>
