@@ -834,9 +834,9 @@ tel web stop                          # Dừng Web UI server
        - **Đồng bộ hai chiều với Raw JSON**: Tự động sinh và cập nhật mã JSON khi thao tác trên GUI; hỗ trợ tab `📝 Raw JSON Code` cho người dùng muốn xem hoặc sao chép mã.
      - Hỗ trợ đầy đủ hai chiều **Upload (Import JSON)** và **Download (Export JSON)**: người dùng có thể lưu lại layout dashboard thành file `.json` để tái sử dụng hoặc chia sẻ.
      - **Biểu Đồ Donut Tỷ Trọng Phân Bổ (Share-of-Context & Hover Tooltip Chi Tiết)**:
-       - Khi lọc theo hãng (Brand/OEM) và chọn 1 số Serial (ví dụ chọn 2 trong tổng 14 serials), biểu đồ Donut tự động giữ ngữ cảnh của hãng và chia lát cắt: **Đã chọn** vs **Phần còn lại**, tâm tròn hiển thị huy hiệu thống kê `ĐÃ CHỌN 2 / 14`.
-       - **Hover hiển thị danh sách còn lại**: Khi rê chuột vào lát cắt hoặc mục chú giải `⚪ Phần còn lại (12 mục khác)`, Tooltip sẽ hiển thị danh sách chi tiết các mã serial chưa chọn dưới dạng thẻ huy hiệu (Pill badges) kèm số lượng và tỷ trọng.
-       - Khi rê chuột vào tâm hình tròn (Center badge), Tooltip hiển thị tổng quan đối chiếu cả 2 nhóm `🟢 Đã chọn (2)` và `⚪ Phần còn lại (12)`.
+       - Khi lọc theo hãng (Brand/OEM) và chọn 1 số Serial (ví dụ chọn 2 trong tổng 14 serials), biểu đồ Donut tự động giữ ngữ cảnh của hãng và chia lát cắt: **Selected** vs **Remaining**, tâm tròn hiển thị huy hiệu thống kê chuẩn tiếng Anh: `SELECTED 29%` (hoặc `SELECTED 50%`) và số lượng `X / N serials`.
+       - **Hover hiển thị danh sách còn lại**: Khi rê chuột vào lát cắt hoặc mục chú giải `⚪ Remaining (12 other serials)`, Tooltip sẽ hiển thị danh sách chi tiết các mã serial chưa chọn dưới dạng thẻ huy hiệu (Pill badges) kèm số lượng và tỷ trọng.
+       - Khi rê chuột vào tâm hình tròn (Center badge), Tooltip hiển thị tổng quan đối chiếu cả 2 nhóm `🟢 Selected` và `⚪ Remaining`.
      - Tích hợp nút **🪄 Gợi ý biểu đồ mẫu** (Auto-Suggest) khi người dùng muốn nhanh chóng tạo bộ biểu đồ mặc định mà không cần thiết lập thủ công.
    - **Bộ Thư Viện Mẫu Nghiệp Vụ Chuẩn `bi_studio/`**: Tự động phát hiện và hiển thị các file Excel mẫu nghiệp vụ chung (Bán lẻ global_retail_sales.xlsx, Quản trị nhân sự hr_workforce_analytics.xlsx, Dự án công nghệ it_project_portfolio.xlsx, Tài chính vận hành financial_budget_opex.xlsx), menu dropdown tự cập nhật động mà không cần can thiệp mã nguồn HTML.
    - **Xuất Dữ Liệu Hai Chiều**: Hỗ trợ xem/sao chép/tải xuống dữ liệu dưới dạng JSON ({} JSON) hoặc xuất ngược tập dữ liệu đã lọc ra file Excel .xlsx (⬇ Excel).

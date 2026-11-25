@@ -6460,8 +6460,8 @@ function initBIDashboard() {
             sheet: biState.activeSheet,
             visuals: biState.visuals,
           }),
-        }).catch(() => {});
-      } catch {}
+        }).catch(() => { });
+      } catch { }
     }
   });
 
@@ -8121,6 +8121,8 @@ function biRenderDonutChart(container, vis) {
   const contextGroups = biAggregate(contextData, vis.x, vis.y, vis.agg);
   contextGroups.sort((a, b) => b.val - a.val);
 
+  const yColObj = biState.columns.find((c) => c.name === vis.y);
+  const isNumericMeasure = yColObj && yColObj.type === "number" && vis.y !== vis.x && vis.agg !== "count" && vis.agg !== "distinct";
   const hasMetric = Boolean(vis.y && vis.y !== vis.x);
   const unitLabel = /serial|series/i.test(vis.x) ? "serials" : (/vin/i.test(vis.x) ? "VINs" : "mục");
 
@@ -8135,16 +8137,17 @@ function biRenderDonutChart(container, vis) {
     const selectedList = contextGroups.filter((g) => activeFilterSet.has(g.key));
     const remainingList = contextGroups.filter((g) => !activeFilterSet.has(g.key));
 
-    if (hasMetric) {
-      selectedVal = selectedList.reduce((acc, i) => acc + i.val, 0);
-      remainingVal = remainingList.reduce((acc, i) => acc + i.val, 0);
-      total = selectedVal + remainingVal;
-    } else {
-      // Measuring proportion of distinct items/serials (e.g. 7 selected out of 14 total serials = 50%)
-      selectedVal = selectedList.length;
-      remainingVal = remainingList.length;
-      total = contextGroups.length;
-    }
+    if (isNumericMeasure) {
+      if (hasMetric) {
+        selectedVal = selectedList.reduce((acc, i) => acc + i.val, 0);
+        remainingVal = remainingList.reduce((acc, i) => acc + i.val, 0);
+        total = selectedVal + remainingVal;
+      } else {
+        // Measuring proportion of distinct items/serials (e.g. 7 selected out of 14 total serials = 50%)
+        selectedVal = selectedList.length;
+        remainingVal = remainingList.length;
+        total = contextGroups.length;
+      }
 
     if (selectedList.length <= 4) {
       items = [
@@ -8204,41 +8207,39 @@ function biRenderDonutChart(container, vis) {
         },
       ];
     }
-    total = contextGroups.reduce((acc, i) => acc + i.val, 0);
-  }
 
   if (total <= 0) {
     container.innerHTML = `<span class="meta" style="display:block;text-align:center;padding:40px 10px;">No distribution data available.</span>`;
     return;
   }
 
-  const cx = 130;
-  const cy = 130;
-  const r = 90;
-  const innerR = 55;
+    const cx = 130;
+    const cy = 130;
+    const r = 90;
+    const innerR = 55;
 
-  let currentAngle = -Math.PI / 2;
-  let svg = `<svg class="bi-chart-svg" viewBox="0 0 460 260">`;
+    let currentAngle = -Math.PI / 2;
+    let svg = `<svg class="bi-chart-svg" viewBox="0 0 460 260">`;
 
-  // Slices
-  items.forEach((item, idx) => {
-    const sliceAngle = (item.val / total) * (Math.PI * 2);
-    const startAngle = currentAngle;
-    const endAngle = currentAngle + sliceAngle;
-    currentAngle = endAngle;
+    // Slices
+    items.forEach((item, idx) => {
+      const sliceAngle = (item.val / total) * (Math.PI * 2);
+      const startAngle = currentAngle;
+      const endAngle = currentAngle + sliceAngle;
+      currentAngle = endAngle;
 
-    const x1 = cx + r * Math.cos(startAngle);
-    const y1 = cy + r * Math.sin(startAngle);
-    const x2 = cx + r * Math.cos(endAngle);
-    const y2 = cy + r * Math.sin(endAngle);
+      const x1 = cx + r * Math.cos(startAngle);
+      const y1 = cy + r * Math.sin(startAngle);
+      const x2 = cx + r * Math.cos(endAngle);
+      const y2 = cy + r * Math.sin(endAngle);
 
-    const ix1 = cx + innerR * Math.cos(endAngle);
-    const iy1 = cy + innerR * Math.sin(endAngle);
-    const ix2 = cx + innerR * Math.cos(startAngle);
-    const iy2 = cy + innerR * Math.sin(startAngle);
+      const ix1 = cx + innerR * Math.cos(endAngle);
+      const iy1 = cy + innerR * Math.sin(endAngle);
+      const ix2 = cx + innerR * Math.cos(startAngle);
+      const iy2 = cy + innerR * Math.sin(startAngle);
 
-    const largeArc = sliceAngle > Math.PI ? 1 : 0;
-    const pathData = `
+      const largeArc = sliceAngle > Math.PI ? 1 : 0;
+      const pathData = `
       M ${x1} ${y1}
       A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}
       L ${ix1} ${iy1}
@@ -8246,17 +8247,17 @@ function biRenderDonutChart(container, vis) {
       Z
     `;
 
-    const color = item.color || BI_PALETTES[idx % BI_PALETTES.length];
-    const pct = ((item.val / total) * 100).toFixed(1);
-    const isSelected = item.isRemaining ? false : (isFiltered ? activeFilterSet.has(item.key) : false);
-    const opacity = isSelectionRatioMode ? (item.isRemaining ? "0.45" : "1.0") : (isFiltered ? (isSelected ? "1.0" : "0.25") : "0.92");
-    const strokeAttr = (isSelected || (isSelectionRatioMode && !item.isRemaining)) ? `stroke="#ffffff" stroke-width="2.5"` : `stroke="#1e1e2e" stroke-width="2"`;
+      const color = item.color || BI_PALETTES[idx % BI_PALETTES.length];
+      const pct = ((item.val / total) * 100).toFixed(1);
+      const isSelected = item.isRemaining ? false : (isFiltered ? activeFilterSet.has(item.key) : false);
+      const opacity = isSelectionRatioMode ? (item.isRemaining ? "0.45" : "1.0") : (isFiltered ? (isSelected ? "1.0" : "0.25") : "0.92");
+      const strokeAttr = (isSelected || (isSelectionRatioMode && !item.isRemaining)) ? `stroke="#ffffff" stroke-width="2.5"` : `stroke="#1e1e2e" stroke-width="2"`;
 
-    svg += `
+      svg += `
       <path class="bi-donut-slice" d="${pathData}" fill="${color}" ${strokeAttr}
         data-cat="${item.key}" data-val="${item.val}" data-pct="${pct}" data-idx="${idx}" style="cursor:pointer;opacity:${opacity};transition:all 0.15s;"></path>
     `;
-  });
+    });
 
   // Center text & badge (English labels)
   if (isSelectionRatioMode) {
@@ -8271,35 +8272,35 @@ function biRenderDonutChart(container, vis) {
         <text x="${cx}" y="${cy + 15}" fill="var(--text)" font-size="12" font-weight="700" text-anchor="middle" pointer-events="none">${centerDisplayVal}</text>
       </g>
     `;
-  } else {
-    svg += `
+    } else {
+      svg += `
       <g class="bi-donut-center">
         <text x="${cx}" y="${cy - 2}" fill="var(--text-dim)" font-size="11" text-anchor="middle">TOTAL</text>
         <text x="${cx}" y="${cy + 16}" fill="var(--text)" font-size="14" font-weight="700" text-anchor="middle">${biFormatNumber(total)}</text>
       </g>
     `;
-  }
+    }
 
-  // Legend on right
-  const legendX = 250;
-  items.forEach((item, idx) => {
-    const ly = 40 + idx * 26;
-    const color = item.color || BI_PALETTES[idx % BI_PALETTES.length];
-    const pct = ((item.val / total) * 100).toFixed(1);
-    const isSelected = item.isRemaining ? false : (isFiltered ? activeFilterSet.has(item.key) : false);
-    const opacity = isSelectionRatioMode ? (item.isRemaining ? "0.65" : "1.0") : (isFiltered ? (isSelected ? "1.0" : "0.35") : "1.0");
+    // Legend on right
+    const legendX = 250;
+    items.forEach((item, idx) => {
+      const ly = 40 + idx * 26;
+      const color = item.color || BI_PALETTES[idx % BI_PALETTES.length];
+      const pct = ((item.val / total) * 100).toFixed(1);
+      const isSelected = item.isRemaining ? false : (isFiltered ? activeFilterSet.has(item.key) : false);
+      const opacity = isSelectionRatioMode ? (item.isRemaining ? "0.65" : "1.0") : (isFiltered ? (isSelected ? "1.0" : "0.35") : "1.0");
 
-    svg += `
+      svg += `
       <g class="bi-donut-legend-item" data-cat="${item.key}" data-idx="${idx}" style="cursor:pointer;opacity:${opacity};">
         <rect x="${legendX}" y="${ly - 9}" width="12" height="12" rx="3" fill="${color}"/>
         <text x="${legendX + 18}" y="${ly}" fill="var(--text)" font-size="11" font-weight="${isSelected || (isSelectionRatioMode && !item.isRemaining) ? '700' : '500'}">${item.key.length > 17 ? item.key.slice(0, 16) + '…' : item.key}</text>
         <text x="${legendX + 175}" y="${ly}" fill="var(--text-dim)" font-size="10.5" text-anchor="end">${pct}% (${biFormatNumber(item.val)})</text>
       </g>
     `;
-  });
+    });
 
-  svg += `</svg>`;
-  container.innerHTML = svg;
+    svg += `</svg>`;
+    container.innerHTML = svg;
 
   // Tooltip & Cross-Filter click wiring
   container.querySelectorAll(".bi-donut-slice, .bi-donut-legend-item").forEach((el) => {
@@ -8310,24 +8311,24 @@ function biRenderDonutChart(container, vis) {
       }
     });
 
-    el.addEventListener("mouseenter", (e) => {
-      const idx = Number(el.dataset.idx);
-      const item = items[idx];
-      if (!item) return;
+      el.addEventListener("mouseenter", (e) => {
+        const idx = Number(el.dataset.idx);
+        const item = items[idx];
+        if (!item) return;
 
-      const pct = ((item.val / total) * 100).toFixed(1);
-      let extraHtml = "";
+        const pct = ((item.val / total) * 100).toFixed(1);
+        let extraHtml = "";
 
-      if (item.subKeys && item.subKeys.length > 0) {
-        const keys = item.subKeys;
-        if (item.isRemaining) {
-          const maxShow = 20;
-          const showKeys = keys.slice(0, maxShow);
-          const extraCount = keys.length - maxShow;
-          const badges = showKeys
-            .map((k) => `<span style="background:rgba(255,255,255,0.12);color:#e2e8f0;padding:2px 6px;border-radius:4px;font-size:10px;font-family:monospace;display:inline-block;">${k}</span>`)
-            .join(" ");
-          extraHtml = `
+        if (item.subKeys && item.subKeys.length > 0) {
+          const keys = item.subKeys;
+          if (item.isRemaining) {
+            const maxShow = 20;
+            const showKeys = keys.slice(0, maxShow);
+            const extraCount = keys.length - maxShow;
+            const badges = showKeys
+              .map((k) => `<span style="background:rgba(255,255,255,0.12);color:#e2e8f0;padding:2px 6px;border-radius:4px;font-size:10px;font-family:monospace;display:inline-block;">${k}</span>`)
+              .join(" ");
+            extraHtml = `
             <div style="margin-top:2px;">
               <div style="color:var(--text-dim);font-weight:600;margin-bottom:5px;font-size:10.5px;">Remaining items (${keys.length}):</div>
               <div style="display:flex;flex-wrap:wrap;gap:4px;max-height:160px;overflow-y:auto;padding-right:2px;">
@@ -8336,19 +8337,19 @@ function biRenderDonutChart(container, vis) {
               </div>
             </div>
           `;
-        } else if (item.isSelected && keys.length > 1) {
-          const badges = keys
-            .slice(0, 15)
-            .map((k) => `<span style="background:rgba(16,185,129,0.22);color:#34d399;padding:2px 6px;border-radius:4px;font-size:10px;font-family:monospace;display:inline-block;">${k}</span>`)
-            .join(" ");
-          extraHtml = `
+          } else if (item.isSelected && keys.length > 1) {
+            const badges = keys
+              .slice(0, 15)
+              .map((k) => `<span style="background:rgba(16,185,129,0.22);color:#34d399;padding:2px 6px;border-radius:4px;font-size:10px;font-family:monospace;display:inline-block;">${k}</span>`)
+              .join(" ");
+            extraHtml = `
             <div style="margin-top:2px;">
               <div style="color:#10b981;font-weight:600;margin-bottom:5px;font-size:10.5px;">Selected items (${keys.length}):</div>
               <div style="display:flex;flex-wrap:wrap;gap:4px;max-height:140px;overflow-y:auto;padding-right:2px;">${badges}</div>
             </div>
           `;
+          }
         }
-      }
 
       const titlePrefix = item.isRemaining ? "⚪ " : "🟢 ";
       biShowTooltip(
@@ -8360,28 +8361,24 @@ function biRenderDonutChart(container, vis) {
       );
     });
 
-    el.addEventListener("mousemove", (e) => biMoveTooltip(e));
-    el.addEventListener("mouseleave", () => biHideTooltip());
-  });
+    // Center circle tooltip (summary of selected vs remaining)
+    const centerEl = container.querySelector(".bi-donut-center");
+    if (centerEl && isSelectionRatioMode) {
+      centerEl.addEventListener("mouseenter", (e) => {
+        const selectedList = contextGroups.filter((g) => activeFilterSet.has(g.key));
+        const remainingList = contextGroups.filter((g) => !activeFilterSet.has(g.key));
+        const selectedPct = ((selectedVal / total) * 100).toFixed(0);
 
-  // Center circle tooltip (summary of selected vs remaining)
-  const centerEl = container.querySelector(".bi-donut-center");
-  if (centerEl && isSelectionRatioMode) {
-    centerEl.addEventListener("mouseenter", (e) => {
-      const selectedList = contextGroups.filter((g) => activeFilterSet.has(g.key));
-      const remainingList = contextGroups.filter((g) => !activeFilterSet.has(g.key));
-      const selectedPct = ((selectedVal / total) * 100).toFixed(0);
+        const selBadges = selectedList
+          .slice(0, 8)
+          .map((g) => `<span style="background:rgba(16,185,129,0.22);color:#34d399;padding:2px 5px;border-radius:4px;font-size:10px;font-family:monospace;">${g.key}</span>`)
+          .join(" ");
+        const remBadges = remainingList
+          .slice(0, 12)
+          .map((g) => `<span style="background:rgba(255,255,255,0.12);color:#cbd5e1;padding:2px 5px;border-radius:4px;font-size:10px;font-family:monospace;">${g.key}</span>`)
+          .join(" ");
 
-      const selBadges = selectedList
-        .slice(0, 8)
-        .map((g) => `<span style="background:rgba(16,185,129,0.22);color:#34d399;padding:2px 5px;border-radius:4px;font-size:10px;font-family:monospace;">${g.key}</span>`)
-        .join(" ");
-      const remBadges = remainingList
-        .slice(0, 12)
-        .map((g) => `<span style="background:rgba(255,255,255,0.12);color:#cbd5e1;padding:2px 5px;border-radius:4px;font-size:10px;font-family:monospace;">${g.key}</span>`)
-        .join(" ");
-
-      const extra = `
+        const extra = `
         <div style="margin-top:2px;">
           <div style="color:#10b981;font-weight:600;margin-bottom:4px;font-size:10.5px;">🟢 Selected (${selectedList.length}):</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${selBadges}${selectedList.length > 8 ? ` <span style="font-size:9.5px;color:var(--text-dim);">+${selectedList.length - 8}…</span>` : ""}</div>
@@ -8401,192 +8398,194 @@ function biRenderDonutChart(container, vis) {
     centerEl.addEventListener("mousemove", (e) => biMoveTooltip(e));
     centerEl.addEventListener("mouseleave", () => biHideTooltip());
   }
-}
 
-function biRenderTable(container, vis) {
-  const records = biState.filteredData.slice(0, vis.limit || 20);
-  if (records.length === 0) {
-    container.innerHTML = `<span class="meta">No matching records found.</span>`;
-    return;
-  }
-
-  const cols = biState.columns.slice(0, 7); // show top 7 columns
-
-  let html = `<div class="bi-table-wrap"><table class="bi-table"><thead><tr>`;
-  cols.forEach((c) => {
-    html += `<th>${c.name}</th>`;
-  });
-  html += `</tr></thead><tbody>`;
-
-  records.forEach((row) => {
-    html += `<tr>`;
-    cols.forEach((c) => {
-      const val = row[c.name];
-      const displayVal = val !== null && val !== undefined ? String(val) : "—";
-      html += `<td>${displayVal}</td>`;
-    });
-    html += `</tr>`;
-  });
-
-  html += `</tbody></table></div>`;
-  container.innerHTML = html;
-}
-
-function biOpenJsonModal() {
-  const modal = $("#modal-bi-json");
-  if (!modal) return;
-  const jsonStr = JSON.stringify(biState.filteredData, null, 2);
-  const sizeKb = (new Blob([jsonStr]).size / 1024).toFixed(1);
-
-  $("#bi-json-stats-badge").textContent = `${biState.filteredData.length} records · ${biState.columns.length} columns · ${sizeKb} KB`;
-  $("#bi-json-viewer-content").textContent = jsonStr;
-  modal.classList.remove("hidden");
-}
-
-function biOpenConfigModal(activeTab = "gui") {
-  const modal = $("#modal-bi-config");
-  if (!modal) return;
-
-  // Populate column selectors for GUI form
-  const xSelect = $("#bi-gui-x-select");
-  const ySelect = $("#bi-gui-y-select");
-  const y2Select = $("#bi-gui-y2-select");
-
-  const numCols = biState.columns.filter((c) => c.type === "number");
-  const strCols = biState.columns.filter((c) => c.type !== "number");
-  const allCols = biState.columns;
-
-  if (xSelect) {
-    xSelect.innerHTML = allCols.map((c) => `<option value="${c.name}">${c.name} (${c.type})</option>`).join("");
-    if (strCols.length > 0) xSelect.value = strCols[0].name;
-  }
-  if (ySelect) {
-    ySelect.innerHTML = allCols.map((c) => `<option value="${c.name}">${c.name}${c.type === 'number' ? ' (num)' : ''}</option>`).join("");
-    if (numCols.length > 0) ySelect.value = numCols[0].name;
-  }
-  if (y2Select) {
-    y2Select.innerHTML = `<option value="">(None)</option>` +
-      numCols.map((c) => `<option value="${c.name}">${c.name}</option>`).join("");
-  }
-
-  biResetConfigForm();
-  biSwitchConfigTab(activeTab);
-  biRenderConfigGuiList();
-
-  modal.classList.remove("hidden");
-}
-
-function biSwitchConfigTab(tabName) {
-  const isGui = tabName === "gui";
-  const btnGui = $("#btn-bi-cfg-tab-gui");
-  const btnRaw = $("#btn-bi-cfg-tab-raw");
-  const paneGui = $("#bi-config-pane-gui");
-  const paneRaw = $("#bi-config-pane-raw");
-
-  if (isGui) {
-    // If switching from Raw to GUI, try to parse raw JSON
-    const rawVal = $("#bi-config-editor-content")?.value;
-    if (rawVal && rawVal.trim()) {
-      try {
-        const parsed = JSON.parse(rawVal);
-        let rawVisuals = [];
-        if (Array.isArray(parsed)) rawVisuals = parsed;
-        else if (parsed && typeof parsed === "object" && Array.isArray(parsed.visuals)) rawVisuals = parsed.visuals;
-        if (rawVisuals.length > 0) {
-          biState.visuals = rawVisuals.map((v, idx) => ({
-            id: v.id || `vis_${idx + 1}`,
-            type: v.type || "bar",
-            title: v.title || `Visual ${idx + 1}`,
-            x: v.x || "",
-            y: v.y || "",
-            y2: v.y2 || undefined,
-            agg: v.agg || "sum",
-            isWide: !!v.isWide,
-            limit: v.limit || 15,
-          }));
-        }
-      } catch {}
+  function biRenderTable(container, vis) {
+    const records = biState.filteredData.slice(0, vis.limit || 20);
+    if (records.length === 0) {
+      container.innerHTML = `<span class="meta">No matching records found.</span>`;
+      return;
     }
-    btnGui?.classList.add("active");
-    btnRaw?.classList.remove("active");
-    paneGui?.classList.remove("hidden");
-    paneRaw?.classList.add("hidden");
+
+    const cols = biState.columns.slice(0, 7); // show top 7 columns
+
+    let html = `<div class="bi-table-wrap"><table class="bi-table"><thead><tr>`;
+    cols.forEach((c) => {
+      html += `<th>${c.name}</th>`;
+    });
+    html += `</tr></thead><tbody>`;
+
+    records.forEach((row) => {
+      html += `<tr>`;
+      cols.forEach((c) => {
+        const val = row[c.name];
+        const displayVal = val !== null && val !== undefined ? String(val) : "—";
+        html += `<td>${displayVal}</td>`;
+      });
+      html += `</tr>`;
+    });
+
+    html += `</tbody></table></div>`;
+    container.innerHTML = html;
+  }
+
+  function biOpenJsonModal() {
+    const modal = $("#modal-bi-json");
+    if (!modal) return;
+    const jsonStr = JSON.stringify(biState.filteredData, null, 2);
+    const sizeKb = (new Blob([jsonStr]).size / 1024).toFixed(1);
+
+    $("#bi-json-stats-badge").textContent = `${biState.filteredData.length} records · ${biState.columns.length} columns · ${sizeKb} KB`;
+    $("#bi-json-viewer-content").textContent = jsonStr;
+    modal.classList.remove("hidden");
+  }
+
+  function biOpenConfigModal(activeTab = "gui") {
+    const modal = $("#modal-bi-config");
+    if (!modal) return;
+
+    // Populate column selectors for GUI form
+    const xSelect = $("#bi-gui-x-select");
+    const ySelect = $("#bi-gui-y-select");
+    const y2Select = $("#bi-gui-y2-select");
+
+    const numCols = biState.columns.filter((c) => c.type === "number");
+    const strCols = biState.columns.filter((c) => c.type !== "number");
+    const allCols = biState.columns;
+
+    if (xSelect) {
+      xSelect.innerHTML = allCols.map((c) => `<option value="${c.name}">${c.name} (${c.type})</option>`).join("");
+      if (strCols.length > 0) xSelect.value = strCols[0].name;
+    }
+    if (ySelect) {
+      ySelect.innerHTML = numCols.length > 0
+        ? numCols.map((c) => `<option value="${c.name}">${c.name} (num)</option>`).join("")
+        : allCols.map((c) => `<option value="${c.name}">${c.name}</option>`).join("");
+      ySelect.innerHTML = allCols.map((c) => `<option value="${c.name}">${c.name}${c.type === 'number' ? ' (num)' : ''}</option>`).join("");
+      if (numCols.length > 0) ySelect.value = numCols[0].name;
+    }
+    if (y2Select) {
+      y2Select.innerHTML = `<option value="">(None)</option>` +
+        numCols.map((c) => `<option value="${c.name}">${c.name}</option>`).join("");
+    }
+
+    biResetConfigForm();
+    biSwitchConfigTab(activeTab);
     biRenderConfigGuiList();
-  } else {
-    // Switching from GUI to Raw, sync latest visuals to JSON textarea
+
+    modal.classList.remove("hidden");
+  }
+
+  function biSwitchConfigTab(tabName) {
+    const isGui = tabName === "gui";
+    const btnGui = $("#btn-bi-cfg-tab-gui");
+    const btnRaw = $("#btn-bi-cfg-tab-raw");
+    const paneGui = $("#bi-config-pane-gui");
+    const paneRaw = $("#bi-config-pane-raw");
+
+    if (isGui) {
+      // If switching from Raw to GUI, try to parse raw JSON
+      const rawVal = $("#bi-config-editor-content")?.value;
+      if (rawVal && rawVal.trim()) {
+        try {
+          const parsed = JSON.parse(rawVal);
+          let rawVisuals = [];
+          if (Array.isArray(parsed)) rawVisuals = parsed;
+          else if (parsed && typeof parsed === "object" && Array.isArray(parsed.visuals)) rawVisuals = parsed.visuals;
+          if (rawVisuals.length > 0) {
+            biState.visuals = rawVisuals.map((v, idx) => ({
+              id: v.id || `vis_${idx + 1}`,
+              type: v.type || "bar",
+              title: v.title || `Visual ${idx + 1}`,
+              x: v.x || "",
+              y: v.y || "",
+              y2: v.y2 || undefined,
+              agg: v.agg || "sum",
+              isWide: !!v.isWide,
+              limit: v.limit || 15,
+            }));
+          }
+        } catch { }
+      }
+      btnGui?.classList.add("active");
+      btnRaw?.classList.remove("active");
+      paneGui?.classList.remove("hidden");
+      paneRaw?.classList.add("hidden");
+      biRenderConfigGuiList();
+    } else {
+      // Switching from GUI to Raw, sync latest visuals to JSON textarea
+      biSyncVisualsToRawEditor();
+      btnRaw?.classList.add("active");
+      btnGui?.classList.remove("active");
+      paneRaw?.classList.remove("hidden");
+      paneGui?.classList.add("hidden");
+    }
+  }
+
+  function biSyncVisualsToRawEditor() {
+    const visuals = biState.visuals || [];
+    const configPayload = {
+      version: "1.0",
+      generator: "telua_bi_studio",
+      dataset: biState.filename || "dataset.xlsx",
+      sheet: biState.activeSheet || "Sheet1",
+      exported_at: new Date().toISOString(),
+      visuals: visuals.map((v) => ({
+        id: v.id,
+        type: v.type,
+        title: v.title,
+        x: v.x,
+        y: v.y,
+        ...(v.y2 ? { y2: v.y2 } : {}),
+        agg: v.agg || "sum",
+        isWide: !!v.isWide,
+        ...(v.limit ? { limit: v.limit } : {}),
+      })),
+    };
+    const editor = $("#bi-config-editor-content");
+    if (editor) {
+      editor.value = JSON.stringify(configPayload, null, 2);
+    }
+  }
+
+  function biRenderConfigGuiList() {
+    const listEl = $("#bi-gui-visuals-list");
+    if (!listEl) return;
+
+    const visuals = biState.visuals || [];
+    const countEl = $("#bi-gui-list-count");
+    if (countEl) countEl.textContent = `${visuals.length} biểu đồ`;
+
+    const badge = $("#bi-config-stats-badge");
+    if (badge) badge.textContent = `${visuals.length} visual${visuals.length === 1 ? "" : "s"}`;
+
     biSyncVisualsToRawEditor();
-    btnRaw?.classList.add("active");
-    btnGui?.classList.remove("active");
-    paneRaw?.classList.remove("hidden");
-    paneGui?.classList.add("hidden");
-  }
-}
 
-function biSyncVisualsToRawEditor() {
-  const visuals = biState.visuals || [];
-  const configPayload = {
-    version: "1.0",
-    generator: "telua_bi_studio",
-    dataset: biState.filename || "dataset.xlsx",
-    sheet: biState.activeSheet || "Sheet1",
-    exported_at: new Date().toISOString(),
-    visuals: visuals.map((v) => ({
-      id: v.id,
-      type: v.type,
-      title: v.title,
-      x: v.x,
-      y: v.y,
-      ...(v.y2 ? { y2: v.y2 } : {}),
-      agg: v.agg || "sum",
-      isWide: !!v.isWide,
-      ...(v.limit ? { limit: v.limit } : {}),
-    })),
-  };
-  const editor = $("#bi-config-editor-content");
-  if (editor) {
-    editor.value = JSON.stringify(configPayload, null, 2);
-  }
-}
-
-function biRenderConfigGuiList() {
-  const listEl = $("#bi-gui-visuals-list");
-  if (!listEl) return;
-
-  const visuals = biState.visuals || [];
-  const countEl = $("#bi-gui-list-count");
-  if (countEl) countEl.textContent = `${visuals.length} biểu đồ`;
-
-  const badge = $("#bi-config-stats-badge");
-  if (badge) badge.textContent = `${visuals.length} visual${visuals.length === 1 ? "" : "s"}`;
-
-  biSyncVisualsToRawEditor();
-
-  if (visuals.length === 0) {
-    listEl.innerHTML = `
+    if (visuals.length === 0) {
+      listEl.innerHTML = `
       <div class="meta" style="text-align:center;padding:24px;border:1px dashed var(--border);border-radius:6px;">
         Chưa có biểu đồ nào trong cấu hình. Hãy điền thông tin vào biểu mẫu ở trên và nhấn <strong>＋ Thêm vào danh sách</strong>, hoặc nhấn <strong>💡 Load Template</strong>.
       </div>
     `;
-    return;
-  }
+      return;
+    }
 
-  listEl.innerHTML = visuals.map((vis, idx) => {
-    let typeIcon = "📊";
-    if (vis.type === "combo") typeIcon = "📊📈";
-    else if (vis.type === "hbar") typeIcon = "📶";
-    else if (vis.type === "line") typeIcon = "📈";
-    else if (vis.type === "pie") typeIcon = "🍩";
-    else if (vis.type === "table") typeIcon = "▦";
+    listEl.innerHTML = visuals.map((vis, idx) => {
+      let typeIcon = "📊";
+      if (vis.type === "combo") typeIcon = "📊📈";
+      else if (vis.type === "hbar") typeIcon = "📶";
+      else if (vis.type === "line") typeIcon = "📈";
+      else if (vis.type === "pie") typeIcon = "🍩";
+      else if (vis.type === "table") typeIcon = "▦";
 
-    const widthLabel = vis.isWide ? "2 cột (Full)" : "1 cột";
-    const dimMeasure = vis.type === "table"
-      ? `Grid · Top ${vis.limit || 15} rows`
-      : `X: <strong>${vis.x || '—'}</strong> · Y: <strong>${vis.y || '—'}</strong> (${(vis.agg || 'sum').toUpperCase()})${vis.y2 ? ` · Y2: <strong>${vis.y2}</strong>` : ''}`;
+      const widthLabel = vis.isWide ? "2 cột (Full)" : "1 cột";
+      const dimMeasure = vis.type === "table"
+        ? `Grid · Top ${vis.limit || 15} rows`
+        : `X: <strong>${vis.x || '—'}</strong> · Y: <strong>${vis.y || '—'}</strong> (${(vis.agg || 'sum').toUpperCase()})${vis.y2 ? ` · Y2: <strong>${vis.y2}</strong>` : ''}`;
 
-    const isFirst = idx === 0;
-    const isLast = idx === visuals.length - 1;
+      const isFirst = idx === 0;
+      const isLast = idx === visuals.length - 1;
 
-    return `
+      return `
       <div class="bi-gui-item" data-id="${vis.id}" data-idx="${idx}">
         <div class="bi-gui-item-info">
           <span style="font-size:16px;">${typeIcon}</span>
@@ -8608,437 +8607,440 @@ function biRenderConfigGuiList() {
         </div>
       </div>
     `;
-  }).join("");
+    }).join("");
 
-  // Attach button event listeners in GUI list
-  listEl.querySelectorAll(".btn-gui-up").forEach((b) => {
-    b.addEventListener("click", () => {
-      const idx = parseInt(b.dataset.idx, 10);
-      if (idx > 0) {
-        const temp = biState.visuals[idx];
-        biState.visuals[idx] = biState.visuals[idx - 1];
-        biState.visuals[idx - 1] = temp;
+    // Attach button event listeners in GUI list
+    listEl.querySelectorAll(".btn-gui-up").forEach((b) => {
+      b.addEventListener("click", () => {
+        const idx = parseInt(b.dataset.idx, 10);
+        if (idx > 0) {
+          const temp = biState.visuals[idx];
+          biState.visuals[idx] = biState.visuals[idx - 1];
+          biState.visuals[idx - 1] = temp;
+          biRenderConfigGuiList();
+          biRenderVisuals();
+        }
+      });
+    });
+
+    listEl.querySelectorAll(".btn-gui-down").forEach((b) => {
+      b.addEventListener("click", () => {
+        const idx = parseInt(b.dataset.idx, 10);
+        if (idx < biState.visuals.length - 1) {
+          const temp = biState.visuals[idx];
+          biState.visuals[idx] = biState.visuals[idx + 1];
+          biState.visuals[idx + 1] = temp;
+          biRenderConfigGuiList();
+          biRenderVisuals();
+        }
+      });
+    });
+
+    listEl.querySelectorAll(".btn-gui-width").forEach((b) => {
+      b.addEventListener("click", () => {
+        const v = biState.visuals.find((item) => item.id === b.dataset.id);
+        if (v) {
+          v.isWide = !v.isWide;
+          biRenderConfigGuiList();
+          biRenderVisuals();
+        }
+      });
+    });
+
+    listEl.querySelectorAll(".btn-gui-edit").forEach((b) => {
+      b.addEventListener("click", () => biEditConfigVisual(b.dataset.id));
+    });
+
+    listEl.querySelectorAll(".btn-gui-del").forEach((b) => {
+      b.addEventListener("click", () => {
+        biState.visuals = biState.visuals.filter((item) => item.id !== b.dataset.id);
         biRenderConfigGuiList();
         biRenderVisuals();
-      }
+        toast("Đã xóa", "Đã xóa biểu đồ khỏi cấu hình.", "info", 1500);
+      });
     });
-  });
-
-  listEl.querySelectorAll(".btn-gui-down").forEach((b) => {
-    b.addEventListener("click", () => {
-      const idx = parseInt(b.dataset.idx, 10);
-      if (idx < biState.visuals.length - 1) {
-        const temp = biState.visuals[idx];
-        biState.visuals[idx] = biState.visuals[idx + 1];
-        biState.visuals[idx + 1] = temp;
-        biRenderConfigGuiList();
-        biRenderVisuals();
-      }
-    });
-  });
-
-  listEl.querySelectorAll(".btn-gui-width").forEach((b) => {
-    b.addEventListener("click", () => {
-      const v = biState.visuals.find((item) => item.id === b.dataset.id);
-      if (v) {
-        v.isWide = !v.isWide;
-        biRenderConfigGuiList();
-        biRenderVisuals();
-      }
-    });
-  });
-
-  listEl.querySelectorAll(".btn-gui-edit").forEach((b) => {
-    b.addEventListener("click", () => biEditConfigVisual(b.dataset.id));
-  });
-
-  listEl.querySelectorAll(".btn-gui-del").forEach((b) => {
-    b.addEventListener("click", () => {
-      biState.visuals = biState.visuals.filter((item) => item.id !== b.dataset.id);
-      biRenderConfigGuiList();
-      biRenderVisuals();
-      toast("Đã xóa", "Đã xóa biểu đồ khỏi cấu hình.", "info", 1500);
-    });
-  });
-}
-
-function biEditConfigVisual(id) {
-  const vis = biState.visuals.find((v) => v.id === id);
-  if (!vis) return;
-
-  biState._editingVisualId = id;
-
-  // Set type chips
-  document.querySelectorAll("#bi-gui-type-chips .term-chip").forEach((chip) => {
-    const isMatch = chip.dataset.vtype === vis.type;
-    chip.classList.toggle("active", isMatch);
-  });
-  const y2Group = $("#bi-gui-y2-group");
-  if (y2Group) y2Group.style.display = vis.type === "combo" ? "block" : "none";
-
-  const titleInput = $("#bi-gui-title-input");
-  if (titleInput) titleInput.value = vis.title || "";
-
-  const wideBox = $("#bi-gui-wide-checkbox");
-  if (wideBox) wideBox.checked = !!vis.isWide;
-
-  const xSel = $("#bi-gui-x-select");
-  if (xSel && vis.x) xSel.value = vis.x;
-
-  const ySel = $("#bi-gui-y-select");
-  if (ySel && vis.y) ySel.value = vis.y;
-
-  const y2Sel = $("#bi-gui-y2-select");
-  if (y2Sel && vis.y2) y2Sel.value = vis.y2;
-
-  const aggSel = $("#bi-gui-agg-select");
-  if (aggSel && vis.agg) aggSel.value = vis.agg;
-
-  const formTitle = $("#bi-gui-form-title");
-  if (formTitle) formTitle.textContent = `✏️ Chỉnh Sửa Biểu Đồ: ${vis.title || 'Chart'}`;
-
-  const saveBtn = $("#btn-bi-gui-save-item");
-  if (saveBtn) saveBtn.textContent = "💾 Cập nhật biểu đồ";
-
-  $("#btn-bi-gui-cancel-edit")?.classList.remove("hidden");
-}
-
-function biResetConfigForm() {
-  biState._editingVisualId = null;
-
-  const titleInput = $("#bi-gui-title-input");
-  if (titleInput) titleInput.value = "";
-
-  const wideBox = $("#bi-gui-wide-checkbox");
-  if (wideBox) wideBox.checked = false;
-
-  // Default to combo or bar
-  document.querySelectorAll("#bi-gui-type-chips .term-chip").forEach((chip, idx) => {
-    chip.classList.toggle("active", idx === 0);
-  });
-  const y2Group = $("#bi-gui-y2-group");
-  if (y2Group) y2Group.style.display = "block";
-
-  const formTitle = $("#bi-gui-form-title");
-  if (formTitle) formTitle.textContent = "＋ Thêm Biểu Đồ Mới (Add Chart)";
-
-  const saveBtn = $("#btn-bi-gui-save-item");
-  if (saveBtn) saveBtn.textContent = "＋ Thêm vào danh sách";
-
-  $("#btn-bi-gui-cancel-edit")?.classList.add("hidden");
-}
-
-function biSaveConfigItemFromForm() {
-  const activeChip = $("#bi-gui-type-chips .term-chip.active");
-  const type = activeChip?.dataset.vtype || "bar";
-  let title = ($("#bi-gui-title-input")?.value || "").trim();
-  const isWide = !!$("#bi-gui-wide-checkbox")?.checked;
-  const x = $("#bi-gui-x-select")?.value || "";
-  const y = $("#bi-gui-y-select")?.value || "";
-  const y2 = $("#bi-gui-y2-select")?.value || "";
-  const agg = $("#bi-gui-agg-select")?.value || "sum";
-
-  if (!title) {
-    if (type === "table") title = `Data Grid (${biState.activeSheet || 'Table'})`;
-    else if (type === "combo") title = `${y} vs ${y2 || 'Line'} by ${x}`;
-    else title = `${y} by ${x}`;
   }
 
-  if (biState._editingVisualId) {
-    const idx = biState.visuals.findIndex((v) => v.id === biState._editingVisualId);
-    if (idx !== -1) {
-      biState.visuals[idx] = {
-        ...biState.visuals[idx],
+  function biEditConfigVisual(id) {
+    const vis = biState.visuals.find((v) => v.id === id);
+    if (!vis) return;
+
+    biState._editingVisualId = id;
+
+    // Set type chips
+    document.querySelectorAll("#bi-gui-type-chips .term-chip").forEach((chip) => {
+      const isMatch = chip.dataset.vtype === vis.type;
+      chip.classList.toggle("active", isMatch);
+    });
+    const y2Group = $("#bi-gui-y2-group");
+    if (y2Group) y2Group.style.display = vis.type === "combo" ? "block" : "none";
+
+    const titleInput = $("#bi-gui-title-input");
+    if (titleInput) titleInput.value = vis.title || "";
+
+    const wideBox = $("#bi-gui-wide-checkbox");
+    if (wideBox) wideBox.checked = !!vis.isWide;
+
+    const xSel = $("#bi-gui-x-select");
+    if (xSel && vis.x) xSel.value = vis.x;
+
+    const ySel = $("#bi-gui-y-select");
+    if (ySel && vis.y) ySel.value = vis.y;
+
+    const y2Sel = $("#bi-gui-y2-select");
+    if (y2Sel && vis.y2) y2Sel.value = vis.y2;
+
+    const aggSel = $("#bi-gui-agg-select");
+    if (aggSel && vis.agg) aggSel.value = vis.agg;
+
+    const formTitle = $("#bi-gui-form-title");
+    if (formTitle) formTitle.textContent = `✏️ Chỉnh Sửa Biểu Đồ: ${vis.title || 'Chart'}`;
+
+    const saveBtn = $("#btn-bi-gui-save-item");
+    if (saveBtn) saveBtn.textContent = "💾 Cập nhật biểu đồ";
+
+    $("#btn-bi-gui-cancel-edit")?.classList.remove("hidden");
+  }
+
+  function biResetConfigForm() {
+    biState._editingVisualId = null;
+
+    const titleInput = $("#bi-gui-title-input");
+    if (titleInput) titleInput.value = "";
+
+    const wideBox = $("#bi-gui-wide-checkbox");
+    if (wideBox) wideBox.checked = false;
+
+    // Default to combo or bar
+    document.querySelectorAll("#bi-gui-type-chips .term-chip").forEach((chip, idx) => {
+      chip.classList.toggle("active", idx === 0);
+    });
+    const y2Group = $("#bi-gui-y2-group");
+    if (y2Group) y2Group.style.display = "block";
+
+    const formTitle = $("#bi-gui-form-title");
+    if (formTitle) formTitle.textContent = "＋ Thêm Biểu Đồ Mới (Add Chart)";
+
+    const saveBtn = $("#btn-bi-gui-save-item");
+    if (saveBtn) saveBtn.textContent = "＋ Thêm vào danh sách";
+
+    $("#btn-bi-gui-cancel-edit")?.classList.add("hidden");
+  }
+
+  function biSaveConfigItemFromForm() {
+    const activeChip = $("#bi-gui-type-chips .term-chip.active");
+    const type = activeChip?.dataset.vtype || "bar";
+    let title = ($("#bi-gui-title-input")?.value || "").trim();
+    const isWide = !!$("#bi-gui-wide-checkbox")?.checked;
+    const x = $("#bi-gui-x-select")?.value || "";
+    const y = $("#bi-gui-y-select")?.value || "";
+    const y2 = $("#bi-gui-y2-select")?.value || "";
+    const agg = $("#bi-gui-agg-select")?.value || "sum";
+
+    if (!title) {
+      if (type === "table") title = `Data Grid (${biState.activeSheet || 'Table'})`;
+      else if (type === "combo") title = `${y} vs ${y2 || 'Line'} by ${x}`;
+      else title = `${y} by ${x}`;
+    }
+
+    if (biState._editingVisualId) {
+      const idx = biState.visuals.findIndex((v) => v.id === biState._editingVisualId);
+      if (idx !== -1) {
+        biState.visuals[idx] = {
+          ...biState.visuals[idx],
+          type,
+          title,
+          x,
+          y,
+          ...(y2 ? { y2 } : { y2: undefined }),
+          agg,
+          isWide,
+        };
+        toast("Đã cập nhật", `Đã lưu thay đổi cho biểu đồ '${title}'.`, "ok", 2000);
+      }
+    } else {
+      const newVis = {
+        id: `vis_${Date.now()}`,
         type,
         title,
         x,
         y,
-        ...(y2 ? { y2 } : { y2: undefined }),
+        ...(y2 ? { y2 } : {}),
         agg,
         isWide,
+        limit: 15,
       };
-      toast("Đã cập nhật", `Đã lưu thay đổi cho biểu đồ '${title}'.`, "ok", 2000);
+      biState.visuals.push(newVis);
+      toast("Đã thêm biểu đồ", `Đã thêm biểu đồ '${title}' vào danh sách cấu hình.`, "ok", 2000);
     }
-  } else {
-    const newVis = {
+
+    biResetConfigForm();
+    biRenderConfigGuiList();
+    biRenderVisuals();
+  }
+
+  function biApplyConfigJson(jsonStr) {
+    if (!jsonStr || !jsonStr.trim()) {
+      toast("Config Empty", "Please provide a valid JSON configuration.", "err", 3000);
+      return false;
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch (err) {
+      toast("Invalid JSON", "Syntax error in JSON: " + err.message, "err", 4000);
+      return false;
+    }
+
+    let rawVisuals = [];
+    if (Array.isArray(parsed)) {
+      rawVisuals = parsed;
+    } else if (parsed && typeof parsed === "object" && Array.isArray(parsed.visuals)) {
+      rawVisuals = parsed.visuals;
+    } else {
+      toast("Invalid Schema", "Config JSON must either be an array of visuals or an object with a 'visuals' array property.", "err", 4500);
+      return false;
+    }
+
+    biState.visuals = rawVisuals.map((v, idx) => ({
+      id: v.id || `vis_${idx + 1}`,
+      type: v.type || "bar",
+      title: v.title || `Visual ${idx + 1}`,
+      x: v.x || "",
+      y: v.y || "",
+      y2: v.y2 || undefined,
+      agg: v.agg || "sum",
+      isWide: !!v.isWide,
+      limit: v.limit || 15,
+    }));
+
+    biRenderVisuals();
+    $("#modal-bi-config")?.classList.add("hidden");
+    toast("Config Applied", `Successfully loaded ${biState.visuals.length} visual(s) from JSON config.`, "ok", 3000);
+
+    // Optionally persist config to backend
+    try {
+      fetch("/api/bi/visual-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dataset: biState.filename,
+          sheet: biState.activeSheet,
+          visuals: biState.visuals,
+        }),
+      }).catch(() => { });
+    } catch { }
+
+    return true;
+  }
+
+  function biExportConfigJson() {
+    const visuals = biState.visuals || [];
+    const configPayload = {
+      version: "1.0",
+      generator: "telua_bi_studio",
+      dataset: biState.filename || "dataset.xlsx",
+      sheet: biState.activeSheet || "Sheet1",
+      exported_at: new Date().toISOString(),
+      visuals: visuals.map((v) => ({
+        id: v.id,
+        type: v.type,
+        title: v.title,
+        x: v.x,
+        y: v.y,
+        ...(v.y2 ? { y2: v.y2 } : {}),
+        agg: v.agg || "sum",
+        isWide: !!v.isWide,
+        ...(v.limit ? { limit: v.limit } : {}),
+      })),
+    };
+
+    const jsonStr = JSON.stringify(configPayload, null, 2);
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const baseName = biState.filename ? biState.filename.replace(/\.[^/.]+$/, "") : "bi_dashboard";
+    a.href = url;
+    a.download = `${baseName}_visuals_config.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("Config Downloaded", `Saved ${a.download} (${visuals.length} visual${visuals.length === 1 ? "" : "s"}).`, "ok", 2500);
+  }
+
+  function biImportConfigJson(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target.result;
+        biApplyConfigJson(content);
+      } catch (err) {
+        toast("Import Error", "Failed to parse JSON file: " + err.message, "err", 4000);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function biOpenAddVisualModal() {
+    const modal = $("#modal-bi-add-visual");
+    if (!modal) return;
+
+    const xSelect = $("#bi-visual-x-select");
+    const ySelect = $("#bi-visual-y-select");
+    const y2Select = $("#bi-visual-y2-select");
+
+    const numCols = biState.columns.filter((c) => c.type === "number");
+    const allCols = biState.columns;
+
+    if (xSelect) {
+      xSelect.innerHTML = allCols.map((c) => `<option value="${c.name}">${c.name} (${c.type})</option>`).join("");
+    }
+    if (ySelect) {
+      ySelect.innerHTML = numCols.length > 0
+        ? numCols.map((c) => `<option value="${c.name}">${c.name}</option>`).join("")
+        : allCols.map((c) => `<option value="${c.name}">${c.name}</option>`).join("");
+      ySelect.innerHTML = allCols.map((c) => `<option value="${c.name}">${c.name}${c.type === 'number' ? ' (num)' : ''}</option>`).join("");
+      if (numCols.length > 0) ySelect.value = numCols[0].name;
+    }
+    if (y2Select) {
+      y2Select.innerHTML = `<option value="">(None)</option>` +
+        numCols.map((c) => `<option value="${c.name}">${c.name}</option>`).join("");
+    }
+
+    modal.classList.remove("hidden");
+  }
+
+  function biSaveNewVisual() {
+    const activeTypeBtn = document.querySelector("#bi-visual-type-select .term-chip.active");
+    const type = activeTypeBtn ? activeTypeBtn.dataset.vtype : "bar";
+    const title = $("#bi-visual-title-input")?.value.trim() || `${type.toUpperCase()} Visual`;
+    const x = $("#bi-visual-x-select")?.value;
+    const y = $("#bi-visual-y-select")?.value;
+    const y2 = $("#bi-visual-y2-select")?.value || null;
+    const agg = $("#bi-visual-agg-select")?.value || "sum";
+
+    biState.visuals.push({
       id: `vis_${Date.now()}`,
       type,
       title,
       x,
       y,
-      ...(y2 ? { y2 } : {}),
+      y2,
       agg,
-      isWide,
-      limit: 15,
-    };
-    biState.visuals.push(newVis);
-    toast("Đã thêm biểu đồ", `Đã thêm biểu đồ '${title}' vào danh sách cấu hình.`, "ok", 2000);
-  }
-
-  biResetConfigForm();
-  biRenderConfigGuiList();
-  biRenderVisuals();
-}
-
-function biApplyConfigJson(jsonStr) {
-  if (!jsonStr || !jsonStr.trim()) {
-    toast("Config Empty", "Please provide a valid JSON configuration.", "err", 3000);
-    return false;
-  }
-
-  let parsed;
-  try {
-    parsed = JSON.parse(jsonStr);
-  } catch (err) {
-    toast("Invalid JSON", "Syntax error in JSON: " + err.message, "err", 4000);
-    return false;
-  }
-
-  let rawVisuals = [];
-  if (Array.isArray(parsed)) {
-    rawVisuals = parsed;
-  } else if (parsed && typeof parsed === "object" && Array.isArray(parsed.visuals)) {
-    rawVisuals = parsed.visuals;
-  } else {
-    toast("Invalid Schema", "Config JSON must either be an array of visuals or an object with a 'visuals' array property.", "err", 4500);
-    return false;
-  }
-
-  biState.visuals = rawVisuals.map((v, idx) => ({
-    id: v.id || `vis_${idx + 1}`,
-    type: v.type || "bar",
-    title: v.title || `Visual ${idx + 1}`,
-    x: v.x || "",
-    y: v.y || "",
-    y2: v.y2 || undefined,
-    agg: v.agg || "sum",
-    isWide: !!v.isWide,
-    limit: v.limit || 15,
-  }));
-
-  biRenderVisuals();
-  $("#modal-bi-config")?.classList.add("hidden");
-  toast("Config Applied", `Successfully loaded ${biState.visuals.length} visual(s) from JSON config.`, "ok", 3000);
-
-  // Optionally persist config to backend
-  try {
-    fetch("/api/bi/visual-config", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        dataset: biState.filename,
-        sheet: biState.activeSheet,
-        visuals: biState.visuals,
-      }),
-    }).catch(() => {});
-  } catch {}
-
-  return true;
-}
-
-function biExportConfigJson() {
-  const visuals = biState.visuals || [];
-  const configPayload = {
-    version: "1.0",
-    generator: "telua_bi_studio",
-    dataset: biState.filename || "dataset.xlsx",
-    sheet: biState.activeSheet || "Sheet1",
-    exported_at: new Date().toISOString(),
-    visuals: visuals.map((v) => ({
-      id: v.id,
-      type: v.type,
-      title: v.title,
-      x: v.x,
-      y: v.y,
-      ...(v.y2 ? { y2: v.y2 } : {}),
-      agg: v.agg || "sum",
-      isWide: !!v.isWide,
-      ...(v.limit ? { limit: v.limit } : {}),
-    })),
-  };
-
-  const jsonStr = JSON.stringify(configPayload, null, 2);
-  const blob = new Blob([jsonStr], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  const baseName = biState.filename ? biState.filename.replace(/\.[^/.]+$/, "") : "bi_dashboard";
-  a.href = url;
-  a.download = `${baseName}_visuals_config.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  toast("Config Downloaded", `Saved ${a.download} (${visuals.length} visual${visuals.length === 1 ? "" : "s"}).`, "ok", 2500);
-}
-
-function biImportConfigJson(file) {
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      const content = e.target.result;
-      biApplyConfigJson(content);
-    } catch (err) {
-      toast("Import Error", "Failed to parse JSON file: " + err.message, "err", 4000);
-    }
-  };
-  reader.readAsText(file);
-}
-
-function biOpenAddVisualModal() {
-  const modal = $("#modal-bi-add-visual");
-  if (!modal) return;
-
-  const xSelect = $("#bi-visual-x-select");
-  const ySelect = $("#bi-visual-y-select");
-  const y2Select = $("#bi-visual-y2-select");
-
-  const numCols = biState.columns.filter((c) => c.type === "number");
-  const allCols = biState.columns;
-
-  if (xSelect) {
-    xSelect.innerHTML = allCols.map((c) => `<option value="${c.name}">${c.name} (${c.type})</option>`).join("");
-  }
-  if (ySelect) {
-    ySelect.innerHTML = allCols.map((c) => `<option value="${c.name}">${c.name}${c.type === 'number' ? ' (num)' : ''}</option>`).join("");
-    if (numCols.length > 0) ySelect.value = numCols[0].name;
-  }
-  if (y2Select) {
-    y2Select.innerHTML = `<option value="">(None)</option>` +
-      numCols.map((c) => `<option value="${c.name}">${c.name}</option>`).join("");
-  }
-
-  modal.classList.remove("hidden");
-}
-
-function biSaveNewVisual() {
-  const activeTypeBtn = document.querySelector("#bi-visual-type-select .term-chip.active");
-  const type = activeTypeBtn ? activeTypeBtn.dataset.vtype : "bar";
-  const title = $("#bi-visual-title-input")?.value.trim() || `${type.toUpperCase()} Visual`;
-  const x = $("#bi-visual-x-select")?.value;
-  const y = $("#bi-visual-y-select")?.value;
-  const y2 = $("#bi-visual-y2-select")?.value || null;
-  const agg = $("#bi-visual-agg-select")?.value || "sum";
-
-  biState.visuals.push({
-    id: `vis_${Date.now()}`,
-    type,
-    title,
-    x,
-    y,
-    y2,
-    agg,
-  });
-
-  $("#modal-bi-add-visual")?.classList.add("hidden");
-  biRenderVisuals();
-  toast("Visual Added", `Created '${title}' on dashboard canvas.`, "ok", 2500);
-}
-
-async function biExportExcel() {
-  if (biState.filteredData.length === 0) {
-    toast("Export Failed", "No records to export.", "warn", 2500);
-    return;
-  }
-  toast("Exporting Excel…", "Generating .xlsx file with active filtered dataset…", "info", 2000);
-  try {
-    const res = await fetch("/api/bi/export-excel", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        data: biState.filteredData,
-        sheet_name: biState.activeSheet || "FilteredData",
-        filename: `telua_bi_${biState.activeSheet || "export"}.xlsx`,
-      }),
     });
-    if (!res.ok) throw new Error("Server returned error during Excel export.");
 
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `telua_bi_${biState.activeSheet || "export"}.xlsx`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast("Excel Exported", "File downloaded successfully.", "ok", 3000);
-  } catch (err) {
-    toast("Export Error", err.message, "err", 5000);
+    $("#modal-bi-add-visual")?.classList.add("hidden");
+    biRenderVisuals();
+    toast("Visual Added", `Created '${title}' on dashboard canvas.`, "ok", 2500);
   }
-}
 
-/* ---------------- Boot ---------------- */
-async function boot() {
-  // Self-heal if browser served a stale cached index.html (304 Not Modified) missing core panes
-  if (!document.querySelector("#view-pipelines") || !document.querySelector("#editor") || !document.querySelector("#btn-term-new-session")) {
+  async function biExportExcel() {
+    if (biState.filteredData.length === 0) {
+      toast("Export Failed", "No records to export.", "warn", 2500);
+      return;
+    }
+    toast("Exporting Excel…", "Generating .xlsx file with active filtered dataset…", "info", 2000);
     try {
-      const healed = sessionStorage.getItem("telua_dom_healed");
-      if (!healed) {
-        sessionStorage.setItem("telua_dom_healed", "1");
-        await fetch(window.location.pathname, { cache: "reload" });
-        window.location.reload();
-        return;
+      const res = await fetch("/api/bi/export-excel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          data: biState.filteredData,
+          sheet_name: biState.activeSheet || "FilteredData",
+          filename: `telua_bi_${biState.activeSheet || "export"}.xlsx`,
+        }),
+      });
+      if (!res.ok) throw new Error("Server returned error during Excel export.");
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `telua_bi_${biState.activeSheet || "export"}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast("Excel Exported", "File downloaded successfully.", "ok", 3000);
+    } catch (err) {
+      toast("Export Error", err.message, "err", 5000);
+    }
+  }
+
+  /* ---------------- Boot ---------------- */
+  async function boot() {
+    // Self-heal if browser served a stale cached index.html (304 Not Modified) missing core panes
+    if (!document.querySelector("#view-pipelines") || !document.querySelector("#editor") || !document.querySelector("#btn-term-new-session")) {
+      try {
+        const healed = sessionStorage.getItem("telua_dom_healed");
+        if (!healed) {
+          sessionStorage.setItem("telua_dom_healed", "1");
+          await fetch(window.location.pathname, { cache: "reload" });
+          window.location.reload();
+          return;
+        }
+      } catch { /* ignore */ }
+    } else {
+      try { sessionStorage.removeItem("telua_dom_healed"); } catch { /* ignore */ }
+    }
+    wire();
+    await Promise.all([refreshStatus(), refreshFiles(), refreshCryptoStatus()]);
+
+    // Restore the last-used source from draft or localStorage so F5 keeps the active tab/source.
+    const pipeDraft = draftLoadPipelines();
+    let savedSource = null;
+    let savedTab = null;
+    let savedFile = null;
+    try {
+      savedSource = localStorage.getItem(LAST_SOURCE_KEY);
+      savedTab = localStorage.getItem(LAST_TAB_KEY);
+      savedFile = localStorage.getItem(LAST_FILE_KEY);
+    } catch { /* ignore */ }
+
+    const validSources = new Set(["my", "multi", "car", "dump", "system", "docker"]);
+    const initialSource = (pipeDraft && pipeDraft.source && validSources.has(pipeDraft.source))
+      ? pipeDraft.source
+      : (savedSource && validSources.has(savedSource) ? savedSource : "my");
+
+    state.plSource = initialSource === "docker" ? "system" : initialSource;
+    if (state.plSource !== "system") _lastNonSystemPlSource = state.plSource;
+    document.querySelectorAll("#pl-source-switch .src-btn").forEach(b =>
+      b.classList.toggle("active", b.dataset.source === state.plSource));
+
+    await loadPipelines(pipeDraft);
+    updateDraftChip();
+
+    if (savedTab === "terminal") {
+      switchTab("terminal");
+    } else if (savedTab === "aosp") {
+      switchTab("aosp");
+    } else if (savedTab === "logcat") {
+      switchTab("logcat");
+    } else if (savedTab === "docs") {
+      switchTab("docs");
+    } else if (savedTab === "bi") {
+      switchTab("bi");
+    } else if (savedTab === "files") {
+      if (savedFile && state.files.some(f => f.name === savedFile)) {
+        const fileDraft = draftLoadFile();
+        const draftContent = (fileDraft && fileDraft.name === savedFile) ? fileDraft.content : null;
+        await openFile(savedFile, draftContent);
+      } else {
+        switchTab("files");
+      }
+    } else {
+      syncTopTabs();
+    }
+
+    // Auto-resume logcat streaming if it was running before the page refresh.
+    // The old adb logcat process died with the page, so start a fresh one.
+    try {
+      if (sessionStorage.getItem(LOGCAT_AUTOSTART_KEY) === "1" && !_logcatStreaming) {
+        sessionStorage.removeItem(LOGCAT_AUTOSTART_KEY);
+        fetch("/api/logcat/stop", { method: "POST" }).catch(() => { }); // kill orphaned adb proc
+        startLogcatStream();
+        toast("Logcat Resumed", "Streaming restarted after page refresh.", "info", 2500);
       }
     } catch { /* ignore */ }
-  } else {
-    try { sessionStorage.removeItem("telua_dom_healed"); } catch { /* ignore */ }
-  }
-  wire();
-  await Promise.all([refreshStatus(), refreshFiles(), refreshCryptoStatus()]);
-
-  // Restore the last-used source from draft or localStorage so F5 keeps the active tab/source.
-  const pipeDraft = draftLoadPipelines();
-  let savedSource = null;
-  let savedTab = null;
-  let savedFile = null;
-  try {
-    savedSource = localStorage.getItem(LAST_SOURCE_KEY);
-    savedTab = localStorage.getItem(LAST_TAB_KEY);
-    savedFile = localStorage.getItem(LAST_FILE_KEY);
-  } catch { /* ignore */ }
-
-  const validSources = new Set(["my", "multi", "car", "dump", "system", "docker"]);
-  const initialSource = (pipeDraft && pipeDraft.source && validSources.has(pipeDraft.source))
-    ? pipeDraft.source
-    : (savedSource && validSources.has(savedSource) ? savedSource : "my");
-
-  state.plSource = initialSource === "docker" ? "system" : initialSource;
-  if (state.plSource !== "system") _lastNonSystemPlSource = state.plSource;
-  document.querySelectorAll("#pl-source-switch .src-btn").forEach(b =>
-    b.classList.toggle("active", b.dataset.source === state.plSource));
-
-  await loadPipelines(pipeDraft);
-  updateDraftChip();
-
-  if (savedTab === "terminal") {
-    switchTab("terminal");
-  } else if (savedTab === "aosp") {
-    switchTab("aosp");
-  } else if (savedTab === "logcat") {
-    switchTab("logcat");
-  } else if (savedTab === "docs") {
-    switchTab("docs");
-  } else if (savedTab === "bi") {
-    switchTab("bi");
-  } else if (savedTab === "files") {
-    if (savedFile && state.files.some(f => f.name === savedFile)) {
-      const fileDraft = draftLoadFile();
-      const draftContent = (fileDraft && fileDraft.name === savedFile) ? fileDraft.content : null;
-      await openFile(savedFile, draftContent);
-    } else {
-      switchTab("files");
-    }
-  } else {
-    syncTopTabs();
   }
 
-  // Auto-resume logcat streaming if it was running before the page refresh.
-  // The old adb logcat process died with the page, so start a fresh one.
-  try {
-    if (sessionStorage.getItem(LOGCAT_AUTOSTART_KEY) === "1" && !_logcatStreaming) {
-      sessionStorage.removeItem(LOGCAT_AUTOSTART_KEY);
-      fetch("/api/logcat/stop", { method: "POST" }).catch(() => { }); // kill orphaned adb proc
-      startLogcatStream();
-      toast("Logcat Resumed", "Streaming restarted after page refresh.", "info", 2500);
-    }
-  } catch { /* ignore */ }
-}
-
-boot();
+  boot();
