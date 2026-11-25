@@ -8137,81 +8137,82 @@ function biRenderDonutChart(container, vis) {
     const selectedList = contextGroups.filter((g) => activeFilterSet.has(g.key));
     const remainingList = contextGroups.filter((g) => !activeFilterSet.has(g.key));
 
-    if (isNumericMeasure) {
-      if (hasMetric) {
-        selectedVal = selectedList.reduce((acc, i) => acc + i.val, 0);
-        remainingVal = remainingList.reduce((acc, i) => acc + i.val, 0);
-        total = selectedVal + remainingVal;
-      } else {
-        // Measuring proportion of distinct items/serials (e.g. 7 selected out of 14 total serials = 50%)
-        selectedVal = selectedList.length;
-        remainingVal = remainingList.length;
-        total = contextGroups.length;
-      }
-
-      if (selectedList.length <= 4) {
-        items = [
-          ...selectedList.map((s, idx) => ({
-            ...s,
-            val: hasMetric ? s.val : 1,
-            isSelected: true,
-            color: BI_PALETTES[idx % BI_PALETTES.length],
-            subKeys: [s.key],
-          })),
-          {
-            key: `Remaining (${remainingList.length} other ${unitLabel})`,
-            val: remainingVal,
-            isSelected: false,
-            isRemaining: true,
-            color: "#475569",
-            subKeys: remainingList.map((r) => r.key),
-          },
-        ];
-      } else {
-        items = [
-          {
-            key: `Selected (${selectedList.length} ${unitLabel})`,
-            val: selectedVal,
-            isSelected: true,
-            color: "#10b981",
-            subKeys: selectedList.map((s) => s.key),
-          },
-          {
-            key: `Remaining (${remainingList.length} ${unitLabel})`,
-            val: remainingVal,
-            isSelected: false,
-            isRemaining: true,
-            color: "#475569",
-            subKeys: remainingList.map((r) => r.key),
-          },
-        ];
-      }
+    if (hasMetric) {
+      selectedVal = selectedList.reduce((acc, i) => acc + i.val, 0);
+      remainingVal = remainingList.reduce((acc, i) => acc + i.val, 0);
+      total = selectedVal + remainingVal;
     } else {
-      // Normal mode (no selection subset): show distribution of all or top items
-      if (contextGroups.length <= 7) {
-        items = contextGroups.map((item) => ({
-          ...item,
-          subKeys: [item.key],
-        }));
-      } else {
-        const top6 = contextGroups.slice(0, 6);
-        const rest = contextGroups.slice(6);
-        const restVal = rest.reduce((acc, i) => acc + i.val, 0);
-        items = [
-          ...top6.map((item) => ({ ...item, subKeys: [item.key] })),
-          {
-            key: `Other (${rest.length} ${unitLabel})`,
-            val: restVal,
-            color: "#475569",
-            subKeys: rest.map((r) => r.key),
-          },
-        ];
-      }
+      // Measuring proportion of distinct items/serials (e.g. 7 selected out of 14 total serials = 50%)
+      selectedVal = selectedList.length;
+      remainingVal = remainingList.length;
+      total = contextGroups.length;
+    }
 
-      if (total <= 0) {
-        container.innerHTML = `<span class="meta" style="display:block;text-align:center;padding:40px 10px;">No distribution data available.</span>`;
-        return;
-      }
+    if (selectedList.length <= 4) {
+      items = [
+        ...selectedList.map((s, idx) => ({
+          ...s,
+          val: hasMetric ? s.val : 1,
+          isSelected: true,
+          color: BI_PALETTES[idx % BI_PALETTES.length],
+          subKeys: [s.key],
+        })),
+        {
+          key: `Remaining (${remainingList.length} other ${unitLabel})`,
+          val: remainingVal,
+          isSelected: false,
+          isRemaining: true,
+          color: "#475569",
+          subKeys: remainingList.map((r) => r.key),
+        },
+      ];
+    } else {
+      items = [
+        {
+          key: `Selected (${selectedList.length} ${unitLabel})`,
+          val: selectedVal,
+          isSelected: true,
+          color: "#10b981",
+          subKeys: selectedList.map((s) => s.key),
+        },
+        {
+          key: `Remaining (${remainingList.length} ${unitLabel})`,
+          val: remainingVal,
+          isSelected: false,
+          isRemaining: true,
+          color: "#475569",
+          subKeys: remainingList.map((r) => r.key),
+        },
+      ];
+    }
+  } else {
+    // Normal mode (no selection subset): show distribution of all or top items
+    if (contextGroups.length <= 7) {
+      items = contextGroups.map((item) => ({
+        ...item,
+        subKeys: [item.key],
+      }));
+    } else {
+      const top6 = contextGroups.slice(0, 6);
+      const rest = contextGroups.slice(6);
+      const restVal = rest.reduce((acc, i) => acc + i.val, 0);
+      items = [
+        ...top6.map((item) => ({ ...item, subKeys: [item.key] })),
+        {
+          key: `Other (${rest.length} ${unitLabel})`,
+          val: restVal,
+          color: "#475569",
+          subKeys: rest.map((r) => r.key),
+        },
+      ];
+    }
+    total = contextGroups.reduce((acc, i) => acc + i.val, 0);
+  }
+
+  if (total <= 0) {
+    container.innerHTML = `<span class="meta" style="display:block;text-align:center;padding:40px 10px;">No distribution data available.</span>`;
+    return;
+  }
 
       const cx = 130;
       const cy = 130;
@@ -8351,34 +8352,38 @@ function biRenderDonutChart(container, vis) {
             }
           }
 
-          const titlePrefix = item.isRemaining ? "⚪ " : "🟢 ";
-          biShowTooltip(
-            e,
-            `${titlePrefix}${item.key}`,
-            `Value: <b>${biFormatNumber(item.val)}</b>`,
-            `Share: <b>${pct}%</b>`,
-            extraHtml
-          );
-        });
+      const titlePrefix = item.isRemaining ? "⚪ " : "🟢 ";
+      biShowTooltip(
+        e,
+        `${titlePrefix}${item.key}`,
+        `Value: <b>${biFormatNumber(item.val)}</b>`,
+        `Share: <b>${pct}%</b>`,
+        extraHtml
+      );
+    });
 
-        // Center circle tooltip (summary of selected vs remaining)
-        const centerEl = container.querySelector(".bi-donut-center");
-        if (centerEl && isSelectionRatioMode) {
-          centerEl.addEventListener("mouseenter", (e) => {
-            const selectedList = contextGroups.filter((g) => activeFilterSet.has(g.key));
-            const remainingList = contextGroups.filter((g) => !activeFilterSet.has(g.key));
-            const selectedPct = ((selectedVal / total) * 100).toFixed(0);
+    el.addEventListener("mousemove", (e) => biMoveTooltip(e));
+    el.addEventListener("mouseleave", () => biHideTooltip());
+  });
 
-            const selBadges = selectedList
-              .slice(0, 8)
-              .map((g) => `<span style="background:rgba(16,185,129,0.22);color:#34d399;padding:2px 5px;border-radius:4px;font-size:10px;font-family:monospace;">${g.key}</span>`)
-              .join(" ");
-            const remBadges = remainingList
-              .slice(0, 12)
-              .map((g) => `<span style="background:rgba(255,255,255,0.12);color:#cbd5e1;padding:2px 5px;border-radius:4px;font-size:10px;font-family:monospace;">${g.key}</span>`)
-              .join(" ");
+  // Center circle tooltip (summary of selected vs remaining)
+  const centerEl = container.querySelector(".bi-donut-center");
+  if (centerEl && isSelectionRatioMode) {
+    centerEl.addEventListener("mouseenter", (e) => {
+      const selectedList = contextGroups.filter((g) => activeFilterSet.has(g.key));
+      const remainingList = contextGroups.filter((g) => !activeFilterSet.has(g.key));
+      const selectedPct = ((selectedVal / total) * 100).toFixed(0);
 
-            const extra = `
+      const selBadges = selectedList
+        .slice(0, 8)
+        .map((g) => `<span style="background:rgba(16,185,129,0.22);color:#34d399;padding:2px 5px;border-radius:4px;font-size:10px;font-family:monospace;">${g.key}</span>`)
+        .join(" ");
+      const remBadges = remainingList
+        .slice(0, 12)
+        .map((g) => `<span style="background:rgba(255,255,255,0.12);color:#cbd5e1;padding:2px 5px;border-radius:4px;font-size:10px;font-family:monospace;">${g.key}</span>`)
+        .join(" ");
+
+      const extra = `
         <div style="margin-top:2px;">
           <div style="color:#10b981;font-weight:600;margin-bottom:4px;font-size:10.5px;">🟢 Selected (${selectedList.length}):</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${selBadges}${selectedList.length > 8 ? ` <span style="font-size:9.5px;color:var(--text-dim);">+${selectedList.length - 8}…</span>` : ""}</div>
@@ -8387,19 +8392,20 @@ function biRenderDonutChart(container, vis) {
         </div>
       `;
 
-            biShowTooltip(
-              e,
-              `📊 Selection Overview (${vis.x})`,
-              `Selected: <b>${biFormatNumber(selectedVal)} / ${biFormatNumber(total)} (${selectedPct}%)</b>`,
-              `Remaining: <b>${biFormatNumber(remainingVal)} / ${biFormatNumber(total)} (${(100 - Number(selectedPct)).toFixed(0)}%)</b>`,
-              extra
-            );
-          });
-          centerEl.addEventListener("mousemove", (e) => biMoveTooltip(e));
-          centerEl.addEventListener("mouseleave", () => biHideTooltip());
-        }
+      biShowTooltip(
+        e,
+        `📊 Selection Overview (${vis.x})`,
+        `Selected: <b>${biFormatNumber(selectedVal)} / ${biFormatNumber(total)} (${selectedPct}%)</b>`,
+        `Remaining: <b>${biFormatNumber(remainingVal)} / ${biFormatNumber(total)} (${(100 - Number(selectedPct)).toFixed(0)}%)</b>`,
+        extra
+      );
+    });
+    centerEl.addEventListener("mousemove", (e) => biMoveTooltip(e));
+    centerEl.addEventListener("mouseleave", () => biHideTooltip());
+  }
+}
 
-        function biRenderTable(container, vis) {
+function biRenderTable(container, vis) {
           const records = biState.filteredData.slice(0, vis.limit || 20);
           if (records.length === 0) {
             container.innerHTML = `<span class="meta">No matching records found.</span>`;
