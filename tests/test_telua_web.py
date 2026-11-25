@@ -9,6 +9,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest.mock import MagicMock, patch
 from pathlib import Path
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -188,7 +189,7 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
     def test_static_js_modular_scripts(self):
         scripts = [
             "core.js", "tab_files.js", "tab_pipelines.js", "tab_terminal.js",
-            "tab_docs.js", "tab_aosp.js", "tab_logcat.js", "tab_bi.js", "app.js",
+            "tab_docs.js", "tab_aosp.js", "tab_logcat.js", "tab_mirror.js", "tab_bi.js", "app.js",
         ]
         for s in scripts:
             res = self.client.get(f"/static/js/{s}")
@@ -430,6 +431,60 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
                 shared_file.write_bytes(saved_shared)
             elif shared_file.exists():
                 shared_file.unlink()
+
+
+    def test_api_mirror_endpoints(self):
+        """Test Screen Mirroring info and input injection endpoints."""
+        # 1. /api/mirror/info without mocking
+        res_info = self.client.get("/api/mirror/info")
+        self.assertEqual(res_info.status_code, 200)
+        data_info = res_info.get_json()
+        self.assertTrue(data_info["ok"])
+        self.assertIn("adb_available", data_info)
+        self.assertIn("width", data_info)
+        self.assertIn("height", data_info)
+        self.assertIn("density", data_info)
+
+        # 2. Mock adb and subprocess for input injection endpoints
+        with patch("telua_web_mirror._resolve_adb_binary", return_value="dummy_adb"), \
+             patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout=b"dummy")
+
+            # Touch
+            res_touch = self.client.post("/api/mirror/touch", json={"x": 540, "y": 960})
+            self.assertEqual(res_touch.status_code, 200)
+            self.assertTrue(res_touch.get_json()["ok"])
+
+            # Touch invalid coordinates
+            res_touch_bad = self.client.post("/api/mirror/touch", json={"x": "abc"})
+            self.assertEqual(res_touch_bad.status_code, 400)
+
+            # Swipe
+            res_swipe = self.client.post("/api/mirror/swipe", json={"x1": 100, "y1": 200, "x2": 100, "y2": 800, "duration": 300})
+            self.assertEqual(res_swipe.status_code, 200)
+            self.assertTrue(res_swipe.get_json()["ok"])
+
+            # Key
+            res_key = self.client.post("/api/mirror/key", json={"key": "4"})
+            self.assertEqual(res_key.status_code, 200)
+            self.assertTrue(res_key.get_json()["ok"])
+
+            # Key invalid format (prevent injection)
+            res_key_bad = self.client.post("/api/mirror/key", json={"key": "invalid;rm -rf"})
+            self.assertEqual(res_key_bad.status_code, 400)
+
+            # Text
+            res_text = self.client.post("/api/mirror/text", json={"text": "Hello Telua Mirror"})
+            self.assertEqual(res_text.status_code, 200)
+            self.assertTrue(res_text.get_json()["ok"])
+
+            # Frame - mock valid PNG output
+            png_header = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+            mock_run.return_value = MagicMock(returncode=0, stdout=png_header)
+            res_frame = self.client.get("/api/mirror/frame")
+            self.assertEqual(res_frame.status_code, 200)
+            self.assertEqual(res_frame.mimetype, "image/png")
+            res_frame.close()
 
 
 if __name__ == "__main__":
