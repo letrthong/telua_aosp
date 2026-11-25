@@ -956,16 +956,43 @@ code,
   border: 1px solid rgba(167, 139, 250, .55);
   color: #ede9fe;
   font-weight: 600;
+  transition: all 0.15s ease;
+  cursor: pointer;
 }
 
 .btn.amethyst-btn:hover:not(:disabled) {
-  background: rgba(139, 92, 246, .4);
+  background: rgba(139, 92, 246, .45);
   border-color: #c4b5fd;
   color: #ffffff;
+  box-shadow: 0 0 12px rgba(139, 92, 246, .5);
 }
 
-.btn.amethyst-btn.running-active {
-  animation: aospRunningPulse 1.2s ease-in-out infinite;
+.btn.amethyst-btn:active:not(:disabled),
+.btn.amethyst-btn.btn-clicked {
+  background: rgba(139, 92, 246, .6) !important;
+  border-color: #e9d5ff !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(196, 181, 253, .8), 0 0 16px rgba(139, 92, 246, .7) !important;
+  transform: translateY(1px) scale(0.98);
+}
+
+.btn.amethyst-btn.running-active,
+#btn-aosp-upload-apk.running-active {
+  opacity: 1 !important;
+  cursor: progress;
+  border-color: #c4b5fd !important;
+  color: #ffffff !important;
+  background: rgba(139, 92, 246, .38) !important;
+  animation: aospAmethystPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes aospAmethystPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 1px rgba(167, 139, 250, .6), 0 0 8px rgba(139, 92, 246, .35);
+  }
+  50% {
+    box-shadow: 0 0 0 2px rgba(196, 181, 253, .95), 0 0 20px rgba(139, 92, 246, .75);
+  }
 }
 
 /* ---------------- Confirm Delete Modal ---------------- */
@@ -2765,6 +2792,20 @@ code,
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.aosp-upload-btn:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.12));
+  border-color: var(--accent);
+  color: var(--text);
+  box-shadow: 0 0 8px rgba(31, 111, 235, 0.35);
+}
+
+.aosp-upload-btn:active {
+  transform: translateY(1px) scale(0.97);
+  background: var(--accent);
+  color: #ffffff;
 }
 
 .aosp-actions-bar {

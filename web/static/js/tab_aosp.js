@@ -231,12 +231,16 @@ async function uploadAospApk(file, restartMode = "framework") {
   if (expected && file.name.toLowerCase() !== expected.toLowerCase()) {
     appendOut(`<span style="color:#f85149;font-weight:700">✕ Filename mismatch:</span> uploaded <b>${esc(file.name)}</b> but active project expects <b>${esc(expected)}</b> (OUTPUT_FILE_NAME).`);
     toast("Filename mismatch", `Expected "${expected}", got "${file.name}".`, "danger", 5000);
+    if (uploadBtn) uploadBtn.classList.remove("btn-clicked");
     return;
   }
 
   _aospRunning = true;
   actionBtns.forEach(b => b.disabled = true);
-  if (uploadBtn) uploadBtn.classList.add("running-active");
+  if (uploadBtn) {
+    uploadBtn.disabled = true;
+    uploadBtn.classList.add("running-active");
+  }
   if (stopBtn) { stopBtn.disabled = false; stopBtn.classList.add("danger-solid"); }
   if (badge) { badge.textContent = "📤 Uploading…"; badge.className = "run-badge running"; }
 
@@ -286,7 +290,11 @@ async function uploadAospApk(file, restartMode = "framework") {
   } finally {
     _aospRunning = false;
     actionBtns.forEach(b => b.disabled = false);
-    if (uploadBtn) uploadBtn.classList.remove("running-active");
+    if (uploadBtn) {
+      uploadBtn.disabled = false;
+      uploadBtn.classList.remove("running-active");
+      uploadBtn.classList.remove("btn-clicked");
+    }
     if (stopBtn) { stopBtn.disabled = true; stopBtn.classList.remove("danger-solid"); }
   }
 }

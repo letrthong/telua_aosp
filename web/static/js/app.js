@@ -126,7 +126,12 @@ function wire() {
   });
   $("#btn-aosp-stop")?.addEventListener("click", () => stopAospCommand());
   // Upload APK: pick file -> validate name vs OUTPUT_FILE_NAME -> push + restart
-  $("#btn-aosp-upload-apk")?.addEventListener("click", () => $("#aosp-apk-file-input")?.click());
+  $("#btn-aosp-upload-apk")?.addEventListener("click", () => {
+    const btn = $("#btn-aosp-upload-apk");
+    btn?.classList.add("btn-clicked");
+    setTimeout(() => btn?.classList.remove("btn-clicked"), 1500);
+    $("#aosp-apk-file-input")?.click();
+  });
   $("#aosp-apk-file-input")?.addEventListener("change", (e) => {
     const f = e.target.files?.[0];
     if (f) uploadAospApk(f);
@@ -514,81 +519,81 @@ const BI_PALETTES = [
 ];
 
 
-        /* ---------------- Boot ---------------- */
-        async function boot() {
-          // Self-heal if browser served a stale cached index.html (304 Not Modified) missing core panes
-          if (!document.querySelector("#view-pipelines") || !document.querySelector("#editor") || !document.querySelector("#btn-term-new-session")) {
-            try {
-              const healed = sessionStorage.getItem("telua_dom_healed");
-              if (!healed) {
-                sessionStorage.setItem("telua_dom_healed", "1");
-                await fetch(window.location.pathname, { cache: "reload" });
-                window.location.reload();
-                return;
-              }
-            } catch { /* ignore */ }
-          } else {
-            try { sessionStorage.removeItem("telua_dom_healed"); } catch { /* ignore */ }
-          }
-          wire();
-          await Promise.all([refreshStatus(), refreshFiles(), refreshCryptoStatus()]);
+/* ---------------- Boot ---------------- */
+async function boot() {
+  // Self-heal if browser served a stale cached index.html (304 Not Modified) missing core panes
+  if (!document.querySelector("#view-pipelines") || !document.querySelector("#editor") || !document.querySelector("#btn-term-new-session")) {
+    try {
+      const healed = sessionStorage.getItem("telua_dom_healed");
+      if (!healed) {
+        sessionStorage.setItem("telua_dom_healed", "1");
+        await fetch(window.location.pathname, { cache: "reload" });
+        window.location.reload();
+        return;
+      }
+    } catch { /* ignore */ }
+  } else {
+    try { sessionStorage.removeItem("telua_dom_healed"); } catch { /* ignore */ }
+  }
+  wire();
+  await Promise.all([refreshStatus(), refreshFiles(), refreshCryptoStatus()]);
 
-          // Restore the last-used source from draft or localStorage so F5 keeps the active tab/source.
-          const pipeDraft = draftLoadPipelines();
-          let savedSource = null;
-          let savedTab = null;
-          let savedFile = null;
-          try {
-            savedSource = localStorage.getItem(LAST_SOURCE_KEY);
-            savedTab = localStorage.getItem(LAST_TAB_KEY);
-            savedFile = localStorage.getItem(LAST_FILE_KEY);
-          } catch { /* ignore */ }
+  // Restore the last-used source from draft or localStorage so F5 keeps the active tab/source.
+  const pipeDraft = draftLoadPipelines();
+  let savedSource = null;
+  let savedTab = null;
+  let savedFile = null;
+  try {
+    savedSource = localStorage.getItem(LAST_SOURCE_KEY);
+    savedTab = localStorage.getItem(LAST_TAB_KEY);
+    savedFile = localStorage.getItem(LAST_FILE_KEY);
+  } catch { /* ignore */ }
 
-          const validSources = new Set(["my", "multi", "car", "dump", "system", "docker"]);
-          const initialSource = (pipeDraft && pipeDraft.source && validSources.has(pipeDraft.source))
-            ? pipeDraft.source
-            : (savedSource && validSources.has(savedSource) ? savedSource : "my");
+  const validSources = new Set(["my", "multi", "car", "dump", "system", "docker"]);
+  const initialSource = (pipeDraft && pipeDraft.source && validSources.has(pipeDraft.source))
+    ? pipeDraft.source
+    : (savedSource && validSources.has(savedSource) ? savedSource : "my");
 
-          state.plSource = initialSource === "docker" ? "system" : initialSource;
-          if (state.plSource !== "system") _lastNonSystemPlSource = state.plSource;
-          document.querySelectorAll("#pl-source-switch .src-btn").forEach(b =>
-            b.classList.toggle("active", b.dataset.source === state.plSource));
+  state.plSource = initialSource === "docker" ? "system" : initialSource;
+  if (state.plSource !== "system") _lastNonSystemPlSource = state.plSource;
+  document.querySelectorAll("#pl-source-switch .src-btn").forEach(b =>
+    b.classList.toggle("active", b.dataset.source === state.plSource));
 
-          await loadPipelines(pipeDraft);
-          updateDraftChip();
+  await loadPipelines(pipeDraft);
+  updateDraftChip();
 
-          if (savedTab === "terminal") {
-            switchTab("terminal");
-          } else if (savedTab === "aosp") {
-            switchTab("aosp");
-          } else if (savedTab === "logcat") {
-            switchTab("logcat");
-          } else if (savedTab === "docs") {
-            switchTab("docs");
-          } else if (savedTab === "bi") {
-            switchTab("bi");
-          } else if (savedTab === "files") {
-            if (savedFile && state.files.some(f => f.name === savedFile)) {
-              const fileDraft = draftLoadFile();
-              const draftContent = (fileDraft && fileDraft.name === savedFile) ? fileDraft.content : null;
-              await openFile(savedFile, draftContent);
-            } else {
-              switchTab("files");
-            }
-          } else {
-            syncTopTabs();
-          }
+  if (savedTab === "terminal") {
+    switchTab("terminal");
+  } else if (savedTab === "aosp") {
+    switchTab("aosp");
+  } else if (savedTab === "logcat") {
+    switchTab("logcat");
+  } else if (savedTab === "docs") {
+    switchTab("docs");
+  } else if (savedTab === "bi") {
+    switchTab("bi");
+  } else if (savedTab === "files") {
+    if (savedFile && state.files.some(f => f.name === savedFile)) {
+      const fileDraft = draftLoadFile();
+      const draftContent = (fileDraft && fileDraft.name === savedFile) ? fileDraft.content : null;
+      await openFile(savedFile, draftContent);
+    } else {
+      switchTab("files");
+    }
+  } else {
+    syncTopTabs();
+  }
 
-          // Auto-resume logcat streaming if it was running before the page refresh.
-          // The old adb logcat process died with the page, so start a fresh one.
-          try {
-            if (sessionStorage.getItem(LOGCAT_AUTOSTART_KEY) === "1" && !_logcatStreaming) {
-              sessionStorage.removeItem(LOGCAT_AUTOSTART_KEY);
-              fetch("/api/logcat/stop", { method: "POST" }).catch(() => { }); // kill orphaned adb proc
-              startLogcatStream();
-              toast("Logcat Resumed", "Streaming restarted after page refresh.", "info", 2500);
-            }
-          } catch { /* ignore */ }
-        }
+  // Auto-resume logcat streaming if it was running before the page refresh.
+  // The old adb logcat process died with the page, so start a fresh one.
+  try {
+    if (sessionStorage.getItem(LOGCAT_AUTOSTART_KEY) === "1" && !_logcatStreaming) {
+      sessionStorage.removeItem(LOGCAT_AUTOSTART_KEY);
+      fetch("/api/logcat/stop", { method: "POST" }).catch(() => { }); // kill orphaned adb proc
+      startLogcatStream();
+      toast("Logcat Resumed", "Streaming restarted after page refresh.", "info", 2500);
+    }
+  } catch { /* ignore */ }
+}
 
-        boot();
+boot();

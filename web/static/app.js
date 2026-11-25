@@ -6106,7 +6106,12 @@ function wire() {
   });
   $("#btn-aosp-stop")?.addEventListener("click", () => stopAospCommand());
   // Upload APK: pick file -> validate name vs OUTPUT_FILE_NAME -> push + restart
-  $("#btn-aosp-upload-apk")?.addEventListener("click", () => $("#aosp-apk-file-input")?.click());
+  $("#btn-aosp-upload-apk")?.addEventListener("click", () => {
+    const btn = $("#btn-aosp-upload-apk");
+    btn?.classList.add("btn-clicked");
+    setTimeout(() => btn?.classList.remove("btn-clicked"), 1500);
+    $("#aosp-apk-file-input")?.click();
+  });
   $("#aosp-apk-file-input")?.addEventListener("change", (e) => {
     const f = e.target.files?.[0];
     if (f) uploadAospApk(f);
