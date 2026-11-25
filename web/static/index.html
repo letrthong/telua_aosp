@@ -191,7 +191,8 @@
             New session</button>
           <button class="btn" id="btn-term-copy" title="Copy terminal log to clipboard">📋 Copy</button>
           <button class="btn" id="btn-term-clear" title="Clear terminal output (or type 'clear')">🧹 Clear</button>
-          <button class="btn" id="btn-term-popout" title="Mở terminal ở cửa sổ riêng (kéo sang màn hình thứ 2)">🖥 Pop-out</button>
+          <button class="btn" id="btn-term-popout" title="Mở terminal ở cửa sổ riêng (kéo sang màn hình thứ 2)">🖥
+            Pop-out</button>
         </div>
       </div>
       <div class="term-quick-bar" id="term-quick-bar">
@@ -292,12 +293,15 @@
       <div id="logcat-adb-offline-banner" class="logcat-offline-banner hidden">
         <span class="offline-icon">⚠️</span>
         <div class="offline-text">
-          <b>ADB Offline:</b> Không tìm thấy thiết bị Android kết nối. Nếu đang cắm USB trên máy tính Windows, hãy chạy <code>adb_remote_pc.bat</code> để kết nối qua SSH reverse tunnel.
+          <b>ADB Offline:</b> No connected Android devices detected. Connected via USB on Windows? Run
+          <code>adb_remote_pc.bat</code> to establish an SSH reverse tunnel.
         </div>
         <div class="offline-actions">
-          <button class="btn btn-xs jade-btn" id="btn-logcat-open-adb-help">⚡ Hướng Dẫn &amp; Tải .bat</button>
-          <a class="btn btn-xs ghost" id="btn-logcat-direct-download" href="/api/adb/remote-script" download="adb_remote_pc.bat" title="Tải file adb_remote_pc.bat">⬇ Tải .bat</a>
-          <button class="btn btn-xs ghost" id="btn-logcat-copy-adb-path" title="Copy đường dẫn D:\wmshare\telua_aosp\scripts\windows\adb_remote_pc.bat">📋 Copy Path</button>
+          <button class="btn btn-xs jade-btn" id="btn-logcat-open-adb-help">⚡ Remote PC Helper &amp; Download</button>
+          <a class="btn btn-xs ghost" id="btn-logcat-direct-download" href="/api/adb/remote-script"
+            download="adb_remote_pc.bat" title="Download adb_remote_pc.bat">⬇ Download .bat</a>
+          <button class="btn btn-xs ghost" id="btn-logcat-copy-adb-path"
+            title="Copy local path: D:\wmshare\telua_aosp\scripts\windows\adb_remote_pc.bat">📋 Copy Path</button>
         </div>
       </div>
 
@@ -387,7 +391,8 @@
             title="Upload a built APK — filename must match OUTPUT_FILE_NAME of the active project, then adb push to DEPLOY_PATH and restart framework">
             📤 Upload APK
           </button>
-          <input type="file" id="aosp-apk-file-input" class="hidden" accept=".apk,application/vnd.android.package-archive" />
+          <input type="file" id="aosp-apk-file-input" class="hidden"
+            accept=".apk,application/vnd.android.package-archive" />
         </div>
         <button class="btn danger" id="btn-aosp-stop" disabled title="Stop running AOSP command (SIGINT/kill)">
           ⏹ Stop
@@ -615,13 +620,16 @@
           <button class="btn jade-btn" id="btn-bi-cross-report"
             title="Generate multi-tab comparison &amp; relational report">📑 Multi-Tab Report</button>
           <button class="btn" id="btn-bi-view-json" title="View &amp; export converted JSON data">{} JSON</button>
-          <button class="btn" id="btn-bi-config-open" title="View, edit, import or export Dashboard Visuals Config (JSON)">⚙️ Config JSON</button>
+          <button class="btn" id="btn-bi-config-open"
+            title="View, edit, import or export Dashboard Visuals Config (JSON)">⚙️ Config JSON</button>
           <label class="btn ghost" style="cursor:pointer;" title="Upload Dashboard Visuals Config (.json)">
             ⬆ Upload Config
             <input type="file" id="bi-config-file-input" accept=".json" style="display:none;">
           </label>
-          <button class="btn ghost" id="btn-bi-config-download-btn" title="Download current Visuals Config as .json">⬇ Download Config</button>
-          <button class="btn" id="btn-bi-calc-col-open" title="Add a calculated column using simple math expressions">fx Measure</button>
+          <button class="btn ghost" id="btn-bi-config-download-btn" title="Download current Visuals Config as .json">⬇
+            Download Config</button>
+          <button class="btn" id="btn-bi-calc-col-open" title="Add a calculated column using simple math expressions">fx
+            Measure</button>
           <button class="btn jade-btn" id="btn-bi-add-visual" title="Add a new custom visual chart or table">＋ Add
             Visual</button>
           <button class="btn ghost" id="btn-bi-reset-filters" title="Reset all active slicers and search">↺
@@ -638,7 +646,8 @@
           <div class="bi-fields-head">
             <span class="bi-fields-title">📐 Fields &amp; Columns</span>
             <span id="bi-fields-count" class="meta" style="font-size:11px;">0 fields</span>
-            <button class="btn btn-xs ghost" id="btn-bi-calc-col-fields" title="New Measure / Calculated Column (fx)" style="color:var(--accent);font-weight:700;">fx</button>
+            <button class="btn btn-xs ghost" id="btn-bi-calc-col-fields" title="New Measure / Calculated Column (fx)"
+              style="color:var(--accent);font-weight:700;">fx</button>
             <button class="btn btn-xs ghost" id="btn-bi-fields-toggle" title="Toggle Fields panel">◀</button>
           </div>
           <div class="bi-fields-filter">
@@ -686,36 +695,52 @@
             </div>
 
             <!-- Power BI Slicers Bar (Filters) -->
-            <div id="bi-slicers-bar" class="bi-slicers-bar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div id="bi-slicers-bar" class="bi-slicers-bar"
+              style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
               <div class="bi-slicer-label">
                 <span>⚡ Slicers:</span>
               </div>
 
               <!-- Quick input filter (Generic Column Filter) -->
-              <div class="bi-slicer-input-wrap" style="display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.03);padding:2px 8px;border-radius:6px;border:1px solid var(--border);">
+              <div class="bi-slicer-input-wrap"
+                style="display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.03);padding:2px 8px;border-radius:6px;border:1px solid var(--border);">
                 <span class="meta" style="font-size:11px;font-weight:600;color:var(--accent);">🔍 Filter:</span>
-                <select id="bi-slicer-col-select" class="theme-select" style="font-size:11px;height:24px;padding:2px 6px;" title="Select column to filter"></select>
-                <input id="bi-slicer-val-input" list="bi-slicer-val-datalist" type="text" placeholder="Value…" class="term-input" style="font-size:11px;height:24px;padding:2px 8px;width:130px;">
+                <select id="bi-slicer-col-select" class="theme-select"
+                  style="font-size:11px;height:24px;padding:2px 6px;" title="Select column to filter"></select>
+                <input id="bi-slicer-val-input" list="bi-slicer-val-datalist" type="text" placeholder="Value…"
+                  class="term-input" style="font-size:11px;height:24px;padding:2px 8px;width:130px;">
                 <datalist id="bi-slicer-val-datalist"></datalist>
-                <button class="btn btn-xs primary" id="btn-bi-slicer-apply-input" type="button" title="Apply filter">Filter</button>
-                <button class="btn btn-xs ghost" id="btn-bi-slicer-clear-input" type="button" title="Clear filter on this column" style="display:none;">✕</button>
+                <button class="btn btn-xs primary" id="btn-bi-slicer-apply-input" type="button"
+                  title="Apply filter">Filter</button>
+                <button class="btn btn-xs ghost" id="btn-bi-slicer-clear-input" type="button"
+                  title="Clear filter on this column" style="display:none;">✕</button>
               </div>
 
               <!-- Multi-select Items / Value Picker Dropdown -->
               <div class="dropdown-wrapper" id="wrap-bi-slicer-multiselect">
-                <button class="btn btn-xs ghost dropdown-trigger" id="btn-bi-slicer-multiselect-trigger" type="button" title="Multi-select items checklist">
-                  <span id="bi-multiselect-trigger-label">☑ Select Items</span> <span id="bi-multiselect-badge" class="tag" style="font-size:10px;padding:1px 5px;margin-left:4px;background:var(--accent-soft);color:var(--accent);">0</span> <span class="dropdown-arrow">▼</span>
+                <button class="btn btn-xs ghost dropdown-trigger" id="btn-bi-slicer-multiselect-trigger" type="button"
+                  title="Multi-select items checklist">
+                  <span id="bi-multiselect-trigger-label">☑ Select Items</span> <span id="bi-multiselect-badge"
+                    class="tag"
+                    style="font-size:10px;padding:1px 5px;margin-left:4px;background:var(--accent-soft);color:var(--accent);">0</span>
+                  <span class="dropdown-arrow">▼</span>
                 </button>
-                <div class="dropdown-menu" id="menu-bi-slicer-multiselect" style="width:280px;max-height:320px;overflow-y:auto;padding:10px;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.5);">
+                <div class="dropdown-menu" id="menu-bi-slicer-multiselect"
+                  style="width:280px;max-height:320px;overflow-y:auto;padding:10px;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.5);">
                   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                    <span class="meta" style="font-size:11px;font-weight:700;" id="bi-multiselect-title">Select Items:</span>
+                    <span class="meta" style="font-size:11px;font-weight:700;" id="bi-multiselect-title">Select
+                      Items:</span>
                     <div style="display:flex;gap:4px;">
-                      <button class="btn btn-xs ghost" id="btn-bi-multiselect-all" type="button" style="font-size:10px;">All</button>
-                      <button class="btn btn-xs ghost" id="btn-bi-multiselect-clear" type="button" style="font-size:10px;">Clear</button>
+                      <button class="btn btn-xs ghost" id="btn-bi-multiselect-all" type="button"
+                        style="font-size:10px;">All</button>
+                      <button class="btn btn-xs ghost" id="btn-bi-multiselect-clear" type="button"
+                        style="font-size:10px;">Clear</button>
                     </div>
                   </div>
-                  <input type="search" id="bi-multiselect-search" placeholder="🔍 Search…" class="term-input" style="width:100%;font-size:11px;height:24px;margin-bottom:8px;box-sizing:border-box;">
-                  <div id="bi-multiselect-items" style="display:flex;flex-direction:column;gap:3px;max-height:180px;overflow-y:auto;">
+                  <input type="search" id="bi-multiselect-search" placeholder="🔍 Search…" class="term-input"
+                    style="width:100%;font-size:11px;height:24px;margin-bottom:8px;box-sizing:border-box;">
+                  <div id="bi-multiselect-items"
+                    style="display:flex;flex-direction:column;gap:3px;max-height:180px;overflow-y:auto;">
                     <!-- Checkbox items: [☑ Item 1] [☑ Item 2] ... -->
                   </div>
                 </div>
@@ -1181,7 +1206,8 @@
       <div class="editor-head"
         style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);flex-shrink:0;">
         <div class="editor-title" style="gap:10px;align-items:center;flex-wrap:wrap;">
-          <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;">⚙️ Visuals Manager &amp; Config</span>
+          <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;">⚙️ Visuals Manager &amp;
+            Config</span>
           <div class="src-switch">
             <button class="src-btn active" id="btn-bi-cfg-tab-gui" type="button">🎨 Visual GUI Manager</button>
             <button class="src-btn" id="btn-bi-cfg-tab-raw" type="button">📝 Raw JSON Code</button>
@@ -1193,23 +1219,29 @@
             📂 Upload JSON
             <input type="file" id="bi-modal-config-upload" accept=".json" style="display:none;">
           </label>
-          <button class="btn btn-xs ghost" id="btn-bi-config-download" title="Download .json file">⬇ Download JSON</button>
-          <button class="btn btn-xs ghost" id="btn-bi-config-sample" title="Load sample visual config template">💡 Load Template</button>
+          <button class="btn btn-xs ghost" id="btn-bi-config-download" title="Download .json file">⬇ Download
+            JSON</button>
+          <button class="btn btn-xs ghost" id="btn-bi-config-sample" title="Load sample visual config template">💡 Load
+            Template</button>
         </div>
       </div>
 
       <!-- TAB 1: Visual GUI Manager -->
-      <div id="bi-config-pane-gui" style="display:flex;flex-direction:column;gap:12px;overflow-y:auto;max-height:65vh;padding-right:4px;">
+      <div id="bi-config-pane-gui"
+        style="display:flex;flex-direction:column;gap:12px;overflow-y:auto;max-height:65vh;padding-right:4px;">
         <!-- Add / Edit Form Card -->
-        <div style="background:var(--bg-card, rgba(255,255,255,0.02));border:1px solid var(--border);border-radius:8px;padding:12px 14px;">
+        <div
+          style="background:var(--bg-card, rgba(255,255,255,0.02));border:1px solid var(--border);border-radius:8px;padding:12px 14px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-            <span id="bi-gui-form-title" style="font-weight:700;font-size:13px;color:var(--accent);">＋ Thêm Biểu Đồ Mới (Add Chart)</span>
+            <span id="bi-gui-form-title" style="font-weight:700;font-size:13px;color:var(--accent);">＋ Thêm Biểu Đồ Mới
+              (Add Chart)</span>
             <button class="btn btn-xs ghost hidden" id="btn-bi-gui-cancel-edit" type="button">✕ Hủy chỉnh sửa</button>
           </div>
           <div style="display:flex;flex-direction:column;gap:10px;">
             <!-- Type chips -->
             <div>
-              <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;">Loại biểu đồ (Chart Type):</label>
+              <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;">Loại biểu đồ (Chart
+                Type):</label>
               <div class="term-quick-bar" id="bi-gui-type-chips" style="border:none;padding:0;gap:6px;flex-wrap:wrap;">
                 <button type="button" class="term-chip active" data-vtype="combo">📊📈 Combo (Bar + Line)</button>
                 <button type="button" class="term-chip" data-vtype="bar">📊 Column (Bar)</button>
@@ -1223,8 +1255,10 @@
             <!-- Title & Width -->
             <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;">
               <div>
-                <label for="bi-gui-title-input" class="meta" style="display:block;margin-bottom:4px;font-size:11px;">Tiêu đề biểu đồ (Title):</label>
-                <input id="bi-gui-title-input" type="text" class="term-input" style="width:100%;box-sizing:border-box;font-size:12px;" placeholder="e.g. Doanh Thu Theo Khu Vực">
+                <label for="bi-gui-title-input" class="meta"
+                  style="display:block;margin-bottom:4px;font-size:11px;">Tiêu đề biểu đồ (Title):</label>
+                <input id="bi-gui-title-input" type="text" class="term-input"
+                  style="width:100%;box-sizing:border-box;font-size:12px;" placeholder="e.g. Doanh Thu Theo Khu Vực">
               </div>
               <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;margin-bottom:4px;">
                 <input type="checkbox" id="bi-gui-wide-checkbox">
@@ -1235,21 +1269,25 @@
             <!-- Dimensions & Measures -->
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;">
               <div>
-                <label for="bi-gui-x-select" class="meta" style="display:block;margin-bottom:4px;font-size:11px;">Trục X (Phân loại):</label>
+                <label for="bi-gui-x-select" class="meta" style="display:block;margin-bottom:4px;font-size:11px;">Trục X
+                  (Phân loại):</label>
                 <select id="bi-gui-x-select" class="theme-select" style="width:100%;font-size:12px;"></select>
               </div>
               <div>
-                <label for="bi-gui-y-select" class="meta" style="display:block;margin-bottom:4px;font-size:11px;">Trục Y (Chỉ số):</label>
+                <label for="bi-gui-y-select" class="meta" style="display:block;margin-bottom:4px;font-size:11px;">Trục Y
+                  (Chỉ số):</label>
                 <select id="bi-gui-y-select" class="theme-select" style="width:100%;font-size:12px;"></select>
               </div>
               <div id="bi-gui-y2-group">
-                <label for="bi-gui-y2-select" class="meta" style="display:block;margin-bottom:4px;font-size:11px;">Trục Y2 (Combo Line):</label>
+                <label for="bi-gui-y2-select" class="meta" style="display:block;margin-bottom:4px;font-size:11px;">Trục
+                  Y2 (Combo Line):</label>
                 <select id="bi-gui-y2-select" class="theme-select" style="width:100%;font-size:12px;">
                   <option value="">(None)</option>
                 </select>
               </div>
               <div>
-                <label for="bi-gui-agg-select" class="meta" style="display:block;margin-bottom:4px;font-size:11px;">Hàm gom nhóm (Agg):</label>
+                <label for="bi-gui-agg-select" class="meta" style="display:block;margin-bottom:4px;font-size:11px;">Hàm
+                  gom nhóm (Agg):</label>
                 <select id="bi-gui-agg-select" class="theme-select" style="width:100%;font-size:12px;">
                   <option value="sum" selected>SUM (Tổng)</option>
                   <option value="count">COUNT (Đếm bản ghi)</option>
@@ -1262,7 +1300,8 @@
             </div>
 
             <div style="display:flex;justify-content:flex-end;margin-top:2px;">
-              <button class="btn primary" id="btn-bi-gui-save-item" type="button" style="font-size:12px;">＋ Thêm vào danh sách</button>
+              <button class="btn primary" id="btn-bi-gui-save-item" type="button" style="font-size:12px;">＋ Thêm vào
+                danh sách</button>
             </div>
           </div>
         </div>
@@ -1270,7 +1309,8 @@
         <!-- Configured Visuals List Section -->
         <div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <span class="meta" style="font-weight:700;font-size:12px;text-transform:uppercase;">Danh sách biểu đồ trong cấu hình:</span>
+            <span class="meta" style="font-weight:700;font-size:12px;text-transform:uppercase;">Danh sách biểu đồ trong
+              cấu hình:</span>
             <span id="bi-gui-list-count" class="meta" style="font-size:11px;">0 biểu đồ</span>
           </div>
           <div id="bi-gui-visuals-list" style="display:flex;flex-direction:column;gap:8px;">
@@ -1283,7 +1323,8 @@
       <div id="bi-config-pane-raw" class="hidden" style="display:flex;flex-direction:column;flex:1;min-height:320px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
           <span class="meta" style="font-size:12px;">Chỉnh sửa trực tiếp mã JSON (hoặc sao chép để chia sẻ):</span>
-          <button class="btn btn-xs ghost" id="btn-bi-config-copy" title="Copy Config JSON to clipboard">📋 Copy JSON</button>
+          <button class="btn btn-xs ghost" id="btn-bi-config-copy" title="Copy Config JSON to clipboard">📋 Copy
+            JSON</button>
         </div>
         <textarea id="bi-config-editor-content" class="editor mono"
           style="flex:1;min-height:280px;max-height:55vh;overflow:auto;font-size:12px;padding:12px;background:var(--bg-soft,#1e1e2e);border:1px solid var(--border);border-radius:6px;resize:vertical;"
@@ -1365,39 +1406,49 @@ RANK,FASKey,BRAND,Vehicle Series,Vehicle Type,Latest Popul.,MY,% of VIO,MVP,Bran
     <div class="modal-box wide" style="max-width:650px;">
       <div class="editor-head" style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);">
         <div class="editor-title">
-          <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;">fx New Measure / Calculated Column</span>
+          <span class="mono" style="font-weight:700;color:var(--accent);font-size:14px;">fx New Measure / Calculated
+            Column</span>
           <span class="meta">Power BI Mini-DAX Formulas</span>
         </div>
       </div>
-      <p class="meta" style="margin-bottom:12px;">Create custom calculated fields by combining existing numeric columns with math operators (<code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>( )</code>).</p>
-      
+      <p class="meta" style="margin-bottom:12px;">Create custom calculated fields by combining existing numeric columns
+        with math operators (<code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>( )</code>).</p>
+
       <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:14px;">
         <div>
           <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Column Name</label>
-          <input id="bi-calc-name" type="text" class="term-input" style="width:100%;box-sizing:border-box;" placeholder="e.g. Profit_Margin_Pct, Net_Revenue, Cost_Variance">
+          <input id="bi-calc-name" type="text" class="term-input" style="width:100%;box-sizing:border-box;"
+            placeholder="e.g. Profit_Margin_Pct, Net_Revenue, Cost_Variance">
         </div>
-        
+
         <div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
             <label style="font-size:12px;font-weight:600;">Formula Expression</label>
             <span class="meta" style="font-size:11px;">Use <code>[Column_Name]</code> syntax</span>
           </div>
-          <input id="bi-calc-expr" type="text" class="term-input mono" style="width:100%;box-sizing:border-box;font-size:13px;" placeholder="e.g. ([Profit] / [Revenue]) * 100">
+          <input id="bi-calc-expr" type="text" class="term-input mono"
+            style="width:100%;box-sizing:border-box;font-size:13px;" placeholder="e.g. ([Profit] / [Revenue]) * 100">
         </div>
 
         <div>
-          <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px;">Quick Formula Templates:</label>
+          <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px;">Quick Formula
+            Templates:</label>
           <div style="display:flex;gap:6px;flex-wrap:wrap;" id="bi-calc-templates">
-            <button type="button" class="btn btn-xs ghost" data-template="(([A] / [B]) * 100)">Ratio / Margin %: (([A] / [B]) * 100)</button>
-            <button type="button" class="btn btn-xs ghost" data-template="([A] - [B])">Difference / Variance: ([A] - [B])</button>
+            <button type="button" class="btn btn-xs ghost" data-template="(([A] / [B]) * 100)">Ratio / Margin %: (([A] /
+              [B]) * 100)</button>
+            <button type="button" class="btn btn-xs ghost" data-template="([A] - [B])">Difference / Variance: ([A] -
+              [B])</button>
             <button type="button" class="btn btn-xs ghost" data-template="([A] * [B])">Multiply: ([A] * [B])</button>
             <button type="button" class="btn btn-xs ghost" data-template="([A] + [B])">Sum: ([A] + [B])</button>
           </div>
         </div>
 
         <div>
-          <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px;">Click Column to Insert into Formula:</label>
-          <div id="bi-calc-columns-chips" style="display:flex;gap:5px;flex-wrap:wrap;max-height:100px;overflow-y:auto;padding:6px;background:rgba(0,0,0,0.15);border-radius:6px;border:1px solid var(--border);"></div>
+          <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px;">Click Column to Insert
+            into Formula:</label>
+          <div id="bi-calc-columns-chips"
+            style="display:flex;gap:5px;flex-wrap:wrap;max-height:100px;overflow-y:auto;padding:6px;background:rgba(0,0,0,0.15);border-radius:6px;border:1px solid var(--border);">
+          </div>
         </div>
       </div>
 
@@ -1422,51 +1473,58 @@ RANK,FASKey,BRAND,Vehicle Series,Vehicle Type,Latest Popul.,MY,% of VIO,MVP,Bran
       </div>
 
       <div class="adb-modal-body" style="display:flex;flex-direction:column;gap:12px;font-size:13px;line-height:1.5;">
-        <div style="background:rgba(218, 54, 51, 0.12);border:1px solid rgba(218, 54, 51, 0.4);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;">
+        <div
+          style="background:rgba(218, 54, 51, 0.12);border:1px solid rgba(218, 54, 51, 0.4);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;">
           <span style="font-size:22px;">⚠️</span>
           <div>
-            <b style="color:var(--red,#f85149);font-size:14px;">Không tìm thấy thiết bị ADB hoặc thiết bị đang Offline!</b>
+            <b style="color:var(--red,#f85149);font-size:14px;">No ADB devices detected or device is offline!</b>
             <div class="meta" style="font-size:12px;margin-top:2px;">
-              Nếu bạn đang cắm cáp USB thiết bị Android vào máy tính Windows của bạn, bạn có thể chuyển tiếp cổng ADB (5037) từ Windows vào server này thông qua SSH Reverse Tunnel.
+              If your Android phone or board is connected via USB to your Windows PC, forward the ADB port
+              (<code>5037</code>) to this server using an SSH Reverse Tunnel.
             </div>
           </div>
         </div>
 
         <div>
           <label style="font-weight:600;font-size:12px;display:block;margin-bottom:4px;">
-            📁 Đường dẫn file script trên máy tính Windows:
+            📁 Local script location on your Windows PC:
           </label>
           <div style="display:flex;gap:8px;align-items:center;">
-            <div id="adb-help-script-path" class="mono" style="flex:1;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;word-break:break-all;user-select:all;">
+            <div id="adb-help-script-path" class="mono"
+              style="flex:1;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;word-break:break-all;user-select:all;">
               D:\wmshare\telua_aosp\scripts\windows\adb_remote_pc.bat
             </div>
-            <button class="btn btn-sm" id="btn-adb-copy-path" title="Copy đường dẫn vào clipboard">📋 Copy Path</button>
-            <a class="btn btn-sm jade-btn" id="btn-adb-download-bat" href="/api/adb/remote-script" download="adb_remote_pc.bat" title="Tải file adb_remote_pc.bat về máy">⬇ Tải .bat</a>
+            <button class="btn btn-sm" id="btn-adb-copy-path" title="Copy file path to clipboard">📋 Copy Path</button>
+            <a class="btn btn-sm jade-btn" id="btn-adb-download-bat" href="/api/adb/remote-script"
+              download="adb_remote_pc.bat" title="Download adb_remote_pc.bat script">⬇ Download .bat</a>
           </div>
         </div>
 
         <div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:8px;padding:12px 14px;">
           <div style="font-weight:600;font-size:12px;margin-bottom:8px;color:var(--accent);">
-            🛠 3 Bước kết nối nhanh trên Windows:
+            🛠 3 Quick Steps on Windows:
           </div>
           <ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;">
-            <li>Cắm điện thoại / máy bảng Android vào cổng USB trên Windows (bật <b>USB Debugging</b>).</li>
-            <li>Chạy file <code>adb_remote_pc.bat</code> (Nhấn đúp chuột hoặc mở trong CMD / PowerShell).</li>
-            <li>Nhập mật khẩu SSH (nếu được hỏi) và giữ cửa sổ CMD mở để duy trì kết nối cổng <code>5037</code>.</li>
+            <li>Connect your Android device via USB to Windows (enable <b>USB Debugging</b> in Developer Options).</li>
+            <li>Run <code>adb_remote_pc.bat</code> (double-click in Explorer or run in CMD / PowerShell).</li>
+            <li>Enter your SSH password if prompted and keep the CMD window open to maintain port <code>5037</code>
+              tunnel.</li>
           </ol>
         </div>
 
-        <div style="font-size:11px;color:var(--text-dim);background:rgba(0,0,0,0.18);border:1px solid var(--border);border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
+        <div
+          style="font-size:11px;color:var(--text-dim);background:rgba(0,0,0,0.18);border:1px solid var(--border);border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
           <span class="mono" id="adb-help-cmd-text">ssh -R 5037:127.0.0.1:5037 %USERNAME%@10.184.129.24 -p 22</span>
-          <button class="btn btn-xs ghost" id="btn-adb-copy-cmd" title="Copy lệnh SSH reverse tunnel">Copy Command</button>
+          <button class="btn btn-xs ghost" id="btn-adb-copy-cmd" title="Copy SSH tunnel command">Copy Command</button>
         </div>
       </div>
 
-      <div class="modal-actions" style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
-        <span class="meta" style="font-size:11px;" id="adb-help-status-meta">Trạng thái: Đang kiểm tra...</span>
+      <div class="modal-actions"
+        style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+        <span class="meta" style="font-size:11px;" id="adb-help-status-meta">Status: Checking connection...</span>
         <div style="display:flex;gap:8px;">
-          <button class="btn" id="btn-adb-help-close">Đóng</button>
-          <button class="btn primary" id="btn-adb-help-refresh">⟳ Kiểm Tra Lại ADB</button>
+          <button class="btn" id="btn-adb-help-close">Close</button>
+          <button class="btn primary" id="btn-adb-help-refresh">⟳ Re-check ADB</button>
         </div>
       </div>
     </div>
@@ -1477,7 +1535,16 @@ RANK,FASKey,BRAND,Vehicle Series,Vehicle Type,Latest Popul.,MY,% of VIO,MVP,Bran
 
   <script src="/static/mermaid.min.js"></script>
   <script src="/static/quill.min.js"></script>
-  <script src="/static/app.js"></script>
+  <!-- Modular Telua Web scripts (split by tab) -->
+  <script src="/static/js/core.js"></script>
+  <script src="/static/js/tab_files.js"></script>
+  <script src="/static/js/tab_pipelines.js"></script>
+  <script src="/static/js/tab_terminal.js"></script>
+  <script src="/static/js/tab_docs.js"></script>
+  <script src="/static/js/tab_aosp.js"></script>
+  <script src="/static/js/tab_logcat.js"></script>
+  <script src="/static/js/tab_bi.js"></script>
+  <script src="/static/js/app.js"></script>
 </body>
 
 </html>

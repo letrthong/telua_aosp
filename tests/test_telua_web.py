@@ -185,6 +185,17 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertTrue(data["ok"])
         self.assertEqual(data["tool"], "telua_web")
 
+    def test_static_js_modular_scripts(self):
+        scripts = [
+            "core.js", "tab_files.js", "tab_pipelines.js", "tab_terminal.js",
+            "tab_docs.js", "tab_aosp.js", "tab_logcat.js", "tab_bi.js", "app.js",
+        ]
+        for s in scripts:
+            res = self.client.get(f"/static/js/{s}")
+            self.assertEqual(res.status_code, 200, f"/static/js/{s} returned {res.status_code}")
+            self.assertGreater(len(res.data), 100, f"/static/js/{s} is too small")
+            res.close()
+
     def test_api_status_and_adb_remote_script(self):
         # 1. Test /api/status returns adb_remote_script info
         res = self.client.get("/api/status")

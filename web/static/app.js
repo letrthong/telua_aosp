@@ -218,15 +218,15 @@ function renderStatus(s) {
     if (adb.length === 0) {
       chipAdb.innerHTML = `adb: <b>offline</b> <span class="adb-chip-btn" title="Click for Windows Remote PC bat helper">⚡ .bat</span>`;
       chipAdb.className = "chip err clickable";
-      chipAdb.title = "Không tìm thấy thiết bị ADB. Nhấp để tải/chạy adb_remote_pc.bat trên Windows.";
+      chipAdb.title = "No ADB devices connected. Click to view Windows Remote PC helper (adb_remote_pc.bat).";
     } else if (adb.some(d => d.state === "offline")) {
       chipAdb.innerHTML = `adb: <b>${adb.length} (offline)</b> <span class="adb-chip-btn" title="Click for Windows Remote PC bat helper">⚡ .bat</span>`;
       chipAdb.className = "chip warn clickable";
-      chipAdb.title = "Thiết bị ADB đang offline. Nhấp để tải/chạy adb_remote_pc.bat trên Windows.";
+      chipAdb.title = "ADB device is offline. Click to view Windows Remote PC helper (adb_remote_pc.bat).";
     } else {
       chipAdb.innerHTML = `adb: <b>${adb.length}</b> ${adb.map(d => esc(d.serial)).join(", ")}`;
       chipAdb.className = "chip ok clickable";
-      chipAdb.title = `Thiết bị ADB đang kết nối: ${adb.map(d => d.serial).join(", ")}. Nhấp để xem ADB Remote Helper.`;
+      chipAdb.title = `Connected ADB devices: ${adb.map(d => d.serial).join(", ")}. Click to view ADB Remote Helper.`;
     }
   }
 
@@ -1419,11 +1419,11 @@ function openAdbOfflineModal() {
   const adb = state.status?.adb_devices || [];
   if (metaEl) {
     if (adb.length === 0) {
-      metaEl.innerHTML = `Trạng thái: <span style="color:var(--red,#f85149);font-weight:600;">● Chưa kết nối thiết bị nào (0 devices)</span>`;
+      metaEl.innerHTML = `Status: <span style="color:var(--red,#f85149);font-weight:600;">● No devices connected (0 devices)</span>`;
     } else if (adb.some(d => d.state === "offline")) {
-      metaEl.innerHTML = `Trạng thái: <span style="color:var(--yellow,#d29922);font-weight:600;">● Thiết bị đang Offline (${adb.map(d => d.serial).join(", ")})</span>`;
+      metaEl.innerHTML = `Status: <span style="color:var(--yellow,#d29922);font-weight:600;">● Device is Offline (${adb.map(d => d.serial).join(", ")})</span>`;
     } else {
-      metaEl.innerHTML = `Trạng thái: <span style="color:var(--green,#3fb950);font-weight:600;">● Đang Online (${adb.map(d => d.serial).join(", ")})</span>`;
+      metaEl.innerHTML = `Status: <span style="color:var(--green,#3fb950);font-weight:600;">● Online (${adb.map(d => d.serial).join(", ")})</span>`;
     }
   }
   modal.classList.remove("hidden");
@@ -1437,9 +1437,9 @@ async function copyAdbScriptPath() {
   const p = getAdbRemoteScriptPath();
   try {
     await navigator.clipboard.writeText(p);
-    toast("Đã sao chép đường dẫn", p, "info", 3000);
+    toast("Path Copied", p, "info", 3000);
   } catch {
-    toast("Sao chép thất bại", "Vui lòng bôi đen đường dẫn và bấm Ctrl+C.", "warn");
+    toast("Copy Failed", "Please select the path text manually and press Ctrl+C.", "warn");
   }
 }
 
@@ -1447,34 +1447,34 @@ async function copyAdbScriptCmd() {
   const cmd = $("#adb-help-cmd-text")?.textContent || "ssh -R 5037:127.0.0.1:5037 %USERNAME%@10.184.129.24 -p 22";
   try {
     await navigator.clipboard.writeText(cmd.trim());
-    toast("Đã sao chép lệnh SSH", cmd.trim(), "info", 3000);
+    toast("SSH Command Copied", cmd.trim(), "info", 3000);
   } catch {
-    toast("Sao chép thất bại", "Vui lòng chọn lệnh và bấm Ctrl+C.", "warn");
+    toast("Copy Failed", "Please select the command text and press Ctrl+C.", "warn");
   }
 }
 
 async function refreshAdbStatusFromModal() {
   const metaEl = $("#adb-help-status-meta");
-  if (metaEl) metaEl.textContent = "Đang kiểm tra kết nối thiết bị...";
+  if (metaEl) metaEl.textContent = "Checking device connection...";
   try {
     const s = await api("/api/status");
     renderStatus(s);
     const adb = s.adb_devices || [];
     if (metaEl) {
       if (adb.length === 0) {
-        metaEl.innerHTML = `Trạng thái: <span style="color:var(--red,#f85149);font-weight:600;">● Vẫn chưa tìm thấy thiết bị (0 devices)</span>`;
-        toast("ADB vẫn offline", "Chưa phát hiện thiết bị. Hãy chắc chắn đã chạy file .bat trên Windows và cửa sổ CMD vẫn đang mở.", "warn");
+        metaEl.innerHTML = `Status: <span style="color:var(--red,#f85149);font-weight:600;">● Still no devices found (0 devices)</span>`;
+        toast("ADB Still Offline", "No device detected. Make sure you ran the .bat script on Windows and the CMD window remains open.", "warn");
       } else if (adb.some(d => d.state === "offline")) {
-        metaEl.innerHTML = `Trạng thái: <span style="color:var(--yellow,#d29922);font-weight:600;">● Thiết bị phát hiện nhưng đang Offline</span>`;
-        toast("Thiết bị Offline", "Thiết bị được nhận diện nhưng ở trạng thái offline. Hãy mở khóa màn hình và cho phép USB Debugging.", "warn");
+        metaEl.innerHTML = `Status: <span style="color:var(--yellow,#d29922);font-weight:600;">● Device detected but Offline</span>`;
+        toast("Device Offline", "Device is detected but offline. Please unlock device screen and accept USB Debugging authorization.", "warn");
       } else {
-        metaEl.innerHTML = `Trạng thái: <span style="color:var(--green,#3fb950);font-weight:600;">● Kết nối thành công! (${adb.map(d => d.serial).join(", ")})</span>`;
-        toast("ADB Kết nối thành công! ✓", `Đã nhận diện: ${adb.map(d => d.serial).join(", ")}`, "ok");
+        metaEl.innerHTML = `Status: <span style="color:var(--green,#3fb950);font-weight:600;">● Connected successfully! (${adb.map(d => d.serial).join(", ")})</span>`;
+        toast("ADB Connected! ✓", `Detected: ${adb.map(d => d.serial).join(", ")}`, "ok");
       }
     }
   } catch (err) {
-    if (metaEl) metaEl.textContent = "Lỗi khi kiểm tra: " + err.message;
-    toast("Lỗi kiểm tra ADB", err.message, "err");
+    if (metaEl) metaEl.textContent = "Check error: " + err.message;
+    toast("ADB Check Error", err.message, "err");
   }
 }
 
