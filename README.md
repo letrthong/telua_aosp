@@ -833,6 +833,9 @@ tel web stop                          # Dừng Web UI server
        - **Đổi kích thước (⤢ Width)**: Chuyển đổi linh hoạt giữa 1 cột và 2 cột (full width).
        - **Đồng bộ hai chiều với Raw JSON**: Tự động sinh và cập nhật mã JSON khi thao tác trên GUI; hỗ trợ tab `📝 Raw JSON Code` cho người dùng muốn xem hoặc sao chép mã.
      - Hỗ trợ đầy đủ hai chiều **Upload (Import JSON)** và **Download (Export JSON)**: người dùng có thể lưu lại layout dashboard thành file `.json` để tái sử dụng hoặc chia sẻ.
+     - **Thanh Bộ Lọc Tổng Quát (Generic Slicers & Multi-Select Checklist)**:
+       - Cung cấp ô lọc nhanh đa năng **`🔍 Filter:`** cho phép chọn bất kỳ cột phân loại nào (Brand, Region, Department, Category,...) và nhập giá trị lọc nhanh kèm gợi ý tự động (Datalist Autocomplete).
+       - Dropdown đa chọn **`☑ <Tên_Cột>`** tự động cập nhật nhãn theo cột thực tế trong bảng (ví dụ: `☑ Vehicle Series`, `☑ Product`, `☑ Region`), hỗ trợ tìm kiếm nhanh, badge đếm số lượng `Đã chọn / Tổng số` và nút thao tác nhanh `All` / `Clear`.
      - **Biểu Đồ Donut Tỷ Trọng Phân Bổ (Share-of-Context & Hover Tooltip Chi Tiết)**:
        - Khi lọc theo hãng (Brand/OEM) và chọn 1 số Serial (ví dụ chọn 2 trong tổng 14 serials), biểu đồ Donut tự động giữ ngữ cảnh của hãng và chia lát cắt: **Selected** vs **Remaining**, tâm tròn hiển thị huy hiệu thống kê chuẩn tiếng Anh: `SELECTED 29%` (hoặc `SELECTED 50%`) và số lượng `X / N serials`.
        - **Hover hiển thị danh sách còn lại**: Khi rê chuột vào lát cắt hoặc mục chú giải `⚪ Remaining (12 other serials)`, Tooltip sẽ hiển thị danh sách chi tiết các mã serial chưa chọn dưới dạng thẻ huy hiệu (Pill badges) kèm số lượng và tỷ trọng.

@@ -678,32 +678,32 @@
                 <span>⚡ Slicers:</span>
               </div>
 
-              <!-- Quick input filter (Điền giá trị lọc, e.g. Hãng xe / Brand / Toyota) -->
+              <!-- Quick input filter (Generic Column Filter) -->
               <div class="bi-slicer-input-wrap" style="display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.03);padding:2px 8px;border-radius:6px;border:1px solid var(--border);">
-                <span class="meta" style="font-size:11px;font-weight:600;color:var(--accent);">🔍 Điền Brand:</span>
-                <select id="bi-slicer-col-select" class="theme-select" style="font-size:11px;height:24px;padding:2px 6px;" title="Chọn cột để điền giá trị lọc (e.g. OEM, Brand)"></select>
-                <input id="bi-slicer-val-input" list="bi-slicer-val-datalist" type="text" placeholder="Nhập tên (e.g. Toyota)…" class="term-input" style="font-size:11px;height:24px;padding:2px 8px;width:130px;">
+                <span class="meta" style="font-size:11px;font-weight:600;color:var(--accent);">🔍 Filter:</span>
+                <select id="bi-slicer-col-select" class="theme-select" style="font-size:11px;height:24px;padding:2px 6px;" title="Select column to filter"></select>
+                <input id="bi-slicer-val-input" list="bi-slicer-val-datalist" type="text" placeholder="Value…" class="term-input" style="font-size:11px;height:24px;padding:2px 8px;width:130px;">
                 <datalist id="bi-slicer-val-datalist"></datalist>
-                <button class="btn btn-xs primary" id="btn-bi-slicer-apply-input" type="button" title="Áp dụng giá trị lọc">Lọc</button>
-                <button class="btn btn-xs ghost" id="btn-bi-slicer-clear-input" type="button" title="Xóa bộ lọc cột này" style="display:none;">✕</button>
+                <button class="btn btn-xs primary" id="btn-bi-slicer-apply-input" type="button" title="Apply filter">Filter</button>
+                <button class="btn btn-xs ghost" id="btn-bi-slicer-clear-input" type="button" title="Clear filter on this column" style="display:none;">✕</button>
               </div>
 
-              <!-- Multi-select Serial / Value Picker Dropdown -->
+              <!-- Multi-select Items / Value Picker Dropdown -->
               <div class="dropdown-wrapper" id="wrap-bi-slicer-multiselect">
-                <button class="btn btn-xs ghost dropdown-trigger" id="btn-bi-slicer-multiselect-trigger" type="button" title="Chọn danh sách Vehicle Serials đa chọn">
-                  <span>☑ Chọn Serial</span> <span id="bi-multiselect-badge" class="tag" style="font-size:10px;padding:1px 5px;margin-left:4px;background:var(--accent-soft);color:var(--accent);">0</span> <span class="dropdown-arrow">▼</span>
+                <button class="btn btn-xs ghost dropdown-trigger" id="btn-bi-slicer-multiselect-trigger" type="button" title="Multi-select items checklist">
+                  <span id="bi-multiselect-trigger-label">☑ Select Items</span> <span id="bi-multiselect-badge" class="tag" style="font-size:10px;padding:1px 5px;margin-left:4px;background:var(--accent-soft);color:var(--accent);">0</span> <span class="dropdown-arrow">▼</span>
                 </button>
                 <div class="dropdown-menu" id="menu-bi-slicer-multiselect" style="width:280px;max-height:320px;overflow-y:auto;padding:10px;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.5);">
                   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                    <span class="meta" style="font-size:11px;font-weight:700;" id="bi-multiselect-title">Vehicle Serials:</span>
+                    <span class="meta" style="font-size:11px;font-weight:700;" id="bi-multiselect-title">Select Items:</span>
                     <div style="display:flex;gap:4px;">
-                      <button class="btn btn-xs ghost" id="btn-bi-multiselect-all" type="button" style="font-size:10px;">Tất cả</button>
-                      <button class="btn btn-xs ghost" id="btn-bi-multiselect-clear" type="button" style="font-size:10px;">Bỏ chọn</button>
+                      <button class="btn btn-xs ghost" id="btn-bi-multiselect-all" type="button" style="font-size:10px;">All</button>
+                      <button class="btn btn-xs ghost" id="btn-bi-multiselect-clear" type="button" style="font-size:10px;">Clear</button>
                     </div>
                   </div>
-                  <input type="search" id="bi-multiselect-search" placeholder="🔍 Tìm serial…" class="term-input" style="width:100%;font-size:11px;height:24px;margin-bottom:8px;box-sizing:border-box;">
+                  <input type="search" id="bi-multiselect-search" placeholder="🔍 Search…" class="term-input" style="width:100%;font-size:11px;height:24px;margin-bottom:8px;box-sizing:border-box;">
                   <div id="bi-multiselect-items" style="display:flex;flex-direction:column;gap:3px;max-height:180px;overflow-y:auto;">
-                    <!-- Checkbox items: [☑ Serial 1] [☑ Serial 2] ... -->
+                    <!-- Checkbox items: [☑ Item 1] [☑ Item 2] ... -->
                   </div>
                 </div>
               </div>

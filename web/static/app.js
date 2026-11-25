@@ -7370,7 +7370,7 @@ function biPopulateSlicerControls() {
     const vals = Array.from(new Set(biState.rawData.map((r) => String(r[activeCol] ?? "")))).filter(Boolean);
     vals.sort();
     datalist.innerHTML = vals.slice(0, 50).map((v) => `<option value="${v}">`).join("");
-    valInput.placeholder = `Nhập ${activeCol} (e.g. Toyota)…`;
+    valInput.placeholder = `Filter ${activeCol}…`;
 
     const activeSet = biState.activeSlicers[activeCol];
     if (activeSet && activeSet.size > 0) {
@@ -7445,6 +7445,9 @@ function biUpdateMultiSelectDropdown() {
   const serialCol = serialColObj.name;
   if (title) title.textContent = `${serialCol}:`;
 
+  const triggerLabel = $("#bi-multiselect-trigger-label");
+  if (triggerLabel) triggerLabel.textContent = `☑ ${serialCol}`;
+
   const contextData = biGetContextData(serialCol);
   const uniqueSerials = Array.from(new Set(contextData.map((r) => String(r[serialCol] ?? "")))).filter(Boolean);
   uniqueSerials.sort();
@@ -7455,12 +7458,16 @@ function biUpdateMultiSelectDropdown() {
     badge.textContent = `${activeSet.size} / ${uniqueSerials.length}`;
   }
 
+  if (searchInput) {
+    searchInput.placeholder = `🔍 Search ${serialCol}…`;
+  }
+
   const renderItems = (filterQuery = "") => {
     const q = filterQuery.toLowerCase();
     const filteredList = uniqueSerials.filter((s) => !q || s.toLowerCase().includes(q));
 
     if (filteredList.length === 0) {
-      container.innerHTML = `<span class="meta" style="font-size:11px;padding:6px;">Không tìm thấy serial nào.</span>`;
+      container.innerHTML = `<span class="meta" style="font-size:11px;padding:6px;">No items found.</span>`;
       return;
     }
 
