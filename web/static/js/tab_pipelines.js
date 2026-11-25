@@ -41,8 +41,9 @@ function syncTopTabs() {
   const isLogcat = !$("#view-logcat")?.classList.contains("hidden");
   const isDocs = !$("#view-docs")?.classList.contains("hidden");
   const isBi = !$("#view-bi")?.classList.contains("hidden");
-  const isSystem = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && (state.plSource === "system" || state.plSource === "docker");
-  const isPipelines = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isSystem;
+  const isMirror = !$("#view-mirror")?.classList.contains("hidden");
+  const isSystem = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isMirror && (state.plSource === "system" || state.plSource === "docker");
+  const isPipelines = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isMirror && !isSystem;
   $("#tab-files")?.classList.toggle("active", isFiles);
   $("#tab-pipelines")?.classList.toggle("active", isPipelines);
   $("#tab-system")?.classList.toggle("active", isSystem);
@@ -54,9 +55,10 @@ function syncTopTabs() {
     logcatTab.classList.toggle("tab-streaming", Boolean(_logcatStreaming));
   }
   $("#tab-docs")?.classList.toggle("active", isDocs);
+  $("#tab-mirror")?.classList.toggle("active", isMirror);
   $("#tab-bi")?.classList.toggle("active", isBi);
   try {
-    const activeTabName = isFiles ? "files" : (isAosp ? "aosp" : (isTerminal ? "terminal" : (isLogcat ? "logcat" : (isDocs ? "docs" : (isBi ? "bi" : (isSystem ? "system" : "pipelines"))))));
+    const activeTabName = isFiles ? "files" : (isAosp ? "aosp" : (isTerminal ? "terminal" : (isLogcat ? "logcat" : (isDocs ? "docs" : (isBi ? "bi" : (isMirror ? "mirror" : (isSystem ? "system" : "pipelines")))))));
     localStorage.setItem(LAST_TAB_KEY, activeTabName);
     localStorage.setItem(LAST_SOURCE_KEY, state.plSource);
   } catch { /* ignore */ }
@@ -65,12 +67,13 @@ function syncTopTabs() {
 function switchPipelineSource(source) {
   if (source === "docker") source = "system";
   if (source !== "system") _lastNonSystemPlSource = source;
-  // Ensure Pipelines view is visible if user clicks a source while in Terminal, Files, Docs, Logcat or AOSP
+  // Ensure Pipelines view is visible if user clicks a source while in Terminal, Files, Docs, Logcat, AOSP or Mirror
   $("#view-files")?.classList.add("hidden");
   $("#view-aosp")?.classList.add("hidden");
   $("#view-terminal")?.classList.add("hidden");
   $("#view-docs")?.classList.add("hidden");
   $("#view-logcat")?.classList.add("hidden");
+  $("#view-mirror")?.classList.add("hidden");
   $("#view-pipelines")?.classList.remove("hidden");
   if (state.plSource === source) {
     syncTopTabs();

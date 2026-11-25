@@ -589,10 +589,11 @@ function switchTab(tab) {
   const isLogcat = tab === "logcat";
   const isDocs = tab === "docs";
   const isBi = tab === "bi";
-  const isPipelinesView = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi;
+  const isMirror = tab === "mirror";
+  const isPipelinesView = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isMirror;
 
-  // Collapse Config Files sidebar in Docs, AOSP, Terminal, Logcat & BI views to give maximum full-width canvas
-  $(".layout")?.classList.toggle("no-sidebar", isDocs || isAosp || isTerminal || isLogcat || isBi);
+  // Collapse Config Files sidebar in Docs, AOSP, Terminal, Logcat, BI & Mirror views to give maximum full-width canvas
+  $(".layout")?.classList.toggle("no-sidebar", isDocs || isAosp || isTerminal || isLogcat || isBi || isMirror);
 
   $("#view-files")?.classList.toggle("hidden", !isFiles);
   $("#view-aosp")?.classList.toggle("hidden", !isAosp);
@@ -601,6 +602,10 @@ function switchTab(tab) {
   $("#view-logcat")?.classList.toggle("hidden", !isLogcat);
   $("#view-docs")?.classList.toggle("hidden", !isDocs);
   $("#view-bi")?.classList.toggle("hidden", !isBi);
+  $("#view-mirror")?.classList.toggle("hidden", !isMirror);
+  if (!isMirror && typeof stopMirrorStream === "function") {
+    stopMirrorStream();
+  }
   if (tab === "system") {
     switchPipelineSource("system");
   } else if (tab === "pipelines" && (state.plSource === "system" || state.plSource === "docker")) {
@@ -608,6 +613,10 @@ function switchTab(tab) {
   }
   syncTopTabs();
   renderFiles($("#search")?.value || "");
+  if (isMirror) {
+    if (typeof initMirror === "function") initMirror();
+    return;
+  }
   if (isBi) {
     initBIDashboard();
   }

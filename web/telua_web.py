@@ -90,6 +90,9 @@ from telua_web_aosp import (  # noqa: E402
 from telua_web_bi import (  # noqa: E402
     bi_bp,
 )
+from telua_web_mirror import (  # noqa: E402
+    mirror_bp,
+)
 
 try:
     from flask import Flask, abort, jsonify, request, send_from_directory, send_file
@@ -133,6 +136,7 @@ app.register_blueprint(pipelines_bp)
 app.register_blueprint(docs_bp)
 app.register_blueprint(aosp_bp)
 app.register_blueprint(bi_bp)
+app.register_blueprint(mirror_bp)
 
 
 @app.errorhandler(HTTPException)

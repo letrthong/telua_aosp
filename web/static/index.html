@@ -38,6 +38,7 @@
           title="Interactive Web CLI Terminal — run tel / Linux / Git / ADB commands directly">💻 Terminal</button>
         <button class="tab" id="tab-logcat"
           title="Live Android Logcat stream with realtime search, tag &amp; level filter">📱 Logcat</button>
+        <button class="tab" id="tab-mirror" title="Live Android Screen Mirroring &amp; Remote Control">📱 Mirror</button>
         <button class="tab" id="tab-docs" title="Sphinx Doc-as-Code — WYSIWYG Quill.js &amp; RST Converter">📚
           Docs</button>
         <button class="tab" id="tab-bi" title="Excel to JSON &amp; Power BI Interactive Dashboard">📊 BI Studio</button>
@@ -310,6 +311,108 @@
         <div class="logcat-screen mono" id="logcat-screen"></div>
         <button class="logcat-scroll-pill hidden" id="logcat-scroll-pill" title="Scroll to bottom">↓ Resume
           Auto-scroll</button>
+      </div>
+    </section>
+
+    <!-- ============ Screen Mirroring pane (Live Display & Touch Control) ============ -->
+    <section class="editor-pane hidden" id="view-mirror">
+      <div class="editor-head">
+        <div class="editor-title">
+          <span class="mono" style="color:var(--accent);font-weight:700">📱 Screen Mirror</span>
+          <span id="mirror-status-badge" class="run-badge">Idle</span>
+          <span id="mirror-fps-badge" class="chip mono" style="font-size:11px;">0 FPS</span>
+          <span id="mirror-res-pill" class="chip mono" style="font-size:11px;">1080×1920 (Portrait)</span>
+          <span id="mirror-device-pill" class="meta mono" style="font-size:11px;">No device</span>
+        </div>
+        <div class="editor-actions">
+          <div class="mirror-fps-select-wrap" style="display:inline-flex;align-items:center;gap:4px;font-size:12px;">
+            <label for="mirror-fps-select" class="meta">FPS:</label>
+            <select id="mirror-fps-select" class="theme-select mono" style="padding:3px 6px;font-size:11px;">
+              <option value="5">5 FPS (Eco)</option>
+              <option value="10" selected>10 FPS (Balanced)</option>
+              <option value="15">15 FPS (High)</option>
+            </select>
+          </div>
+          <button class="btn primary" id="btn-mirror-toggle">▶ Start Live</button>
+          <button class="btn" id="btn-mirror-screenshot" title="Capture &amp; download high-res PNG screenshot">📸 Screenshot</button>
+        </div>
+      </div>
+
+      <!-- Offline Warning Banner -->
+      <div id="mirror-offline-banner" class="logcat-offline-banner hidden">
+        <span class="offline-icon">⚠️</span>
+        <div class="offline-text">
+          <b>Device Offline:</b> No connected Android device detected for screen mirroring. Run <code>scripts\windows\adb_remote_pc.bat</code> if connected via Windows.
+        </div>
+        <div class="offline-actions">
+          <a class="btn btn-xs jade-btn" href="/api/adb/remote-script" download="adb_remote_pc.bat">⬇ Download .bat</a>
+        </div>
+      </div>
+
+      <!-- Mirroring Main Canvas & Control Deck -->
+      <div class="mirror-container">
+        <!-- Center Screen Area -->
+        <div class="mirror-screen-area">
+          <div class="mirror-device-frame" id="mirror-device-frame">
+            <canvas id="mirror-canvas" class="mirror-canvas" width="1080" height="1920"></canvas>
+            <div class="mirror-overlay-hint">
+              <span>👆 Click to Tap · Drag to Swipe / Scroll</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Side: Remote Control Deck -->
+        <div class="mirror-control-deck">
+          <div class="mirror-deck-group">
+            <div class="mirror-deck-label">Navigation &amp; Hardware Keys</div>
+            <div class="mirror-keys-grid">
+              <button class="btn mirror-key-btn" id="btn-mirror-key-back" title="Back (Key 4)">
+                <span>◀ Back</span>
+              </button>
+              <button class="btn mirror-key-btn primary" id="btn-mirror-key-home" title="Home (Key 3)">
+                <span>🔘 Home</span>
+              </button>
+              <button class="btn mirror-key-btn" id="btn-mirror-key-appswitch" title="Recent Apps (Key 187)">
+                <span>⏹ Apps</span>
+              </button>
+              <button class="btn mirror-key-btn danger ghost" id="btn-mirror-key-power" title="Power Button (Key 26)">
+                <span>⚡ Power</span>
+              </button>
+              <button class="btn mirror-key-btn" id="btn-mirror-key-volup" title="Volume Up (Key 24)">
+                <span>🔊 Vol+</span>
+              </button>
+              <button class="btn mirror-key-btn" id="btn-mirror-key-voldown" title="Volume Down (Key 25)">
+                <span>🔉 Vol-</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="mirror-deck-group">
+            <div class="mirror-deck-label">Quick Actions</div>
+            <div class="mirror-keys-grid">
+              <button class="btn mirror-key-btn" id="btn-mirror-key-notif" title="Pull down Notification Shade">
+                <span>🔔 Notifications</span>
+              </button>
+              <button class="btn mirror-key-btn" id="btn-mirror-key-settings" title="Launch Android Settings App">
+                <span>⚙️ Settings</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="mirror-deck-group">
+            <div class="mirror-deck-label">Type Text into Focused Field</div>
+            <div class="mirror-text-row">
+              <input type="text" id="mirror-text-input" class="term-input" placeholder="Type text and press Enter…" autocomplete="off" spellcheck="false">
+              <button class="btn primary" id="btn-mirror-send-text">Send</button>
+            </div>
+            <div class="meta" style="font-size:11px;margin-top:4px;">Injected via <code>adb shell input text</code></div>
+          </div>
+
+          <div class="mirror-deck-group" style="margin-top:auto;">
+            <div class="mirror-deck-label">Device Status</div>
+            <div id="mirror-status-meta" class="meta" style="font-size:12px;line-height:1.5;">Status: Checking...</div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -1543,6 +1646,7 @@ RANK,FASKey,BRAND,Vehicle Series,Vehicle Type,Latest Popul.,MY,% of VIO,MVP,Bran
   <script src="/static/js/tab_docs.js"></script>
   <script src="/static/js/tab_aosp.js"></script>
   <script src="/static/js/tab_logcat.js"></script>
+  <script src="/static/js/tab_mirror.js"></script>
   <script src="/static/js/tab_bi.js"></script>
   <script src="/static/js/app.js"></script>
 </body>

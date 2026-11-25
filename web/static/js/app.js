@@ -83,6 +83,7 @@ function wire() {
   $("#tab-logcat")?.addEventListener("click", () => switchTab("logcat"));
   $("#tab-docs")?.addEventListener("click", () => switchTab("docs"));
   $("#tab-bi")?.addEventListener("click", () => switchTab("bi"));
+  $("#tab-mirror")?.addEventListener("click", () => switchTab("mirror"));
 
   // AOSP Center wiring
   $("#btn-aosp-reload")?.addEventListener("click", () => loadAospConfig());
