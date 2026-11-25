@@ -92,7 +92,7 @@ from telua_web_bi import (  # noqa: E402
 )
 
 try:
-    from flask import Flask, abort, jsonify, request, send_from_directory
+    from flask import Flask, abort, jsonify, request, send_from_directory, send_file
     from werkzeug.exceptions import HTTPException
 except ImportError:  # pragma: no cover
     sys.stderr.write(
@@ -214,6 +214,7 @@ def api_ping():
 
 @app.get("/api/status")
 def api_status():
+    remote_bat = ROOT / "scripts" / "windows" / "adb_remote_pc.bat"
     return jsonify({
         "ok": True,
         "version": parse_version(),
@@ -222,10 +223,38 @@ def api_status():
         "active_project": parse_active_project(),
         "profiles": parse_profiles(),
         "adb_devices": adb_devices(),
+        "adb_remote_script": {
+            "name": "adb_remote_pc.bat",
+            "path": str(remote_bat),
+            "exists": remote_bat.is_file(),
+            "download_url": "/api/adb/remote-script",
+        },
         "ram": ram_info(),
         "uptime_s": int(time.time() - START_TIME),
         "python": sys.version.split()[0],
     })
+
+
+@app.get("/api/adb/remote-script")
+def api_adb_remote_script():
+    """Download adb_remote_pc.bat script for Windows SSH reverse ADB tunnel."""
+    bat_path = ROOT / "scripts" / "windows" / "adb_remote_pc.bat"
+    if not bat_path.is_file():
+        abort(404, description="adb_remote_pc.bat not found at %s" % bat_path)
+    try:
+        return send_file(
+            str(bat_path),
+            as_attachment=True,
+            download_name="adb_remote_pc.bat",
+            mimetype="application/x-bat",
+        )
+    except TypeError:  # pragma: no cover (fallback for Flask < 2.0)
+        return send_file(
+            str(bat_path),
+            as_attachment=True,
+            attachment_filename="adb_remote_pc.bat",
+            mimetype="application/x-bat",
+        )
 
 
 @app.get("/api/files")

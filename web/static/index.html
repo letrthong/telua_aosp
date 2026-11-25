@@ -288,6 +288,19 @@
         </label>
       </div>
 
+      <!-- ADB Offline Suggestion Banner -->
+      <div id="logcat-adb-offline-banner" class="logcat-offline-banner hidden">
+        <span class="offline-icon">⚠️</span>
+        <div class="offline-text">
+          <b>ADB Offline:</b> Không tìm thấy thiết bị Android kết nối. Nếu đang cắm USB trên máy tính Windows, hãy chạy <code>adb_remote_pc.bat</code> để kết nối qua SSH reverse tunnel.
+        </div>
+        <div class="offline-actions">
+          <button class="btn btn-xs jade-btn" id="btn-logcat-open-adb-help">⚡ Hướng Dẫn &amp; Tải .bat</button>
+          <a class="btn btn-xs ghost" id="btn-logcat-direct-download" href="/api/adb/remote-script" download="adb_remote_pc.bat" title="Tải file adb_remote_pc.bat">⬇ Tải .bat</a>
+          <button class="btn btn-xs ghost" id="btn-logcat-copy-adb-path" title="Copy đường dẫn D:\wmshare\telua_aosp\scripts\windows\adb_remote_pc.bat">📋 Copy Path</button>
+        </div>
+      </div>
+
       <!-- Logcat Streaming Display -->
       <div class="logcat-container" id="logcat-container">
         <div class="logcat-screen mono" id="logcat-screen"></div>
@@ -1391,6 +1404,70 @@ RANK,FASKey,BRAND,Vehicle Series,Vehicle Type,Latest Popul.,MY,% of VIO,MVP,Bran
       <div class="modal-actions">
         <button class="btn" id="btn-bi-calc-cancel">Cancel</button>
         <button class="btn jade-btn" id="btn-bi-calc-submit">✔ Add Column</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ADB Offline / Remote PC Helper Modal ============ -->
+  <div class="modal hidden" id="modal-adb-offline-help">
+    <div class="modal-box wide" style="max-width:680px;">
+      <div class="editor-head" style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);">
+        <div class="editor-title">
+          <span class="mono" style="font-weight:700;color:var(--accent);font-size:15px;">⚡ ADB Remote PC Helper</span>
+          <span class="meta">Windows Reverse SSH Tunnel</span>
+        </div>
+        <div class="editor-actions">
+          <button class="btn btn-xs ghost" id="btn-adb-help-close-top">✕</button>
+        </div>
+      </div>
+
+      <div class="adb-modal-body" style="display:flex;flex-direction:column;gap:12px;font-size:13px;line-height:1.5;">
+        <div style="background:rgba(218, 54, 51, 0.12);border:1px solid rgba(218, 54, 51, 0.4);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;">
+          <span style="font-size:22px;">⚠️</span>
+          <div>
+            <b style="color:var(--red,#f85149);font-size:14px;">Không tìm thấy thiết bị ADB hoặc thiết bị đang Offline!</b>
+            <div class="meta" style="font-size:12px;margin-top:2px;">
+              Nếu bạn đang cắm cáp USB thiết bị Android vào máy tính Windows của bạn, bạn có thể chuyển tiếp cổng ADB (5037) từ Windows vào server này thông qua SSH Reverse Tunnel.
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-weight:600;font-size:12px;display:block;margin-bottom:4px;">
+            📁 Đường dẫn file script trên máy tính Windows:
+          </label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div id="adb-help-script-path" class="mono" style="flex:1;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;word-break:break-all;user-select:all;">
+              D:\wmshare\telua_aosp\scripts\windows\adb_remote_pc.bat
+            </div>
+            <button class="btn btn-sm" id="btn-adb-copy-path" title="Copy đường dẫn vào clipboard">📋 Copy Path</button>
+            <a class="btn btn-sm jade-btn" id="btn-adb-download-bat" href="/api/adb/remote-script" download="adb_remote_pc.bat" title="Tải file adb_remote_pc.bat về máy">⬇ Tải .bat</a>
+          </div>
+        </div>
+
+        <div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:8px;padding:12px 14px;">
+          <div style="font-weight:600;font-size:12px;margin-bottom:8px;color:var(--accent);">
+            🛠 3 Bước kết nối nhanh trên Windows:
+          </div>
+          <ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;">
+            <li>Cắm điện thoại / máy bảng Android vào cổng USB trên Windows (bật <b>USB Debugging</b>).</li>
+            <li>Chạy file <code>adb_remote_pc.bat</code> (Nhấn đúp chuột hoặc mở trong CMD / PowerShell).</li>
+            <li>Nhập mật khẩu SSH (nếu được hỏi) và giữ cửa sổ CMD mở để duy trì kết nối cổng <code>5037</code>.</li>
+          </ol>
+        </div>
+
+        <div style="font-size:11px;color:var(--text-dim);background:rgba(0,0,0,0.18);border:1px solid var(--border);border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
+          <span class="mono" id="adb-help-cmd-text">ssh -R 5037:127.0.0.1:5037 %USERNAME%@10.184.129.24 -p 22</span>
+          <button class="btn btn-xs ghost" id="btn-adb-copy-cmd" title="Copy lệnh SSH reverse tunnel">Copy Command</button>
+        </div>
+      </div>
+
+      <div class="modal-actions" style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+        <span class="meta" style="font-size:11px;" id="adb-help-status-meta">Trạng thái: Đang kiểm tra...</span>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" id="btn-adb-help-close">Đóng</button>
+          <button class="btn primary" id="btn-adb-help-refresh">⟳ Kiểm Tra Lại ADB</button>
+        </div>
       </div>
     </div>
   </div>

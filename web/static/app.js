@@ -211,13 +211,31 @@ function renderStatus(s) {
   $("#chip-project").innerHTML = `project: <b>${esc(s.active_project || "—")}</b>`;
   const adb = s.adb_devices || [];
   const chipAdb = $("#chip-adb");
-  if (adb.length === 0) {
-    chipAdb.textContent = "adb: offline";
-    chipAdb.className = "chip err";
-  } else {
-    chipAdb.innerHTML = `adb: <b>${adb.length}</b> ${adb.map(d => esc(d.serial)).join(", ")}`;
-    chipAdb.className = "chip ok";
+  const isAdbOffline = adb.length === 0 || adb.some(d => d.state === "offline");
+  if (chipAdb) {
+    chipAdb.classList.add("clickable");
+    chipAdb.style.cursor = "pointer";
+    if (adb.length === 0) {
+      chipAdb.innerHTML = `adb: <b>offline</b> <span class="adb-chip-btn" title="Click for Windows Remote PC bat helper">⚡ .bat</span>`;
+      chipAdb.className = "chip err clickable";
+      chipAdb.title = "Không tìm thấy thiết bị ADB. Nhấp để tải/chạy adb_remote_pc.bat trên Windows.";
+    } else if (adb.some(d => d.state === "offline")) {
+      chipAdb.innerHTML = `adb: <b>${adb.length} (offline)</b> <span class="adb-chip-btn" title="Click for Windows Remote PC bat helper">⚡ .bat</span>`;
+      chipAdb.className = "chip warn clickable";
+      chipAdb.title = "Thiết bị ADB đang offline. Nhấp để tải/chạy adb_remote_pc.bat trên Windows.";
+    } else {
+      chipAdb.innerHTML = `adb: <b>${adb.length}</b> ${adb.map(d => esc(d.serial)).join(", ")}`;
+      chipAdb.className = "chip ok clickable";
+      chipAdb.title = `Thiết bị ADB đang kết nối: ${adb.map(d => d.serial).join(", ")}. Nhấp để xem ADB Remote Helper.`;
+    }
   }
+
+  // Update Logcat offline suggestion banner if present
+  const logcatOfflineBanner = $("#logcat-adb-offline-banner");
+  if (logcatOfflineBanner) {
+    logcatOfflineBanner.classList.toggle("hidden", !isAdbOffline);
+  }
+
   const ram = s.ram;
   const chipRam = $("#chip-ram");
   if (ram) {
@@ -1381,6 +1399,83 @@ function renderCryptoItems(items = []) {
     chip.className = "chip " + (encCount === items.length ? "ok" : encCount > 0 ? "warn" : "");
   }
   updateCryptoButtons();
+}
+
+/* ---------------- ADB Offline & Remote Script Helper ---------------- */
+const DEFAULT_ADB_REMOTE_BAT_PATH = "D:\\wmshare\\telua_aosp\\scripts\\windows\\adb_remote_pc.bat";
+
+function getAdbRemoteScriptPath() {
+  return state.status?.adb_remote_script?.path || DEFAULT_ADB_REMOTE_BAT_PATH;
+}
+
+function openAdbOfflineModal() {
+  const modal = $("#modal-adb-offline-help");
+  if (!modal) return;
+  const pathEl = $("#adb-help-script-path");
+  const fullPath = getAdbRemoteScriptPath();
+  if (pathEl) pathEl.textContent = fullPath;
+
+  const metaEl = $("#adb-help-status-meta");
+  const adb = state.status?.adb_devices || [];
+  if (metaEl) {
+    if (adb.length === 0) {
+      metaEl.innerHTML = `Trạng thái: <span style="color:var(--red,#f85149);font-weight:600;">● Chưa kết nối thiết bị nào (0 devices)</span>`;
+    } else if (adb.some(d => d.state === "offline")) {
+      metaEl.innerHTML = `Trạng thái: <span style="color:var(--yellow,#d29922);font-weight:600;">● Thiết bị đang Offline (${adb.map(d => d.serial).join(", ")})</span>`;
+    } else {
+      metaEl.innerHTML = `Trạng thái: <span style="color:var(--green,#3fb950);font-weight:600;">● Đang Online (${adb.map(d => d.serial).join(", ")})</span>`;
+    }
+  }
+  modal.classList.remove("hidden");
+}
+
+function closeAdbOfflineModal() {
+  $("#modal-adb-offline-help")?.classList.add("hidden");
+}
+
+async function copyAdbScriptPath() {
+  const p = getAdbRemoteScriptPath();
+  try {
+    await navigator.clipboard.writeText(p);
+    toast("Đã sao chép đường dẫn", p, "info", 3000);
+  } catch {
+    toast("Sao chép thất bại", "Vui lòng bôi đen đường dẫn và bấm Ctrl+C.", "warn");
+  }
+}
+
+async function copyAdbScriptCmd() {
+  const cmd = $("#adb-help-cmd-text")?.textContent || "ssh -R 5037:127.0.0.1:5037 %USERNAME%@10.184.129.24 -p 22";
+  try {
+    await navigator.clipboard.writeText(cmd.trim());
+    toast("Đã sao chép lệnh SSH", cmd.trim(), "info", 3000);
+  } catch {
+    toast("Sao chép thất bại", "Vui lòng chọn lệnh và bấm Ctrl+C.", "warn");
+  }
+}
+
+async function refreshAdbStatusFromModal() {
+  const metaEl = $("#adb-help-status-meta");
+  if (metaEl) metaEl.textContent = "Đang kiểm tra kết nối thiết bị...";
+  try {
+    const s = await api("/api/status");
+    renderStatus(s);
+    const adb = s.adb_devices || [];
+    if (metaEl) {
+      if (adb.length === 0) {
+        metaEl.innerHTML = `Trạng thái: <span style="color:var(--red,#f85149);font-weight:600;">● Vẫn chưa tìm thấy thiết bị (0 devices)</span>`;
+        toast("ADB vẫn offline", "Chưa phát hiện thiết bị. Hãy chắc chắn đã chạy file .bat trên Windows và cửa sổ CMD vẫn đang mở.", "warn");
+      } else if (adb.some(d => d.state === "offline")) {
+        metaEl.innerHTML = `Trạng thái: <span style="color:var(--yellow,#d29922);font-weight:600;">● Thiết bị phát hiện nhưng đang Offline</span>`;
+        toast("Thiết bị Offline", "Thiết bị được nhận diện nhưng ở trạng thái offline. Hãy mở khóa màn hình và cho phép USB Debugging.", "warn");
+      } else {
+        metaEl.innerHTML = `Trạng thái: <span style="color:var(--green,#3fb950);font-weight:600;">● Kết nối thành công! (${adb.map(d => d.serial).join(", ")})</span>`;
+        toast("ADB Kết nối thành công! ✓", `Đã nhận diện: ${adb.map(d => d.serial).join(", ")}`, "ok");
+      }
+    }
+  } catch (err) {
+    if (metaEl) metaEl.textContent = "Lỗi khi kiểm tra: " + err.message;
+    toast("Lỗi kiểm tra ADB", err.message, "err");
+  }
 }
 
 async function refreshCryptoStatus() {
@@ -4877,6 +4972,10 @@ async function startLogcatStream() {
         errRow.textContent = `[ERROR] ${err.message}`;
         screen.appendChild(errRow);
       }
+      const adb = state.status?.adb_devices || [];
+      if (adb.length === 0 || adb.some(d => d.state === "offline")) {
+        $("#logcat-adb-offline-banner")?.classList.remove("hidden");
+      }
     }
   } finally {
     _logcatStreaming = false;
@@ -5928,6 +6027,16 @@ function wire() {
   $("#btn-crypto-close")?.addEventListener("click", () => $("#modal-crypto")?.classList.add("hidden"));
   $("#btn-confirm-cancel")?.addEventListener("click", () => resolveConfirm(false));
   $("#btn-confirm-ok")?.addEventListener("click", () => resolveConfirm(true));
+
+  // ADB Offline & Remote Script Modal actions
+  $("#chip-adb")?.addEventListener("click", () => openAdbOfflineModal());
+  $("#btn-adb-help-close")?.addEventListener("click", closeAdbOfflineModal);
+  $("#btn-adb-help-close-top")?.addEventListener("click", closeAdbOfflineModal);
+  $("#btn-adb-copy-path")?.addEventListener("click", copyAdbScriptPath);
+  $("#btn-adb-copy-cmd")?.addEventListener("click", copyAdbScriptCmd);
+  $("#btn-adb-help-refresh")?.addEventListener("click", refreshAdbStatusFromModal);
+  $("#btn-logcat-open-adb-help")?.addEventListener("click", openAdbOfflineModal);
+  $("#btn-logcat-copy-adb-path")?.addEventListener("click", copyAdbScriptPath);
 
   // Crypto & Overlay actions
   $("#chip-crypto")?.addEventListener("click", () => openCryptoModal("all"));

@@ -185,6 +185,26 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertTrue(data["ok"])
         self.assertEqual(data["tool"], "telua_web")
 
+    def test_api_status_and_adb_remote_script(self):
+        # 1. Test /api/status returns adb_remote_script info
+        res = self.client.get("/api/status")
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertTrue(data["ok"])
+        self.assertIn("adb_devices", data)
+        self.assertIn("adb_remote_script", data)
+        self.assertTrue(data["adb_remote_script"]["exists"])
+        self.assertTrue(data["adb_remote_script"]["path"].endswith("adb_remote_pc.bat"))
+        self.assertEqual(data["adb_remote_script"]["download_url"], "/api/adb/remote-script")
+
+        # 2. Test /api/adb/remote-script downloads adb_remote_pc.bat
+        res_bat = self.client.get("/api/adb/remote-script")
+        self.assertEqual(res_bat.status_code, 200)
+        self.assertIn("adb_remote_pc.bat", res_bat.headers.get("Content-Disposition", ""))
+        content = res_bat.data.decode("utf-8", errors="ignore")
+        self.assertIn("ssh -R 5037:127.0.0.1:5037", content)
+        res_bat.close()
+
     def test_api_pipelines_system(self):
         res = self.client.get("/api/pipelines?source=system")
         self.assertEqual(res.status_code, 200)
