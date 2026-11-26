@@ -4183,6 +4183,11 @@ code,
 }
 
 /* ---------------- AI Agent chat ---------------- */
+#view-ai {
+  height: 100%;
+  min-height: 0;
+}
+
 .ai-chat-log {
   flex: 1;
   min-height: 0;
@@ -4190,7 +4195,6 @@ code,
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end; /* anchor messages just above the CLI input bar — no big empty gap */
   gap: 10px;
   background: var(--bg);
 }
@@ -4251,6 +4255,7 @@ code,
   border-top: 1px solid var(--border);
   background: var(--bg-soft);
   align-items: flex-end;
+  flex-shrink: 0;
 }
 
 .ai-input-bar textarea {

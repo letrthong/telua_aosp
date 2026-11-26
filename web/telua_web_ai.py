@@ -512,7 +512,22 @@ def _call_chat_completions(messages, provider_entry, model_entry):
                 data = json.loads(resp.read().decode("utf-8"))
             break
         except Exception as exc:
-            last_err = exc
+            err_detail = str(exc)
+            if hasattr(exc, "read"):
+                try:
+                    raw_body = exc.read().decode("utf-8", errors="replace")
+                    err_json = json.loads(raw_body)
+                    if isinstance(err_json, dict) and "error" in err_json:
+                        err_obj = err_json["error"]
+                        if isinstance(err_obj, dict) and "message" in err_obj:
+                            err_detail = f"{getattr(exc, 'code', 'HTTP Error')}: {err_obj['message']}"
+                        elif isinstance(err_obj, str):
+                            err_detail = f"{getattr(exc, 'code', 'HTTP Error')}: {err_obj}"
+                    elif isinstance(err_json, list) and len(err_json) > 0 and "error" in err_json[0]:
+                        err_detail = f"{getattr(exc, 'code', 'HTTP Error')}: {err_json[0]['error'].get('message', str(exc))}"
+                except Exception:
+                    pass
+            last_err = err_detail
             continue
     else:
         raise RuntimeError(f"All endpoints failed for {model_id}: {last_err}")

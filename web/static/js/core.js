@@ -710,6 +710,8 @@ function switchTab(tab) {
   }
   if (isAi) {
     initAI();
+    setTimeout(() => $("#ai-input")?.focus(), 40);
+    return;
   }
   if (isLogcat) {
     initLogcat();

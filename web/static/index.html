@@ -1037,6 +1037,30 @@
         </div>
       </div>
     </section>
+
+    <!-- ============ AI Agent Pane (LLM tool-calling chat) ============ -->
+    <section class="editor-pane hidden" id="view-ai">
+      <div class="editor-head">
+        <div class="editor-title">
+          <span class="mono" style="color:var(--accent);font-weight:700">🤖 AI Agent</span>
+          <span id="ai-model-badge" class="chip" title="Active LLM provider &amp; model">model: —</span>
+          <span id="ai-status-badge" class="run-badge">Idle</span>
+        </div>
+        <div class="editor-actions">
+          <button class="btn" id="btn-ai-config" title="⚙ Cấu hình AI Provider — endpoint, model &amp; API key">⚙ Config</button>
+          <button class="btn" id="btn-ai-clear" title="Xóa hội thoại">🧹 Clear</button>
+        </div>
+      </div>
+      <div id="ai-chat-log" class="ai-chat-log">
+        <div class="ai-msg ai-msg-assistant">Xin chào! Tôi là <b>Telua AI Agent</b> — tôi có thể tự chạy
+          <code>tel</code>, <code>adb</code>, đọc file config/source để giúp bạn build &amp; debug AOSP.
+          Hỏi thử: <i>“Kiểm tra thiết bị adb và cho biết build hiện tại”</i>.</div>
+      </div>
+      <div class="ai-input-bar">
+        <textarea id="ai-input" rows="2" placeholder="Hỏi AI agent… (Enter = gửi, Shift+Enter = xuống dòng)"></textarea>
+        <button class="btn primary" id="btn-ai-send" title="Gửi câu hỏi cho AI agent">➤ Send</button>
+      </div>
+    </section>
   </main>
 
   <!-- ============ Docs Directory Modal ============ -->
@@ -1236,30 +1260,6 @@
       </div>
     </div>
   </div>
-
-  <!-- ============ AI Agent Pane (LLM tool-calling chat) ============ -->
-  <section class="editor-pane hidden" id="view-ai">
-    <div class="editor-head">
-      <div class="editor-title">
-        <span class="mono" style="color:var(--accent);font-weight:700">🤖 AI Agent</span>
-        <span id="ai-model-badge" class="chip" title="Active LLM provider &amp; model">model: —</span>
-        <span id="ai-status-badge" class="run-badge">Idle</span>
-      </div>
-      <div class="editor-actions">
-        <button class="btn" id="btn-ai-config" title="⚙ Cấu hình AI Provider — endpoint, model &amp; API key">⚙ Config</button>
-        <button class="btn" id="btn-ai-clear" title="Xóa hội thoại">🧹 Clear</button>
-      </div>
-    </div>
-    <div id="ai-chat-log" class="ai-chat-log">
-      <div class="ai-msg ai-msg-assistant">Xin chào! Tôi là <b>Telua AI Agent</b> — tôi có thể tự chạy
-        <code>tel</code>, <code>adb</code>, đọc file config/source để giúp bạn build &amp; debug AOSP.
-        Hỏi thử: <i>“Kiểm tra thiết bị adb và cho biết build hiện tại”</i>.</div>
-    </div>
-    <div class="ai-input-bar">
-      <textarea id="ai-input" rows="2" placeholder="Hỏi AI agent… (Enter = gửi, Shift+Enter = xuống dòng)"></textarea>
-      <button class="btn primary" id="btn-ai-send" title="Gửi câu hỏi cho AI agent">➤ Send</button>
-    </div>
-  </section>
 
   <!-- ============ AI Provider Config modal ============ -->
   <div class="modal hidden" id="modal-ai-config">
