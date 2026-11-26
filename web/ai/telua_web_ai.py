@@ -248,6 +248,8 @@ Rules:
 - Use search_knowledge to query local persistent ChromaDB documentation and training data.
 - Use save_training_knowledge to persist verified solutions or architectural notes for long-term recall.
 - You can create, write, and edit code files directly using write_file and edit_file.
+- Use get_file_git_history to inspect commit history (hash, author, date, message) of a specific file.
+- Use get_commit_diff to inspect lines added/removed in a specific commit when investigating regressions, bug causes, or historical changes.
 - When a target file is specified, read it first with read_file (if it exists), consult relevant MCP skills (get_telua_skill or search_knowledge), write or edit the code directly with write_file or edit_file, and run verification commands via run_tel (e.g. 'tel build' or compilation checks).
 - Keep commands short and read-only first (status, logs) before mutating anything.
 - Never run destructive commands (flash, rm -rf /, force push) — they are blocked.
@@ -620,6 +622,73 @@ def _tool_save_training_knowledge(args: dict) -> str:
         return f"[ERROR saving to ChromaDB] {exc}"
 
 
+def _tool_get_file_git_history(args: dict) -> str:
+    """Inspect git commit history (commit, author, date, message) of a specific file."""
+    root = _repo_root()
+    rel = str(args.get("filepath", "") or args.get("path", "")).strip().lstrip("/")
+    if not rel:
+        return "[ERROR] missing 'filepath'"
+    try:
+        limit = max(1, min(int(args.get("limit", 10)), 30))
+    except (ValueError, TypeError):
+        limit = 10
+
+    path = (root / rel).resolve()
+    if not str(path).startswith(str(root.resolve())):
+        return "[ERROR] path outside toolkit root is not allowed"
+
+    cmd = [
+        "git", "-C", str(root),
+        "log", f"-n{limit}",
+        "--pretty=format:%h | %ad | %an | %s",
+        "--date=short",
+        "--", rel,
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        out = proc.stdout.strip()
+        if not out:
+            return f"Không có lịch sử commit cho file '{rel}' (hoặc file mới chưa commit)."
+        return f"=== Git History: {rel} (Top {limit} commits) ===\n{out}"
+    except Exception as exc:
+        return f"[ERROR reading git history] {exc}"
+
+
+def _tool_get_commit_diff(args: dict) -> str:
+    """Inspect diff and stat of a specific git commit to see lines added/removed."""
+    root = _repo_root()
+    commit = str(args.get("commit_hash", "") or args.get("commit", "")).strip()
+    if not commit:
+        return "[ERROR] missing 'commit_hash'"
+
+    if not re.match(r"^[a-zA-Z0-9_\-\.\^~]+$", commit):
+        return "[ERROR] invalid commit hash format"
+
+    filepath = str(args.get("filepath", "") or args.get("path", "")).strip().lstrip("/")
+
+    cmd = ["git", "-C", str(root), "show", "--stat", "-p", commit]
+    if filepath:
+        path = (root / filepath).resolve()
+        if not str(path).startswith(str(root.resolve())):
+            return "[ERROR] filepath outside toolkit root is not allowed"
+        cmd.extend(["--", filepath])
+
+    guardrails = get_ai_guardrails()
+    max_output = max(1000, min(int(guardrails.get("max_tool_output_chars", 6000)), 20000))
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        out = proc.stdout
+        if proc.returncode != 0:
+            err = proc.stderr.strip() or f"git show exited with code {proc.returncode}"
+            return f"[ERROR] {err}"
+        if len(out) > max_output:
+            out = out[:max_output] + f"\n... [Diff truncated at {max_output} chars to protect token budget] ..."
+        return out or "(empty diff)"
+    except Exception as exc:
+        return f"[ERROR reading commit diff] {exc}"
+
+
 TOOL_EXECUTORS = {
     "run_tel": _tool_run_tel,
     "read_file": _tool_read_file,
@@ -628,6 +697,8 @@ TOOL_EXECUTORS = {
     "list_files": _tool_list_files,
     "search_knowledge": _tool_search_knowledge,
     "save_training_knowledge": _tool_save_training_knowledge,
+    "get_file_git_history": _tool_get_file_git_history,
+    "get_commit_diff": _tool_get_commit_diff,
     "get_telua_skill": lambda args: _tool_get_telua_skill(args),
     "list_telua_skills": lambda args: _tool_list_telua_skills(args),
 }
@@ -783,6 +854,36 @@ TOOL_SCHEMAS = [
                 "type": "object",
                 "properties": {"path": {"type": "string", "description": "Relative directory path"}},
                 "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_file_git_history",
+            "description": "View git commit history (hash, author, date, subject) of a specific file to understand previous modifications and regressions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filepath": {"type": "string", "description": "Relative file path inside the workspace (e.g. 'web/ai/telua_web_ai.py')"},
+                    "limit": {"type": "integer", "description": "Maximum number of commits to list (default 10, max 30)"}
+                },
+                "required": ["filepath"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_commit_diff",
+            "description": "View details of lines added/deleted in a specific git commit (git show with diff and stat).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "commit_hash": {"type": "string", "description": "Commit hash or reference (e.g. 'a1b2c3d' or 'HEAD~1')"},
+                    "filepath": {"type": "string", "description": "Optional file path filter to see only changes to this file in the commit"}
+                },
+                "required": ["commit_hash"],
             },
         },
     },

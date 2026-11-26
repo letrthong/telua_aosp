@@ -633,6 +633,28 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertEqual(res_g_post.get_json()["guardrails"]["max_iterations"], 6)
         self.assertEqual(res_g_post.get_json()["guardrails"]["max_lines_per_read"], 120)
 
+        # Test Monthly Token Usage tracking and endpoint
+        from ai.telua_web_ai import record_ai_token_usage, get_ai_token_usage
+        record_ai_token_usage(prompt_tokens=150, completion_tokens=50, model="test-model")
+        usage_state = get_ai_token_usage()
+        self.assertIn("months", usage_state)
+        res_tokens = self.client.get("/api/ai/token_usage")
+        self.assertEqual(res_tokens.status_code, 200)
+        data_tokens = res_tokens.get_json()
+        self.assertTrue(data_tokens["ok"])
+        self.assertIn("current_month", data_tokens)
+        self.assertIn("current", data_tokens)
+        self.assertGreaterEqual(data_tokens["current"]["total_tokens"], 200)
+        self.assertIsInstance(data_tokens["history"], list)
+
+        # Test Git history & commit diff tools
+        from ai.telua_web_ai import _tool_get_file_git_history, _tool_get_commit_diff
+        hist = _tool_get_file_git_history({"filepath": "README.md", "limit": 3})
+        self.assertIn("Git History", hist)
+        diff = _tool_get_commit_diff({"commit_hash": "HEAD"})
+        self.assertTrue(len(diff) > 0)
+        self.assertNotIn("[ERROR]", diff)
+
 
 if __name__ == "__main__":
     unittest.main()

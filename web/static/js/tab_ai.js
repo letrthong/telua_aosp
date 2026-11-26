@@ -75,6 +75,7 @@ async function aiSend() {
     const answer = res.answer || res.error || "(no answer)";
     aiAppendMsg("assistant", esc(answer).replace(/\n/g, "<br>"));
     _aiHistory.push({ role: "assistant", content: answer });
+    loadAITokenUsage();
   } catch (err) {
     aiAppendMsg("assistant", `⚠️ <b>Lỗi:</b> ${esc(err.message)}`);
   } finally {
@@ -151,6 +152,7 @@ async function initAI() {
 
   // ---- Provider config modal (⚙ Config) ----
   $("#btn-ai-config")?.addEventListener("click", openAIConfigModal);
+  $("#ai-header-token-badge")?.addEventListener("click", openAIConfigModal);
   $("#btn-ai-cfg-cancel")?.addEventListener("click", () => $("#modal-ai-config")?.classList.add("hidden"));
   $("#ai-cfg-provider-select")?.addEventListener("change", () => {
     renderAIConfigModels();
@@ -293,6 +295,8 @@ async function initAI() {
           : `thiếu API key (set <code>TELUA_AI_API_KEY</code> hoặc mở <b>⚙ Config</b>).`));
     }
   } catch { /* status optional */ }
+
+  loadAITokenUsage();
 }
 
 /* ---------------- Provider config modal ---------------- */
@@ -327,6 +331,7 @@ async function openAIConfigModal() {
     updateAIKeyStatus(entry);
     loadAIMcpStatus();
     loadAIGuardrails();
+    loadAITokenUsage();
     $("#modal-ai-config")?.classList.remove("hidden");
   } catch (err) {
     toast("AI Config", err.message, "err");
@@ -373,6 +378,70 @@ async function saveAIGuardrails() {
     }
   } catch (err) {
     toast("Lỗi Guardrails", err.message, "err");
+  }
+}
+
+async function loadAITokenUsage() {
+  try {
+    const res = await api("/api/ai/token_usage");
+    if (!res || !res.ok) return;
+
+    const cur = res.current || {};
+    const total = cur.total_tokens || 0;
+    const prompt = cur.prompt_tokens || 0;
+    const compl = cur.completion_tokens || 0;
+    const reqs = cur.requests || 0;
+
+    const fmt = n => Number(n || 0).toLocaleString();
+
+    // Update Header Badge
+    const headerBadge = $("#ai-header-token-badge");
+    if (headerBadge) {
+      headerBadge.textContent = `📊 Tháng này: ${fmt(total)} tokens`;
+      headerBadge.title = `Tháng ${res.current_month || ""}: Prompt ${fmt(prompt)} | Output ${fmt(compl)} | ${fmt(reqs)} lượt chat. Nhấn để xem lịch sử.`;
+    }
+
+    // Update Modal Badge
+    const modalBadge = $("#ai-token-current-month-badge");
+    if (modalBadge) {
+      modalBadge.textContent = `Tháng ${res.current_month || ""}: ${fmt(total)} tokens`;
+    }
+
+    // Update Metric Cards
+    const elTot = $("#ai-metric-total-tokens");
+    if (elTot) elTot.textContent = fmt(total);
+    const elPrompt = $("#ai-metric-prompt-tokens");
+    if (elPrompt) elPrompt.textContent = fmt(prompt);
+    const elCompl = $("#ai-metric-completion-tokens");
+    if (elCompl) elCompl.textContent = fmt(compl);
+    const elReqs = $("#ai-metric-requests");
+    if (elReqs) elReqs.textContent = fmt(reqs);
+
+    // Update History Table
+    const tbody = $("#ai-token-history-tbody");
+    if (tbody) {
+      const history = res.history || [];
+      if (!history.length) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:10px;color:var(--text-muted);">Chưa có dữ liệu token được ghi nhận</td></tr>`;
+      } else {
+        tbody.innerHTML = history.map(h => {
+          const isCurrent = h.month === res.current_month;
+          return `
+            <tr style="${isCurrent ? 'font-weight:600;background:rgba(255,255,255,0.03);' : ''}">
+              <td style="padding:6px 10px;text-align:left;">
+                ${esc(h.month)} ${isCurrent ? '<span class="chip ok" style="font-size:10px;padding:1px 5px;margin-left:4px;">Hiện tại</span>' : ''}
+              </td>
+              <td style="padding:6px 10px;text-align:right;" class="mono">${fmt(h.prompt_tokens)}</td>
+              <td style="padding:6px 10px;text-align:right;" class="mono">${fmt(h.completion_tokens)}</td>
+              <td style="padding:6px 10px;text-align:right;color:var(--accent);" class="mono">${fmt(h.total_tokens)}</td>
+              <td style="padding:6px 10px;text-align:center;" class="mono">${fmt(h.requests)}</td>
+            </tr>
+          `;
+        }).join("");
+      }
+    }
+  } catch {
+    /* ignore network / non-fatal */
   }
 }
 

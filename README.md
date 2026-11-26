@@ -25,12 +25,17 @@ An automated developer workflow script for building and deploying privileged sys
 | `src/telua_clean.sh` | Java source code hygiene, style auto-fixer, static report & AI skill linker (`tel java`) |
 | `python/clean_java.py` | Enforces Java whitespace, tab expansion, keyword spacing, K&R braces & Google Java Style |
 | `python/unused_methods_report.py` | 6-in-1 static Java report: unused methods, unused params, whitespace, `google-java-format`, unused imports & unused private fields (`tel java report`) |
-| `src/telua_web.sh` & `web/telua_web.py` | Config Manager & BI Studio Web UI (Flask backend + vanilla JS frontend, `tel web start`) |
+| `src/telua_web.sh` & `web/telua_web.py` | Config Manager, BI Studio, Hardware Power & AI Agent Web UI (`tel web start`) |
+| `web/ai/telua_web_ai.py` | Autonomous AI Agent engine: tool-calling loop, auto-coding, token guardrails & monthly usage tracker |
+| `web/ai/telua_mcp_skill.py` | Multi-source MCP Skills manager & ChromaDB vector store integration (134 pre-indexed skills) |
+| `web/telua_web_power_controls.py` | Hardware Power Switch: dual-output relay (Main Power & Ignition ACC) with state persistence & event history |
+| `config/mcp_skills_config.json` | MCP skills sources configuration (local paths & Git repositories) |
+| `config/target_power_state.json` | Persistent hardware relay state & switch history log |
 | `web/telua_web_bi.py` | BI Studio backend: Excel/CSV to JSON converter, multi-sheet consolidator & cross-tab report engine |
 | `bi_studio/` | Sample multi-tab generic business Excel workbooks (Retail, HR, IT, Finance) with dynamic auto-discovery |
 | `src/telua_docs.sh` & `sphinx/` | Sphinx Doc-as-Code manager with 4 project templates & live preview (`tel docs`) |
 | `src/telua_completion.sh` | Bash and Zsh Tab Auto-completion engine with auto-reload (`tel <Tab><Tab>`) |
-| `requirements.txt` | Python package dependencies (`cryptography`, `flask`, `sphinx`) |
+| `requirements.txt` | Python package dependencies (`cryptography`, `flask`, `sphinx`, `chromadb`) |
 
 ---
 
@@ -1030,15 +1035,64 @@ Contributions from the developer community are welcome! Whether you are adding n
 
 ---
 
-## 9. AI Agent & LLM Integration (`AI.md`)
+## 9. AI Agent, Autonomous Coding & MCP Skills Integration
+
+The toolkit includes an autonomous tool-calling AI agent integrated directly into the Web UI (`tel web start` → **🤖 AI Agent** tab), backed by local vector knowledge and enterprise safety guardrails.
+
+```
++----------------------------------------------------------------------------------+
+|                            TELUA AI AGENT ARCHITECTURE                           |
++----------------------------------------------------------------------------------+
+                                        │
+           ┌────────────────────────────┼───────────────────────────┐
+           ▼                            ▼                           ▼
+ 🛠️ TOOL-CALLING CORE           🧠 PERSISTENT KNOWLEDGE     🛡️ TOKEN SHIELD & SAFETY
+ • read_file (line-chunked)     • ChromaDB Vector Store     • Loop Breaker shield
+ • write_file (workspace write) • 134 MCP Skills (Java/AOSP)• Line range read cap
+ • edit_file (exact snippet)    • Multi-Source Git sync     • Max turn iter cap
+ • get_file_git_history         • Auto-sync cron scheduler  • Monthly usage tracker
+ • get_commit_diff              • Semantic knowledge search • 6-month token history
+ • run_tel (sandboxed CLI)
+```
+
+### 9.1 Autonomous Coding & Direct Workspace Tools
+The AI Agent operates inside an iterative thinking loop, selecting and executing workspace tools autonomously:
+* **Target File & Directory Auto-Coding Bar:** Set a target path (e.g. `src/com/android/car/` or `src/CarService.java`), click `📖 Read / Scan` for situational awareness, or click `⚡ Auto-Code` to refactor multiple files across the target.
+* **`read_file`**: Chunked line-range reads (`start_line` to `end_line`, max 150 lines/read) with line numbers (`0042 | code`), preventing context overflow on multi-thousand line files.
+* **`write_file`**: Directly creates or overwrites workspace files with path traversal security.
+* **`edit_file`**: Replaces exact code snippets with surgical precision without rewriting whole files.
+* **`get_file_git_history` & `get_commit_diff`**: Reads per-file commit logs and inspects code diffs (`git show --stat -p`) for rapid regression diagnostics and root cause analysis.
+* **`run_tel`**: Executes compilation checks (`tel build`), hardware commands, ADB queries, and tests, automatically blocking destructive commands (`rm -rf /`, formatting, force pushes).
+
+### 9.2 MCP Skills & ChromaDB Knowledge Base (134 Pre-Indexed Skills)
+Local engineering skills and design patterns are indexed in a persistent vector database ([ai_agent/data/](ai_agent/data/)):
+* **`telua_skill` (Java_Android):** Vehicle HAL, Power HAL, CarAudioService, CarPropertyService, Audio policy, AIDL / Binder rules.
+* **`claude-code-java`:** Concurrency reviews, Spring Boot patterns, JPA performance, Clean Code, Security audits, and SOLID design.
+* **Dynamic Multi-Source Management:** Add local directories or clone remote Git repositories directly in the Web UI (`⚙ Config` modal).
+* **Automated Sync Scheduler:** Triggers re-indexing automatically on web startup and at configurable intervals (every 3h, 6h, 12h, or manual).
+
+### 9.3 Token Shield & Infinite Loop Guardrails
+To prevent runaway LLM costs and context exhaustion:
+* **Loop Breaker Shield:** Intercepts and stops duplicate tool calls if the Agent attempts to invoke the same tool with identical arguments repeatedly.
+* **Max Iterations Limit:** Enforces a configurable cap (default 5 turns) per user prompt.
+* **Monthly Token Tracking:** Logs prompt tokens, completion tokens, and request counts per month into `config/overlay/ai_token_usage.json`, retaining history for the current and past 2–6 months with UI metric cards and a monthly breakdown table.
+
+### 9.4 Hardware Relay Power Controls
+Automated dual-output hardware relay control (**Main Power** & **Ignition ACC**) for bench-test DUTs:
+* Toggle power outputs directly from the Web UI or via `web/telua_web_power_controls.py`.
+* Power states and timestamped switch events are persisted in `config/target_power_state.json`.
+
+---
+
+## 10. AI Assistant & LLM Reference (`AI.md`)
 
 Working with AI coding assistants (e.g., Gemini, Claude, Cursor, Copilot, Antigravity)?
-Refer to our dedicated LLM reference guide:
+Refer to our dedicated machine-readable LLM instruction guide:
 
 👉 **[AI Agent & LLM Reference (AI.md)](AI.md)**
 
 * Machine-readable intent-to-command mapping.
-* Non-interactive execution rules (e.g. `-y` flag usage).
-* Fast diagnostic & code inspection shortcuts for AI subagents.
+* Non-interactive execution rules (`-y` flag usage).
+* Tool definitions, parameters, and defensive rules for AI subagents.
 
 
