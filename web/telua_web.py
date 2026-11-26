@@ -506,6 +506,11 @@ def main():
         threading.Timer(1.2, open_browser, args=(url,)).start()
 
     print_banner(args.host, args.port)
+    try:
+        from ai.telua_mcp_skill import start_mcp_background_scheduler
+        start_mcp_background_scheduler()
+    except Exception:
+        pass
     app.run(host=args.host, port=args.port, debug=False, threaded=True)
 
 

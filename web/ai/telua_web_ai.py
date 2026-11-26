@@ -94,6 +94,8 @@ logcat, dumpsys diagnostics, git/repo operations and analyzing source code.
 
 Rules:
 - Prefer the provided tools over guessing. Use run_tel for tel/telua/shell commands.
+- Use search_knowledge to query local persistent ChromaDB documentation and training data.
+- Use save_training_knowledge to persist verified solutions or architectural notes for long-term recall.
 - Keep commands short and read-only first (status, logs) before mutating anything.
 - Never run destructive commands (flash, rm -rf /, force push) — they are blocked.
 - When you have enough information, answer concisely with a clear conclusion and
@@ -103,8 +105,44 @@ Rules:
 """
 
 
+def _repo_root() -> Path:
+    """Return repository root: web/ai/telua_web_ai.py -> repo root."""
+    return Path(__file__).resolve().parent.parent.parent
+
+
+CHROMA_DATA_DIR = _repo_root() / "ai_agent" / "data"
+_CHROMA_CLIENT = None
+CHROMA_COLLECTION_NAME = "telua_knowledge"
+
+
+def _get_chroma_client():
+    global _CHROMA_CLIENT
+    if _CHROMA_CLIENT is not None:
+        return _CHROMA_CLIENT
+    try:
+        import chromadb
+        CHROMA_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        _CHROMA_CLIENT = chromadb.PersistentClient(path=str(CHROMA_DATA_DIR))
+        return _CHROMA_CLIENT
+    except Exception:
+        return None
+
+
+def _get_chroma_collection(name: str = CHROMA_COLLECTION_NAME):
+    client = _get_chroma_client()
+    if client is None:
+        return None
+    try:
+        return client.get_or_create_collection(
+            name=name,
+            metadata={"description": "Telua AOSP persistent training knowledge & docs"}
+        )
+    except Exception:
+        return None
+
+
 def _ai_providers_json_path() -> Optional[Path]:
-    root = Path(__file__).resolve().parent.parent
+    root = _repo_root()
     for cand in AI_PROVIDERS_JSON_CANDIDATES:
         path = root / cand
         if path.is_file():
@@ -125,15 +163,14 @@ def _read_providers_json() -> list:
 
 
 def _write_providers_json(providers: list) -> None:
-    path = _ai_providers_json_path() or (
-        Path(__file__).resolve().parent.parent / "config" / "ai_providers.json")
+    path = _ai_providers_json_path() or (_repo_root() / "config" / "ai_providers.json")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(providers, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def _read_template_json() -> list:
     """Read default provider templates from file."""
-    root = Path(__file__).resolve().parent.parent
+    root = _repo_root()
     for cand in AI_PROVIDERS_TEMPLATE_CANDIDATES:
         path = root / cand
         if path.is_file():
@@ -169,7 +206,7 @@ def _active_model_entry(provider_entry: dict, active_model_id: str = "") -> Opti
 
 def _read_ai_config() -> dict:
     """Read optional config/overlay/const_ai.config (KEY=VALUE lines)."""
-    root = Path(__file__).resolve().parent.parent
+    root = _repo_root()
     for cand in AI_CONFIG_FILE_CANDIDATES:
         path = root / cand
         if path.is_file():
@@ -236,7 +273,7 @@ def _tool_run_tel(args: dict) -> str:
     try:
         proc = subprocess.run(
             ["bash", "-c", cmd],
-            cwd=str(Path(__file__).resolve().parent.parent),
+            cwd=str(_repo_root()),
             capture_output=True, text=True, errors="replace", timeout=300,
         )
         out = ((proc.stdout or "") + (proc.stderr or "")).strip()
@@ -248,7 +285,7 @@ def _tool_run_tel(args: dict) -> str:
 
 
 def _tool_read_file(args: dict) -> str:
-    root = Path(__file__).resolve().parent.parent
+    root = _repo_root()
     rel = str(args.get("path", "")).strip().lstrip("/")
     if not rel:
         return "[ERROR] missing 'path'"
@@ -267,7 +304,7 @@ def _tool_read_file(args: dict) -> str:
 
 
 def _tool_list_files(args: dict) -> str:
-    root = Path(__file__).resolve().parent.parent
+    root = _repo_root()
     rel = str(args.get("path", "")).strip().lstrip("/") or "."
     path = (root / rel).resolve()
     if not str(path).startswith(str(root.resolve())):
@@ -284,11 +321,86 @@ def _tool_list_files(args: dict) -> str:
         return f"[ERROR] {exc}"
 
 
+def _tool_search_knowledge(args: dict) -> str:
+    """Search persistent ChromaDB knowledge base in ai_agent/data."""
+    query = str(args.get("query", "")).strip()
+    if not query:
+        return "[ERROR] missing 'query' parameter"
+    col = _get_chroma_collection()
+    if col is None:
+        return "[WARNING] ChromaDB is not initialized or ai_agent/data is unavailable."
+    try:
+        n_results = max(1, min(int(args.get("n_results", 4)), 10))
+        results = col.query(query_texts=[query], n_results=n_results)
+        docs = results.get("documents", [[]])[0]
+        metas = results.get("metadatas", [[]])[0]
+        if not docs:
+            return f"(No knowledge records matched query: '{query}')"
+        out = []
+        for i, (doc, meta) in enumerate(zip(docs, metas)):
+            topic = (meta or {}).get("topic", "general")
+            src = (meta or {}).get("source", "user_train")
+            out.append(f"[{i+1}] (Topic: {topic} | Source: {src})\n{doc}")
+        return "\n\n---\n\n".join(out)
+    except Exception as exc:
+        return f"[ERROR querying ChromaDB] {exc}"
+
+
+def _tool_save_training_knowledge(args: dict) -> str:
+    """Save new training knowledge / notes directly to ChromaDB on disk (ai_agent/data)."""
+    content = str(args.get("content", "")).strip()
+    if not content:
+        return "[ERROR] missing 'content' to train/save"
+    topic = str(args.get("topic", "general")).strip()
+    source = str(args.get("source", "agent_train")).strip()
+    col = _get_chroma_collection()
+    if col is None:
+        return "[ERROR] ChromaDB is not initialized."
+    try:
+        import uuid
+        import time
+        doc_id = f"doc_{int(time.time())}_{uuid.uuid4().hex[:6]}"
+        meta = {
+            "topic": topic,
+            "source": source,
+            "timestamp": int(time.time()),
+        }
+        col.add(documents=[content], metadatas=[meta], ids=[doc_id])
+        return f"✓ Successfully persisted to ChromaDB (ai_agent/data): id={doc_id}, topic={topic}, {len(content)} chars."
+    except Exception as exc:
+        return f"[ERROR saving to ChromaDB] {exc}"
+
+
 TOOL_EXECUTORS = {
     "run_tel": _tool_run_tel,
     "read_file": _tool_read_file,
     "list_files": _tool_list_files,
+    "search_knowledge": _tool_search_knowledge,
+    "save_training_knowledge": _tool_save_training_knowledge,
+    "get_telua_skill": lambda args: _tool_get_telua_skill(args),
+    "list_telua_skills": lambda args: _tool_list_telua_skills(args),
 }
+
+def _tool_get_telua_skill(args: dict) -> str:
+    """Retrieve raw content of a specific Java/Android skill or template."""
+    name = str(args.get("name") or args.get("rel_path") or "").strip()
+    if not name:
+        return "[ERROR] missing skill 'name' or 'rel_path'"
+    from .telua_mcp_skill import get_skill_content
+    res = get_skill_content(name)
+    if not res:
+        return f"[ERROR] skill not found: {name}"
+    return f"=== SKILL: {res['name']} ({res['category']}) ===\n" + res["content"]
+
+def _tool_list_telua_skills(args: dict) -> str:
+    """List available skills in telua_skill/Java_Android."""
+    cat = str(args.get("category", "")).strip()
+    from .telua_mcp_skill import scan_skills
+    skills = scan_skills()
+    if cat:
+        skills = [s for s in skills if s["category"].lower() == cat.lower()]
+    lines = [f"- [{s['category']}] {s['name']}: {s['summary']}" for s in skills[:35]]
+    return f"Found {len(skills)} skills in telua_skill/Java_Android:\n" + "\n".join(lines)
 
 # OpenAI-style tool schemas (also converted for Anthropic).
 TOOL_SCHEMAS = [
@@ -302,6 +414,60 @@ TOOL_SCHEMAS = [
                 "type": "object",
                 "properties": {"cmd": {"type": "string", "description": "The command line to run"}},
                 "required": ["cmd"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_knowledge",
+            "description": "Search local persistent ChromaDB knowledge base (ai_agent/data) for indexed documentation, troubleshooting guides, training data, or previous solutions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The search keywords or question to look up"},
+                    "n_results": {"type": "integer", "description": "Number of results to return (default 4)"}
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "save_training_knowledge",
+            "description": "Persist new technical knowledge, AOSP build notes, commands, solutions or training data directly to ChromaDB on disk (ai_agent/data) for long-term recall.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {"type": "string", "description": "The detailed knowledge, code snippet, or explanation to persist"},
+                    "topic": {"type": "string", "description": "Short topic label (e.g. 'aosp_build', 'audio_hal', 'battery_dump', 'git_repo')"},
+                    "source": {"type": "string", "description": "Source reference, document path or author"}
+                },
+                "required": ["content", "topic"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_telua_skill",
+            "description": "Fetch a specific Java, Android, AAOS VHAL rule, architecture template, or script from telua_skill/Java_Android by name or relative path.",
+            "parameters": {
+                "type": "object",
+                "properties": {"name": {"type": "string", "description": "Skill name or file name (e.g. 'BinderServiceTemplate.java', 'thread_safety_concurrency_rule.md')"}},
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_telua_skills",
+            "description": "List available engineering skills, templates, rules, and scripts in telua_skill/Java_Android.",
+            "parameters": {
+                "type": "object",
+                "properties": {"category": {"type": "string", "description": "Optional category filter: rules, examples, design, docs, scripts, tasks"}},
             },
         },
     },
@@ -684,7 +850,7 @@ def api_ai_config():
     active_provider = str(data.get("activeProvider", "")).strip()
     active_model = str(data.get("activeModel", "")).strip()
     if active_provider or active_model:
-        root = Path(__file__).resolve().parent.parent
+        root = _repo_root()
         cfg_path = root / "config" / "overlay" / "const_ai.config"
         cfg_path.parent.mkdir(parents=True, exist_ok=True)
         lines = []
@@ -786,3 +952,132 @@ def api_ai_chat():
         return jsonify({"ok": False, "error": str(exc), "trace": trace}), 400
     except Exception as exc:  # pragma: no cover
         return jsonify({"ok": False, "error": f"Agent error: {exc}", "trace": trace}), 500
+
+
+# ------------------------------------------------------------------------------
+# ChromaDB Persistent Training & Knowledge Endpoints (ai_agent/data)
+# ------------------------------------------------------------------------------
+
+@ai_bp.get("/api/ai/chroma/status")
+def api_ai_chroma_status():
+    """Return status of the persistent ChromaDB database in ai_agent/data."""
+    client = _get_chroma_client()
+    if client is None:
+        return jsonify({
+            "ok": True,
+            "installed": False,
+            "path": str(CHROMA_DATA_DIR),
+            "doc_count": 0,
+            "collections": [],
+        })
+    try:
+        collections = client.list_collections()
+        col_names = [getattr(c, "name", str(c)) for c in collections]
+        col = _get_chroma_collection()
+        count = col.count() if col else 0
+        return jsonify({
+            "ok": True,
+            "installed": True,
+            "path": str(CHROMA_DATA_DIR),
+            "doc_count": count,
+            "collections": col_names,
+        })
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+# ------------------------------------------------------------------------------
+# Model Context Protocol (MCP) Skills & Knowledge Endpoints (Java_Android)
+# ------------------------------------------------------------------------------
+
+@ai_bp.get("/api/ai/mcp/config")
+def api_ai_mcp_config_get():
+    """Return MCP skill configuration and local status."""
+    from .telua_mcp_skill import get_mcp_skill_config, scan_skills
+    cfg = get_mcp_skill_config()
+    skills = scan_skills()
+    categories = sorted(set(s["category"] for s in skills))
+    return jsonify({
+        "ok": True,
+        "config": cfg,
+        "skills_count": len(skills),
+        "categories": categories,
+    })
+
+
+@ai_bp.post("/api/ai/mcp/config")
+def api_ai_mcp_config_post():
+    """Save updated MCP skill configuration."""
+    from .telua_mcp_skill import save_mcp_skill_config
+    data = request.get_json(silent=True) or {}
+    updated = save_mcp_skill_config(data)
+    return jsonify({"ok": True, "config": updated})
+
+
+@ai_bp.post("/api/ai/mcp/sync")
+def api_ai_mcp_sync():
+    """Sync all skills from telua_skill/Java_Android into ChromaDB (ai_agent/data)."""
+    from .telua_mcp_skill import sync_skills_to_chroma
+    res = sync_skills_to_chroma()
+    return jsonify(res)
+
+
+@ai_bp.get("/api/ai/mcp/skills")
+def api_ai_mcp_skills():
+    """List all scanned skills from Java_Android."""
+    from .telua_mcp_skill import scan_skills
+    skills = scan_skills()
+    return jsonify({"ok": True, "skills": skills, "count": len(skills)})
+
+
+@ai_bp.get("/api/ai/mcp/skill")
+def api_ai_mcp_skill():
+    """Get raw content of one skill file."""
+    path = request.args.get("path") or request.args.get("name") or ""
+    if not path:
+        return jsonify({"ok": False, "error": "Missing 'path' or 'name'."}), 400
+    from .telua_mcp_skill import get_skill_content
+    res = get_skill_content(path)
+    if not res:
+        return jsonify({"ok": False, "error": f"Skill not found: {path}"}), 404
+    return jsonify({"ok": True, "skill": res})
+
+
+
+@ai_bp.post("/api/ai/chroma/train")
+def api_ai_chroma_train():
+    """Add a new document/snippet to the ChromaDB training knowledge collection."""
+    data = request.get_json(silent=True) or {}
+    text = str(data.get("text") or data.get("content") or "").strip()
+    topic = str(data.get("topic") or "user_trained").strip()
+    source = str(data.get("source") or "web_ui").strip()
+    if not text:
+        return jsonify({"ok": False, "error": "Missing 'text' content to train."}), 400
+    res = _tool_save_training_knowledge({"content": text, "topic": topic, "source": source})
+    if res.startswith("[ERROR"):
+        return jsonify({"ok": False, "error": res}), 500
+    return jsonify({"ok": True, "result": res})
+
+
+@ai_bp.post("/api/ai/chroma/query")
+def api_ai_chroma_query():
+    """Query ChromaDB for relevant knowledge records."""
+    data = request.get_json(silent=True) or {}
+    query = str(data.get("query") or "").strip()
+    n_results = int(data.get("n_results", 4))
+    if not query:
+        return jsonify({"ok": False, "error": "Missing 'query'."}), 400
+    col = _get_chroma_collection()
+    if not col:
+        return jsonify({"ok": False, "error": "ChromaDB not available."}), 500
+    try:
+        res = col.query(query_texts=[query], n_results=n_results)
+        docs = res.get("documents", [[]])[0]
+        metas = res.get("metadatas", [[]])[0]
+        records = [{"text": d, "meta": m} for d, m in zip(docs, metas)]
+        return jsonify({"ok": True, "records": records, "count": len(records)})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+

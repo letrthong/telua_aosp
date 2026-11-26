@@ -554,13 +554,58 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertTrue(data_cfg["ok"])
         self.assertIsInstance(data_cfg["providers"], list)
 
-        # Test loading template from config file
-        res_tpl = self.client.get("/api/ai/template")
-        self.assertEqual(res_tpl.status_code, 200)
-        data_tpl = res_tpl.get_json()
-        self.assertTrue(data_tpl["ok"])
-        self.assertIsInstance(data_tpl["template"], list)
-        self.assertGreater(data_tpl["count"], 0)
+        # Test ChromaDB status, train and query
+        res_chr_st = self.client.get("/api/ai/chroma/status")
+        self.assertEqual(res_chr_st.status_code, 200)
+        data_chr_st = res_chr_st.get_json()
+        self.assertTrue(data_chr_st["ok"])
+        self.assertIn("installed", data_chr_st)
+        self.assertIn("doc_count", data_chr_st)
+
+        # Test train knowledge into ChromaDB
+        res_train = self.client.post("/api/ai/chroma/train", json={
+            "text": "AOSP Automotive IVI architecture note: CarService manages CarAudioService and CarPropertyService.",
+            "topic": "aosp_architecture",
+            "source": "unittest"
+        })
+        self.assertEqual(res_train.status_code, 200)
+        self.assertTrue(res_train.get_json()["ok"])
+
+        # Test query knowledge from ChromaDB
+        res_query = self.client.post("/api/ai/chroma/query", json={
+            "query": "CarAudioService",
+            "n_results": 2
+        })
+        self.assertEqual(res_query.status_code, 200)
+        data_q = res_query.get_json()
+        self.assertTrue(data_q["ok"])
+        self.assertGreaterEqual(data_q["count"], 1)
+
+        # Test MCP Skill endpoints
+        res_mcp_cfg = self.client.get("/api/ai/mcp/config")
+        self.assertEqual(res_mcp_cfg.status_code, 200)
+        data_mcp = res_mcp_cfg.get_json()
+        self.assertTrue(data_mcp["ok"])
+        self.assertIn("config", data_mcp)
+        self.assertGreater(data_mcp["skills_count"], 0)
+
+        res_skills = self.client.get("/api/ai/mcp/skills")
+        self.assertEqual(res_skills.status_code, 200)
+        data_sk = res_skills.get_json()
+        self.assertTrue(data_sk["ok"])
+        self.assertGreater(data_sk["count"], 0)
+
+        # Test get specific skill content
+        first_skill = data_sk["skills"][0]["rel_path"]
+        res_one = self.client.get(f"/api/ai/mcp/skill?path={first_skill}")
+        self.assertEqual(res_one.status_code, 200)
+        self.assertTrue(res_one.get_json()["ok"])
+        self.assertIn("content", res_one.get_json()["skill"])
+
+        # Test sync endpoint
+        res_sync = self.client.post("/api/ai/mcp/sync")
+        self.assertEqual(res_sync.status_code, 200)
+        self.assertTrue(res_sync.get_json()["ok"])
 
 
 if __name__ == "__main__":

@@ -102,6 +102,67 @@ async function initAI() {
   });
   $("#btn-ai-key-save")?.addEventListener("click", saveAIKey);
   $("#btn-ai-cfg-save")?.addEventListener("click", saveAIConfigJson);
+  $("#btn-ai-mcp-sync")?.addEventListener("click", async () => {
+    const btn = $("#btn-ai-mcp-sync");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "⏳ Syncing...";
+    }
+    try {
+      const res = await api("/api/ai/mcp/sync", { method: "POST" });
+      if (res && res.ok) {
+        toast("MCP Sync Thành Công 🎉", `Đã lập chỉ mục ${res.indexed} skills vào ChromaDB (${res.collection}).`, "ok", 4500);
+        await loadAIMcpStatus();
+      } else {
+        toast("Sync Error", res.error || "Không thể đồng bộ skills", "err");
+      }
+    } catch (err) {
+      toast("Sync Error", err.message, "err");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "🔄 Sync to ChromaDB";
+      }
+    }
+  });
+  $("#btn-ai-mcp-save-path")?.addEventListener("click", async () => {
+    const pathInput = $("#ai-mcp-repo-path");
+    if (!pathInput) return;
+    try {
+      await api("/api/ai/mcp/config", {
+        method: "POST",
+        body: JSON.stringify({ local_path: pathInput.value }),
+      });
+      toast("MCP Path Saved 💾", "Đã lưu đường dẫn telua_skill repository.", "ok", 3000);
+      await loadAIMcpStatus();
+    } catch (err) {
+      toast("Save Path Failed", err.message, "err");
+    }
+  });
+
+  $("#btn-ai-mcp-save-schedule")?.addEventListener("click", async () => {
+    const sel = $("#ai-mcp-schedule-select");
+    if (!sel) return;
+    const val = sel.value;
+    let payload = {};
+    if (val === "manual") {
+      payload = { auto_sync_enabled: false };
+    } else if (val === "startup_only") {
+      payload = { auto_sync_enabled: true, sync_on_startup: true, sync_interval_hours: 0 };
+    } else {
+      payload = { auto_sync_enabled: true, sync_on_startup: true, sync_interval_hours: parseFloat(val) || 3 };
+    }
+    try {
+      await api("/api/ai/mcp/config", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      toast("Lịch Đã Lưu ⏱", "Đã cập nhật chu kỳ đồng bộ ChromaDB.", "ok", 3500);
+      await loadAIMcpStatus();
+    } catch (err) {
+      toast("Lỗi Lưu Lịch", err.message, "err");
+    }
+  });
   $("#btn-ai-load-template")?.addEventListener("click", async () => {
     try {
       const res = await api("/api/ai/template");
@@ -179,6 +240,7 @@ async function openAIConfigModal() {
     if (jsonArea) jsonArea.value = JSON.stringify(_aiProviders, null, 2);
 
     updateAIKeyStatus(entry);
+    loadAIMcpStatus();
     $("#modal-ai-config")?.classList.remove("hidden");
   } catch (err) {
     toast("AI Config", err.message, "err");
@@ -265,5 +327,68 @@ async function saveAIConfigJson() {
     } catch { /* ignore */ }
   } catch (err) {
     toast("Save failed", err.message, "err");
+  }
+}
+
+/* ---------------- MCP Skill & ChromaDB Integration ---------------- */
+async function loadAIMcpStatus() {
+  try {
+    const [st, cfgRes, skillsRes] = await Promise.all([
+      api("/api/ai/chroma/status"),
+      api("/api/ai/mcp/config"),
+      api("/api/ai/mcp/skills"),
+    ]);
+
+    const pill = $("#ai-mcp-status-pill");
+    if (pill) {
+      if (st.installed) {
+        pill.textContent = `ChromaDB: ${st.doc_count || 0} docs`;
+        pill.className = "chip ok";
+      } else {
+        pill.textContent = "ChromaDB: uninitialized";
+        pill.className = "chip";
+      }
+    }
+
+    const pathInput = $("#ai-mcp-repo-path");
+    if (pathInput && cfgRes.config?.local_path) {
+      pathInput.value = cfgRes.config.local_path;
+    }
+
+    const schedSel = $("#ai-mcp-schedule-select");
+    if (schedSel && cfgRes.config) {
+      if (!cfgRes.config.auto_sync_enabled) {
+        schedSel.value = "manual";
+      } else if (!cfgRes.config.sync_interval_hours) {
+        schedSel.value = "startup_only";
+      } else {
+        schedSel.value = String(cfgRes.config.sync_interval_hours || "3");
+      }
+    }
+
+    const info = $("#ai-mcp-sync-info");
+    if (info) {
+      const syncTime = cfgRes.config?.last_sync || "chưa đồng bộ";
+      const total = cfgRes.skills_count || (skillsRes.skills && skillsRes.skills.length) || 0;
+      const sched = cfgRes.config?.auto_sync_enabled ? `Mỗi ${cfgRes.config.sync_interval_hours || 3}h` : "thủ công";
+      info.textContent = `Repo có ${total} skills (${(cfgRes.categories || []).join(", ")}) · Lịch: ${sched} · Lần sync cuối: ${syncTime}`;
+    }
+
+    const countEl = $("#ai-mcp-count");
+    if (countEl) countEl.textContent = String((skillsRes.skills || []).length);
+
+    const listEl = $("#ai-mcp-skills-list");
+    if (listEl && Array.isArray(skillsRes.skills)) {
+      listEl.innerHTML = skillsRes.skills.map(s =>
+        `<div style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+          <span style="color:var(--accent);font-weight:600;">[${esc(s.category)}]</span>
+          <span class="mono">${esc(s.name)}</span>
+          <span style="color:#8b949e;font-size:10px;">(${Math.round(s.size_bytes / 1024 * 10) / 10}KB)</span>
+        </div>`
+      ).join("") || "(chưa có file skill)";
+    }
+  } catch (err) {
+    const info = $("#ai-mcp-sync-info");
+    if (info) info.textContent = `Lỗi đọc MCP config: ${err.message}`;
   }
 }

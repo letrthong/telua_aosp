@@ -1301,6 +1301,46 @@
           spellcheck="false" placeholder='[{ "name": "DeepSeek (litellm)", "apiType": "chat-completions", "apiKey": "", "models": [ … ] }]'></textarea>
       </div>
 
+      <div class="settings-section" style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <h4 style="margin:0;">📦 MCP Skills &amp; Knowledge (<a href="https://github.com/letrthong/telua_skill/tree/main/Java_Android" target="_blank" style="color:var(--accent);text-decoration:none;">telua_skill / Java_Android</a>)</h4>
+          <span id="ai-mcp-status-pill" class="chip" style="font-size:11px;">ChromaDB: —</span>
+        </div>
+        <p class="meta">Lấy kỹ năng, mẫu kiến trúc AAOS VHAL &amp; nguyên tắc lập trình Java/Android từ repo
+          <code>telua_skill/Java_Android</code> và lập chỉ mục vào ChromaDB (<code>ai_agent/data</code>) để AI tự động tra cứu.</p>
+        
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+          <input type="text" id="ai-mcp-repo-path" class="term-input mono" style="flex:1;"
+            placeholder="Local path or Git URL" value="repos/telua_skill/Java_Android">
+          <button class="btn" id="btn-ai-mcp-save-path" title="Lưu đường dẫn repository">💾 Save</button>
+          <button class="btn primary" id="btn-ai-mcp-sync" title="Đồng bộ toàn bộ skill Java/Android vào ChromaDB">🔄 Sync to ChromaDB</button>
+        </div>
+
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;flex-wrap:wrap;background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:8px;border:1px solid var(--border);">
+          <div style="flex:1;min-width:240px;">
+            <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);">⏱ Lịch tự động Train Data (Auto-Sync &amp; Trigger):</label>
+            <select id="ai-mcp-schedule-select" class="theme-select" style="width:100%;font-size:12px;">
+              <option value="3">⚡ Khởi động Web + Tự động trigger mỗi 3 giờ (Khuyên dùng)</option>
+              <option value="6">⚡ Khởi động Web + Tự động trigger mỗi 6 giờ</option>
+              <option value="12">⚡ Khởi động Web + Tự động trigger mỗi 12 giờ</option>
+              <option value="startup_only">⚡ Chỉ chạy khi khởi động Web (Startup only)</option>
+              <option value="manual">🛑 Tắt tự động (Chỉ đồng bộ thủ công)</option>
+            </select>
+          </div>
+          <div style="align-self:flex-end;">
+            <button class="btn" id="btn-ai-mcp-save-schedule" title="Lưu chu kỳ tự động">💾 Lưu lịch</button>
+          </div>
+        </div>
+
+        <div class="meta" id="ai-mcp-sync-info">Đang kết nối ChromaDB...</div>
+
+        <!-- Skills preview collapsible -->
+        <details style="margin-top:8px;">
+          <summary class="meta" style="cursor:pointer;color:var(--accent);font-weight:600;">📑 Danh sách kỹ năng (<span id="ai-mcp-count">0</span> files)</summary>
+          <div id="ai-mcp-skills-list" style="max-height:160px;overflow-y:auto;margin-top:6px;font-size:11px;font-family:var(--mono);padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px;"></div>
+        </details>
+      </div>
+
       <div class="modal-actions">
         <button class="btn" id="btn-ai-cfg-cancel">Cancel</button>
         <button class="btn primary" id="btn-ai-cfg-save" title="Lưu toàn bộ JSON provider registry">💾 Save JSON</button>
