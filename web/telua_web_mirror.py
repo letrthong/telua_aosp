@@ -64,6 +64,19 @@ def _get_target_device_args(device_serial: str = "") -> list:
     return []
 
 
+def _get_fallback_dimensions() -> Tuple[int, int, int]:
+    """Determine smart fallback dimensions based on AOSP TARGET_PRODUCT (e.g. Car vs Phone)."""
+    try:
+        from telua_web_aosp import get_aosp_config
+        cfg = get_aosp_config()
+        tp = (cfg.get("target_product") or "").lower()
+        if any(kw in tp for kw in ("car", "auto", "cockpit", "ivi", "headunit")):
+            return 1920, 1080, 240
+    except Exception:
+        pass
+    return 1080, 1920, 420
+
+
 def _fetch_screen_dimensions(adb: str, dev_args: list) -> Tuple[int, int, int]:
     """Return (width, height, density) from device via `wm size` and `wm density`."""
     width, height, density = 1080, 1920, 420
@@ -105,7 +118,7 @@ def api_mirror_info():
     current_dev = dev_args[1] if len(dev_args) == 2 else (devices[0]["serial"] if devices else "")
     online = any(d["serial"] == current_dev and d.get("state") == "device" for d in devices)
 
-    width, height, density = 1080, 1920, 420
+    width, height, density = _get_fallback_dimensions()
     if adb and online:
         width, height, density = _fetch_screen_dimensions(adb, dev_args)
 
