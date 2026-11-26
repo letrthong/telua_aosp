@@ -96,6 +96,9 @@ from telua_web_mirror import (  # noqa: E402
 from telua_web_power_controls import (  # noqa: E402
     power_bp,
 )
+from telua_web_ai import (  # noqa: E402
+    ai_bp,
+)
 
 try:
     from flask import Flask, abort, jsonify, request, send_from_directory, send_file
@@ -141,6 +144,7 @@ app.register_blueprint(aosp_bp)
 app.register_blueprint(bi_bp)
 app.register_blueprint(mirror_bp)
 app.register_blueprint(power_bp)
+app.register_blueprint(ai_bp)
 
 
 @app.errorhandler(HTTPException)

@@ -4181,3 +4181,91 @@ code,
 .text-muted {
   color: #8b949e;
 }
+
+/* ---------------- AI Agent chat ---------------- */
+.ai-chat-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end; /* anchor messages just above the CLI input bar — no big empty gap */
+  gap: 10px;
+  background: var(--bg);
+}
+
+.ai-msg {
+  max-width: 88%;
+  padding: 9px 13px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ai-msg-user {
+  align-self: flex-end;
+  background: #1f6feb;
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.ai-msg-assistant {
+  align-self: flex-start;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+
+.ai-msg-tool {
+  align-self: stretch;
+  max-width: 100%;
+  background: var(--bg-soft);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 7px 11px;
+  font-size: 12px;
+}
+
+.ai-tool-head {
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.ai-tool-out {
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+}
+
+.ai-input-bar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-soft);
+  align-items: flex-end;
+}
+
+.ai-input-bar textarea {
+  flex: 1;
+  resize: none;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 11px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.ai-input-bar textarea:focus {
+  border-color: var(--accent);
+}

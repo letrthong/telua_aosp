@@ -44,6 +44,7 @@
         <button class="tab" id="tab-docs" title="Sphinx Doc-as-Code — WYSIWYG Quill.js &amp; RST Converter">📚
           Docs</button>
         <button class="tab" id="tab-bi" title="Excel to JSON &amp; Power BI Interactive Dashboard">📊 BI Studio</button>
+        <button class="tab" id="tab-ai" title="AI Agent — chat với LLM, tự chạy tel/adb/file tools để build &amp; debug">🤖 AI Agent</button>
       </nav>
     </div>
     <div class="statusbar">
@@ -1236,6 +1237,74 @@
     </div>
   </div>
 
+  <!-- ============ AI Agent Pane (LLM tool-calling chat) ============ -->
+  <section class="editor-pane hidden" id="view-ai">
+    <div class="editor-head">
+      <div class="editor-title">
+        <span class="mono" style="color:var(--accent);font-weight:700">🤖 AI Agent</span>
+        <span id="ai-model-badge" class="chip" title="Active LLM provider &amp; model">model: —</span>
+        <span id="ai-status-badge" class="run-badge">Idle</span>
+      </div>
+      <div class="editor-actions">
+        <button class="btn" id="btn-ai-config" title="⚙ Cấu hình AI Provider — endpoint, model &amp; API key">⚙ Config</button>
+        <button class="btn" id="btn-ai-clear" title="Xóa hội thoại">🧹 Clear</button>
+      </div>
+    </div>
+    <div id="ai-chat-log" class="ai-chat-log">
+      <div class="ai-msg ai-msg-assistant">Xin chào! Tôi là <b>Telua AI Agent</b> — tôi có thể tự chạy
+        <code>tel</code>, <code>adb</code>, đọc file config/source để giúp bạn build &amp; debug AOSP.
+        Hỏi thử: <i>“Kiểm tra thiết bị adb và cho biết build hiện tại”</i>.</div>
+    </div>
+    <div class="ai-input-bar">
+      <textarea id="ai-input" rows="2" placeholder="Hỏi AI agent… (Enter = gửi, Shift+Enter = xuống dòng)"></textarea>
+      <button class="btn primary" id="btn-ai-send" title="Gửi câu hỏi cho AI agent">➤ Send</button>
+    </div>
+  </section>
+
+  <!-- ============ AI Provider Config modal ============ -->
+  <div class="modal hidden" id="modal-ai-config">
+    <div class="modal-box wide">
+      <h3>🤖 AI Provider Configuration</h3>
+      <p class="meta">Cấu hình endpoint LLM (OpenAI chat-completions compatible). Lưu vào
+        <code>config/ai_providers.json</code> — API key lưu trực tiếp trong file này (đảm bảo thư mục
+        <code>config/overlay/</code> hoặc file nằm ngoài Git nếu key nhạy cảm).</p>
+
+      <div class="settings-section">
+        <h4>Provider (endpoint)</h4>
+        <select id="ai-cfg-provider-select" class="theme-select" style="width:100%;"></select>
+        <div class="meta" style="margin-top:6px;" id="ai-cfg-provider-info"></div>
+      </div>
+
+      <div class="settings-section">
+        <h4>Model</h4>
+        <select id="ai-cfg-model-select" class="theme-select" style="width:100%;"></select>
+        <div class="meta" style="margin-top:6px;" id="ai-cfg-model-info"></div>
+      </div>
+
+      <div class="settings-section">
+        <h4>API Key</h4>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="password" id="ai-cfg-key-input" class="term-input mono" style="flex:1;"
+            placeholder="Paste API key… (endpoint nội bộ có thể để trống)" autocomplete="off">
+          <button class="btn" id="btn-ai-key-save" title="Lưu API key cho provider đang chọn">💾 Save key</button>
+        </div>
+        <div class="meta" style="margin-top:6px;" id="ai-cfg-key-status"></div>
+      </div>
+
+      <div class="settings-section">
+        <h4>Raw JSON (advanced)</h4>
+        <textarea id="ai-cfg-json" class="term-input mono"
+          style="width:100%;min-height:220px;box-sizing:border-box;font-size:11px;"
+          spellcheck="false" placeholder='[{ "name": "DeepSeek (litellm)", "apiType": "chat-completions", "apiKey": "", "models": [ … ] }]'></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn" id="btn-ai-cfg-cancel">Cancel</button>
+        <button class="btn primary" id="btn-ai-cfg-save" title="Lưu toàn bộ JSON provider registry">💾 Save JSON</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ Settings modal (theme + tab visibility) ============ -->
   <div class="modal hidden" id="modal-settings">
     <div class="modal-box">
@@ -1847,6 +1916,7 @@ RANK,FASKey,BRAND,Vehicle Series,Vehicle Type,Latest Popul.,MY,% of VIO,MVP,Bran
   <script src="/static/js/tab_mirror.js"></script>
   <script src="/static/js/tab_power.js"></script>
   <script src="/static/js/tab_bi.js"></script>
+  <script src="/static/js/tab_ai.js"></script>
   <script src="/static/js/app.js"></script>
 </body>
 

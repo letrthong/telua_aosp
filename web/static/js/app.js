@@ -96,6 +96,7 @@ function wire() {
   $("#tab-logcat")?.addEventListener("click", () => switchTab("logcat"));
   $("#tab-docs")?.addEventListener("click", () => switchTab("docs"));
   $("#tab-bi")?.addEventListener("click", () => switchTab("bi"));
+  $("#tab-ai")?.addEventListener("click", () => switchTab("ai"));
   $("#tab-mirror")?.addEventListener("click", () => switchTab("mirror"));
   $("#tab-power")?.addEventListener("click", () => switchTab("power"));
 
@@ -591,6 +592,8 @@ async function boot() {
     switchTab("docs");
   } else if (savedTab === "bi") {
     switchTab("bi");
+  } else if (savedTab === "ai") {
+    switchTab("ai");
   } else if (savedTab === "files") {
     if (savedFile && state.files.some(f => f.name === savedFile)) {
       const fileDraft = draftLoadFile();

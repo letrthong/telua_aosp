@@ -51,6 +51,7 @@ const SETTINGS_TABS = [
   { id: "power", icon: "⚡", label: "Power", desc: "Target power controls" },
   { id: "docs", icon: "📚", label: "Docs", desc: "Sphinx Doc-as-Code" },
   { id: "bi", icon: "📊", label: "BI Studio", desc: "Excel → JSON & Dashboard" },
+  { id: "ai", icon: "🤖", label: "AI Agent", desc: "LLM chat + tel/adb tools" },
 ];
 
 function loadTabsVisible() {
@@ -668,12 +669,13 @@ function switchTab(tab) {
   const isLogcat = tab === "logcat";
   const isDocs = tab === "docs";
   const isBi = tab === "bi";
+  const isAi = tab === "ai";
   const isMirror = tab === "mirror";
   const isPower = tab === "power";
-  const isPipelinesView = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isMirror && !isPower;
+  const isPipelinesView = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isAi && !isMirror && !isPower;
 
   // Collapse Config Files sidebar in Docs, AOSP, Terminal, Logcat, BI, Mirror & Power views to give maximum full-width canvas
-  $(".layout")?.classList.toggle("no-sidebar", isDocs || isAosp || isTerminal || isLogcat || isBi || isMirror || isPower);
+  $(".layout")?.classList.toggle("no-sidebar", isDocs || isAosp || isTerminal || isLogcat || isBi || isAi || isMirror || isPower);
 
   $("#view-files")?.classList.toggle("hidden", !isFiles);
   $("#view-aosp")?.classList.toggle("hidden", !isAosp);
@@ -682,6 +684,7 @@ function switchTab(tab) {
   $("#view-logcat")?.classList.toggle("hidden", !isLogcat);
   $("#view-docs")?.classList.toggle("hidden", !isDocs);
   $("#view-bi")?.classList.toggle("hidden", !isBi);
+  $("#view-ai")?.classList.toggle("hidden", !isAi);
   $("#view-mirror")?.classList.toggle("hidden", !isMirror);
   $("#view-power")?.classList.toggle("hidden", !isPower);
   if (!isMirror && typeof _mirrorKeepInBackground !== "undefined" && !_mirrorKeepInBackground) {
@@ -704,6 +707,9 @@ function switchTab(tab) {
   }
   if (isBi) {
     initBIDashboard();
+  }
+  if (isAi) {
+    initAI();
   }
   if (isLogcat) {
     initLogcat();
