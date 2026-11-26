@@ -189,7 +189,7 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
     def test_static_js_modular_scripts(self):
         scripts = [
             "core.js", "tab_files.js", "tab_pipelines.js", "tab_terminal.js",
-            "tab_docs.js", "tab_aosp.js", "tab_logcat.js", "tab_mirror.js", "tab_bi.js", "app.js",
+            "tab_docs.js", "tab_aosp.js", "tab_logcat.js", "tab_mirror.js", "tab_power.js", "tab_bi.js", "app.js",
         ]
         for s in scripts:
             res = self.client.get(f"/static/js/{s}")
@@ -523,7 +523,20 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         res_bad = self.client.post("/api/power/set", json={"state": "INVALID"})
         self.assertEqual(res_bad.status_code, 400)
 
-        # 6. Restore to ON
+        # 6. Test independent output controls (out1 & out2)
+        res_out1_off = self.client.post("/api/power/output/out1", json={"state": "OFF"})
+        self.assertEqual(res_out1_off.status_code, 200)
+        data_o1 = res_out1_off.get_json()
+        self.assertEqual(data_o1["output"], "out1")
+        self.assertEqual(data_o1["state"], "OFF")
+
+        res_out2_on = self.client.post("/api/power/output/out2", json={"state": "ON"})
+        self.assertEqual(res_out2_on.status_code, 200)
+        data_o2 = res_out2_on.get_json()
+        self.assertEqual(data_o2["output"], "out2")
+        self.assertEqual(data_o2["state"], "ON")
+
+        # 7. Restore to ON (Master)
         self.client.post("/api/power/set", json={"state": "ON"})
 
 

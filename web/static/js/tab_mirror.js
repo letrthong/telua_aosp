@@ -269,92 +269,6 @@ async function downloadMirrorScreenshot() {
   }
 }
 
-/* ---------------- ⚡ Target Power Controls ---------------- */
-async function fetchPowerStatus() {
-  try {
-    const res = await api("/api/power/status");
-    if (res && res.ok) {
-      renderPowerUI(res.state, res);
-      return res;
-    }
-  } catch (err) {
-    console.debug("[Power] status fetch error:", err);
-  }
-  return null;
-}
-
-function renderPowerUI(state, data) {
-  const badge = $("#mirror-power-badge");
-  const metaState = $("#power-meta-state");
-  const btnOn = $("#btn-power-on");
-  const btnOff = $("#btn-power-off");
-  const isOnline = state === "ON";
-
-  if (badge) {
-    badge.textContent = isOnline ? "ON" : "OFF";
-    badge.className = isOnline ? "run-badge ok" : "run-badge err";
-  }
-  if (metaState) {
-    metaState.textContent = state;
-    metaState.style.color = isOnline ? "var(--green, #3fb950)" : "var(--red, #f85149)";
-  }
-  if (btnOn) {
-    btnOn.classList.toggle("active-on", isOnline);
-    btnOn.disabled = isOnline;
-  }
-  if (btnOff) {
-    btnOff.classList.toggle("active-off", !isOnline);
-    btnOff.disabled = !isOnline;
-  }
-}
-
-async function setTargetPower(state) {
-  try {
-    const res = await api("/api/power/set", {
-      method: "POST",
-      body: JSON.stringify({ state }),
-    });
-    if (res && res.ok) {
-      renderPowerUI(res.state, res);
-      toast("Target Power", `Target power set to ${res.state} (persisted in config).`, res.state === "ON" ? "ok" : "warn", 3000);
-      if (res.state === "ON") {
-        setTimeout(captureMirrorFrame, 500);
-      }
-    }
-  } catch (err) {
-    toast("Power Error", err.message, "err");
-  }
-}
-
-async function runTargetPowerAction(action) {
-  try {
-    if (action === "soft_reboot") {
-      toast("Soft Rebooting...", "Restarting Zygote runtime via adb setprop...", "info", 3000);
-      await api("/api/terminal/run", {
-        method: "POST",
-        body: JSON.stringify({ cmd: "adb shell setprop ctl.restart zygote" }),
-      });
-      setTimeout(captureMirrorFrame, 1500);
-    } else if (action === "full_reboot") {
-      const ok = await confirmDialog({
-        title: "Confirm Reboot Target",
-        message: "Are you sure you want to perform a full hardware reboot of the target board?",
-        confirmText: "🔄 Reboot Target",
-        icon: "🔄",
-      });
-      if (!ok) return;
-      toast("Rebooting Target...", "Sending adb reboot command to target board...", "warn", 4000);
-      await api("/api/terminal/run", {
-        method: "POST",
-        body: JSON.stringify({ cmd: "adb reboot" }),
-      });
-      setTimeout(captureMirrorFrame, 4000);
-    }
-  } catch (err) {
-    toast("Reboot Error", err.message, "err");
-  }
-}
-
 function initMirror() {
   const canvas = $("#mirror-canvas");
   if (!canvas) return;
@@ -475,14 +389,7 @@ function initMirror() {
     }
   });
 
-  // ⚡ Target Power Controls
-  $("#btn-power-on")?.addEventListener("click", () => setTargetPower("ON"));
-  $("#btn-power-off")?.addEventListener("click", () => setTargetPower("OFF"));
-  $("#btn-power-soft-reboot")?.addEventListener("click", () => runTargetPowerAction("soft_reboot"));
-  $("#btn-power-full-reboot")?.addEventListener("click", () => runTargetPowerAction("full_reboot"));
-
-  // Fetch initial info, power status and start
-  fetchPowerStatus();
+  // Fetch initial info and start
   fetchMirrorInfo().then(() => {
     startMirrorStream();
   });

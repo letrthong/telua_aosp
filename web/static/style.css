@@ -3887,46 +3887,236 @@ code,
   font-size: 12px;
 }
 
-/* ⚡ Target Power Controls */
-.mirror-power-deck-group {
-  border-top: 1px solid var(--border-color, #30363d);
-  padding-top: 10px;
-  margin-top: 6px;
+/* ============ ⚡ Target Power Tab (Dual Output Switches) ============ */
+.power-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 20px;
+  overflow-y: auto;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.mirror-power-grid {
+.power-switches-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 18px;
+}
+
+.power-card {
+  background: var(--bg-soft, #161b22);
+  border: 2px solid var(--border-color, #30363d);
+  border-radius: 12px;
+  padding: 18px 20px;
+  transition: all 0.25s ease;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.power-card.channel-active {
+  border-color: #3fb950;
+  box-shadow: 0 0 18px rgba(63, 185, 80, 0.22);
+}
+
+.power-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.power-card-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.power-ch-pill {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  background: rgba(88, 166, 255, 0.15);
+  color: var(--accent, #58a6ff);
+  border: 1px solid rgba(88, 166, 255, 0.3);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.power-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main, #e6edf3);
+}
+
+.power-card-desc {
+  font-size: 12px;
+  color: var(--text-muted, #8b949e);
+  line-height: 1.4;
+  margin-bottom: 14px;
+}
+
+.power-led {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: inline-block;
+  transition: all 0.3s ease;
+}
+
+.power-led.on {
+  background: #3fb950;
+  box-shadow: 0 0 12px #3fb950;
+}
+
+.power-led.off {
+  background: #484f58;
+  border: 1px solid #30363d;
+}
+
+.power-telemetry-row {
+  display: flex;
+  gap: 16px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-color, #30363d);
+  padding: 8px 14px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.power-metric {
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+}
+
+.power-metric .p-label {
+  color: var(--text-muted, #8b949e);
+  font-size: 10px;
+  margin-bottom: 2px;
+}
+
+.power-metric .p-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main, #e6edf3);
+}
+
+.power-switch-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 6px;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
-.mirror-power-btn {
+.power-toggle-btn {
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  font-weight: 600;
-  padding: 8px 10px;
-  font-size: 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-.mirror-power-btn.active-on {
-  box-shadow: 0 0 10px rgba(63, 185, 80, 0.45);
-  border: 1.5px solid #3fb950;
-  opacity: 1;
+.power-toggle-btn.btn-sw-on {
+  background: rgba(46, 160, 67, 0.15);
+  border: 1.5px solid #2ea043;
+  color: #3fb950;
 }
 
-.mirror-power-btn.active-off {
-  box-shadow: 0 0 10px rgba(248, 81, 73, 0.45);
-  border: 1.5px solid #f85149;
-  opacity: 1;
+.power-toggle-btn.btn-sw-on.active-sw {
+  background: #238636;
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(46, 160, 67, 0.4);
 }
 
-.mirror-power-btn:disabled {
+.power-toggle-btn.btn-sw-off {
+  background: rgba(248, 81, 73, 0.12);
+  border: 1.5px solid #da3633;
+  color: #f85149;
+}
+
+.power-toggle-btn.btn-sw-off.active-sw {
+  background: #da3633;
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(218, 54, 51, 0.4);
+}
+
+.power-toggle-btn:disabled {
+  opacity: 0.6;
   cursor: default;
-  opacity: 0.7;
+}
+
+.power-card-footer {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.power-sub-deck {
+  background: var(--bg-soft, #161b22);
+  border: 1px solid var(--border-color, #30363d);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.power-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main, #e6edf3);
+  margin-bottom: 10px;
+}
+
+.power-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.power-config-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(88, 166, 255, 0.08);
+  border: 1px solid rgba(88, 166, 255, 0.25);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.power-banner-icon {
+  font-size: 22px;
+}
+
+.power-banner-content {
+  flex: 1;
+}
+
+.power-banner-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--accent, #58a6ff);
+}
+
+.power-history-wrap {
+  background: var(--bg-soft, #161b22);
+  border: 1px solid var(--border-color, #30363d);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.power-history-table-container {
+  overflow-x: auto;
+}
+
+.text-green {
+  color: #3fb950;
+}
+
+.text-muted {
+  color: #8b949e;
 }

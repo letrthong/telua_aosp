@@ -607,8 +607,9 @@ function syncTopTabs() {
   const isDocs = !$("#view-docs")?.classList.contains("hidden");
   const isBi = !$("#view-bi")?.classList.contains("hidden");
   const isMirror = !$("#view-mirror")?.classList.contains("hidden");
-  const isSystem = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isMirror && (state.plSource === "system" || state.plSource === "docker");
-  const isPipelines = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isMirror && !isSystem;
+  const isPower = !$("#view-power")?.classList.contains("hidden");
+  const isSystem = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isMirror && !isPower && (state.plSource === "system" || state.plSource === "docker");
+  const isPipelines = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isMirror && !isPower && !isSystem;
   $("#tab-files")?.classList.toggle("active", isFiles);
   $("#tab-pipelines")?.classList.toggle("active", isPipelines);
   $("#tab-system")?.classList.toggle("active", isSystem);
@@ -625,9 +626,10 @@ function syncTopTabs() {
     mirrorTab.classList.toggle("active", isMirror);
     mirrorTab.classList.toggle("tab-streaming", typeof _mirrorRunning !== "undefined" && Boolean(_mirrorRunning));
   }
+  $("#tab-power")?.classList.toggle("active", isPower);
   $("#tab-bi")?.classList.toggle("active", isBi);
   try {
-    const activeTabName = isFiles ? "files" : (isAosp ? "aosp" : (isTerminal ? "terminal" : (isLogcat ? "logcat" : (isDocs ? "docs" : (isBi ? "bi" : (isMirror ? "mirror" : (isSystem ? "system" : "pipelines")))))));
+    const activeTabName = isFiles ? "files" : (isAosp ? "aosp" : (isTerminal ? "terminal" : (isLogcat ? "logcat" : (isDocs ? "docs" : (isBi ? "bi" : (isMirror ? "mirror" : (isPower ? "power" : (isSystem ? "system" : "pipelines"))))))));
     localStorage.setItem(LAST_TAB_KEY, activeTabName);
     localStorage.setItem(LAST_SOURCE_KEY, state.plSource);
   } catch { /* ignore */ }
@@ -636,13 +638,14 @@ function syncTopTabs() {
 function switchPipelineSource(source) {
   if (source === "docker") source = "system";
   if (source !== "system") _lastNonSystemPlSource = source;
-  // Ensure Pipelines view is visible if user clicks a source while in Terminal, Files, Docs, Logcat, AOSP or Mirror
+  // Ensure Pipelines view is visible if user clicks a source while in Terminal, Files, Docs, Logcat, AOSP, Mirror or Power
   $("#view-files")?.classList.add("hidden");
   $("#view-aosp")?.classList.add("hidden");
   $("#view-terminal")?.classList.add("hidden");
   $("#view-docs")?.classList.add("hidden");
   $("#view-logcat")?.classList.add("hidden");
   $("#view-mirror")?.classList.add("hidden");
+  $("#view-power")?.classList.add("hidden");
   $("#view-pipelines")?.classList.remove("hidden");
   $("#view-terminal")?.classList.add("hidden");
   $("#view-docs")?.classList.add("hidden");
@@ -5836,10 +5839,11 @@ function switchTab(tab) {
   const isDocs = tab === "docs";
   const isBi = tab === "bi";
   const isMirror = tab === "mirror";
-  const isPipelinesView = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isMirror;
+  const isPower = tab === "power";
+  const isPipelinesView = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isMirror && !isPower;
 
-  // Collapse Config Files sidebar in Docs, AOSP, Terminal, Logcat, BI & Mirror views to give maximum full-width canvas
-  $(".layout")?.classList.toggle("no-sidebar", isDocs || isAosp || isTerminal || isLogcat || isBi || isMirror);
+  // Collapse Config Files sidebar in Docs, AOSP, Terminal, Logcat, BI, Mirror & Power views to give maximum full-width canvas
+  $(".layout")?.classList.toggle("no-sidebar", isDocs || isAosp || isTerminal || isLogcat || isBi || isMirror || isPower);
 
   $("#view-files")?.classList.toggle("hidden", !isFiles);
   $("#view-aosp")?.classList.toggle("hidden", !isAosp);
@@ -5849,6 +5853,7 @@ function switchTab(tab) {
   $("#view-docs")?.classList.toggle("hidden", !isDocs);
   $("#view-bi")?.classList.toggle("hidden", !isBi);
   $("#view-mirror")?.classList.toggle("hidden", !isMirror);
+  $("#view-power")?.classList.toggle("hidden", !isPower);
   if (!isMirror && typeof _mirrorKeepInBackground !== "undefined" && !_mirrorKeepInBackground) {
     if (typeof stopMirrorStream === "function") stopMirrorStream();
   }
@@ -5859,6 +5864,10 @@ function switchTab(tab) {
   }
   syncTopTabs();
   renderFiles($("#search")?.value || "");
+  if (isPower) {
+    if (typeof initPowerTab === "function") initPowerTab();
+    return;
+  }
   if (isMirror) {
     if (typeof initMirror === "function") initMirror();
     return;
@@ -6084,6 +6093,7 @@ function wire() {
   $("#tab-docs")?.addEventListener("click", () => switchTab("docs"));
   $("#tab-bi")?.addEventListener("click", () => switchTab("bi"));
   $("#tab-mirror")?.addEventListener("click", () => switchTab("mirror"));
+  $("#tab-power")?.addEventListener("click", () => switchTab("power"));
 
   // AOSP Center wiring
   $("#btn-aosp-reload")?.addEventListener("click", () => loadAospConfig());
