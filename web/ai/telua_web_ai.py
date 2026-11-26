@@ -411,14 +411,28 @@ def _call_openai(messages, model, base_url):
         if msg["role"] == "tool":
             converted.append({"role": "tool", "tool_call_id": msg["tool_call_id"], "content": msg["content"]})
         elif msg["role"] == "assistant" and msg.get("tool_calls"):
-            converted.append({
+            converted_tc = []
+            for tc in msg["tool_calls"]:
+                tc_item = {
+                    "id": tc.get("id"),
+                    "type": "function",
+                    "function": {
+                        "name": tc.get("function", {}).get("name") if isinstance(tc.get("function"), dict) else tc.get("name"),
+                        "arguments": tc.get("function", {}).get("arguments") if isinstance(tc.get("function"), dict) else tc.get("arguments", "{}"),
+                    },
+                }
+                if tc.get("extra_content"):
+                    tc_item["extra_content"] = tc["extra_content"]
+                converted_tc.append(tc_item)
+
+            ast_msg = {
                 "role": "assistant",
                 "content": msg.get("content") or None,
-                "tool_calls": [{
-                    "id": tc["id"], "type": "function",
-                    "function": {"name": tc["name"], "arguments": tc["arguments"]},
-                } for tc in msg["tool_calls"]],
-            })
+                "tool_calls": converted_tc,
+            }
+            if msg.get("extra_content"):
+                ast_msg["extra_content"] = msg["extra_content"]
+            converted.append(ast_msg)
         else:
             converted.append({"role": msg["role"], "content": msg["content"]})
 
@@ -455,7 +469,10 @@ def _call_llm(messages, provider, model, base_url):
         entry = _active_provider_entry(providers, cfg.get("active_provider", ""))
         model_entry = _active_model_entry(entry or {}, cfg.get("active_model", ""))
         if entry and model_entry:
-            return _call_chat_completions(messages, entry, model_entry)
+            res = _call_chat_completions(messages, entry, model_entry)
+            res["model"] = model_entry.get("id") or model_entry.get("name")
+            res["provider"] = entry.get("name")
+            return res
     if provider == "openai":
         return _call_openai(messages, model, base_url)
     return _call_anthropic(messages, model, base_url)
@@ -482,14 +499,28 @@ def _call_chat_completions(messages, provider_entry, model_entry):
         if msg["role"] == "tool":
             converted.append({"role": "tool", "tool_call_id": msg["tool_call_id"], "content": msg["content"]})
         elif msg["role"] == "assistant" and msg.get("tool_calls"):
-            converted.append({
+            converted_tc = []
+            for tc in msg["tool_calls"]:
+                tc_item = {
+                    "id": tc.get("id"),
+                    "type": "function",
+                    "function": {
+                        "name": tc.get("function", {}).get("name") if isinstance(tc.get("function"), dict) else tc.get("name"),
+                        "arguments": tc.get("function", {}).get("arguments") if isinstance(tc.get("function"), dict) else tc.get("arguments", "{}"),
+                    },
+                }
+                if tc.get("extra_content"):
+                    tc_item["extra_content"] = tc["extra_content"]
+                converted_tc.append(tc_item)
+
+            ast_msg = {
                 "role": "assistant",
                 "content": msg.get("content") or None,
-                "tool_calls": [{
-                    "id": tc["id"], "type": "function",
-                    "function": {"name": tc["name"], "arguments": tc["arguments"]},
-                } for tc in msg["tool_calls"]],
-            })
+                "tool_calls": converted_tc,
+            }
+            if msg.get("extra_content"):
+                ast_msg["extra_content"] = msg["extra_content"]
+            converted.append(ast_msg)
         else:
             converted.append({"role": msg["role"], "content": msg["content"]})
 
@@ -537,11 +568,14 @@ def _call_chat_completions(messages, provider_entry, model_entry):
         "id": tc.get("id", f"call_{i}"),
         "name": tc.get("function", {}).get("name", ""),
         "arguments": tc.get("function", {}).get("arguments") or "{}",
+        **({"extra_content": tc["extra_content"]} if tc.get("extra_content") else {})
     } for i, tc in enumerate(msg.get("tool_calls") or [])]
 
     raw = {"role": "assistant", "content": msg.get("content") or ""}
     if tool_calls:
         raw["tool_calls"] = tool_calls
+    if msg.get("extra_content"):
+        raw["extra_content"] = msg["extra_content"]
     return {
         "text": (msg.get("content") or "").strip(),
         "tool_calls": tool_calls,
@@ -717,8 +751,8 @@ def api_ai_chat():
                     "ok": True,
                     "answer": resp["text"] or "(empty response)",
                     "trace": trace,
-                    "model": model,
-                    "provider": provider,
+                    "model": resp.get("model", model),
+                    "provider": resp.get("provider", provider),
                 })
 
             # Record assistant tool-call message and execute each tool.

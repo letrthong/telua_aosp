@@ -36,6 +36,9 @@ SCRIPT_FILE = Path(__file__).resolve()
 WEB_DIR = SCRIPT_FILE.parent
 if str(WEB_DIR) not in sys.path:
     sys.path.insert(0, str(WEB_DIR))
+AI_DIR = WEB_DIR / "ai"
+if str(AI_DIR) not in sys.path:
+    sys.path.insert(0, str(AI_DIR))
 
 # Core toolkit helpers
 from telua_web_core import (  # noqa: E402
@@ -96,9 +99,14 @@ from telua_web_mirror import (  # noqa: E402
 from telua_web_power_controls import (  # noqa: E402
     power_bp,
 )
-from telua_web_ai import (  # noqa: E402
-    ai_bp,
-)
+try:
+    from ai.telua_web_ai import (  # noqa: E402
+        ai_bp,
+    )
+except ImportError:
+    from telua_web_ai import (  # noqa: E402
+        ai_bp,
+    )
 
 try:
     from flask import Flask, abort, jsonify, request, send_from_directory, send_file
