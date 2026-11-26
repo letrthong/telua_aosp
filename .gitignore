@@ -75,6 +75,15 @@ instance/
 # Sphinx documentation
 docs/_build/
 
+# Cloned External Repositories (MCP skills, knowledge, plugins)
+repos/
+.repos/
+.repo/
+
+# AI Agent persistent ChromaDB vector data
+ai_agent/data/
+ai_agent/*.db
+
 # PyBuilder
 .pybuilder/
 target/
@@ -236,6 +245,7 @@ deployment_log.txt
 
 config/overlay/*.config
 config/overlay/*.bak
+config/overlay/*.json
 !config/overlay/enc_*.config
 !config/overlay/ReadMe.txt
 config/const_my_cli.config

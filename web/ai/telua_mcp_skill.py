@@ -59,6 +59,7 @@ CONFIG_FILE_CANDIDATES = [
     "config/overlay/mcp_skills_config.json",
     "config/mcp_skills_config.json",
 ]
+STATE_FILE_PATH = "config/overlay/mcp_skills_state.json"
 
 
 def _config_path() -> Path:
@@ -70,8 +71,31 @@ def _config_path() -> Path:
     return root / "config" / "mcp_skills_config.json"
 
 
+def get_mcp_skill_state() -> dict:
+    """Read dynamic runtime state (last_sync, indexed_count) from overlay."""
+    p = _repo_root() / STATE_FILE_PATH
+    if p.is_file():
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+    return {"last_sync": "", "indexed_count": 0}
+
+
+def save_mcp_skill_state(state: dict) -> dict:
+    """Save dynamic runtime state to overlay file (never modifying tracked config)."""
+    p = _repo_root() / STATE_FILE_PATH
+    p.parent.mkdir(parents=True, exist_ok=True)
+    current = get_mcp_skill_state()
+    current.update(state)
+    p.write_text(json.dumps(current, indent=2), encoding="utf-8")
+    return current
+
+
 def get_mcp_skill_config() -> dict:
-    """Read MCP skill configuration."""
+    """Read MCP skill configuration (merged with overlay runtime state)."""
     path = _config_path()
     default_cfg = {
         "enabled": True,
@@ -95,17 +119,63 @@ def get_mcp_skill_config() -> dict:
                     default_cfg["sources"] = [dict(s) for s in DEFAULT_SOURCES]
         except Exception:
             pass
+    # Merge overlay dynamic state without modifying static config file
+    state = get_mcp_skill_state()
+    default_cfg.update(state)
     return default_cfg
 
 
 def save_mcp_skill_config(cfg: dict) -> dict:
-    """Save MCP skill configuration."""
-    current = get_mcp_skill_config()
-    current.update(cfg)
+    """Save static MCP skill configuration (stripping dynamic runtime state)."""
+    # Extract dynamic state if passed
+    state_updates = {}
+    cleaned = dict(cfg)
+    for k in ["last_sync", "indexed_count"]:
+        if k in cleaned:
+            state_updates[k] = cleaned.pop(k)
+    if state_updates:
+        save_mcp_skill_state(state_updates)
+
+    # Clean and validate sources if passed
+    if "sources" in cleaned and isinstance(cleaned["sources"], list):
+        cleaned_sources = []
+        for i, s in enumerate(cleaned["sources"]):
+            if not isinstance(s, dict):
+                continue
+            local_path = str(s.get("local_path", "")).strip()
+            if not local_path:
+                continue
+            name = str(s.get("name", "")).strip() or f"Source {i+1}"
+            s_id = str(s.get("id", "")).strip()
+            if not s_id:
+                s_id = local_path.replace("\\", "/").rstrip("/").split("/")[-1].lower().replace("-", "_").replace(".", "_")
+            cleaned_sources.append({
+                "id": s_id,
+                "name": name,
+                "local_path": local_path,
+                "repo_url": str(s.get("repo_url", "")).strip(),
+                "enabled": bool(s.get("enabled", True)),
+            })
+        cleaned["sources"] = cleaned_sources
+        if cleaned_sources and not cleaned.get("local_path"):
+            cleaned["local_path"] = cleaned_sources[0]["local_path"]
+            cleaned["repo_url"] = cleaned_sources[0]["repo_url"]
+
+    # Read existing static config only
     path = _config_path()
+    current = {}
+    if path.is_file():
+        try:
+            current = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    current.update(cleaned)
+    for k in ["last_sync", "indexed_count"]:
+        current.pop(k, None)
+
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(current, indent=2, ensure_ascii=False), encoding="utf-8")
-    return current
+    return get_mcp_skill_config()
 
 
 def resolve_skill_dir() -> Path:
@@ -113,7 +183,9 @@ def resolve_skill_dir() -> Path:
     cfg = get_mcp_skill_config()
     rel = cfg.get("local_path") or DEFAULT_SKILL_LOCAL_PATH
     root = _repo_root()
-    p = (root / rel).resolve()
+    p = Path(rel)
+    if not p.is_dir():
+        p = (root / rel).resolve()
     if p.is_dir():
         return p
     candidates = [
@@ -126,34 +198,46 @@ def resolve_skill_dir() -> Path:
     return p
 
 
-def resolve_skill_sources() -> List[dict]:
-    """Resolve all configured and enabled skill source repositories."""
+def get_all_configured_sources() -> List[dict]:
+    """Return all configured sources with resolution status (exists, resolved_path, enabled)."""
     cfg = get_mcp_skill_config()
     sources = cfg.get("sources") or DEFAULT_SOURCES
     root = _repo_root()
-    resolved = []
+    result = []
 
     for s in sources:
-        if not s.get("enabled", True):
-            continue
-        rel = s.get("local_path", "")
-        p = (root / rel).resolve()
+        rel = str(s.get("local_path", "")).strip()
+        # 1. Try absolute or direct path
+        p = Path(rel)
         if not p.is_dir():
-            # Check candidate fallbacks
+            # 2. Try relative to repo root
+            p = (root / rel).resolve()
+        if not p.is_dir():
+            # 3. Try under repos/
             for cand in [root / rel, root / "repos" / rel]:
                 if cand.is_dir():
                     p = cand.resolve()
                     break
 
-        if p.is_dir():
-            resolved.append({
-                "id": s.get("id") or p.name,
-                "name": s.get("name") or p.name,
-                "repo_url": s.get("repo_url", ""),
-                "local_path": rel,
-                "dir": p,
-            })
-    return resolved
+        exists = p.is_dir()
+        s_id = s.get("id") or (p.name if exists else (rel.replace("\\", "/").rstrip("/").split("/")[-1] or "source"))
+        result.append({
+            "id": s_id,
+            "name": s.get("name") or s_id,
+            "repo_url": s.get("repo_url", ""),
+            "local_path": rel,
+            "enabled": s.get("enabled", True),
+            "exists": exists,
+            "resolved_path": str(p) if exists else "",
+            "dir": p if exists else None,
+        })
+    return result
+
+
+def resolve_skill_sources() -> List[dict]:
+    """Resolve all configured and enabled skill source repositories."""
+    sources = get_all_configured_sources()
+    return [s for s in sources if s.get("enabled", True) and s.get("exists", False)]
 
 
 def _parse_skill_metadata(file_path: Path, ext: str) -> Tuple[str, str]:
@@ -487,7 +571,7 @@ def sync_skills_to_chroma(collection_name: str = "telua_knowledge", incremental:
         _save_skill_hashes(current_hashes)
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        save_mcp_skill_config({
+        save_mcp_skill_state({
             "last_sync": timestamp,
             "indexed_count": len(skills),
         })

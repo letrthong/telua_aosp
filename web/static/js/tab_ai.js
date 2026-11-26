@@ -55,14 +55,21 @@ async function aiSend() {
   if (!msg) return;
   input.value = "";
 
+  const targetInput = $("#ai-target-file");
+  const targetFile = (targetInput?.value || "").trim();
+  let fullMsg = msg;
+  if (targetFile && !msg.includes(targetFile)) {
+    fullMsg = `[Target File: ${targetFile}]\n${msg}`;
+  }
+
   aiAppendMsg("user", esc(msg));
-  _aiHistory.push({ role: "user", content: msg });
+  _aiHistory.push({ role: "user", content: fullMsg });
   aiSetBusy(true);
 
   try {
     const res = await api("/api/ai/chat", {
       method: "POST",
-      body: JSON.stringify({ message: msg, history: _aiHistory.slice(-10) }),
+      body: JSON.stringify({ message: fullMsg, history: _aiHistory.slice(-10) }),
     });
     (res.trace || []).forEach(t => aiAppendToolTrace(t.tool, t.args, t.output));
     const answer = res.answer || res.error || "(no answer)";
@@ -94,12 +101,61 @@ async function initAI() {
       `<div class="ai-msg ai-msg-assistant">🧹 Hội thoại đã xóa. Bạn muốn AI agent làm gì?</div>`;
   });
 
+  // ---- Target Path (File / Folder) Quick Actions ----
+  $("#btn-ai-target-read")?.addEventListener("click", () => {
+    const targetInput = $("#ai-target-file");
+    const targetPath = (targetInput?.value || "").trim();
+    if (!targetPath) {
+      toast("Target Path", "Vui lòng nhập đường dẫn file hoặc thư mục trước.", "err");
+      targetInput?.focus();
+      return;
+    }
+    const isFolder = !targetPath.includes(".") || targetPath.endsWith("/") || targetPath.endsWith("\\");
+    const input = $("#ai-input");
+    if (input) {
+      input.value = isFolder
+        ? `Hãy dùng list_files quét cấu trúc thư mục '${targetPath}', đọc lướt các file chính và tóm tắt kiến trúc của thư mục này.`
+        : `Hãy đọc và phân tích toàn diện mã nguồn file: ${targetPath}`;
+      aiSend();
+    }
+  });
+
+  $("#btn-ai-target-code")?.addEventListener("click", () => {
+    const targetInput = $("#ai-target-file");
+    const targetPath = (targetInput?.value || "").trim();
+    if (!targetPath) {
+      toast("Target Path", "Vui lòng nhập đường dẫn file hoặc thư mục cần lập trình trước.", "err");
+      targetInput?.focus();
+      return;
+    }
+    const isFolder = !targetPath.includes(".") || targetPath.endsWith("/") || targetPath.endsWith("\\");
+    const input = $("#ai-input");
+    const userPrompt = (input?.value || "").trim();
+
+    let promptText = "";
+    if (isFolder) {
+      promptText = userPrompt
+        ? `Target Folder: '${targetPath}'. Yêu cầu lập trình các file trong thư mục: ${userPrompt}. Hãy dùng list_files để kiểm tra các file hiện có, sau đó lần lượt tạo mới hoặc cập nhật các file liên quan (dùng write_file/edit_file), và dùng run_tel để build/kiểm tra cú pháp sau khi code xong.`
+        : `Target Folder: '${targetPath}'. Hãy quét thư mục này (dùng list_files), đối chiếu với MCP Skills (telua_skill & claude-code-java) và lập trình/hoàn thiện các file cần thiết trong thư mục bằng write_file hoặc edit_file.`;
+    } else {
+      promptText = userPrompt 
+        ? `Hãy lập trình/hoàn thiện code cho file ${targetPath} theo yêu cầu sau: ${userPrompt}. Hãy sử dụng công cụ write_file hoặc edit_file để cập nhật trực tiếp vào file, và gọi run_tel để build/kiểm tra cú pháp nếu cần.`
+        : `Hãy kiểm tra file ${targetPath}, đối chiếu với các mẫu kiến trúc trong MCP Skills (telua_skill & claude-code-java) và sử dụng công cụ write_file hoặc edit_file để hoàn thiện code trực tiếp vào file này.`;
+    }
+
+    if (input) {
+      input.value = promptText;
+      aiSend();
+    }
+  });
+
   // ---- Provider config modal (⚙ Config) ----
   $("#btn-ai-config")?.addEventListener("click", openAIConfigModal);
   $("#btn-ai-cfg-cancel")?.addEventListener("click", () => $("#modal-ai-config")?.classList.add("hidden"));
   $("#ai-cfg-provider-select")?.addEventListener("change", () => {
     renderAIConfigModels();
   });
+  $("#btn-ai-save-guardrails")?.addEventListener("click", saveAIGuardrails);
   $("#btn-ai-key-save")?.addEventListener("click", saveAIKey);
   $("#btn-ai-cfg-save")?.addEventListener("click", saveAIConfigJson);
   $("#btn-ai-mcp-sync")?.addEventListener("click", async () => {
@@ -125,19 +181,48 @@ async function initAI() {
       }
     }
   });
-  $("#btn-ai-mcp-save-path")?.addEventListener("click", async () => {
-    const pathInput = $("#ai-mcp-repo-path");
-    if (!pathInput) return;
+  $("#btn-ai-mcp-save-sources")?.addEventListener("click", async () => {
     try {
       await api("/api/ai/mcp/config", {
         method: "POST",
-        body: JSON.stringify({ local_path: pathInput.value }),
+        body: JSON.stringify({ sources: _aiMcpSources }),
       });
-      toast("MCP Path Saved 💾", "Đã lưu đường dẫn telua_skill repository.", "ok", 3000);
+      toast("Đã Lưu Danh Sách Nguồn 💾", "Các thư mục kỹ năng đã được lưu vào cấu hình.", "ok", 3000);
       await loadAIMcpStatus();
     } catch (err) {
-      toast("Save Path Failed", err.message, "err");
+      toast("Lỗi Lưu Nguồn", err.message, "err");
     }
+  });
+
+  $("#btn-ai-mcp-add-source")?.addEventListener("click", () => {
+    const nameInput = $("#ai-mcp-new-name");
+    const pathInput = $("#ai-mcp-new-path");
+    const urlInput = $("#ai-mcp-new-url");
+    if (!pathInput || !pathInput.value.trim()) {
+      toast("Thiếu đường dẫn", "Vui lòng nhập đường dẫn thư mục hoặc repository.", "err");
+      return;
+    }
+    const path = pathInput.value.trim();
+    const name = (nameInput?.value.trim()) || path.split("/").pop().split("\\").pop() || "Custom Source";
+    const url = urlInput?.value.trim() || "";
+    const cleanId = path.replace(/[\\/]/g, "_").toLowerCase().replace(/[^a-z0-9_]/g, "");
+
+    _aiMcpSources.push({
+      id: cleanId,
+      name: name,
+      local_path: path,
+      repo_url: url,
+      enabled: true,
+      exists: true,
+      count: 0,
+    });
+
+    if (nameInput) nameInput.value = "";
+    if (pathInput) pathInput.value = "";
+    if (urlInput) urlInput.value = "";
+
+    renderAIMcpSourcesList();
+    toast("Đã thêm nguồn ➕", "Đã thêm vào danh sách tạm. Nhấn '💾 Lưu danh sách nguồn' để áp dụng.", "ok", 3500);
   });
 
   $("#btn-ai-mcp-save-schedule")?.addEventListener("click", async () => {
@@ -241,9 +326,53 @@ async function openAIConfigModal() {
 
     updateAIKeyStatus(entry);
     loadAIMcpStatus();
+    loadAIGuardrails();
     $("#modal-ai-config")?.classList.remove("hidden");
   } catch (err) {
     toast("AI Config", err.message, "err");
+  }
+}
+
+async function loadAIGuardrails() {
+  try {
+    const res = await api("/api/ai/guardrails");
+    if (res && res.guardrails) {
+      const g = res.guardrails;
+      const iterSel = $("#ai-guard-max-iter");
+      if (iterSel && g.max_iterations) iterSel.value = String(g.max_iterations);
+      const linesSel = $("#ai-guard-max-lines");
+      if (linesSel && g.max_lines_per_read) linesSel.value = String(g.max_lines_per_read);
+      const charsSel = $("#ai-guard-max-chars");
+      if (charsSel && g.max_tool_output_chars) charsSel.value = String(g.max_tool_output_chars);
+      const loopCb = $("#ai-guard-loop-breaker");
+      if (loopCb && g.loop_breaker_enabled !== undefined) loopCb.checked = Boolean(g.loop_breaker_enabled);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+async function saveAIGuardrails() {
+  const iter = parseInt($("#ai-guard-max-iter")?.value || "5", 10);
+  const lines = parseInt($("#ai-guard-max-lines")?.value || "150", 10);
+  const chars = parseInt($("#ai-guard-max-chars")?.value || "6000", 10);
+  const loopBreaker = Boolean($("#ai-guard-loop-breaker")?.checked);
+
+  try {
+    const res = await api("/api/ai/guardrails", {
+      method: "POST",
+      body: JSON.stringify({
+        max_iterations: iter,
+        max_lines_per_read: lines,
+        max_tool_output_chars: chars,
+        loop_breaker_enabled: loopBreaker,
+      }),
+    });
+    if (res && res.ok) {
+      toast("Đã lưu Guardrails 🛡", `Max: ${iter} turns | Max read: ${lines} dòng | Loop Breaker: ${loopBreaker ? "BẬT" : "TẮT"}`, "ok", 3500);
+    }
+  } catch (err) {
+    toast("Lỗi Guardrails", err.message, "err");
   }
 }
 
@@ -331,6 +460,63 @@ async function saveAIConfigJson() {
 }
 
 /* ---------------- MCP Skill & ChromaDB Integration ---------------- */
+let _aiMcpSources = [];
+
+function renderAIMcpSourcesList() {
+  const container = $("#ai-mcp-sources-list");
+  if (!container) return;
+  if (!_aiMcpSources.length) {
+    container.innerHTML = `<div class="meta" style="padding:8px;text-align:center;">(Chưa có nguồn kỹ năng nào. Hãy nhập thông tin bên dưới và nhấn "➕ Thêm")</div>`;
+    return;
+  }
+  container.innerHTML = _aiMcpSources.map((s, idx) => {
+    const isOk = s.exists !== false;
+    const statusChip = isOk 
+      ? `<span class="chip ok" style="font-size:10px;padding:1px 6px;">${s.count || 0} skills</span>`
+      : `<span class="chip err" style="font-size:10px;padding:1px 6px;" title="${esc(s.resolved_path || 'Không tìm thấy thư mục trên ổ cứng')}">⚠️ Thư mục không tồn tại</span>`;
+    const gitLink = s.repo_url 
+      ? `<a href="${esc(s.repo_url)}" target="_blank" style="color:var(--accent);font-size:11px;text-decoration:none;" title="Mở Git repo">↗ Git</a>` 
+      : '';
+    
+    return `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg);border:1px solid ${s.enabled ? 'var(--border)' : 'rgba(255,255,255,0.06)'};border-radius:6px;opacity:${s.enabled ? '1' : '0.6'};">
+        <input type="checkbox" class="ai-mcp-src-toggle" data-idx="${idx}" ${s.enabled ? 'checked' : ''} title="${s.enabled ? 'Đang BẬT nguồn này' : 'Đang TẮT nguồn này'}">
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <strong style="font-size:11px;color:var(--text);">${esc(s.name || s.id)}</strong>
+            ${statusChip}
+            ${gitLink}
+          </div>
+          <div class="mono meta" style="font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;" title="${esc(s.resolved_path || s.local_path)}">
+            ${esc(s.local_path)}
+          </div>
+        </div>
+        <button class="btn danger ai-mcp-src-del" data-idx="${idx}" style="padding:2px 7px;font-size:11px;" title="Xóa nguồn này">🗑</button>
+      </div>
+    `;
+  }).join("");
+
+  container.querySelectorAll(".ai-mcp-src-toggle").forEach(cb => {
+    cb.addEventListener("change", (e) => {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      if (_aiMcpSources[idx]) {
+        _aiMcpSources[idx].enabled = e.target.checked;
+        renderAIMcpSourcesList();
+      }
+    });
+  });
+
+  container.querySelectorAll(".ai-mcp-src-del").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      const name = _aiMcpSources[idx]?.name || "nguồn này";
+      if (!confirm(`Bạn có chắc muốn xóa nguồn "${name}" khỏi danh sách?`)) return;
+      _aiMcpSources.splice(idx, 1);
+      renderAIMcpSourcesList();
+    });
+  });
+}
+
 async function loadAIMcpStatus() {
   try {
     const [st, cfgRes, skillsRes] = await Promise.all([
@@ -350,10 +536,8 @@ async function loadAIMcpStatus() {
       }
     }
 
-    const pathInput = $("#ai-mcp-repo-path");
-    if (pathInput && cfgRes.config?.local_path) {
-      pathInput.value = cfgRes.config.local_path;
-    }
+    _aiMcpSources = cfgRes.sources || [];
+    renderAIMcpSourcesList();
 
     const schedSel = $("#ai-mcp-schedule-select");
     if (schedSel && cfgRes.config) {
@@ -371,7 +555,8 @@ async function loadAIMcpStatus() {
       const syncTime = cfgRes.config?.last_sync || "chưa đồng bộ";
       const total = cfgRes.skills_count || (skillsRes.skills && skillsRes.skills.length) || 0;
       const sched = cfgRes.config?.auto_sync_enabled ? `Mỗi ${cfgRes.config.sync_interval_hours || 3}h` : "thủ công";
-      info.textContent = `Repo có ${total} skills (${(cfgRes.categories || []).join(", ")}) · Lịch: ${sched} · Lần sync cuối: ${syncTime}`;
+      const activeCount = (_aiMcpSources || []).filter(s => s.enabled).length;
+      info.textContent = `Tổng cộng ${total} skills (${activeCount}/${_aiMcpSources.length} nguồn bật) · Lịch: ${sched} · Lần sync cuối: ${syncTime}`;
     }
 
     const countEl = $("#ai-mcp-count");
@@ -380,10 +565,13 @@ async function loadAIMcpStatus() {
     const listEl = $("#ai-mcp-skills-list");
     if (listEl && Array.isArray(skillsRes.skills)) {
       listEl.innerHTML = skillsRes.skills.map(s =>
-        `<div style="padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
-          <span style="color:var(--accent);font-weight:600;">[${esc(s.category)}]</span>
-          <span class="mono">${esc(s.name)}</span>
-          <span style="color:#8b949e;font-size:10px;">(${Math.round(s.size_bytes / 1024 * 10) / 10}KB)</span>
+        `<div style="padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+          <div>
+            <span style="color:var(--accent);font-weight:600;">[${esc(s.source_id || 'skill')}:${esc(s.category)}]</span>
+            <span class="mono">${esc(s.name)}</span>
+            ${s.title && s.title !== s.name ? `<span style="color:var(--text);opacity:0.85;margin-left:4px;">— ${esc(s.title)}</span>` : ''}
+          </div>
+          <span style="color:#8b949e;font-size:10px;flex-shrink:0;">${Math.round(s.size_bytes / 1024 * 10) / 10}KB</span>
         </div>`
       ).join("") || "(chưa có file skill)";
     }

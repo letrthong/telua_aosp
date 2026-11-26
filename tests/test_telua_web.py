@@ -607,6 +607,32 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertEqual(res_sync.status_code, 200)
         self.assertTrue(res_sync.get_json()["ok"])
 
+        # Test write_file & edit_file tools
+        from ai.telua_web_ai import _tool_write_file, _tool_edit_file, _tool_read_file, _repo_root
+        test_file = "ai_agent/test_autocode.txt"
+        res_w = _tool_write_file({"path": test_file, "content": "public class TestAutoCode { int val = 1; }"})
+        self.assertIn("[SUCCESS]", res_w)
+        res_r = _tool_read_file({"path": test_file})
+        self.assertIn("TestAutoCode", res_r)
+        res_e = _tool_edit_file({"path": test_file, "target": "val = 1", "replacement": "val = 42"})
+        self.assertIn("[SUCCESS]", res_e)
+        res_r2 = _tool_read_file({"path": test_file})
+        self.assertIn("val = 42", res_r2)
+        p_test = _repo_root() / test_file
+        if p_test.is_file():
+            p_test.unlink()
+
+        # Test guardrails endpoint
+        res_g = self.client.get("/api/ai/guardrails")
+        self.assertEqual(res_g.status_code, 200)
+        self.assertTrue(res_g.get_json()["ok"])
+        self.assertIn("guardrails", res_g.get_json())
+
+        res_g_post = self.client.post("/api/ai/guardrails", json={"max_iterations": 6, "max_lines_per_read": 120})
+        self.assertEqual(res_g_post.status_code, 200)
+        self.assertEqual(res_g_post.get_json()["guardrails"]["max_iterations"], 6)
+        self.assertEqual(res_g_post.get_json()["guardrails"]["max_lines_per_read"], 120)
+
 
 if __name__ == "__main__":
     unittest.main()

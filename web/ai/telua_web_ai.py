@@ -69,8 +69,61 @@ AI_PROVIDERS_TEMPLATE_CANDIDATES = [
 
 DEFAULT_PROVIDER = "anthropic"
 DEFAULT_MODEL = "claude-sonnet-4-5"
-DEFAULT_MAX_ITERATIONS = 8
-DEFAULT_MAX_TOOL_OUTPUT = 8000  # chars per tool result fed back to the LLM
+DEFAULT_MAX_ITERATIONS = 5
+DEFAULT_MAX_TOOL_OUTPUT = 6000  # chars per tool result fed back to the LLM
+
+DEFAULT_GUARDRAILS = {
+    "max_iterations": 5,
+    "max_lines_per_read": 150,
+    "max_tool_output_chars": 6000,
+    "loop_breaker_enabled": True,
+}
+
+AI_GUARDRAILS_CANDIDATES = [
+    "config/overlay/ai_guardrails.json",
+    "config/ai_guardrails.json",
+]
+
+
+def _ai_guardrails_path() -> Path:
+    root = _repo_root()
+    for cand in AI_GUARDRAILS_CANDIDATES:
+        p = root / cand
+        if p.is_file():
+            return p
+    return root / "config" / "overlay" / "ai_guardrails.json"
+
+
+def get_ai_guardrails() -> dict:
+    """Read token guardrails & loop prevention configuration."""
+    cfg = dict(DEFAULT_GUARDRAILS)
+    p = _ai_guardrails_path()
+    if p.is_file():
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                cfg.update(data)
+        except Exception:
+            pass
+    return cfg
+
+
+def save_ai_guardrails(data: dict) -> dict:
+    """Save token guardrails to overlay file."""
+    cfg = get_ai_guardrails()
+    for k in DEFAULT_GUARDRAILS:
+        if k in data:
+            if isinstance(DEFAULT_GUARDRAILS[k], bool):
+                cfg[k] = bool(data[k])
+            elif isinstance(DEFAULT_GUARDRAILS[k], int):
+                try:
+                    cfg[k] = int(data[k])
+                except (ValueError, TypeError):
+                    pass
+    p = _repo_root() / "config" / "overlay" / "ai_guardrails.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    return cfg
 
 # Commands the agent may NOT run (destructive / dangerous guard rail).
 BLOCKED_CMD_PATTERNS = [
@@ -90,12 +143,14 @@ SYSTEM_PROMPT = """You are Telua AI, an expert AOSP / Android Automotive build &
 integrated into the 'tel' (telua) toolkit.
 
 You help developers with: building AOSP modules, deploying APKs to boards, reading
-logcat, dumpsys diagnostics, git/repo operations and analyzing source code.
+logcat, dumpsys diagnostics, git/repo operations, analyzing source code, and autonomous coding.
 
 Rules:
 - Prefer the provided tools over guessing. Use run_tel for tel/telua/shell commands.
 - Use search_knowledge to query local persistent ChromaDB documentation and training data.
 - Use save_training_knowledge to persist verified solutions or architectural notes for long-term recall.
+- You can create, write, and edit code files directly using write_file and edit_file.
+- When a target file is specified, read it first with read_file (if it exists), consult relevant MCP skills (get_telua_skill or search_knowledge), write or edit the code directly with write_file or edit_file, and run verification commands via run_tel (e.g. 'tel build' or compilation checks).
 - Keep commands short and read-only first (status, logs) before mutating anything.
 - Never run destructive commands (flash, rm -rf /, force push) — they are blocked.
 - When you have enough information, answer concisely with a clear conclusion and
@@ -243,13 +298,11 @@ def _ai_settings():
     model = cfg.get("model") or os.environ.get("TELUA_AI_MODEL") or (
         DEFAULT_MODEL if provider == "anthropic" else "gpt-4o-mini")
     base_url = cfg.get("base_url") or os.environ.get("TELUA_AI_BASE_URL") or ""
-    try:
-        max_iter = int(cfg.get("max_iterations", DEFAULT_MAX_ITERATIONS))
-    except ValueError:
-        max_iter = DEFAULT_MAX_ITERATIONS
+    guardrails = get_ai_guardrails()
+    max_iter = max(1, min(int(guardrails.get("max_iterations", DEFAULT_MAX_ITERATIONS)), 20))
     active_name = cfg.get("active_provider", "")
     active_model = cfg.get("active_model", "")
-    return provider, model, base_url, max(1, min(max_iter, 20)), active_name, active_model
+    return provider, model, base_url, max_iter, active_name, active_model
 
 
 # ------------------------------------------------------------------------------
@@ -285,6 +338,7 @@ def _tool_run_tel(args: dict) -> str:
 
 
 def _tool_read_file(args: dict) -> str:
+    """Read file content with line numbers, constrained by guardrails to prevent token burning."""
     root = _repo_root()
     rel = str(args.get("path", "")).strip().lstrip("/")
     if not rel:
@@ -294,13 +348,110 @@ def _tool_read_file(args: dict) -> str:
         return "[ERROR] path outside toolkit root is not allowed"
     if not path.is_file():
         return f"[ERROR] file not found: {rel}"
+
+    guardrails = get_ai_guardrails()
+    max_lines = max(10, min(int(guardrails.get("max_lines_per_read", 150)), 500))
+    max_chars = max(1000, min(int(guardrails.get("max_tool_output_chars", 6000)), 20000))
+
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
     except Exception as exc:
         return f"[ERROR] {exc}"
-    if len(text) > DEFAULT_MAX_TOOL_OUTPUT:
-        return text[:DEFAULT_MAX_TOOL_OUTPUT] + f"\n...[truncated, {len(text)} chars total]"
-    return text or "(empty file)"
+
+    if not text.strip():
+        return f"(empty file: {rel})"
+
+    lines = text.splitlines()
+    total_lines = len(lines)
+
+    try:
+        start_line = max(1, int(args.get("start_line", 1)))
+    except (ValueError, TypeError):
+        start_line = 1
+
+    try:
+        if "end_line" in args and args["end_line"] is not None:
+            end_line = max(start_line, int(args["end_line"]))
+        else:
+            end_line = start_line + max_lines - 1
+    except (ValueError, TypeError):
+        end_line = start_line + max_lines - 1
+
+    if (end_line - start_line + 1) > max_lines:
+        end_line = start_line + max_lines - 1
+
+    actual_end = min(total_lines, end_line)
+    selected_lines = lines[start_line - 1 : actual_end]
+
+    numbered_lines = []
+    char_count = 0
+    hit_char_limit = False
+
+    for idx, line in enumerate(selected_lines, start=start_line):
+        formatted = f"{idx:4d} | {line}"
+        if char_count + len(formatted) > max_chars:
+            hit_char_limit = True
+            break
+        numbered_lines.append(formatted)
+        char_count += len(formatted) + 1
+
+    header = f"=== FILE: {rel} (Lines {start_line}-{actual_end} of {total_lines} total lines) ==="
+    body = "\n".join(numbered_lines)
+
+    footer = ""
+    if actual_end < total_lines:
+        rem = total_lines - actual_end
+        footer = f"\n... [{rem} lines remaining. Use read_file with start_line={actual_end+1} to read next chunk] ..."
+    elif hit_char_limit:
+        footer = f"\n... [Output truncated at {max_chars} chars guardrail limit] ..."
+
+    return f"{header}\n{body}{footer}"
+
+
+def _tool_write_file(args: dict) -> str:
+    """Create a new file or overwrite an existing file in the workspace."""
+    root = _repo_root()
+    rel = str(args.get("path", "")).strip().lstrip("/")
+    if not rel:
+        return "[ERROR] missing 'path'"
+    content = args.get("content", "")
+    if content is None:
+        return "[ERROR] missing 'content'"
+    path = (root / rel).resolve()
+    if not str(path).startswith(str(root.resolve())):
+        return "[ERROR] path outside toolkit root is not allowed"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        return f"[SUCCESS] wrote {len(content)} characters to {rel}"
+    except Exception as exc:
+        return f"[ERROR] failed to write file: {exc}"
+
+
+def _tool_edit_file(args: dict) -> str:
+    """Replace an exact target snippet in an existing file with replacement code."""
+    root = _repo_root()
+    rel = str(args.get("path", "")).strip().lstrip("/")
+    if not rel:
+        return "[ERROR] missing 'path'"
+    target = args.get("target", "")
+    replacement = args.get("replacement", "")
+    if not target:
+        return "[ERROR] missing 'target' snippet to replace"
+    path = (root / rel).resolve()
+    if not str(path).startswith(str(root.resolve())):
+        return "[ERROR] path outside toolkit root is not allowed"
+    if not path.is_file():
+        return f"[ERROR] file not found: {rel}"
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if target not in text:
+            return f"[ERROR] target snippet not found in {rel}"
+        new_text = text.replace(target, replacement, 1)
+        path.write_text(new_text, encoding="utf-8")
+        return f"[SUCCESS] updated {rel} (replaced target snippet)"
+    except Exception as exc:
+        return f"[ERROR] failed to edit file: {exc}"
 
 
 def _tool_list_files(args: dict) -> str:
@@ -374,6 +525,8 @@ def _tool_save_training_knowledge(args: dict) -> str:
 TOOL_EXECUTORS = {
     "run_tel": _tool_run_tel,
     "read_file": _tool_read_file,
+    "write_file": _tool_write_file,
+    "edit_file": _tool_edit_file,
     "list_files": _tool_list_files,
     "search_knowledge": _tool_search_knowledge,
     "save_training_knowledge": _tool_save_training_knowledge,
@@ -382,7 +535,7 @@ TOOL_EXECUTORS = {
 }
 
 def _tool_get_telua_skill(args: dict) -> str:
-    """Retrieve raw content of a specific Java/Android skill or template."""
+    """Retrieve raw content of a specific Java/Android or Claude Code Java skill/pattern."""
     name = str(args.get("name") or args.get("rel_path") or "").strip()
     if not name:
         return "[ERROR] missing skill 'name' or 'rel_path'"
@@ -390,17 +543,19 @@ def _tool_get_telua_skill(args: dict) -> str:
     res = get_skill_content(name)
     if not res:
         return f"[ERROR] skill not found: {name}"
-    return f"=== SKILL: {res['name']} ({res['category']}) ===\n" + res["content"]
+    src_label = res.get("source_name") or res.get("source_id") or "skill"
+    return f"=== SKILL: {res['name']} (Source: {src_label}, Category: {res['category']}) ===\n" + res["content"]
 
 def _tool_list_telua_skills(args: dict) -> str:
-    """List available skills in telua_skill/Java_Android."""
+    """List available skills in telua_skill/Java_Android and claude-code-java."""
     cat = str(args.get("category", "")).strip()
+    src = str(args.get("source", "")).strip()
     from .telua_mcp_skill import scan_skills
-    skills = scan_skills()
+    skills = scan_skills(source_id=src if src else None)
     if cat:
         skills = [s for s in skills if s["category"].lower() == cat.lower()]
-    lines = [f"- [{s['category']}] {s['name']}: {s['summary']}" for s in skills[:35]]
-    return f"Found {len(skills)} skills in telua_skill/Java_Android:\n" + "\n".join(lines)
+    lines = [f"- [{s.get('source_id')}:{s['category']}] {s['name']} - {s.get('title')}: {s['summary']}" for s in skills[:45]]
+    return f"Found {len(skills)} skills across configured repositories:\n" + "\n".join(lines)
 
 # OpenAI-style tool schemas (also converted for Anthropic).
 TOOL_SCHEMAS = [
@@ -452,10 +607,10 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "get_telua_skill",
-            "description": "Fetch a specific Java, Android, AAOS VHAL rule, architecture template, or script from telua_skill/Java_Android by name or relative path.",
+            "description": "Fetch a specific Java, Android Automotive (AAOS), or Claude Code Java skill/pattern (e.g. 'concurrency-review', 'spring-boot-patterns', 'jpa-patterns', 'BinderServiceTemplate.java', 'thread_safety_concurrency_rule.md') by name or relative path.",
             "parameters": {
                 "type": "object",
-                "properties": {"name": {"type": "string", "description": "Skill name or file name (e.g. 'BinderServiceTemplate.java', 'thread_safety_concurrency_rule.md')"}},
+                "properties": {"name": {"type": "string", "description": "Skill name, folder, or file name (e.g. 'concurrency-review', 'spring-boot-patterns', 'BinderServiceTemplate.java')"}},
                 "required": ["name"],
             },
         },
@@ -464,10 +619,13 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "list_telua_skills",
-            "description": "List available engineering skills, templates, rules, and scripts in telua_skill/Java_Android.",
+            "description": "List available engineering skills, templates, rules, and patterns across telua_skill (Java_Android) and claude-code-java.",
             "parameters": {
                 "type": "object",
-                "properties": {"category": {"type": "string", "description": "Optional category filter: rules, examples, design, docs, scripts, tasks"}},
+                "properties": {
+                    "source": {"type": "string", "description": "Optional source filter: 'telua_skill' or 'claude_code_java'"},
+                    "category": {"type": "string", "description": "Optional category filter: rules, examples, design, concurrency-review, spring-boot-patterns, security-audit, etc."},
+                },
             },
         },
     },
@@ -475,11 +633,46 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Read a text file inside the toolkit workspace (config, source, logs).",
+            "description": "Read a text file inside the toolkit workspace. Supports reading specific line ranges (start_line to end_line, max 150 lines per chunk) to protect token budget and shows numbered lines.",
             "parameters": {
                 "type": "object",
-                "properties": {"path": {"type": "string", "description": "Relative path, e.g. config/apk.config"}},
+                "properties": {
+                    "path": {"type": "string", "description": "Relative path, e.g. src/MyService.java"},
+                    "start_line": {"type": "integer", "description": "1-based line number to start reading from (default 1)"},
+                    "end_line": {"type": "integer", "description": "1-based line number to end reading (default start_line + 150)"}
+                },
                 "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "Write or create a code, configuration, or documentation file in the workspace.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Relative file path inside the workspace (e.g. 'src/MyService.java')"},
+                    "content": {"type": "string", "description": "The full text content to write into the file"}
+                },
+                "required": ["path", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "edit_file",
+            "description": "Edit an existing file by replacing an exact code target snippet with new replacement code.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Relative file path inside the workspace"},
+                    "target": {"type": "string", "description": "Exact text or code snippet in the file to be replaced"},
+                    "replacement": {"type": "string", "description": "New replacement text or code snippet"}
+                },
+                "required": ["path", "target", "replacement"],
             },
         },
     },
@@ -898,6 +1091,10 @@ def api_ai_chat():
         return jsonify({"ok": False, "error": "Missing 'message'."}), 400
 
     provider, model, base_url, max_iter, _active_name, _active_model = _ai_settings()
+    guardrails = get_ai_guardrails()
+    loop_breaker = bool(guardrails.get("loop_breaker_enabled", True))
+    max_output = max(1000, min(int(guardrails.get("max_tool_output_chars", 6000)), 20000))
+    seen_calls = {}
 
     messages = []
     for h in history[-10:]:
@@ -928,7 +1125,33 @@ def api_ai_chat():
                     args = json.loads(tc["arguments"] or "{}")
                 except json.JSONDecodeError:
                     args = {}
-                result = TOOL_EXECUTORS.get(tc["name"], lambda a: "[ERROR] unknown tool")(args)
+
+                tool_name = tc["name"]
+                call_key = f"{tool_name}:{json.dumps(args, sort_keys=True)}"
+                call_count = seen_calls.get(call_key, 0) + 1
+                seen_calls[call_key] = call_count
+
+                # Loop Breaker Guardrail: intercept identical duplicate calls
+                if loop_breaker and call_count >= 2:
+                    result = (
+                        f"[LOOP BREAKER SHIELD: You have executed '{tool_name}' with the exact same arguments "
+                        f"{call_count} times in this turn. To protect token limits and prevent infinite loops, "
+                        f"do not repeat this tool call. Please synthesize your final response now.]"
+                    )
+                else:
+                    fn = TOOL_EXECUTORS.get(tool_name)
+                    if fn:
+                        try:
+                            result = fn(args)
+                        except Exception as exc:
+                            result = f"[ERROR executing {tool_name}] {exc}"
+                    else:
+                        result = f"[ERROR] unknown tool: {tool_name}"
+
+                # Enforce output length limit
+                if len(result) > max_output:
+                    result = result[:max_output] + f"\n... [Truncated at {max_output} chars to protect token budget]"
+
                 trace.append({
                     "tool": tc["name"],
                     "args": args,
@@ -942,8 +1165,8 @@ def api_ai_chat():
 
         return jsonify({
             "ok": True,
-            "answer": "⏹ Dừng sau " + str(max_iter) + " bước agent (max iterations). "
-                      "Kết quả trung gian xem ở phần trace.",
+            "answer": f"⏹ Đã dừng sau {max_iter} bước agent (Guardrail Limit: Max {max_iter} iterations). "
+                      "Agent đã thực hiện các bước ở trên để tránh đốt token.",
             "trace": trace,
             "model": model,
             "provider": provider,
@@ -952,6 +1175,20 @@ def api_ai_chat():
         return jsonify({"ok": False, "error": str(exc), "trace": trace}), 400
     except Exception as exc:  # pragma: no cover
         return jsonify({"ok": False, "error": f"Agent error: {exc}", "trace": trace}), 500
+
+
+@ai_bp.get("/api/ai/guardrails")
+def api_ai_guardrails_get():
+    """Get current token guardrails configuration."""
+    return jsonify({"ok": True, "guardrails": get_ai_guardrails()})
+
+
+@ai_bp.post("/api/ai/guardrails")
+def api_ai_guardrails_post():
+    """Update token guardrails configuration."""
+    data = request.get_json(silent=True) or {}
+    updated = save_ai_guardrails(data)
+    return jsonify({"ok": True, "guardrails": updated})
 
 
 # ------------------------------------------------------------------------------
@@ -993,15 +1230,32 @@ def api_ai_chroma_status():
 @ai_bp.get("/api/ai/mcp/config")
 def api_ai_mcp_config_get():
     """Return MCP skill configuration and local status."""
-    from .telua_mcp_skill import get_mcp_skill_config, scan_skills
+    from .telua_mcp_skill import get_mcp_skill_config, scan_skills, get_all_configured_sources
     cfg = get_mcp_skill_config()
     skills = scan_skills()
     categories = sorted(set(s["category"] for s in skills))
+    sources = get_all_configured_sources()
+    by_src = {}
+    for s in skills:
+        by_src[s["source_id"]] = by_src.get(s["source_id"], 0) + 1
     return jsonify({
         "ok": True,
         "config": cfg,
         "skills_count": len(skills),
         "categories": categories,
+        "sources": [
+            {
+                "id": s["id"],
+                "name": s["name"],
+                "repo_url": s["repo_url"],
+                "local_path": s["local_path"],
+                "enabled": s.get("enabled", True),
+                "exists": s.get("exists", False),
+                "resolved_path": s.get("resolved_path", ""),
+                "count": by_src.get(s["id"], 0),
+            }
+            for s in sources
+        ],
     })
 
 

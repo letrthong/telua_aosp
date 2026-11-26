@@ -1051,6 +1051,14 @@
           <button class="btn" id="btn-ai-clear" title="Xóa hội thoại">🧹 Clear</button>
         </div>
       </div>
+      <!-- Target File & Auto-Coding Bar -->
+      <div class="ai-target-bar" style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:rgba(255,255,255,0.025);border-bottom:1px solid var(--border);flex-shrink:0;">
+        <span class="mono" style="font-size:11px;font-weight:700;color:var(--accent);white-space:nowrap;">📁 Target Path (File / Folder):</span>
+        <input type="text" id="ai-target-file" class="term-input mono" style="flex:1;font-size:11px;padding:4px 8px;min-width:180px;"
+          placeholder="Đường dẫn file hoặc folder (vd: src/com/android/car/ hoặc src/CarService.java)">
+        <button class="btn" id="btn-ai-target-read" title="Đọc phân tích file hoặc quét danh sách file trong thư mục" style="font-size:11px;padding:4px 9px;white-space:nowrap;">📖 Read / Scan</button>
+        <button class="btn primary" id="btn-ai-target-code" title="Yêu cầu AI tự động lập trình nhiều file trong thư mục hoặc file này" style="font-size:11px;padding:4px 10px;white-space:nowrap;">⚡ Auto-Code</button>
+      </div>
       <div id="ai-chat-log" class="ai-chat-log">
         <div class="ai-msg ai-msg-assistant">Xin chào! Tôi là <b>Telua AI Agent</b> — tôi có thể tự chạy
           <code>tel</code>, <code>adb</code>, đọc file config/source để giúp bạn build &amp; debug AOSP.
@@ -1303,17 +1311,37 @@
 
       <div class="settings-section" style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <h4 style="margin:0;">📦 MCP Skills &amp; Knowledge (<a href="https://github.com/letrthong/telua_skill/tree/main/Java_Android" target="_blank" style="color:var(--accent);text-decoration:none;">telua_skill / Java_Android</a>)</h4>
+          <h4 style="margin:0;">📦 Quản lý Nguồn Kỹ năng (MCP Skills &amp; Knowledge Sources)</h4>
           <span id="ai-mcp-status-pill" class="chip" style="font-size:11px;">ChromaDB: —</span>
         </div>
-        <p class="meta">Lấy kỹ năng, mẫu kiến trúc AAOS VHAL &amp; nguyên tắc lập trình Java/Android từ repo
-          <code>telua_skill/Java_Android</code> và lập chỉ mục vào ChromaDB (<code>ai_agent/data</code>) để AI tự động tra cứu.</p>
-        
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
-          <input type="text" id="ai-mcp-repo-path" class="term-input mono" style="flex:1;"
-            placeholder="Local path or Git URL" value="repos/telua_skill/Java_Android">
-          <button class="btn" id="btn-ai-mcp-save-path" title="Lưu đường dẫn repository">💾 Save</button>
-          <button class="btn primary" id="btn-ai-mcp-sync" title="Đồng bộ toàn bộ skill Java/Android vào ChromaDB">🔄 Sync to ChromaDB</button>
+        <p class="meta" style="margin-bottom:8px;">
+          Thêm bất kỳ repository Git hoặc thư mục kỹ năng nào trên máy tính (đường dẫn tương đối như <code>repos/telua_skill/Java_Android</code> hoặc tuyệt đối như <code>D:\code\my_skills</code>). Toàn bộ file quy chuẩn, code mẫu, kiến trúc sẽ được lập chỉ mục vào ChromaDB để AI tra cứu.
+        </p>
+
+        <!-- Dynamic Sources List -->
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <label class="meta" style="font-weight:600;color:var(--text);font-size:11px;">📂 Danh sách các nguồn kỹ năng đang cấu hình:</label>
+            <span class="meta" style="font-size:10px;opacity:0.8;">Hỗ trợ đường dẫn tương đối hoặc tuyệt đối</span>
+          </div>
+          <div id="ai-mcp-sources-list" style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;background:rgba(0,0,0,0.15);padding:6px;border-radius:6px;border:1px solid var(--border);"></div>
+        </div>
+
+        <!-- Add Source Form -->
+        <div style="background:rgba(255,255,255,0.02);border:1px dashed var(--border);border-radius:6px;padding:8px;margin-bottom:10px;">
+          <div style="font-size:11px;font-weight:600;margin-bottom:6px;color:var(--accent);">➕ Thêm nguồn repository / thư mục mới:</div>
+          <div style="display:grid;grid-template-columns:1fr 1.6fr 1fr auto;gap:6px;align-items:center;">
+            <input type="text" id="ai-mcp-new-name" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Tên nguồn (vd: My Java Rules)">
+            <input type="text" id="ai-mcp-new-path" class="term-input mono" style="font-size:11px;padding:4px 6px;" placeholder="Đường dẫn (vd: repos/my_skill hoặc D:\code\...)">
+            <input type="text" id="ai-mcp-new-url" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Git URL (tùy chọn)">
+            <button class="btn" id="btn-ai-mcp-add-source" style="font-size:11px;padding:4px 10px;white-space:nowrap;">➕ Thêm</button>
+          </div>
+        </div>
+
+        <!-- Controls: Save & Sync -->
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+          <button class="btn primary" id="btn-ai-mcp-save-sources" title="Lưu danh sách nguồn vào cấu hình">💾 Lưu danh sách nguồn</button>
+          <button class="btn" id="btn-ai-mcp-sync" title="Đồng bộ toàn bộ các nguồn đang bật vào ChromaDB">🔄 Sync to ChromaDB</button>
         </div>
 
         <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;flex-wrap:wrap;background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:8px;border:1px solid var(--border);">
@@ -1339,6 +1367,54 @@
           <summary class="meta" style="cursor:pointer;color:var(--accent);font-weight:600;">📑 Danh sách kỹ năng (<span id="ai-mcp-count">0</span> files)</summary>
           <div id="ai-mcp-skills-list" style="max-height:160px;overflow-y:auto;margin-top:6px;font-size:11px;font-family:var(--mono);padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px;"></div>
         </details>
+      </div>
+
+      <!-- ============ Token Guardrails & Loop Protection Section ============ -->
+      <div class="settings-section" style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <h4 style="margin:0;">🛡 Chống "Đốt" Token &amp; Chặn Vòng Lặp Vô Tận (Guardrails)</h4>
+          <span class="chip ok" style="font-size:11px;">Token Shield: Active</span>
+        </div>
+        <p class="meta" style="margin-bottom:8px;">
+          Giới hạn số bước suy nghĩ của Agent và độ dài đọc file để tránh cạn kiệt token khi xử lý file lớn (ngàn dòng) hoặc khi Agent bị kẹt vòng lặp.
+        </p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div>
+            <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);font-weight:600;">🔄 Giới hạn bước gọi Tool (Max Turns):</label>
+            <select id="ai-guard-max-iter" class="theme-select" style="width:100%;font-size:12px;">
+              <option value="3">3 bước (Siêu tiết kiệm)</option>
+              <option value="5" selected>5 bước (Khuyên dùng - Cân bằng)</option>
+              <option value="8">8 bước (Phức tạp)</option>
+              <option value="12">12 bước (Chuyên sâu)</option>
+            </select>
+          </div>
+          <div>
+            <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);font-weight:600;">📄 Số dòng đọc tối đa / lần (Lines):</label>
+            <select id="ai-guard-max-lines" class="theme-select" style="width:100%;font-size:12px;">
+              <option value="80">80 dòng / lần</option>
+              <option value="150" selected>150 dòng / lần (Khuyên dùng)</option>
+              <option value="250">250 dòng / lần</option>
+              <option value="500">500 dòng / lần</option>
+            </select>
+          </div>
+          <div>
+            <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);font-weight:600;">✂ Giới hạn Output Tool (Chars):</label>
+            <select id="ai-guard-max-chars" class="theme-select" style="width:100%;font-size:12px;">
+              <option value="3000">3.000 ký tự (~750 token)</option>
+              <option value="6000" selected>6.000 ký tự (~1.500 token)</option>
+              <option value="10000">10.000 ký tự (~2.500 token)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.02);padding:8px 10px;border-radius:6px;border:1px solid var(--border);">
+          <label style="font-size:11px;display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="ai-guard-loop-breaker" checked>
+            <span>🛑 Bật <b>Loop Breaker</b> (Tự động ngắt nếu Agent gọi lại cùng 1 tool với cùng tham số)</span>
+          </label>
+          <button class="btn primary" id="btn-ai-save-guardrails" style="font-size:11px;padding:4px 12px;">💾 Lưu Guardrails</button>
+        </div>
       </div>
 
       <div class="modal-actions">
