@@ -1330,11 +1330,18 @@
 
         <!-- Add Source Form -->
         <div style="background:rgba(255,255,255,0.02);border:1px dashed var(--border);border-radius:6px;padding:8px;margin-bottom:10px;">
-          <div style="font-size:11px;font-weight:600;margin-bottom:6px;color:var(--accent);">➕ Thêm nguồn repository / thư mục mới:</div>
-          <div style="display:grid;grid-template-columns:1fr 1.6fr 1fr auto;gap:6px;align-items:center;">
-            <input type="text" id="ai-mcp-new-name" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Tên nguồn (vd: My Java Rules)">
-            <input type="text" id="ai-mcp-new-path" class="term-input mono" style="font-size:11px;padding:4px 6px;" placeholder="Đường dẫn (vd: repos/my_skill hoặc D:\code\...)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:11px;font-weight:600;color:var(--accent);">➕ Thêm nguồn repository / thư mục mới:</span>
+            <span class="meta" style="font-size:10px;">🔒 Private sẽ lưu trong <code>config/overlay</code> và không bao giờ push lên Git</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1.5fr 1fr 130px auto;gap:6px;align-items:center;">
+            <input type="text" id="ai-mcp-new-name" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Tên nguồn (vd: My Private Rules)">
+            <input type="text" id="ai-mcp-new-path" class="term-input mono" style="font-size:11px;padding:4px 6px;" placeholder="Đường dẫn (vd: repos/private_skill hoặc D:\code\...)">
             <input type="text" id="ai-mcp-new-url" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Git URL (tùy chọn)">
+            <select id="ai-mcp-new-visibility" class="theme-select" style="font-size:11px;padding:4px 6px;" title="Chế độ bảo vệ Git">
+              <option value="private" selected>🔒 Private (No Git)</option>
+              <option value="public">🌐 Public (Git)</option>
+            </select>
             <button class="btn" id="btn-ai-mcp-add-source" style="font-size:11px;padding:4px 10px;white-space:nowrap;">➕ Thêm</button>
           </div>
         </div>

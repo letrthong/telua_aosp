@@ -1543,6 +1543,8 @@ def api_ai_mcp_config_get():
                 "repo_url": s["repo_url"],
                 "local_path": s["local_path"],
                 "enabled": s.get("enabled", True),
+                "visibility": s.get("visibility", "public"),
+                "is_private": bool(s.get("visibility") == "private" or s.get("is_private")),
                 "exists": s.get("exists", False),
                 "resolved_path": s.get("resolved_path", ""),
                 "count": by_src.get(s["id"], 0),

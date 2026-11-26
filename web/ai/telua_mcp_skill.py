@@ -45,6 +45,7 @@ DEFAULT_SOURCES = [
         "repo_url": "https://github.com/letrthong/telua_skill/tree/main/Java_Android",
         "local_path": "repos/telua_skill/Java_Android",
         "enabled": True,
+        "visibility": "public",
     },
     {
         "id": "claude_code_java",
@@ -52,6 +53,7 @@ DEFAULT_SOURCES = [
         "repo_url": "https://github.com/decebals/claude-code-java.git",
         "local_path": "repos/claude-code-java",
         "enabled": True,
+        "visibility": "public",
     },
 ]
 
@@ -60,6 +62,41 @@ CONFIG_FILE_CANDIDATES = [
     "config/mcp_skills_config.json",
 ]
 STATE_FILE_PATH = "config/overlay/mcp_skills_state.json"
+PRIVATE_SOURCES_FILE_PATH = "config/overlay/mcp_skills_private.json"
+
+
+def get_private_sources() -> List[dict]:
+    """Read private skill sources from git-ignored overlay file."""
+    p = _repo_root() / PRIVATE_SOURCES_FILE_PATH
+    if p.is_file():
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and isinstance(data.get("sources"), list):
+                res = []
+                for s in data["sources"]:
+                    if isinstance(s, dict):
+                        item = dict(s)
+                        item["visibility"] = "private"
+                        item["is_private"] = True
+                        res.append(item)
+                return res
+        except Exception:
+            pass
+    return []
+
+
+def save_private_sources(sources: List[dict]) -> None:
+    """Save private skill sources to git-ignored overlay file."""
+    p = _repo_root() / PRIVATE_SOURCES_FILE_PATH
+    p.parent.mkdir(parents=True, exist_ok=True)
+    cleaned = []
+    for s in sources:
+        if isinstance(s, dict):
+            item = dict(s)
+            item["visibility"] = "private"
+            item["is_private"] = True
+            cleaned.append(item)
+    p.write_text(json.dumps({"sources": cleaned}, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def _config_path() -> Path:
@@ -138,7 +175,8 @@ def save_mcp_skill_config(cfg: dict) -> dict:
 
     # Clean and validate sources if passed
     if "sources" in cleaned and isinstance(cleaned["sources"], list):
-        cleaned_sources = []
+        public_sources = []
+        private_sources = []
         for i, s in enumerate(cleaned["sources"]):
             if not isinstance(s, dict):
                 continue
@@ -149,17 +187,26 @@ def save_mcp_skill_config(cfg: dict) -> dict:
             s_id = str(s.get("id", "")).strip()
             if not s_id:
                 s_id = local_path.replace("\\", "/").rstrip("/").split("/")[-1].lower().replace("-", "_").replace(".", "_")
-            cleaned_sources.append({
+            is_priv = bool(s.get("visibility") == "private" or s.get("is_private"))
+            entry = {
                 "id": s_id,
                 "name": name,
                 "local_path": local_path,
                 "repo_url": str(s.get("repo_url", "")).strip(),
                 "enabled": bool(s.get("enabled", True)),
-            })
-        cleaned["sources"] = cleaned_sources
-        if cleaned_sources and not cleaned.get("local_path"):
-            cleaned["local_path"] = cleaned_sources[0]["local_path"]
-            cleaned["repo_url"] = cleaned_sources[0]["repo_url"]
+                "visibility": "private" if is_priv else "public",
+                "is_private": is_priv,
+            }
+            if is_priv:
+                private_sources.append(entry)
+            else:
+                public_sources.append(entry)
+
+        save_private_sources(private_sources)
+        cleaned["sources"] = public_sources
+        if public_sources and not cleaned.get("local_path"):
+            cleaned["local_path"] = public_sources[0]["local_path"]
+            cleaned["repo_url"] = public_sources[0]["repo_url"]
 
     # Read existing static config only
     path = _config_path()
@@ -199,9 +246,31 @@ def resolve_skill_dir() -> Path:
 
 
 def get_all_configured_sources() -> List[dict]:
-    """Return all configured sources with resolution status (exists, resolved_path, enabled)."""
+    """Return all configured sources (public config + private overlay) with resolution status."""
     cfg = get_mcp_skill_config()
-    sources = cfg.get("sources") or DEFAULT_SOURCES
+    public_sources = cfg.get("sources") or DEFAULT_SOURCES
+    private_sources = get_private_sources()
+
+    # Combine public and private sources
+    seen_ids = set()
+    combined = []
+    # Private sources come first or override matching IDs
+    for s in private_sources:
+        s_copy = dict(s)
+        s_copy["visibility"] = "private"
+        s_copy["is_private"] = True
+        combined.append(s_copy)
+        seen_ids.add(s_copy.get("id"))
+
+    for s in public_sources:
+        if s.get("id") not in seen_ids:
+            s_copy = dict(s)
+            s_copy["visibility"] = s_copy.get("visibility", "public")
+            s_copy["is_private"] = (s_copy.get("visibility") == "private")
+            combined.append(s_copy)
+            seen_ids.add(s_copy.get("id"))
+
+    sources = combined
     root = _repo_root()
     result = []
 
@@ -227,6 +296,8 @@ def get_all_configured_sources() -> List[dict]:
             "repo_url": s.get("repo_url", ""),
             "local_path": rel,
             "enabled": s.get("enabled", True),
+            "visibility": s.get("visibility", "public"),
+            "is_private": bool(s.get("visibility") == "private" or s.get("is_private")),
             "exists": exists,
             "resolved_path": str(p) if exists else "",
             "dir": p if exists else None,
@@ -334,6 +405,8 @@ def scan_skills(source_id: Optional[str] = None) -> List[dict]:
                     "size_bytes": stat.st_size,
                     "ext": ext,
                     "summary": summary,
+                    "visibility": src.get("visibility", "public"),
+                    "is_private": bool(src.get("visibility") == "private" or src.get("is_private")),
                 })
             except Exception:
                 continue
@@ -527,6 +600,7 @@ def sync_skills_to_chroma(collection_name: str = "telua_knowledge", incremental:
 
                 current_hashes[doc_id] = file_hash
 
+                is_priv = bool(s.get("visibility") == "private" or s.get("is_private"))
                 metadata = {
                     "source_id": s["source_id"],
                     "source_name": s["source_name"],
@@ -538,6 +612,8 @@ def sync_skills_to_chroma(collection_name: str = "telua_knowledge", incremental:
                     "source": f"{s['source_id']}/{s['rel_path']}",
                     "ext": s["ext"],
                     "type": "agent_skill",
+                    "visibility": "private" if is_priv else "public",
+                    "is_private": is_priv,
                     "indexed_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 }
                 # Formulate semantic embedding document with clear provenance

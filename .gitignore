@@ -81,7 +81,7 @@ repos/
 .repo/
 
 # AI Agent persistent ChromaDB vector data
-ai_agent/data/
+# ai_agent/data/
 ai_agent/*.db
 
 # PyBuilder

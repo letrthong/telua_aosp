@@ -139,7 +139,7 @@ async function initAI() {
         ? `Target Folder: '${targetPath}'. Yêu cầu lập trình các file trong thư mục: ${userPrompt}. Hãy dùng list_files để kiểm tra các file hiện có, sau đó lần lượt tạo mới hoặc cập nhật các file liên quan (dùng write_file/edit_file), và dùng run_tel để build/kiểm tra cú pháp sau khi code xong.`
         : `Target Folder: '${targetPath}'. Hãy quét thư mục này (dùng list_files), đối chiếu với MCP Skills (telua_skill & claude-code-java) và lập trình/hoàn thiện các file cần thiết trong thư mục bằng write_file hoặc edit_file.`;
     } else {
-      promptText = userPrompt 
+      promptText = userPrompt
         ? `Hãy lập trình/hoàn thiện code cho file ${targetPath} theo yêu cầu sau: ${userPrompt}. Hãy sử dụng công cụ write_file hoặc edit_file để cập nhật trực tiếp vào file, và gọi run_tel để build/kiểm tra cú pháp nếu cần.`
         : `Hãy kiểm tra file ${targetPath}, đối chiếu với các mẫu kiến trúc trong MCP Skills (telua_skill & claude-code-java) và sử dụng công cụ write_file hoặc edit_file để hoàn thiện code trực tiếp vào file này.`;
     }
@@ -189,7 +189,7 @@ async function initAI() {
         method: "POST",
         body: JSON.stringify({ sources: _aiMcpSources }),
       });
-      toast("Đã Lưu Danh Sách Nguồn 💾", "Các thư mục kỹ năng đã được lưu vào cấu hình.", "ok", 3000);
+      toast("Đã lưu Nguồn MCP 💾", "Nguồn Private lưu an toàn trong overlay (không dính Git), nguồn Public lưu vào config chung.", "ok", 4000);
       await loadAIMcpStatus();
     } catch (err) {
       toast("Lỗi Lưu Nguồn", err.message, "err");
@@ -200,6 +200,7 @@ async function initAI() {
     const nameInput = $("#ai-mcp-new-name");
     const pathInput = $("#ai-mcp-new-path");
     const urlInput = $("#ai-mcp-new-url");
+    const visInput = $("#ai-mcp-new-visibility");
     if (!pathInput || !pathInput.value.trim()) {
       toast("Thiếu đường dẫn", "Vui lòng nhập đường dẫn thư mục hoặc repository.", "err");
       return;
@@ -208,6 +209,8 @@ async function initAI() {
     const name = (nameInput?.value.trim()) || path.split("/").pop().split("\\").pop() || "Custom Source";
     const url = urlInput?.value.trim() || "";
     const cleanId = path.replace(/[\\/]/g, "_").toLowerCase().replace(/[^a-z0-9_]/g, "");
+    const visibility = visInput?.value || "private";
+    const isPrivate = (visibility === "private");
 
     _aiMcpSources.push({
       id: cleanId,
@@ -217,6 +220,8 @@ async function initAI() {
       enabled: true,
       exists: true,
       count: 0,
+      visibility: visibility,
+      is_private: isPrivate,
     });
 
     if (nameInput) nameInput.value = "";
@@ -224,7 +229,7 @@ async function initAI() {
     if (urlInput) urlInput.value = "";
 
     renderAIMcpSourcesList();
-    toast("Đã thêm nguồn ➕", "Đã thêm vào danh sách tạm. Nhấn '💾 Lưu danh sách nguồn' để áp dụng.", "ok", 3500);
+    toast(`Đã thêm nguồn ${isPrivate ? '🔒 Private' : '🌐 Public'} ➕`, "Nhấn '💾 Lưu danh sách nguồn' để áp dụng lưu an toàn.", "ok", 3500);
   });
 
   $("#btn-ai-mcp-save-schedule")?.addEventListener("click", async () => {
@@ -540,19 +545,26 @@ function renderAIMcpSourcesList() {
   }
   container.innerHTML = _aiMcpSources.map((s, idx) => {
     const isOk = s.exists !== false;
-    const statusChip = isOk 
+    const isPriv = (s.visibility === "private" || s.is_private === true);
+    const visBadge = `
+      <span class="chip ai-mcp-src-vis-toggle" data-idx="${idx}" style="font-size:10px;padding:1px 6px;cursor:pointer;border:1px solid ${isPriv ? 'rgba(255,165,0,0.3)' : 'rgba(56,139,253,0.3)'};background:${isPriv ? 'rgba(255,165,0,0.12)' : 'rgba(56,139,253,0.12)'};color:${isPriv ? '#f0883e' : '#58a6ff'};" title="Nhấn để đổi giữa Private (lưu overlay, không push Git) và Public (chia sẻ trên Git)">
+        ${isPriv ? '🔒 Private' : '🌐 Public'}
+      </span>
+    `;
+    const statusChip = isOk
       ? `<span class="chip ok" style="font-size:10px;padding:1px 6px;">${s.count || 0} skills</span>`
       : `<span class="chip err" style="font-size:10px;padding:1px 6px;" title="${esc(s.resolved_path || 'Không tìm thấy thư mục trên ổ cứng')}">⚠️ Thư mục không tồn tại</span>`;
-    const gitLink = s.repo_url 
-      ? `<a href="${esc(s.repo_url)}" target="_blank" style="color:var(--accent);font-size:11px;text-decoration:none;" title="Mở Git repo">↗ Git</a>` 
+    const gitLink = s.repo_url
+      ? `<a href="${esc(s.repo_url)}" target="_blank" style="color:var(--accent);font-size:11px;text-decoration:none;" title="Mở Git repo">↗ Git</a>`
       : '';
-    
+
     return `
       <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg);border:1px solid ${s.enabled ? 'var(--border)' : 'rgba(255,255,255,0.06)'};border-radius:6px;opacity:${s.enabled ? '1' : '0.6'};">
         <input type="checkbox" class="ai-mcp-src-toggle" data-idx="${idx}" ${s.enabled ? 'checked' : ''} title="${s.enabled ? 'Đang BẬT nguồn này' : 'Đang TẮT nguồn này'}">
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <strong style="font-size:11px;color:var(--text);">${esc(s.name || s.id)}</strong>
+            ${visBadge}
             ${statusChip}
             ${gitLink}
           </div>
@@ -564,6 +576,18 @@ function renderAIMcpSourcesList() {
       </div>
     `;
   }).join("");
+
+  container.querySelectorAll(".ai-mcp-src-vis-toggle").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      if (_aiMcpSources[idx]) {
+        const wasPriv = (_aiMcpSources[idx].visibility === "private" || _aiMcpSources[idx].is_private === true);
+        _aiMcpSources[idx].visibility = wasPriv ? "public" : "private";
+        _aiMcpSources[idx].is_private = !wasPriv;
+        renderAIMcpSourcesList();
+      }
+    });
+  });
 
   container.querySelectorAll(".ai-mcp-src-toggle").forEach(cb => {
     cb.addEventListener("change", (e) => {

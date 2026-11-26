@@ -655,6 +655,22 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertTrue(len(diff) > 0)
         self.assertNotIn("[ERROR]", diff)
 
+        # Test Public vs Private MCP skills source separation
+        from ai.telua_mcp_skill import save_mcp_skill_config, get_all_configured_sources, get_private_sources
+        save_mcp_skill_config({
+            "sources": [
+                {"id": "telua_skill", "name": "Telua Java/Android & AAOS", "local_path": "repos/telua_skill/Java_Android", "visibility": "public"},
+                {"id": "claude_code_java", "name": "Claude Code Java Agent Skills", "local_path": "repos/claude-code-java", "visibility": "public"},
+                {"id": "my_confidential_rules", "name": "Confidential OEM Rules", "local_path": "repos/telua_skill", "visibility": "private"}
+            ]
+        })
+        priv_list = get_private_sources()
+        self.assertTrue(any(s["id"] == "my_confidential_rules" for s in priv_list))
+        self.assertFalse(any(s["id"] == "telua_skill" for s in priv_list))
+        all_srcs = get_all_configured_sources()
+        self.assertTrue(any(s["id"] == "my_confidential_rules" and s["visibility"] == "private" for s in all_srcs))
+        self.assertTrue(any(s["id"] == "telua_skill" and s["visibility"] == "public" for s in all_srcs))
+
 
 if __name__ == "__main__":
     unittest.main()
