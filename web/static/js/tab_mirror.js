@@ -22,6 +22,11 @@ let _mirrorStartX = 0;
 let _mirrorStartY = 0;
 let _mirrorStartTime = 0;
 let _mirrorInitialized = false;
+let _mirrorKeepInBackground = true;
+try {
+  const savedBg = localStorage.getItem("telua_mirror_keep_bg");
+  if (savedBg !== null) _mirrorKeepInBackground = savedBg === "true";
+} catch { /* ignore */ }
 
 async function fetchMirrorInfo() {
   try {
@@ -154,6 +159,7 @@ function startMirrorStream() {
   if (_mirrorRunning) return;
   _mirrorRunning = true;
   updateMirrorControls();
+  if (typeof syncTopTabs === "function") syncTopTabs();
 
   const badge = $("#mirror-status-badge");
   if (badge) {
@@ -191,6 +197,7 @@ function stopMirrorStream() {
     _mirrorFpsInterval = null;
   }
   updateMirrorControls();
+  if (typeof syncTopTabs === "function") syncTopTabs();
 
   const badge = $("#mirror-status-badge");
   if (badge) {
@@ -267,9 +274,11 @@ function initMirror() {
   if (!canvas) return;
 
   if (_mirrorInitialized) {
-    fetchMirrorInfo().then(() => {
-      startMirrorStream();
-    });
+    if (!_mirrorRunning) {
+      fetchMirrorInfo().then(() => {
+        startMirrorStream();
+      });
+    }
     return;
   }
   _mirrorInitialized = true;
@@ -341,6 +350,17 @@ function initMirror() {
       startMirrorStream();
     }
   });
+
+  const chkBg = $("#mirror-chk-background");
+  if (chkBg) {
+    chkBg.checked = _mirrorKeepInBackground;
+    chkBg.addEventListener("change", (e) => {
+      _mirrorKeepInBackground = Boolean(e.target.checked);
+      try {
+        localStorage.setItem("telua_mirror_keep_bg", String(_mirrorKeepInBackground));
+      } catch { /* ignore */ }
+    });
+  }
 
   // Virtual Key Buttons
   $("#btn-mirror-key-back")?.addEventListener("click", () => sendMirrorKey(4));

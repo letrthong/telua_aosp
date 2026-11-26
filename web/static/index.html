@@ -38,7 +38,8 @@
           title="Interactive Web CLI Terminal — run tel / Linux / Git / ADB commands directly">💻 Terminal</button>
         <button class="tab" id="tab-logcat"
           title="Live Android Logcat stream with realtime search, tag &amp; level filter">📱 Logcat</button>
-        <button class="tab" id="tab-mirror" title="Live Android Screen Mirroring &amp; Remote Control">📱 Mirror</button>
+        <button class="tab" id="tab-mirror" title="Live Android Screen Mirroring &amp; Remote Control">📱
+          Mirror</button>
         <button class="tab" id="tab-docs" title="Sphinx Doc-as-Code — WYSIWYG Quill.js &amp; RST Converter">📚
           Docs</button>
         <button class="tab" id="tab-bi" title="Excel to JSON &amp; Power BI Interactive Dashboard">📊 BI Studio</button>
@@ -325,6 +326,12 @@
           <span id="mirror-device-pill" class="meta mono" style="font-size:11px;">No device</span>
         </div>
         <div class="editor-actions">
+          <label class="mirror-bg-opt"
+            style="display:inline-flex;align-items:center;gap:5px;font-size:12px;margin-right:8px;cursor:pointer;"
+            title="Keep streaming in background when switching to other tabs">
+            <input type="checkbox" id="mirror-chk-background" checked style="cursor:pointer;" />
+            <span class="meta" style="user-select:none;">Run in background</span>
+          </label>
           <div class="mirror-fps-select-wrap" style="display:inline-flex;align-items:center;gap:4px;font-size:12px;">
             <label for="mirror-fps-select" class="meta">FPS:</label>
             <select id="mirror-fps-select" class="theme-select mono" style="padding:3px 6px;font-size:11px;">
@@ -334,7 +341,8 @@
             </select>
           </div>
           <button class="btn primary" id="btn-mirror-toggle">▶ Start Live</button>
-          <button class="btn" id="btn-mirror-screenshot" title="Capture &amp; download high-res PNG screenshot">📸 Screenshot</button>
+          <button class="btn" id="btn-mirror-screenshot" title="Capture &amp; download high-res PNG screenshot">📸
+            Screenshot</button>
         </div>
       </div>
 
@@ -342,7 +350,8 @@
       <div id="mirror-offline-banner" class="logcat-offline-banner hidden">
         <span class="offline-icon">⚠️</span>
         <div class="offline-text">
-          <b>Device Offline:</b> No connected Android device detected for screen mirroring. Run <code>scripts\windows\adb_remote_pc.bat</code> if connected via Windows.
+          <b>Device Offline:</b> No connected Android device detected for screen mirroring. Run
+          <code>scripts\windows\adb_remote_pc.bat</code> if connected via Windows.
         </div>
         <div class="offline-actions">
           <a class="btn btn-xs jade-btn" href="/api/adb/remote-script" download="adb_remote_pc.bat">⬇ Download .bat</a>
@@ -402,10 +411,12 @@
           <div class="mirror-deck-group">
             <div class="mirror-deck-label">Type Text into Focused Field</div>
             <div class="mirror-text-row">
-              <input type="text" id="mirror-text-input" class="term-input" placeholder="Type text and press Enter…" autocomplete="off" spellcheck="false">
+              <input type="text" id="mirror-text-input" class="term-input" placeholder="Type text and press Enter…"
+                autocomplete="off" spellcheck="false">
               <button class="btn primary" id="btn-mirror-send-text">Send</button>
             </div>
-            <div class="meta" style="font-size:11px;margin-top:4px;">Injected via <code>adb shell input text</code></div>
+            <div class="meta" style="font-size:11px;margin-top:4px;">Injected via <code>adb shell input text</code>
+            </div>
           </div>
 
           <div class="mirror-deck-group" style="margin-top:auto;">

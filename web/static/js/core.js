@@ -603,8 +603,8 @@ function switchTab(tab) {
   $("#view-docs")?.classList.toggle("hidden", !isDocs);
   $("#view-bi")?.classList.toggle("hidden", !isBi);
   $("#view-mirror")?.classList.toggle("hidden", !isMirror);
-  if (!isMirror && typeof stopMirrorStream === "function") {
-    stopMirrorStream();
+  if (!isMirror && typeof _mirrorKeepInBackground !== "undefined" && !_mirrorKeepInBackground) {
+    if (typeof stopMirrorStream === "function") stopMirrorStream();
   }
   if (tab === "system") {
     switchPipelineSource("system");

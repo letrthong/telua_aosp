@@ -55,7 +55,11 @@ function syncTopTabs() {
     logcatTab.classList.toggle("tab-streaming", Boolean(_logcatStreaming));
   }
   $("#tab-docs")?.classList.toggle("active", isDocs);
-  $("#tab-mirror")?.classList.toggle("active", isMirror);
+  const mirrorTab = $("#tab-mirror");
+  if (mirrorTab) {
+    mirrorTab.classList.toggle("active", isMirror);
+    mirrorTab.classList.toggle("tab-streaming", typeof _mirrorRunning !== "undefined" && Boolean(_mirrorRunning));
+  }
   $("#tab-bi")?.classList.toggle("active", isBi);
   try {
     const activeTabName = isFiles ? "files" : (isAosp ? "aosp" : (isTerminal ? "terminal" : (isLogcat ? "logcat" : (isDocs ? "docs" : (isBi ? "bi" : (isMirror ? "mirror" : (isSystem ? "system" : "pipelines")))))));
