@@ -28,6 +28,38 @@ try {
   if (savedBg !== null) _mirrorKeepInBackground = savedBg === "true";
 } catch { /* ignore */ }
 
+/* ---------------- Device resolution persistence (survives refresh) -------
+   Once the real device width/height has been loaded (from /api/mirror/info or
+   the first frame), it is saved to localStorage so the next time the Mirror
+   tab opens, the canvas immediately uses the correct size/aspect ratio
+   instead of the 1080x1920 default. */
+const MIRROR_SIZE_KEY = "telua_mirror_device_size"; // JSON { width, height }
+
+function saveMirrorDeviceSize(width, height) {
+  if (!width || !height) return;
+  try {
+    localStorage.setItem(MIRROR_SIZE_KEY, JSON.stringify({ width, height }));
+  } catch { /* best-effort */ }
+}
+
+function loadMirrorDeviceSize() {
+  try {
+    const raw = localStorage.getItem(MIRROR_SIZE_KEY);
+    const size = raw ? JSON.parse(raw) : null;
+    if (size && size.width > 0 && size.height > 0) return size;
+  } catch { /* ignore */ }
+  return null;
+}
+
+// Restore the last known device resolution at startup (before first frame).
+try {
+  const savedSize = loadMirrorDeviceSize();
+  if (savedSize) {
+    _mirrorDeviceWidth = savedSize.width;
+    _mirrorDeviceHeight = savedSize.height;
+  }
+} catch { /* ignore */ }
+
 async function fetchMirrorInfo() {
   try {
     const res = await api("/api/mirror/info");
@@ -35,6 +67,7 @@ async function fetchMirrorInfo() {
       if (res.width && res.height) {
         _mirrorDeviceWidth = res.width;
         _mirrorDeviceHeight = res.height;
+        saveMirrorDeviceSize(res.width, res.height);
       }
       renderMirrorMeta(res);
       return res;
@@ -136,6 +169,7 @@ async function captureMirrorFrame() {
             canvas.height = img.naturalHeight;
             _mirrorDeviceWidth = img.naturalWidth;
             _mirrorDeviceHeight = img.naturalHeight;
+            saveMirrorDeviceSize(img.naturalWidth, img.naturalHeight);
             const resPill = $("#mirror-res-pill");
             if (resPill) {
               resPill.textContent = `${canvas.width}×${canvas.height} (${canvas.width > canvas.height ? "Landscape" : "Portrait"})`;
@@ -389,8 +423,31 @@ function initMirror() {
     }
   });
 
-  // Fetch initial info and start
-  fetchMirrorInfo().then(() => {
+  // Fetch initial info and start. The info response carries the CURRENT
+  // device resolution (via `adb shell wm size`), so even on the very first
+  // load (nothing saved in localStorage yet) the canvas gets the real size
+  // right away instead of the 1080x1920 default.
+  fetchMirrorInfo().then((info) => {
+    if (info && info.width && info.height) {
+      canvas.width = info.width;
+      canvas.height = info.height;
+      const pill = $("#mirror-res-pill");
+      if (pill) {
+        pill.textContent = `${info.width}×${info.height} (${info.width > info.height ? "Landscape" : "Portrait"})`;
+      }
+    }
     startMirrorStream();
   });
+
+  // Apply the persisted device resolution to the canvas immediately so the
+  // frame area has the correct aspect ratio before the first frame arrives.
+  const savedSize = loadMirrorDeviceSize();
+  if (savedSize && (canvas.width !== savedSize.width || canvas.height !== savedSize.height)) {
+    canvas.width = savedSize.width;
+    canvas.height = savedSize.height;
+  }
+  const resPill = $("#mirror-res-pill");
+  if (resPill && savedSize) {
+    resPill.textContent = `${savedSize.width}×${savedSize.height} (${savedSize.width > savedSize.height ? "Landscape" : "Portrait"})`;
+  }
 }
