@@ -408,6 +408,33 @@
             </div>
           </div>
 
+          <!-- ⚡ Target Power Controls -->
+          <div class="mirror-deck-group mirror-power-deck-group">
+            <div class="mirror-deck-label" style="display:flex;justify-content:space-between;align-items:center;">
+              <span>⚡ Target Power Controls</span>
+              <span id="mirror-power-badge" class="run-badge ok" style="font-size:10px;padding:1px 6px;">ON</span>
+            </div>
+            <div class="mirror-power-grid">
+              <button class="btn jade-btn mirror-power-btn" id="btn-power-on" title="Turn Target Power ON (Persisted in Config)">
+                <span>⚡ Power ON</span>
+              </button>
+              <button class="btn danger mirror-power-btn" id="btn-power-off" title="Turn Target Power OFF (Persisted in Config)">
+                <span>⏻ Power OFF</span>
+              </button>
+            </div>
+            <div class="mirror-power-sub-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
+              <button class="btn btn-xs ghost" id="btn-power-soft-reboot" title="Soft Reboot / Fast Zygote Restart (5s)">
+                <span>⚡ Soft Reboot</span>
+              </button>
+              <button class="btn btn-xs ghost" id="btn-power-full-reboot" title="Full Board Reboot (adb reboot)">
+                <span>🔄 Full Reboot</span>
+              </button>
+            </div>
+            <div id="mirror-power-meta" class="meta" style="font-size:10px;margin-top:5px;color:var(--text-muted,#8b949e);">
+              State: <b id="power-meta-state" style="color:var(--green,#3fb950);">ON</b> · Source: <code>config/target_power_state.json</code>
+            </div>
+          </div>
+
           <div class="mirror-deck-group">
             <div class="mirror-deck-label">Type Text into Focused Field</div>
             <div class="mirror-text-row">

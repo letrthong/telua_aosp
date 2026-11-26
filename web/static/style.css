@@ -3886,3 +3886,47 @@ code,
   flex: 1;
   font-size: 12px;
 }
+
+/* ⚡ Target Power Controls */
+.mirror-power-deck-group {
+  border-top: 1px solid var(--border-color, #30363d);
+  padding-top: 10px;
+  margin-top: 6px;
+}
+
+.mirror-power-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.mirror-power-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-weight: 600;
+  padding: 8px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mirror-power-btn.active-on {
+  box-shadow: 0 0 10px rgba(63, 185, 80, 0.45);
+  border: 1.5px solid #3fb950;
+  opacity: 1;
+}
+
+.mirror-power-btn.active-off {
+  box-shadow: 0 0 10px rgba(248, 81, 73, 0.45);
+  border: 1.5px solid #f85149;
+  opacity: 1;
+}
+
+.mirror-power-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}

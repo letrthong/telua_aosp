@@ -486,6 +486,46 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
             self.assertEqual(res_frame.mimetype, "image/png")
             res_frame.close()
 
+    def test_api_power_controls_endpoints(self):
+        """Test Target Power Controls persistent status, ON, OFF, and toggle."""
+        # 1. Status
+        res = self.client.get("/api/power/status")
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertTrue(data["ok"])
+        self.assertIn(data["state"], ("ON", "OFF"))
+        self.assertEqual(data["config_file"], "config/target_power_state.json")
+
+        # 2. Set OFF
+        res_off = self.client.post("/api/power/set", json={"state": "OFF"})
+        self.assertEqual(res_off.status_code, 200)
+        data_off = res_off.get_json()
+        self.assertTrue(data_off["ok"])
+        self.assertEqual(data_off["state"], "OFF")
+        self.assertFalse(data_off["is_on"])
+
+        # 3. Set ON
+        res_on = self.client.post("/api/power/set", json={"state": "ON"})
+        self.assertEqual(res_on.status_code, 200)
+        data_on = res_on.get_json()
+        self.assertTrue(data_on["ok"])
+        self.assertEqual(data_on["state"], "ON")
+        self.assertTrue(data_on["is_on"])
+
+        # 4. Toggle
+        res_toggle = self.client.post("/api/power/toggle")
+        self.assertEqual(res_toggle.status_code, 200)
+        data_tog = res_toggle.get_json()
+        self.assertTrue(data_tog["ok"])
+        self.assertEqual(data_tog["state"], "OFF")
+
+        # 5. Invalid state
+        res_bad = self.client.post("/api/power/set", json={"state": "INVALID"})
+        self.assertEqual(res_bad.status_code, 400)
+
+        # 6. Restore to ON
+        self.client.post("/api/power/set", json={"state": "ON"})
+
 
 if __name__ == "__main__":
     unittest.main()
