@@ -201,6 +201,8 @@ async function initAI() {
     const pathInput = $("#ai-mcp-new-path");
     const urlInput = $("#ai-mcp-new-url");
     const visInput = $("#ai-mcp-new-visibility");
+    const projInput = $("#ai-mcp-new-project");
+    const verInput = $("#ai-mcp-new-version");
     if (!pathInput || !pathInput.value.trim()) {
       toast("Thiếu đường dẫn", "Vui lòng nhập đường dẫn thư mục hoặc repository.", "err");
       return;
@@ -211,12 +213,17 @@ async function initAI() {
     const cleanId = path.replace(/[\\/]/g, "_").toLowerCase().replace(/[^a-z0-9_]/g, "");
     const visibility = visInput?.value || "private";
     const isPrivate = (visibility === "private");
+    const project = (projInput?.value.trim()) || "aosp_aaos";
+    let aospVer = verInput?.value || "";
+    if (aospVer === "auto" || aospVer === "custom") aospVer = "";
 
     _aiMcpSources.push({
       id: cleanId,
       name: name,
       local_path: path,
       repo_url: url,
+      project: project,
+      aosp_version: aospVer,
       enabled: true,
       exists: true,
       count: 0,
@@ -565,6 +572,8 @@ function renderAIMcpSourcesList() {
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <strong style="font-size:11px;color:var(--text);">${esc(s.name || s.id)}</strong>
             ${visBadge}
+            ${s.project ? `<span class="chip" style="font-size:10px;padding:1px 6px;background:rgba(255,255,255,0.06);color:var(--accent);" title="Dự án: ${esc(s.project)}">🏷️ ${esc(s.project)}</span>` : ''}
+            ${s.aosp_version ? `<span class="chip" style="font-size:10px;padding:1px 6px;background:rgba(74,222,128,0.12);color:#4ade80;border:1px solid rgba(74,222,128,0.3);" title="Phiên bản AOSP: ${esc(s.aosp_version.toUpperCase())}${s.api_level ? ` (API ${s.api_level})` : ''}">🤖 ${esc(s.aosp_version.toUpperCase())}${s.api_level ? ` (API ${s.api_level})` : ''}</span>` : ''}
             ${statusChip}
             ${gitLink}
           </div>

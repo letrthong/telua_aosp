@@ -22,6 +22,7 @@
 import hashlib
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -119,53 +120,54 @@ def detect_aosp_version_from_path(dir_path: Optional[Path]) -> dict:
         "api_level": None,
         "branch": "",
     }
-    if not dir_path or not dir_path.is_dir():
+    if not dir_path:
         return res
 
-    # 1. Search for version_defaults.mk in ancestors or self
-    curr = dir_path
-    for _ in range(5):
-        ver_file = curr / "build" / "make" / "core" / "version_defaults.mk"
-        if not ver_file.is_file():
-            ver_file = curr / "build" / "core" / "version_defaults.mk"
-        if ver_file.is_file():
-            try:
-                txt = ver_file.read_text(encoding="utf-8", errors="ignore")
-                m_ver = re.search(r"PLATFORM_VERSION\s*(?::=|=)\s*([0-9\.]+)", txt)
-                m_sdk = re.search(r"PLATFORM_SDK_VERSION\s*(?::=|=)\s*([0-9]+)", txt)
-                if m_ver:
-                    v_str = m_ver.group(1).split(".")[0]
-                    res["aosp_version"] = f"a{v_str}"
-                if m_sdk:
-                    res["api_level"] = int(m_sdk.group(1))
+    # 1. Search for version_defaults.mk in ancestors or self if directory exists
+    if dir_path.is_dir():
+        curr = dir_path.resolve()
+        for _ in range(6):
+            ver_file = curr / "build" / "make" / "core" / "version_defaults.mk"
+            if not ver_file.is_file():
+                ver_file = curr / "build" / "core" / "version_defaults.mk"
+            if ver_file.is_file():
+                try:
+                    txt = ver_file.read_text(encoding="utf-8", errors="ignore")
+                    m_ver = re.search(r"PLATFORM_VERSION\s*(?::=|=)\s*([0-9\.]+)", txt)
+                    m_sdk = re.search(r"PLATFORM_SDK_VERSION\s*(?::=|=)\s*([0-9]+)", txt)
+                    if m_ver:
+                        v_str = m_ver.group(1).split(".")[0]
+                        res["aosp_version"] = f"a{v_str}"
+                    if m_sdk:
+                        res["api_level"] = int(m_sdk.group(1))
+                    break
+                except Exception:
+                    pass
+            if curr.parent == curr:
                 break
+            curr = curr.parent
+
+        # Check git branch or tag if git repo
+        git_dir = dir_path / ".git"
+        if git_dir.exists():
+            try:
+                head_f = git_dir / "HEAD" if git_dir.is_dir() else None
+                if head_f and head_f.is_file():
+                    head_content = head_f.read_text(encoding="utf-8").strip()
+                    if "refs/heads/" in head_content:
+                        res["branch"] = head_content.split("refs/heads/")[-1].strip()
             except Exception:
                 pass
-        if curr.parent == curr:
-            break
-        curr = curr.parent
 
     # 2. Check path string heuristics if not detected (e.g. 'aosp_a16', 'android-14', 'a12')
     if not res["aosp_version"]:
         full_str = str(dir_path).lower().replace("\\", "/")
-        m_a = re.search(r"\b(?:android[-_]?|a)(\d{2})\b", full_str)
+        m_a = re.search(r"(?:android[-_]?|aosp[-_]?|a)(\d{2})\b", full_str)
         if m_a:
             v_num = int(m_a.group(1))
             res["aosp_version"] = f"a{v_num}"
             api_map = {11: 30, 12: 31, 13: 33, 14: 34, 15: 35, 16: 36}
             res["api_level"] = api_map.get(v_num)
-
-    # 3. Check git branch or tag if git repo
-    git_dir = dir_path / ".git"
-    if git_dir.exists():
-        try:
-            head_f = git_dir / "HEAD" if git_dir.is_dir() else None
-            if head_f and head_f.is_file():
-                head_content = head_f.read_text(encoding="utf-8").strip()
-                if "refs/heads/" in head_content:
-                    res["branch"] = head_content.split("refs/heads/")[-1].strip()
-        except Exception:
-            pass
 
     return res
 

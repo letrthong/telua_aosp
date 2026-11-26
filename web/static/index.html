@@ -1332,17 +1332,29 @@
         <div style="background:rgba(255,255,255,0.02);border:1px dashed var(--border);border-radius:6px;padding:8px;margin-bottom:10px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <span style="font-size:11px;font-weight:600;color:var(--accent);">➕ Thêm nguồn repository / thư mục mới:</span>
-            <span class="meta" style="font-size:10px;">🔒 Private sẽ lưu trong <code>config/overlay</code> và không bao giờ push lên Git</span>
+            <span class="meta" style="font-size:10px;">🔒 Private lưu trong <code>config/overlay</code> (không push Git). Hỗ trợ tự động nhận diện AOSP A12-A16.</span>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1.5fr 1fr 130px auto;gap:6px;align-items:center;">
-            <input type="text" id="ai-mcp-new-name" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Tên nguồn (vd: My Private Rules)">
-            <input type="text" id="ai-mcp-new-path" class="term-input mono" style="font-size:11px;padding:4px 6px;" placeholder="Đường dẫn (vd: repos/private_skill hoặc D:\code\...)">
+          <div style="display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:6px;align-items:center;margin-bottom:6px;">
+            <input type="text" id="ai-mcp-new-name" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Tên nguồn (vd: AOSP A16 Car Audio)">
+            <input type="text" id="ai-mcp-new-path" class="term-input mono" style="font-size:11px;padding:4px 6px;" placeholder="Đường dẫn (vd: repos/private_skill hoặc D:\aosp_a16\frameworks\opt\car)">
             <input type="text" id="ai-mcp-new-url" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Git URL (tùy chọn)">
+          </div>
+          <div style="display:grid;grid-template-columns:1.2fr 1.4fr 130px auto;gap:6px;align-items:center;">
+            <input type="text" id="ai-mcp-new-project" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Dự án (vd: aosp_aaos)" value="aosp_aaos">
+            <select id="ai-mcp-new-version" class="theme-select" style="font-size:11px;padding:4px 6px;" title="Phiên bản AOSP">
+              <option value="auto" selected>⚡ Tự động nhận diện (A12-A16)</option>
+              <option value="a16">Android 16 (Baklava / API 36)</option>
+              <option value="a15">Android 15 (VanillaIceCream / API 35)</option>
+              <option value="a14">Android 14 (UpsideDownCake / API 34)</option>
+              <option value="a13">Android 13 (Tiramisu / API 33)</option>
+              <option value="a12">Android 12 (SnowCone / API 31-32)</option>
+              <option value="custom">Tùy biến khác</option>
+            </select>
             <select id="ai-mcp-new-visibility" class="theme-select" style="font-size:11px;padding:4px 6px;" title="Chế độ bảo vệ Git">
               <option value="private" selected>🔒 Private (No Git)</option>
               <option value="public">🌐 Public (Git)</option>
             </select>
-            <button class="btn" id="btn-ai-mcp-add-source" style="font-size:11px;padding:4px 10px;white-space:nowrap;">➕ Thêm</button>
+            <button class="btn" id="btn-ai-mcp-add-source" style="font-size:11px;padding:4px 10px;white-space:nowrap;">➕ Thêm nguồn</button>
           </div>
         </div>
 

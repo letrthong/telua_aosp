@@ -39,7 +39,8 @@ When assisting a developer, **ALWAYS prefer using `telua` (or `./build_apk.sh`) 
 │   ├── telua_web_power_controls.py # Dual-output hardware relay control (Main Power + ACC)
 │   ├── ai/                   # AI Agent & MCP Knowledge subsystem
 │   │   ├── telua_web_ai.py   # AI Agent loop, tool executors, token guardrails & monthly usage tracker
-│   │   └── telua_mcp_skill.py # Multi-source MCP skills scanner & ChromaDB synchronizer
+│   │   ├── code_structure_engine.py # AST & Pygments Perception Engine: outline, method extract, snap
+│   │   └── telua_mcp_skill.py # Multi-source MCP skills scanner, A12-A16 versioning & ChromaDB synchronizer
 │   └── static/               # Web frontend UI (HTML, CSS, vanilla JS tabs)
 ├── ai_agent/data/            # Persistent ChromaDB vector database (git-ignored, 'telua_knowledge')
 ├── repos/                    # External cloned MCP skills repositories (git-ignored, e.g. claude-code-java)

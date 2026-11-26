@@ -12,6 +12,10 @@
       "name": "Telua Java/Android & AAOS",
       "local_path": "repos/telua_skill/Java_Android",
       "repo_url": "",
+      "project": "aosp_aaos",
+      "aosp_version": "",
+      "api_level": null,
+      "branch": "",
       "enabled": true,
       "visibility": "public",
       "is_private": false
@@ -21,6 +25,10 @@
       "name": "Claude Code Java Agent Skills",
       "local_path": "repos/claude-code-java",
       "repo_url": "",
+      "project": "aosp_aaos",
+      "aosp_version": "",
+      "api_level": null,
+      "branch": "",
       "enabled": true,
       "visibility": "public",
       "is_private": false

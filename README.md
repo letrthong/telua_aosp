@@ -27,7 +27,8 @@ An automated developer workflow script for building and deploying privileged sys
 | `python/unused_methods_report.py` | 6-in-1 static Java report: unused methods, unused params, whitespace, `google-java-format`, unused imports & unused private fields (`tel java report`) |
 | `src/telua_web.sh` & `web/telua_web.py` | Config Manager, BI Studio, Hardware Power & AI Agent Web UI (`tel web start`) |
 | `web/ai/telua_web_ai.py` | Autonomous AI Agent engine: tool-calling loop, auto-coding, token guardrails & monthly usage tracker |
-| `web/ai/telua_mcp_skill.py` | Multi-source MCP Skills manager & ChromaDB vector store integration (134 pre-indexed skills) |
+| `web/ai/code_structure_engine.py` | AST & Pygments Perception Engine: outline mode, complete symbol extraction & boundary snapping |
+| `web/ai/telua_mcp_skill.py` | Multi-source MCP Skills manager, ChromaDB vector store & A12-A16 dual-layer versioning |
 | `web/telua_web_power_controls.py` | Hardware Power Switch: dual-output relay (Main Power & Ignition ACC) with state persistence & event history |
 | `config/mcp_skills_config.json` | MCP skills sources configuration (local paths & Git repositories) |
 | `config/target_power_state.json` | Persistent hardware relay state & switch history log |
@@ -1035,43 +1036,104 @@ Contributions from the developer community are welcome! Whether you are adding n
 
 ---
 
-## 9. AI Agent, Autonomous Coding & MCP Skills Integration
+## 9. AI Agent Architecture: AI Model + Telua Harness
 
-The toolkit includes an autonomous tool-calling AI agent integrated directly into the Web UI (`tel web start` → **🤖 AI Agent** tab), backed by local vector knowledge and enterprise safety guardrails.
+The toolkit features an autonomous, enterprise-grade AI coding and diagnostic agent (**Tel Agent**) integrated directly into the Web UI (`tel web start` → **🤖 AI Agent** tab).
+
+### 9.1 Conceptual Clarity: Agentic AI vs. AI Agent
+To understand how modern autonomous engineering systems operate, it is crucial to distinguish between the design paradigm and the resulting entity:
+
+| Concept | Nature & Role | In This Toolkit |
+| :--- | :--- | :--- |
+| **Agentic AI** *(Paradigm & Methodology)* | The **architectural design philosophy** that empowers AI systems with autonomy, multi-step planning, tool invocation, and iterative self-correction (reflection)—as opposed to passive, single-shot text generation (Standard GenAI). | The **ReAct autonomous loop** in `telua_web_ai.py` that inspects code, runs builds, reads compiler errors, and refactors until tests pass. |
+| **AI Agent** *(Concrete Entity / Instance)* | The **active software system** ($\text{Model} + \text{Harness}$) tasked with achieving specific engineering objectives. | **Tel Agent**: The specialized, on-premise AOSP & Android Automotive AI Engineer. |
+
+#### The Four Core Patterns of Agentic AI:
+1. **Planning:** Decomposing complex multi-file engineering tasks into step-by-step actions without user micro-management.
+2. **Tool Use (Actuators):** Autonomously invoking compilers (`run_tel`), AST parsers (`read_file`), and vector databases (`search_knowledge`).
+3. **Reflection & Self-Correction:** Reading compiler/test error streams, identifying syntax or logic bugs, and self-patching code across iterative turns.
+4. **Multi-Step Execution:** Looping through thought-action-observation cycles rather than giving up after one single prompt.
+
+### 9.2 The Architectural Formula: AI Agent = AI Model + AI Harness
+An LLM alone is merely a next-token predictor—a "brain in a jar" without hands, eyes, long-term memory, or safety shields. **Tel Agent** combines any pluggable LLM with the domain-tailored **Telua Harness**:
+
+$$\text{AI Agent} = \text{AI Model (The Brain)} + \text{AI Harness (Body, Sensors, Memory \& Safety)}$$
+$$\text{Tel Agent} = \text{Pluggable LLM (Cloud / On-Premise GPU)} + \text{Telua Automotive Harness}$$
 
 ```
-+----------------------------------------------------------------------------------+
-|                            TELUA AI AGENT ARCHITECTURE                           |
-+----------------------------------------------------------------------------------+
-                                        │
-           ┌────────────────────────────┼───────────────────────────┐
-           ▼                            ▼                           ▼
- 🛠️ TOOL-CALLING CORE           🧠 PERSISTENT KNOWLEDGE     🛡️ TOKEN SHIELD & SAFETY
- • read_file (line-chunked)     • ChromaDB Vector Store     • Loop Breaker shield
- • write_file (workspace write) • 134 MCP Skills (Java/AOSP)• Line range read cap
- • edit_file (exact snippet)    • Multi-Source Git sync     • Max turn iter cap
- • get_file_git_history         • Auto-sync cron scheduler  • Monthly usage tracker
- • get_commit_diff              • Semantic knowledge search • 6-month token history
- • run_tel (sandboxed CLI)
++--------------------------------------------------------------------------------------------------+
+|                                           TEL AGENT                                              |
++--------------------------------------------------------------------------------------------------+
+|  🧠 THE BRAIN (Pluggable LLM Core)                                                               |
+|     • Cloud Endpoints: Google Gemini 2.5/Flash, Anthropic Claude 3.5 Sonnet, OpenAI              |
+|     • On-Premise / Air-Gapped: Local GPUs running Qwen 2.5 Coder / DeepSeek via Ollama or vLLM   |
++--------------------------------------------------------------------------------------------------+
+|  🛠️ THE TELUA HARNESS (Automotive & AOSP Operating Environment)                                  |
+|                                                                                                  |
+|  [👁️ PERCEPTION: CodeStructureEngine & Pygments AST]                                            |
+|     • Structure-Aware Slicing: Eliminates naive line-cutting; preserves full AST and syntax       |
+|     • Outline Mode: Instant bird's-eye view of classes, interfaces & methods (< 100 tokens)      |
+|     • Symbol Extraction: Extracts complete method bodies from signature to closing brace '}'     |
+|     • Smart Boundary Snapping: Automatically snaps line ranges forward to prevent chopped code   |
+|                                                                                                  |
+|  [🧠 LONG-TERM MEMORY: Persistent ChromaDB Vector Knowledge]                                     |
+|     • 100% Local Vector Store: Stored on-premise at ai_agent/data/chroma.sqlite3 (Zero Cloud Leak)  |
+|     • Dual-Layer AOSP Versioning: Strict metadata & header separation for Android 12 through A16  |
+|     • Function-as-a-Chunk: Embeds complete methods with Class & Package Provenance Context       |
+|     • Auto-Version Detection: Infers AOSP version (A12-A16) via build/make/core/version_defaults.mk|
+|                                                                                                  |
+|  [🦾 ACTUATORS: Autonomous Workspace Execution Tools]                                            |
+|     • run_tel: Directly executes tel, telua, AOSP make/build, ADB logcat, and dumpsys diagnostics|
+|     • write_file & edit_file: Surgical, autonomous code generation and refactoring               |
+|     • get_file_git_history & get_commit_diff: Automated git forensics and regression root-causing|
+|                                                                                                  |
+|  [🛡️ SAFETY SHIELD & ENTERPRISE COMPLIANCE]                                                      |
+|     • Destructive Command Blocker: Intercepts dangerous operations (rm -rf, fastboot flash)      |
+|     • Public vs Private Overlay: Keeps proprietary OEM code and API keys off Git repositories    |
+|     • Token Usage Monitor: Real-time token tracking per month with 6-month historical retention   |
++--------------------------------------------------------------------------------------------------+
 ```
 
-### 9.1 Autonomous Coding & Direct Workspace Tools
+### 9.3 Perception Engine: `CodeStructureEngine` & AST-Aware Reading
+Naively slicing code at arbitrary 150-line boundaries amputates functions in half, breaks syntax trees, and blinds LLMs to class-level member fields. Telua's built-in **`CodeStructureEngine`** ([web/ai/code_structure_engine.py](web/ai/code_structure_engine.py)), powered by `Pygments` and Python `ast`, provides structure-aware inspection:
+* **Outline Mode (`read_file(path, outline=True)`):** Generates an architectural tree of all classes, interfaces, and method signatures with exact line spans, allowing the agent to analyze 3,000+ line files in seconds with minimal token consumption.
+* **Exact Method Extraction (`read_file(path, method="setVolumeGroupIndex")`):** Locates the method declaration, prepends the enclosing class header, captures Javadoc/docstrings, and extracts the entire function body down to the matching closing brace `}`.
+* **Smart Boundary Snapping:** When reading line chunks (`start_line` to `end_line`), the engine detects if `end_line` falls inside an active method body and automatically snaps forward to the closing brace, ensuring no function is ever cut in half.
+* **Flexible Read Capacities:** Supports expanding chunk sizes up to 500 lines per read on demand (`max_lines=500`).
+
+### 9.4 Long-Term Memory & Dual-Layer AOSP Versioning (A12 vs A16)
+In automotive platforms, CarAudio, CarProperty, and AIDL HAL interfaces mutate significantly across Android releases. Telua enforces **Dual-Layer Version Tagging** across all indexed skills:
+1. **In-Document Provenance Header:** Every code chunk indexed into ChromaDB includes a standardized header:
+   ```java
+   // ==============================================================================
+   // PROJECT: aosp_aaos | AOSP_VERSION: a16 | API_LEVEL: 36 | BRANCH: android-16.0.0_r1
+   // SOURCE: AOSP A16 Car Audio (aosp_a16_car)
+   // FILE: frameworks/opt/car/services/CarAudioService.java (Lines 215-340)
+   // CLASS: CarAudioService | METHOD: setVolumeGroupIndex
+   // ==============================================================================
+   public void setVolumeGroupIndex(int zoneId, int groupId, int index, int flags) { ... }
+   ```
+2. **ChromaDB Metadata Filtering:** Stored with exact filter keys (`project`, `aosp_version`, `api_level`, `branch`), enabling zero-hallucination queries (`where={"aosp_version": "a16"}`).
+3. **Automated AOSP Version Detection:** The `detect_aosp_version_from_path()` engine automatically scans `build/make/core/version_defaults.mk`, git branches, and folder heuristics to tag A12–A16 versions without manual input.
+4. **Cross-Version Migration Analysis:** Enables the Agent to compare A12 and A16 implementations side-by-side to produce precise migration guides for vehicle software engineers.
+
+### 9.5 Autonomous Coding & Direct Workspace Tools
 The AI Agent operates inside an iterative thinking loop, selecting and executing workspace tools autonomously:
 * **Target File & Directory Auto-Coding Bar:** Set a target path (e.g. `src/com/android/car/` or `src/CarService.java`), click `📖 Read / Scan` for situational awareness, or click `⚡ Auto-Code` to refactor multiple files across the target.
-* **`read_file`**: Chunked line-range reads (`start_line` to `end_line`, max 150 lines/read) with line numbers (`0042 | code`), preventing context overflow on multi-thousand line files.
+* **`read_file`**: Outline, method extraction, or smart-snapped line-range reads with line numbers (`0042 | code`).
 * **`write_file`**: Directly creates or overwrites workspace files with path traversal security.
 * **`edit_file`**: Replaces exact code snippets with surgical precision without rewriting whole files.
 * **`get_file_git_history` & `get_commit_diff`**: Reads per-file commit logs and inspects code diffs (`git show --stat -p`) for rapid regression diagnostics and root cause analysis.
 * **`run_tel`**: Executes compilation checks (`tel build`), hardware commands, ADB queries, and tests, automatically blocking destructive commands (`rm -rf /`, formatting, force pushes).
 
-### 9.2 MCP Skills & ChromaDB Knowledge Base (134 Pre-Indexed Skills)
+### 9.6 MCP Skills & ChromaDB Knowledge Base (134 Pre-Indexed Skills)
 Local engineering skills and design patterns are indexed in a persistent vector database ([ai_agent/data/](ai_agent/data/)):
 * **`telua_skill` (Java_Android):** Vehicle HAL, Power HAL, CarAudioService, CarPropertyService, Audio policy, AIDL / Binder rules.
 * **`claude-code-java`:** Concurrency reviews, Spring Boot patterns, JPA performance, Clean Code, Security audits, and SOLID design.
 * **Dynamic Multi-Source Management:** Add local directories or clone remote Git repositories directly in the Web UI (`⚙ Config` modal).
 * **Automated Sync Scheduler:** Triggers re-indexing automatically on web startup and at configurable intervals (every 3h, 6h, 12h, or manual).
 
-### 9.3 Public vs Private Isolation & Vector DB Architecture
+### 9.7 Public vs Private Isolation & Vector DB Architecture
 To protect proprietary company code, NDA documentation, and internal architecture while enabling seamless team sharing:
 * **Public vs Private Source Isolation:**
   - **Public Sources** (e.g. `telua_skill`, `claude_code_java`) are saved in `config/mcp_skills_config.json` and tracked in Git for the whole team.
@@ -1086,13 +1148,13 @@ To protect proprietary company code, NDA documentation, and internal architectur
   - **100% Offline & $0 Cost:** Runs locally on CPU (~5 ms/query) without requiring external API keys or consuming LLM tokens.
   - **Mathematical Symmetry:** Both the indexing pipeline (Write: `sync_skills_to_chroma`) and retrieval tool (Read: `_tool_search_knowledge`) share the exact same embedding model instance, eliminating `DimensionMismatchError` and vector divergence.
 
-### 9.4 Token Shield & Infinite Loop Guardrails
+### 9.8 Token Shield & Infinite Loop Guardrails
 To prevent runaway LLM costs and context exhaustion:
 * **Loop Breaker Shield:** Intercepts and stops duplicate tool calls if the Agent attempts to invoke the same tool with identical arguments repeatedly.
 * **Max Iterations Limit:** Enforces a configurable cap (default 5 turns) per user prompt.
 * **Monthly Token Tracking:** Logs prompt tokens, completion tokens, and request counts per month into `config/overlay/ai_token_usage.json`, retaining history for the current and past 2–6 months with UI metric cards and a monthly breakdown table.
 
-### 9.5 Hardware Relay Power Controls
+### 9.9 Hardware Relay Power Controls
 Automated dual-output hardware relay control (**Main Power** & **Ignition ACC**) for bench-test DUTs:
 * Toggle power outputs directly from the Web UI or via `web/telua_web_power_controls.py`.
 * Power states and timestamped switch events are persisted in `config/target_power_state.json`.

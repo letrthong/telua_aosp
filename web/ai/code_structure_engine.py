@@ -625,23 +625,35 @@ class CodeStructureEngine:
             return chunks
 
         # Chunk 0: Class & Architecture Context
+        project = metadata_base.get("project") or "aosp_aaos"
+        aosp_ver = metadata_base.get("aosp_version") or "unknown"
+        api_lvl = metadata_base.get("api_level") or "N/A"
+        branch = metadata_base.get("branch") or "main"
+
         class_summary_lines = []
         for c in struct.classes:
             class_summary_lines.append(f"Class: {c.signature}")
         method_names = [f"{m.name}()" for m in struct.methods[:30]]
 
         context_doc = (
-            f"SOURCE: {metadata_base.get('source_name', source_id)}\n"
-            f"FILE: {rel_path} (Total Lines: {struct.total_lines}, Language: {struct.language.upper()})\n"
-            f"PACKAGE: {struct.package}\n"
-            f"CLASSES: {', '.join(c.name for c in struct.classes)}\n"
-            f"KEY METHODS: {', '.join(method_names)}\n\n"
+            f"// ==============================================================================\n"
+            f"// PROJECT: {project} | AOSP_VERSION: {aosp_ver} | API_LEVEL: {api_lvl} | BRANCH: {branch}\n"
+            f"// SOURCE: {metadata_base.get('source_name', source_id)}\n"
+            f"// FILE: {rel_path} (Total Lines: {struct.total_lines}, Language: {struct.language.upper()})\n"
+            f"// PACKAGE: {struct.package}\n"
+            f"// CLASSES: {', '.join(c.name for c in struct.classes)}\n"
+            f"// KEY METHODS: {', '.join(method_names)}\n"
+            f"// ==============================================================================\n\n"
             f"--- HEADER CONTEXT (Package, Imports & Declarations) ---\n"
             f"{struct.header_context}"
         )
         ctx_meta = dict(metadata_base)
         ctx_meta["chunk_type"] = "class_context"
         ctx_meta["symbol_name"] = "__class_context__"
+        ctx_meta["project"] = project
+        ctx_meta["aosp_version"] = aosp_ver
+        ctx_meta["api_level"] = api_lvl if isinstance(api_lvl, int) else 0
+        ctx_meta["branch"] = branch
         ctx_meta["start_line"] = 1
         ctx_meta["end_line"] = struct.methods[0].start_line - 1 if struct.methods else struct.total_lines
         clean_rel = rel_path.replace("/", "_").replace("\\", "_").replace(".", "_").replace("-", "_")
@@ -654,11 +666,14 @@ class CodeStructureEngine:
         # Chunks 1..N: Each Method as a Complete Semantic Block
         for idx, m in enumerate(struct.methods):
             doc_lines = [
-                f"SOURCE: {metadata_base.get('source_name', source_id)}",
-                f"FILE: {rel_path} (Lines {m.start_line}-{m.end_line})",
-                f"CLASS: {m.enclosing_class or 'Global'}",
-                f"METHOD: {m.name}",
-                f"SIGNATURE: {m.signature}",
+                f"// ==============================================================================",
+                f"// PROJECT: {project} | AOSP_VERSION: {aosp_ver} | API_LEVEL: {api_lvl} | BRANCH: {branch}",
+                f"// SOURCE: {metadata_base.get('source_name', source_id)}",
+                f"// FILE: {rel_path} (Lines {m.start_line}-{m.end_line})",
+                f"// CLASS: {m.enclosing_class or 'Global'}",
+                f"// METHOD: {m.name}",
+                f"// SIGNATURE: {m.signature}",
+                f"// ==============================================================================",
             ]
             if m.docstring:
                 doc_lines.append(f"DOCSTRING: {m.docstring.strip()[:300]}")
@@ -674,6 +689,10 @@ class CodeStructureEngine:
             m_meta["symbol_name"] = m.name
             m_meta["symbol_kind"] = m.kind
             m_meta["enclosing_class"] = m.enclosing_class
+            m_meta["project"] = project
+            m_meta["aosp_version"] = aosp_ver
+            m_meta["api_level"] = api_lvl if isinstance(api_lvl, int) else 0
+            m_meta["branch"] = branch
             m_meta["start_line"] = m.start_line
             m_meta["end_line"] = m.end_line
 
