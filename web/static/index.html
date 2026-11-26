@@ -1045,6 +1045,7 @@
           <span class="mono" style="color:var(--accent);font-weight:700">🤖 AI Agent</span>
           <span id="ai-model-badge" class="chip" title="Active LLM provider &amp; model">model: —</span>
           <span id="ai-status-badge" class="run-badge">Idle</span>
+          <span id="ai-header-token-badge" class="chip" style="font-size:11px;cursor:pointer;background:rgba(255,255,255,0.06);" title="Nhấn để mở cấu hình &amp; xem chi tiết thống kê token">📊 Tháng này: 0 tokens</span>
         </div>
         <div class="editor-actions">
           <button class="btn" id="btn-ai-config" title="⚙ Cấu hình AI Provider — endpoint, model &amp; API key">⚙ Config</button>
@@ -1414,6 +1415,55 @@
             <span>🛑 Bật <b>Loop Breaker</b> (Tự động ngắt nếu Agent gọi lại cùng 1 tool với cùng tham số)</span>
           </label>
           <button class="btn primary" id="btn-ai-save-guardrails" style="font-size:11px;padding:4px 12px;">💾 Lưu Guardrails</button>
+        </div>
+      </div>
+
+      <!-- ============ Monthly Token Usage & History Section ============ -->
+      <div class="settings-section" style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <h4 style="margin:0;">📊 Thống Kê Sử Dụng Token (Monthly Token Usage &amp; History)</h4>
+          <span class="chip ok" id="ai-token-current-month-badge" style="font-size:11px;">Tháng này: 0 tokens</span>
+        </div>
+        <p class="meta" style="margin-bottom:8px;">
+          Ghi nhận tổng số token tiêu thụ trong tháng hiện tại và lưu trữ lịch sử 2–3 tháng trước (lưu an toàn trong <code>config/overlay/ai_token_usage.json</code>).
+        </p>
+
+        <!-- Current Month Summary Metric Cards -->
+        <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:8px;margin-bottom:12px;" id="ai-token-summary-cards">
+          <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;">
+            <div class="meta" style="font-size:11px;">🎯 Tổng Token Tháng</div>
+            <div id="ai-metric-total-tokens" class="mono" style="font-size:16px;font-weight:700;color:var(--accent);margin-top:2px;">0</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;">
+            <div class="meta" style="font-size:11px;">📥 Prompt Tokens</div>
+            <div id="ai-metric-prompt-tokens" class="mono" style="font-size:16px;font-weight:700;color:var(--text);margin-top:2px;">0</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;">
+            <div class="meta" style="font-size:11px;">📤 Completion Tokens</div>
+            <div id="ai-metric-completion-tokens" class="mono" style="font-size:16px;font-weight:700;color:var(--text);margin-top:2px;">0</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;">
+            <div class="meta" style="font-size:11px;">💬 Số Lượt Hỏi</div>
+            <div id="ai-metric-requests" class="mono" style="font-size:16px;font-weight:700;color:var(--text);margin-top:2px;">0</div>
+          </div>
+        </div>
+
+        <!-- History Table of Previous Months -->
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;overflow:hidden;">
+          <table class="data-table" style="width:100%;font-size:11px;margin:0;">
+            <thead>
+              <tr style="background:rgba(255,255,255,0.02);">
+                <th style="padding:6px 10px;text-align:left;">Tháng (Month)</th>
+                <th style="padding:6px 10px;text-align:right;">Prompt Tokens</th>
+                <th style="padding:6px 10px;text-align:right;">Completion Tokens</th>
+                <th style="padding:6px 10px;text-align:right;">Tổng Token</th>
+                <th style="padding:6px 10px;text-align:center;">Số Lượt Hỏi</th>
+              </tr>
+            </thead>
+            <tbody id="ai-token-history-tbody">
+              <tr><td colspan="5" style="text-align:center;padding:10px;color:var(--text-muted);">Đang tải thống kê...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
 

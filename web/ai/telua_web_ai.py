@@ -27,6 +27,7 @@ import json
 import os
 import re
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -124,6 +125,103 @@ def save_ai_guardrails(data: dict) -> dict:
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     return cfg
+
+
+AI_TOKEN_USAGE_PATH = "config/overlay/ai_token_usage.json"
+
+
+def _ai_token_usage_file() -> Path:
+    return _repo_root() / AI_TOKEN_USAGE_PATH
+
+
+def get_ai_token_usage() -> dict:
+    """Read token usage history across months."""
+    p = _ai_token_usage_file()
+    now_m = datetime.now().strftime("%Y-%m")
+    default_state = {
+        "months": {
+            now_m: {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "requests": 0,
+                "by_model": {},
+            }
+        },
+        "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    if not p.is_file():
+        return default_state
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return default_state
+        if "months" not in data or not isinstance(data["months"], dict):
+            data["months"] = {}
+        if now_m not in data["months"]:
+            data["months"][now_m] = {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "requests": 0,
+                "by_model": {},
+            }
+        return data
+    except Exception:
+        return default_state
+
+
+def record_ai_token_usage(prompt_tokens: int, completion_tokens: int, model: str = "", provider: str = "") -> dict:
+    """Record token consumption for the current month and retain past 3-6 months history."""
+    if prompt_tokens <= 0 and completion_tokens <= 0:
+        return get_ai_token_usage()
+
+    state = get_ai_token_usage()
+    months = state.setdefault("months", {})
+    now_m = datetime.now().strftime("%Y-%m")
+
+    cur = months.setdefault(now_m, {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+        "requests": 0,
+        "by_model": {},
+    })
+
+    cur["prompt_tokens"] = int(cur.get("prompt_tokens", 0)) + int(prompt_tokens)
+    cur["completion_tokens"] = int(cur.get("completion_tokens", 0)) + int(completion_tokens)
+    cur["total_tokens"] = int(cur.get("total_tokens", 0)) + int(prompt_tokens + completion_tokens)
+    cur["requests"] = int(cur.get("requests", 0)) + 1
+
+    if model:
+        by_model = cur.setdefault("by_model", {})
+        m_entry = by_model.setdefault(model, {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "requests": 0,
+        })
+        m_entry["prompt_tokens"] = int(m_entry.get("prompt_tokens", 0)) + int(prompt_tokens)
+        m_entry["completion_tokens"] = int(m_entry.get("completion_tokens", 0)) + int(completion_tokens)
+        m_entry["total_tokens"] = int(m_entry.get("total_tokens", 0)) + int(prompt_tokens + completion_tokens)
+        m_entry["requests"] = int(m_entry.get("requests", 0)) + 1
+
+    # Retention: keep up to 6 months (current month + past 5 months; safely covers user's 2-3 months requirement)
+    sorted_months = sorted(months.keys(), reverse=True)
+    if len(sorted_months) > 6:
+        for old_m in sorted_months[6:]:
+            months.pop(old_m, None)
+
+    state["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    p = _ai_token_usage_file()
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+    return state
 
 # Commands the agent may NOT run (destructive / dangerous guard rail).
 BLOCKED_CMD_PATTERNS = [
@@ -740,6 +838,10 @@ def _call_anthropic(messages, model, base_url):
         "arguments": json.dumps(b.input or {}),
     } for b in resp.content if getattr(b, "type", "") == "tool_use"]
 
+    usage_data = getattr(resp, "usage", None)
+    input_tokens = int(getattr(usage_data, "input_tokens", 0) if usage_data else 0)
+    output_tokens = int(getattr(usage_data, "output_tokens", 0) if usage_data else 0)
+
     return {
         "text": "\n".join(text_parts).strip(),
         "tool_calls": tool_calls,
@@ -750,6 +852,11 @@ def _call_anthropic(messages, model, base_url):
                          **({"id": b.id, "name": b.name, "input": b.input}
                             if getattr(b, "type", "") == "tool_use" else {})}
                         for b in resp.content],
+        },
+        "usage": {
+            "prompt_tokens": input_tokens,
+            "completion_tokens": output_tokens,
+            "total_tokens": input_tokens + output_tokens,
         },
     }
 
@@ -812,10 +919,20 @@ def _call_openai(messages, model, base_url):
     if tool_calls:
         raw["tool_calls"] = [{"id": tc["id"], "name": tc["name"], "arguments": tc["arguments"]}
                              for tc in tool_calls]
+
+    usage_data = getattr(resp, "usage", None)
+    pt = int(getattr(usage_data, "prompt_tokens", 0) if usage_data else 0)
+    ct = int(getattr(usage_data, "completion_tokens", 0) if usage_data else 0)
+
     return {
         "text": (msg.content or "").strip(),
         "tool_calls": tool_calls,
         "raw_assistant_message": raw,
+        "usage": {
+            "prompt_tokens": pt,
+            "completion_tokens": ct,
+            "total_tokens": pt + ct,
+        },
     }
 
 
@@ -935,10 +1052,23 @@ def _call_chat_completions(messages, provider_entry, model_entry):
         raw["tool_calls"] = tool_calls
     if msg.get("extra_content"):
         raw["extra_content"] = msg["extra_content"]
+
+    u = data.get("usage") or {}
+    pt = int(u.get("prompt_tokens") or 0)
+    ct = int(u.get("completion_tokens") or 0)
+    if pt == 0 and ct == 0:
+        pt = max(1, sum(len(str(m.get("content", ""))) for m in messages) // 4)
+        ct = max(1, len(str(msg.get("content", ""))) // 4)
+
     return {
         "text": (msg.get("content") or "").strip(),
         "tool_calls": tool_calls,
         "raw_assistant_message": raw,
+        "usage": {
+            "prompt_tokens": pt,
+            "completion_tokens": ct,
+            "total_tokens": pt + ct,
+        },
     }
 
 
@@ -1105,17 +1235,31 @@ def api_ai_chat():
     messages.append({"role": "user", "content": user_msg})
 
     trace = []
+    turn_prompt_tokens = 0
+    turn_completion_tokens = 0
     try:
         for _ in range(max_iter):
             resp = _call_llm(messages, provider, model, base_url)
+            u = resp.get("usage") or {}
+            turn_prompt_tokens += int(u.get("prompt_tokens") or 0)
+            turn_completion_tokens += int(u.get("completion_tokens") or 0)
 
             if not resp["tool_calls"]:
+                if turn_prompt_tokens > 0 or turn_completion_tokens > 0:
+                    record_ai_token_usage(turn_prompt_tokens, turn_completion_tokens,
+                                          model=resp.get("model", model),
+                                          provider=resp.get("provider", provider))
                 return jsonify({
                     "ok": True,
                     "answer": resp["text"] or "(empty response)",
                     "trace": trace,
                     "model": resp.get("model", model),
                     "provider": resp.get("provider", provider),
+                    "usage": {
+                        "prompt_tokens": turn_prompt_tokens,
+                        "completion_tokens": turn_completion_tokens,
+                        "total_tokens": turn_prompt_tokens + turn_completion_tokens,
+                    },
                 })
 
             # Record assistant tool-call message and execute each tool.
@@ -1163,6 +1307,9 @@ def api_ai_chat():
                     "content": result,
                 })
 
+        if turn_prompt_tokens > 0 or turn_completion_tokens > 0:
+            record_ai_token_usage(turn_prompt_tokens, turn_completion_tokens,
+                                  model=model, provider=provider)
         return jsonify({
             "ok": True,
             "answer": f"⏹ Đã dừng sau {max_iter} bước agent (Guardrail Limit: Max {max_iter} iterations). "
@@ -1170,10 +1317,19 @@ def api_ai_chat():
             "trace": trace,
             "model": model,
             "provider": provider,
+            "usage": {
+                "prompt_tokens": turn_prompt_tokens,
+                "completion_tokens": turn_completion_tokens,
+                "total_tokens": turn_prompt_tokens + turn_completion_tokens,
+            },
         })
     except RuntimeError as exc:
+        if turn_prompt_tokens > 0 or turn_completion_tokens > 0:
+            record_ai_token_usage(turn_prompt_tokens, turn_completion_tokens, model=model, provider=provider)
         return jsonify({"ok": False, "error": str(exc), "trace": trace}), 400
     except Exception as exc:  # pragma: no cover
+        if turn_prompt_tokens > 0 or turn_completion_tokens > 0:
+            record_ai_token_usage(turn_prompt_tokens, turn_completion_tokens, model=model, provider=provider)
         return jsonify({"ok": False, "error": f"Agent error: {exc}", "trace": trace}), 500
 
 
@@ -1189,6 +1345,42 @@ def api_ai_guardrails_post():
     data = request.get_json(silent=True) or {}
     updated = save_ai_guardrails(data)
     return jsonify({"ok": True, "guardrails": updated})
+
+
+@ai_bp.get("/api/ai/token_usage")
+def api_ai_token_usage():
+    """Return token usage statistics for the current month and past months."""
+    state = get_ai_token_usage()
+    now_m = datetime.now().strftime("%Y-%m")
+    months = state.get("months", {})
+    cur = months.get(now_m, {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+        "requests": 0,
+        "by_model": {},
+    })
+
+    history = []
+    for m in sorted(months.keys(), reverse=True):
+        m_data = months[m]
+        history.append({
+            "month": m,
+            "prompt_tokens": m_data.get("prompt_tokens", 0),
+            "completion_tokens": m_data.get("completion_tokens", 0),
+            "total_tokens": m_data.get("total_tokens", 0),
+            "requests": m_data.get("requests", 0),
+            "by_model": m_data.get("by_model", {}),
+        })
+
+    return jsonify({
+        "ok": True,
+        "current_month": now_m,
+        "current": cur,
+        "history": history,
+        "months": months,
+        "last_updated": state.get("last_updated", ""),
+    })
 
 
 # ------------------------------------------------------------------------------
