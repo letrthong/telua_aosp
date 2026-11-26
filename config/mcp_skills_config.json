@@ -1,0 +1,27 @@
+{
+  "enabled": true,
+  "auto_sync_enabled": true,
+  "sync_on_startup": true,
+  "sync_interval_hours": 3,
+  "collection_name": "telua_knowledge",
+  "repo_url": "https://github.com/letrthong/telua_skill/tree/main/Java_Android",
+  "local_path": "repos/telua_skill/Java_Android",
+  "sources": [
+    {
+      "id": "telua_skill",
+      "name": "Telua Java/Android & AAOS",
+      "repo_url": "https://github.com/letrthong/telua_skill/tree/main/Java_Android",
+      "local_path": "repos/telua_skill/Java_Android",
+      "enabled": true
+    },
+    {
+      "id": "claude_code_java",
+      "name": "Claude Code Java Agent Skills",
+      "repo_url": "https://github.com/decebals/claude-code-java.git",
+      "local_path": "repos/claude-code-java",
+      "enabled": true
+    }
+  ],
+  "last_sync": "2026-11-26 21:29:39",
+  "indexed_count": 79
+}
