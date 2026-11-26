@@ -250,6 +250,10 @@ Rules:
 - You can create, write, and edit code files directly using write_file and edit_file.
 - Use get_file_git_history to inspect commit history (hash, author, date, message) of a specific file.
 - Use get_commit_diff to inspect lines added/removed in a specific commit when investigating regressions, bug causes, or historical changes.
+- When inspecting or debugging source code files (> 150 lines):
+  1. Call read_file with outline=True first to see classes, methods, and line ranges without token bloat.
+  2. Call read_file with method="<name>" to read the exact complete function body with class context.
+  3. Or use read_file with start_line and end_line; the tool automatically snaps boundaries to the closing brace so functions are never chopped in half.
 - When a target file is specified, read it first with read_file (if it exists), consult relevant MCP skills (get_telua_skill or search_knowledge), write or edit the code directly with write_file or edit_file, and run verification commands via run_tel (e.g. 'tel build' or compilation checks).
 - Keep commands short and read-only first (status, logs) before mutating anything.
 - Never run destructive commands (flash, rm -rf /, force push) — they are blocked.
@@ -471,6 +475,38 @@ def _tool_read_file(args: dict) -> str:
     if not text.strip():
         return f"(empty file: {rel})"
 
+    # Structure & AST-aware code reading
+    from .code_structure_engine import CodeStructureEngine
+
+    # Mode 1: High-level symbol outline
+    if args.get("outline"):
+        return CodeStructureEngine.get_outline(text, path.name, rel_path=rel)
+
+    # Mode 2: Complete method/symbol extraction
+    target_symbol = str(args.get("method") or args.get("symbol") or "").strip()
+    if target_symbol:
+        sym_res = CodeStructureEngine.extract_symbol(text, path.name, target_symbol, rel_path=rel)
+        if sym_res:
+            return sym_res["output"]
+        return (
+            f"[NOT FOUND] Symbol '{target_symbol}' was not found in {rel}.\n"
+            f"Use read_file(path='{rel}', outline=True) to inspect available classes and methods."
+        )
+
+    # Mode 3: Line range reading with flexible length & smart boundary snapping
+    guardrails = get_ai_guardrails()
+    default_max_lines = int(guardrails.get("max_lines_per_read", 150))
+    requested_max_lines = args.get("max_lines")
+    if requested_max_lines is not None:
+        try:
+            max_lines = max(10, min(int(requested_max_lines), 500))
+        except (ValueError, TypeError):
+            max_lines = default_max_lines
+    else:
+        max_lines = max(10, min(default_max_lines, 500))
+
+    max_chars = max(1000, min(int(guardrails.get("max_tool_output_chars", 6000)), 20000))
+
     lines = text.splitlines()
     total_lines = len(lines)
 
@@ -491,6 +527,19 @@ def _tool_read_file(args: dict) -> str:
         end_line = start_line + max_lines - 1
 
     actual_end = min(total_lines, end_line)
+
+    # Smart Boundary Snapping: expand end_line up to 50 lines to complete the active method
+    snap_note = ""
+    try:
+        _, s_end, note = CodeStructureEngine.snap_boundaries(
+            text, path.name, start_line, actual_end, max_snap=50
+        )
+        if s_end != actual_end and s_end <= total_lines:
+            actual_end = s_end
+            snap_note = f" {note}" if note else ""
+    except Exception:
+        pass
+
     selected_lines = lines[start_line - 1 : actual_end]
 
     numbered_lines = []
@@ -505,7 +554,7 @@ def _tool_read_file(args: dict) -> str:
         numbered_lines.append(formatted)
         char_count += len(formatted) + 1
 
-    header = f"=== FILE: {rel} (Lines {start_line}-{actual_end} of {total_lines} total lines) ==="
+    header = f"=== FILE: {rel} (Lines {start_line}-{actual_end} of {total_lines} total lines){snap_note} ==="
     body = "\n".join(numbered_lines)
 
     footer = ""
@@ -812,13 +861,16 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Read a text file inside the toolkit workspace. Supports reading specific line ranges (start_line to end_line, max 150 lines per chunk) to protect token budget and shows numbered lines.",
+            "description": "Read a source code or text file in the workspace. Supports 3 modes: (1) outline=True to view all classes and methods with line numbers, (2) method='name' to extract a complete function body with class context, or (3) start_line/end_line range reading with automatic function boundary snapping.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "Relative path, e.g. src/MyService.java"},
+                    "outline": {"type": "boolean", "description": "If true, returns a high-level symbol outline (classes, methods, line ranges) instead of reading full text. Use first on files > 150 lines."},
+                    "method": {"type": "string", "description": "Optional name of a specific method or function to extract completely with its enclosing class context."},
                     "start_line": {"type": "integer", "description": "1-based line number to start reading from (default 1)"},
-                    "end_line": {"type": "integer", "description": "1-based line number to end reading (default start_line + 150)"}
+                    "end_line": {"type": "integer", "description": "1-based line number to end reading (default start_line + 150)"},
+                    "max_lines": {"type": "integer", "description": "Maximum lines to read in one call (default 150, up to 500)"}
                 },
                 "required": ["path"],
             },

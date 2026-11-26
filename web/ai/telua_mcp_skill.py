@@ -108,6 +108,68 @@ def _config_path() -> Path:
     return root / "config" / "mcp_skills_config.json"
 
 
+def detect_aosp_version_from_path(dir_path: Optional[Path]) -> dict:
+    """
+    Detect AOSP version, API level, and branch from an AOSP tree or repository path.
+    Looks for build/make/core/version_defaults.mk, git tags, or directory naming heuristics.
+    """
+    res = {
+        "project": "aosp_aaos",
+        "aosp_version": "",
+        "api_level": None,
+        "branch": "",
+    }
+    if not dir_path or not dir_path.is_dir():
+        return res
+
+    # 1. Search for version_defaults.mk in ancestors or self
+    curr = dir_path
+    for _ in range(5):
+        ver_file = curr / "build" / "make" / "core" / "version_defaults.mk"
+        if not ver_file.is_file():
+            ver_file = curr / "build" / "core" / "version_defaults.mk"
+        if ver_file.is_file():
+            try:
+                txt = ver_file.read_text(encoding="utf-8", errors="ignore")
+                m_ver = re.search(r"PLATFORM_VERSION\s*(?::=|=)\s*([0-9\.]+)", txt)
+                m_sdk = re.search(r"PLATFORM_SDK_VERSION\s*(?::=|=)\s*([0-9]+)", txt)
+                if m_ver:
+                    v_str = m_ver.group(1).split(".")[0]
+                    res["aosp_version"] = f"a{v_str}"
+                if m_sdk:
+                    res["api_level"] = int(m_sdk.group(1))
+                break
+            except Exception:
+                pass
+        if curr.parent == curr:
+            break
+        curr = curr.parent
+
+    # 2. Check path string heuristics if not detected (e.g. 'aosp_a16', 'android-14', 'a12')
+    if not res["aosp_version"]:
+        full_str = str(dir_path).lower().replace("\\", "/")
+        m_a = re.search(r"\b(?:android[-_]?|a)(\d{2})\b", full_str)
+        if m_a:
+            v_num = int(m_a.group(1))
+            res["aosp_version"] = f"a{v_num}"
+            api_map = {11: 30, 12: 31, 13: 33, 14: 34, 15: 35, 16: 36}
+            res["api_level"] = api_map.get(v_num)
+
+    # 3. Check git branch or tag if git repo
+    git_dir = dir_path / ".git"
+    if git_dir.exists():
+        try:
+            head_f = git_dir / "HEAD" if git_dir.is_dir() else None
+            if head_f and head_f.is_file():
+                head_content = head_f.read_text(encoding="utf-8").strip()
+                if "refs/heads/" in head_content:
+                    res["branch"] = head_content.split("refs/heads/")[-1].strip()
+        except Exception:
+            pass
+
+    return res
+
+
 def get_mcp_skill_state() -> dict:
     """Read dynamic runtime state (last_sync, indexed_count) from overlay."""
     p = _repo_root() / STATE_FILE_PATH
@@ -193,6 +255,10 @@ def save_mcp_skill_config(cfg: dict) -> dict:
                 "name": name,
                 "local_path": local_path,
                 "repo_url": str(s.get("repo_url", "")).strip(),
+                "project": str(s.get("project", "")).strip() or "aosp_aaos",
+                "aosp_version": str(s.get("aosp_version", "")).strip(),
+                "api_level": int(s.get("api_level")) if s.get("api_level") else None,
+                "branch": str(s.get("branch", "")).strip(),
                 "enabled": bool(s.get("enabled", True)),
                 "visibility": "private" if is_priv else "public",
                 "is_private": is_priv,
@@ -290,11 +356,21 @@ def get_all_configured_sources() -> List[dict]:
 
         exists = p.is_dir()
         s_id = s.get("id") or (p.name if exists else (rel.replace("\\", "/").rstrip("/").split("/")[-1] or "source"))
+        detected = detect_aosp_version_from_path(p if exists else None)
+        final_proj = str(s.get("project", "")).strip() or detected.get("project") or "aosp_aaos"
+        final_ver = str(s.get("aosp_version", "")).strip() or detected.get("aosp_version") or ""
+        final_api = s.get("api_level") or detected.get("api_level")
+        final_br = str(s.get("branch", "")).strip() or detected.get("branch") or ""
+
         result.append({
             "id": s_id,
             "name": s.get("name") or s_id,
             "repo_url": s.get("repo_url", ""),
             "local_path": rel,
+            "project": final_proj,
+            "aosp_version": final_ver,
+            "api_level": final_api,
+            "branch": final_br,
             "enabled": s.get("enabled", True),
             "visibility": s.get("visibility", "public"),
             "is_private": bool(s.get("visibility") == "private" or s.get("is_private")),
@@ -401,6 +477,10 @@ def scan_skills(source_id: Optional[str] = None) -> List[dict]:
                     "scoped_path": scoped_path,
                     "source_id": s_id,
                     "source_name": s_name,
+                    "project": src.get("project", "aosp_aaos"),
+                    "aosp_version": src.get("aosp_version", ""),
+                    "api_level": src.get("api_level"),
+                    "branch": src.get("branch", ""),
                     "category": category,
                     "size_bytes": stat.st_size,
                     "ext": ext,
@@ -606,6 +686,10 @@ def sync_skills_to_chroma(collection_name: str = "telua_knowledge", incremental:
                 metadata = {
                     "source_id": s["source_id"],
                     "source_name": s["source_name"],
+                    "project": s.get("project", "aosp_aaos"),
+                    "aosp_version": s.get("aosp_version", ""),
+                    "api_level": s.get("api_level") or 0,
+                    "branch": s.get("branch", ""),
                     "category": s["category"],
                     "name": s["name"],
                     "title": s["title"],
@@ -618,21 +702,35 @@ def sync_skills_to_chroma(collection_name: str = "telua_knowledge", incremental:
                     "is_private": is_priv,
                     "indexed_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 }
-                # Formulate semantic embedding document with clear provenance
-                full_doc = (
-                    f"SOURCE: {s['source_name']} ({s['source_id']})\n"
-                    f"CATEGORY: {s['category']}\n"
-                    f"TITLE: {s['title']}\n"
-                    f"FILE: {s['name']} (Path: {s['scoped_path']})\n"
-                    f"SUMMARY: {s['summary']}\n\n"
-                    f"{content}"
-                )
-                if len(full_doc) > 15000:
-                    full_doc = full_doc[:15000]
 
-                docs.append(full_doc)
-                metas.append(metadata)
-                ids.append(doc_id)
+                # AST / Structure-Aware Semantic Chunking for source code
+                from .code_structure_engine import CodeStructureEngine
+                code_exts = {".java", ".kt", ".kts", ".c", ".cpp", ".cc", ".cxx", ".h", ".hpp", ".py", ".js", ".ts", ".rs", ".go", ".aidl"}
+                if s["ext"].lower() in code_exts:
+                    code_chunks = CodeStructureEngine.chunk_code_for_vector_db(
+                        content, s["rel_path"], metadata, max_chunk_chars=4000
+                    )
+                    for ch in code_chunks:
+                        if ch["id"] not in ids:
+                            docs.append(ch["document"])
+                            metas.append(ch["metadata"])
+                            ids.append(ch["id"])
+                else:
+                    # Formulate semantic embedding document with clear provenance
+                    full_doc = (
+                        f"SOURCE: {s['source_name']} ({s['source_id']})\n"
+                        f"CATEGORY: {s['category']}\n"
+                        f"TITLE: {s['title']}\n"
+                        f"FILE: {s['name']} (Path: {s['scoped_path']})\n"
+                        f"SUMMARY: {s['summary']}\n\n"
+                        f"{content}"
+                    )
+                    if len(full_doc) > 15000:
+                        full_doc = full_doc[:15000]
+
+                    docs.append(full_doc)
+                    metas.append(metadata)
+                    ids.append(doc_id)
             except Exception:
                 continue
 
