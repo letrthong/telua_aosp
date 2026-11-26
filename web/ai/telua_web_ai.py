@@ -318,7 +318,17 @@ def _read_providers_json() -> list:
 
 
 def _write_providers_json(providers: list) -> None:
-    path = _ai_providers_json_path() or (_repo_root() / "config" / "ai_providers.json")
+    """Write provider configuration.
+    
+    If any provider has an active apiKey, ALWAYS writes to config/overlay/ai_providers.json
+    (which is git-ignored) to guarantee zero API key leakage into tracked public Git files.
+    """
+    has_any_key = any(bool(p.get("apiKey")) for p in providers if isinstance(p, dict))
+    overlay_path = _repo_root() / "config" / "overlay" / "ai_providers.json"
+    if has_any_key or overlay_path.is_file():
+        path = overlay_path
+    else:
+        path = _ai_providers_json_path() or (_repo_root() / "config" / "ai_providers.json")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(providers, indent=2, ensure_ascii=False), encoding="utf-8")
 
