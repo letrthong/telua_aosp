@@ -33,11 +33,22 @@ When assisting a developer, **ALWAYS prefer using `telua` (or `./build_apk.sh`) 
 │   ├── unused_methods_report.py # 6-in-1 static Java analyzer
 │   ├── config_overlay.py     # Smart overlay merger (merges config/overlay/apk_overlays.config)
 │   └── config_crypto.py      # Private overlay encryption/decryption (Fernet AES)
-├── web/                      # Config Manager Web UI (telua_web.py + static/)
-├── requirements.txt          # Python dependencies
+├── web/                      # Config Manager, BI Studio, Hardware Power & AI Agent Web UI
+│   ├── telua_web.py          # Flask application entrypoint & REST routing
+│   ├── telua_web_bi.py       # Business Intelligence & multi-tab workbook engine
+│   ├── telua_web_power_controls.py # Dual-output hardware relay control (Main Power + ACC)
+│   ├── ai/                   # AI Agent & MCP Knowledge subsystem
+│   │   ├── telua_web_ai.py   # AI Agent loop, tool executors, token guardrails & monthly usage tracker
+│   │   └── telua_mcp_skill.py # Multi-source MCP skills scanner & ChromaDB synchronizer
+│   └── static/               # Web frontend UI (HTML, CSS, vanilla JS tabs)
+├── ai_agent/data/            # Persistent ChromaDB vector database (git-ignored, 'telua_knowledge')
+├── repos/                    # External cloned MCP skills repositories (git-ignored, e.g. claude-code-java)
+├── requirements.txt          # Python dependencies (cryptography, flask, sphinx, chromadb)
 ├── sphinx/                   # Sphinx Doc-as-Code modular template & build scripts
 ├── config/                   # Declarative global constant cheatsheets & project configs
 │   ├── apk.config            # Project-specific active profile & lunch target
+│   ├── mcp_skills_config.json # MCP multi-source directories & repositories
+│   ├── target_power_state.json # Persistent hardware relay status & event log
 │   ├── const_car.config      # AAOS car & audio key injection & test harness
 │   ├── const_dumpsys.config  # System diagnostics & AAOS dumpsys targets
 │   ├── const_security.config # Security, SELinux & permission diagnostics
@@ -51,6 +62,8 @@ When assisting a developer, **ALWAYS prefer using `telua` (or `./build_apk.sh`) 
 │       ├── const_my_cli.config.example # Personal pipeline template (telua my <action>)
 │       ├── apk_overlays.config         # Local confidential project overrides (git-ignored)
 │       ├── const_my_cli.config         # Local personal pipeline macros (git-ignored)
+│       ├── ai_guardrails.json          # Custom token guardrail thresholds (git-ignored)
+│       ├── ai_token_usage.json         # Real-time & multi-month token usage history (git-ignored)
 │       └── enc_*.config                # Encrypted private overlay backups (tel enc / tel dec)
 └── AI.md                     # This file (AI reference)
 ```
@@ -76,7 +89,10 @@ When the user asks you to perform a task, map their intent to the corresponding 
 | **Clean Java Source Files** | `telua java [clean\|diff\|all\|path]` (alias: `telua clean-java`) | Strips trailing whitespace, expands tabs, normalizes `if (x)`, K&R braces & Google Java Style |
 | **Report Unused Java Methods & Style** | `telua java report [diff\|all\|path]` (alias: `telua clean-java report`) | 6-in-1 read-only report: unused methods, unused params, whitespace, `google-java-format`, unused imports & unused private fields |
 | **Link Java AI Skills** | `telua java skill` | Links `.skill/java/` knowledge base (`telua_skill` + `claude-code-java`) into workspace |
-| **Config Manager Web UI** | `telua web [start\|stop\|status\|restart\|log]` | Launches Flask Web UI to edit `.config` files, switch profiles & manage pipelines |
+| **Config Manager & AI Web UI** | `telua web [start\|stop\|status\|restart\|log]` | Launches Flask Web UI with AI Agent, BI Studio & Power Switch |
+| **Launch AI Autonomous Coding Agent** | `telua web start` → navigate to `http://<host>:5000` → **🤖 AI Agent** | Interactive agent loop with line-chunked file I/O, auto-coding & vector search |
+| **Sync MCP Skills to ChromaDB** | Web UI → `⚙ Config` → `🔄 Sync to ChromaDB` (or `POST /api/ai/mcp/sync`) | Indexes 134 skills into local vector DB (`ai_agent/data`) |
+| **Control Bench Relay Power** | Web UI → **⚡ Hardware Power** (or `POST /api/power/set`) | Toggles Main Power / ACC Ignition and logs power state |
 | **Private Config Encryption** | `telua crypto [status\|enc\|dec]` (or `tel enc` / `tel dec`) | Checks, encrypts, or decrypts private configs in `config/overlay/` |
 | **Sphinx Doc-as-Code Manager** | `telua docs [init -t <tpl>\|sync\|build\|clean\|start\|check]` | Initializes template (`basic`, `architecture`, `minimal`, `api`), syncs metadata & builds HTML |
 | **Security & SELinux Diagnostics** | `telua sec [action]` | Controls SELinux (status, perm, enforce), dumps AVC denials & privapp |
@@ -173,6 +189,42 @@ telua docs start [8080]   # Auto-build (if needed), open default browser & start
 telua docs serve [8080]   # Alias for 'start'
 telua docs clean          # Remove _build directory
 ```
+
+### 4.7 Autonomous AI Agent, Tool Calling & Token Guardrails (`web/ai/`)
+
+The toolkit provides an integrated tool-calling AI agent available in the Web UI (`tel web start` → **🤖 AI Agent**). It allows models (Anthropic Claude, OpenAI, local Ollama, or internal LiteLLM gateways) to analyze code, retrieve engineering skills, and perform autonomous coding directly in the workspace.
+
+#### 4.7.1 Available Agent Tools (`TOOL_SCHEMAS`)
+
+| Tool Name | Parameters | Purpose & Defensive Guardrails |
+|---|---|---|
+| `read_file` | `path` (str), `start_line` (int, def 1), `end_line` (int, def start+150) | Reads files in numbered chunks (`0001 \| line`). Prevents context explosion by capping reads to max 150 lines per turn. |
+| `write_file` | `path` (str), `content` (str) | Writes or creates files in the repository. Path traversal outside repository root is strictly forbidden. |
+| `edit_file` | `path` (str), `target` (str), `replacement` (str) | Surgically replaces an exact snippet inside an existing file without rewriting whole files. |
+| `list_files` | `path` (str) | Lists directories and files (annotated with `[D]` or `[F]`). |
+| `get_file_git_history` | `filepath` (str), `limit` (int, def 10, max 30) | Returns commit history (`hash \| date \| author \| subject`) of a specific file for regression analysis. |
+| `get_commit_diff` | `commit_hash` (str), `filepath` (str, optional) | Inspects `git show --stat -p <hash>`. Output is automatically truncated at guardrail limit to prevent token blowup. |
+| `run_tel` | `cmd` (str) | Runs shell/tel commands (e.g. `tel build`, `tel dump car-service`). Destructive commands (`rm -rf /`, `mkfs`, force pushes) are blocked. |
+| `search_knowledge` | `query` (str), `n_results` (int, def 4) | Queries local persistent ChromaDB vector store (`ai_agent/data`) for verified AOSP notes and training data. |
+| `save_training_knowledge` | `content` (str), `topic` (str), `source` (str) | Persists verified debugging solutions or architectural patterns permanently to disk. |
+| `list_telua_skills` | `source` (str, optional), `category` (str, optional) | Lists 134 pre-indexed MCP skills across `telua_skill` (Java_Android) and `claude-code-java`. |
+| `get_telua_skill` | `name` or `rel_path` (str) | Fetches the full markdown documentation and code examples of a specific skill. |
+
+#### 4.7.2 Target Path (File / Folder) Auto-Coding Bar
+In the Web UI header:
+* Set `📁 Target Path (File / Folder)` to a relative workspace path (e.g. `src/com/android/car/` or `src/CarService.java`).
+* Click **📖 Read / Scan**: The agent reads the file or scans directory structure.
+* Click **⚡ Auto-Code**: Prompts the agent to consult relevant MCP skills, read target files, refactor or implement code with `write_file` / `edit_file`, and run compilation checks.
+
+#### 4.7.3 Token Shield & Infinite Loop Protection (Guardrails)
+To prevent runaway token costs and infinite agent loops:
+1. **Loop Breaker Shield:** If the Agent attempts to invoke the exact same tool with identical arguments 2 or more times in a single turn, the loop breaker automatically intercepts the call with a synthesis directive, halting the loop.
+2. **Max Iterations Cap:** Each user turn is strictly capped at a configurable number of tool turns (default 5 steps).
+3. **Chunked Line Reading:** Enforces reading in ranges (default 150 lines) so 3,000+ line files do not consume 30,000+ tokens in one turn.
+4. **Monthly Token Usage Tracking & Retention:**
+   - Logs prompt tokens, completion tokens, total tokens, and request counts per month in `config/overlay/ai_token_usage.json`.
+   - Automatically retains the current month and up to 5 previous months (2–6 months history).
+   - Displayed in the UI via metric summary cards and a historical monthly breakdown table.
 
 ---
 
