@@ -1054,7 +1054,19 @@ To understand how modern autonomous engineering systems operate, it is crucial t
 3. **Reflection & Self-Correction:** Reading compiler/test error streams, identifying syntax or logic bugs, and self-patching code across iterative turns.
 4. **Multi-Step Execution:** Looping through thought-action-observation cycles rather than giving up after one single prompt.
 
-### 9.2 The Architectural Formula: AI Agent = AI Model + AI Harness
+### 9.2 Spectrum of Agency: Single-Agent vs. Multi-Agent Systems
+A common misconception is that "Agentic AI must always consist of multiple agents." In reality, *Agentic* defines the **spectrum of autonomous capability**, categorized into two execution paradigms:
+
+| Architectural Tier | Structure & Mechanics | Strengths & Trade-offs | Where Tel Agent Fits |
+| :--- | :--- | :--- | :--- |
+| **Tier 1: Single-Agentic Workflow** *(Current Tel Agent)* | **A single high-focus agent** operating inside an autonomous ReAct loop ($\text{Perceive} \rightarrow \text{Plan} \rightarrow \text{Act} \rightarrow \text{Observe} \rightarrow \text{Self-Correct}$). | • **Sub-second latency:** Zero inter-agent meeting/coordination overhead.<br>• **Token Efficiency:** No redundant prompt echoing between agents.<br>• **Deterministic control:** No conflicting consensus loops or hallucination propagation. | **The Production Sweet Spot:** Perfectly handles 90%+ of engineering tasks (reading multi-thousand line ASTs, running AOSP builds, fixing regressions, querying versioned skills). |
+| **Tier 2: Multi-Agent Swarm** *(Enterprise Scaling)* | **A squad of specialized agents** (Planner $\rightarrow$ Coder $\rightarrow$ Build Engineer $\rightarrow$ Reviewer) communicating over a message bus. | • **Cross-system audits:** Ideal for nocturnal CI/CD repairs, repository-wide migration, and strict adversarial code review.<br>• **High latency & token cost:** Multi-minute consensus delays and multiplied API token bills. | Scalable blueprint: Telua's modular Harness is already decoupled to support fanning out specialized subagents when full subsystem migration is required. |
+
+> [!TIP]
+> **Why Tel Agent's Current Architecture is Optimal:**  
+> Multi-agent architectures deployed prematurely introduce massive token waste and communication latency. Tel Agent strikes the **ideal balance**: it possesses full Agentic capability (tool use, planning, AST code awareness, and self-correction) while remaining blazing fast, token-conservative, and 100% reliable on developer workstations.
+
+### 9.3 The Architectural Formula: AI Agent = AI Model + AI Harness
 An LLM alone is merely a next-token predictor—a "brain in a jar" without hands, eyes, long-term memory, or safety shields. **Tel Agent** combines any pluggable LLM with the domain-tailored **Telua Harness**:
 
 $$\text{AI Agent} = \text{AI Model (The Brain)} + \text{AI Harness (Body, Sensors, Memory \& Safety)}$$
@@ -1094,14 +1106,14 @@ $$\text{Tel Agent} = \text{Pluggable LLM (Cloud / On-Premise GPU)} + \text{Telua
 +--------------------------------------------------------------------------------------------------+
 ```
 
-### 9.3 Perception Engine: `CodeStructureEngine` & AST-Aware Reading
+### 9.4 Perception Engine: `CodeStructureEngine` & AST-Aware Reading
 Naively slicing code at arbitrary 150-line boundaries amputates functions in half, breaks syntax trees, and blinds LLMs to class-level member fields. Telua's built-in **`CodeStructureEngine`** ([web/ai/code_structure_engine.py](web/ai/code_structure_engine.py)), powered by `Pygments` and Python `ast`, provides structure-aware inspection:
 * **Outline Mode (`read_file(path, outline=True)`):** Generates an architectural tree of all classes, interfaces, and method signatures with exact line spans, allowing the agent to analyze 3,000+ line files in seconds with minimal token consumption.
 * **Exact Method Extraction (`read_file(path, method="setVolumeGroupIndex")`):** Locates the method declaration, prepends the enclosing class header, captures Javadoc/docstrings, and extracts the entire function body down to the matching closing brace `}`.
 * **Smart Boundary Snapping:** When reading line chunks (`start_line` to `end_line`), the engine detects if `end_line` falls inside an active method body and automatically snaps forward to the closing brace, ensuring no function is ever cut in half.
 * **Flexible Read Capacities:** Supports expanding chunk sizes up to 500 lines per read on demand (`max_lines=500`).
 
-### 9.4 Long-Term Memory & Dual-Layer AOSP Versioning (A12 vs A16)
+### 9.5 Long-Term Memory & Dual-Layer AOSP Versioning (A12 vs A16)
 In automotive platforms, CarAudio, CarProperty, and AIDL HAL interfaces mutate significantly across Android releases. Telua enforces **Dual-Layer Version Tagging** across all indexed skills:
 1. **In-Document Provenance Header:** Every code chunk indexed into ChromaDB includes a standardized header:
    ```java
@@ -1117,7 +1129,7 @@ In automotive platforms, CarAudio, CarProperty, and AIDL HAL interfaces mutate s
 3. **Automated AOSP Version Detection:** The `detect_aosp_version_from_path()` engine automatically scans `build/make/core/version_defaults.mk`, git branches, and folder heuristics to tag A12–A16 versions without manual input.
 4. **Cross-Version Migration Analysis:** Enables the Agent to compare A12 and A16 implementations side-by-side to produce precise migration guides for vehicle software engineers.
 
-### 9.5 Autonomous Coding & Direct Workspace Tools
+### 9.6 Autonomous Coding & Direct Workspace Tools
 The AI Agent operates inside an iterative thinking loop, selecting and executing workspace tools autonomously:
 * **Target File & Directory Auto-Coding Bar:** Set a target path (e.g. `src/com/android/car/` or `src/CarService.java`), click `📖 Read / Scan` for situational awareness, or click `⚡ Auto-Code` to refactor multiple files across the target.
 * **`read_file`**: Outline, method extraction, or smart-snapped line-range reads with line numbers (`0042 | code`).
@@ -1126,14 +1138,14 @@ The AI Agent operates inside an iterative thinking loop, selecting and executing
 * **`get_file_git_history` & `get_commit_diff`**: Reads per-file commit logs and inspects code diffs (`git show --stat -p`) for rapid regression diagnostics and root cause analysis.
 * **`run_tel`**: Executes compilation checks (`tel build`), hardware commands, ADB queries, and tests, automatically blocking destructive commands (`rm -rf /`, formatting, force pushes).
 
-### 9.6 MCP Skills & ChromaDB Knowledge Base (134 Pre-Indexed Skills)
+### 9.7 MCP Skills & ChromaDB Knowledge Base (134 Pre-Indexed Skills)
 Local engineering skills and design patterns are indexed in a persistent vector database ([ai_agent/data/](ai_agent/data/)):
 * **`telua_skill` (Java_Android):** Vehicle HAL, Power HAL, CarAudioService, CarPropertyService, Audio policy, AIDL / Binder rules.
 * **`claude-code-java`:** Concurrency reviews, Spring Boot patterns, JPA performance, Clean Code, Security audits, and SOLID design.
 * **Dynamic Multi-Source Management:** Add local directories or clone remote Git repositories directly in the Web UI (`⚙ Config` modal).
 * **Automated Sync Scheduler:** Triggers re-indexing automatically on web startup and at configurable intervals (every 3h, 6h, 12h, or manual).
 
-### 9.7 Public vs Private Isolation & Vector DB Architecture
+### 9.8 Public vs Private Isolation & Vector DB Architecture
 To protect proprietary company code, NDA documentation, and internal architecture while enabling seamless team sharing:
 * **Public vs Private Source Isolation:**
   - **Public Sources** (e.g. `telua_skill`, `claude_code_java`) are saved in `config/mcp_skills_config.json` and tracked in Git for the whole team.
@@ -1148,13 +1160,13 @@ To protect proprietary company code, NDA documentation, and internal architectur
   - **100% Offline & $0 Cost:** Runs locally on CPU (~5 ms/query) without requiring external API keys or consuming LLM tokens.
   - **Mathematical Symmetry:** Both the indexing pipeline (Write: `sync_skills_to_chroma`) and retrieval tool (Read: `_tool_search_knowledge`) share the exact same embedding model instance, eliminating `DimensionMismatchError` and vector divergence.
 
-### 9.8 Token Shield & Infinite Loop Guardrails
+### 9.9 Token Shield & Infinite Loop Guardrails
 To prevent runaway LLM costs and context exhaustion:
 * **Loop Breaker Shield:** Intercepts and stops duplicate tool calls if the Agent attempts to invoke the same tool with identical arguments repeatedly.
 * **Max Iterations Limit:** Enforces a configurable cap (default 5 turns) per user prompt.
 * **Monthly Token Tracking:** Logs prompt tokens, completion tokens, and request counts per month into `config/overlay/ai_token_usage.json`, retaining history for the current and past 2–6 months with UI metric cards and a monthly breakdown table.
 
-### 9.9 Hardware Relay Power Controls
+### 9.10 Hardware Relay Power Controls
 Automated dual-output hardware relay control (**Main Power** & **Ignition ACC**) for bench-test DUTs:
 * Toggle power outputs directly from the Web UI or via `web/telua_web_power_controls.py`.
 * Power states and timestamped switch events are persisted in `config/target_power_state.json`.
