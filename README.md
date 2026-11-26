@@ -844,16 +844,101 @@ tel web stop                          # Dừng Web UI server
    - **Bộ Thư Viện Mẫu Nghiệp Vụ Chuẩn `bi_studio/`**: Tự động phát hiện và hiển thị các file Excel mẫu nghiệp vụ chung (Bán lẻ global_retail_sales.xlsx, Quản trị nhân sự hr_workforce_analytics.xlsx, Dự án công nghệ it_project_portfolio.xlsx, Tài chính vận hành financial_budget_opex.xlsx), menu dropdown tự cập nhật động mà không cần can thiệp mã nguồn HTML.
    - **Xuất Dữ Liệu Hai Chiều**: Hỗ trợ xem/sao chép/tải xuống dữ liệu dưới dạng JSON ({} JSON) hoặc xuất ngược tập dữ liệu đã lọc ra file Excel .xlsx (⬇ Excel).
 
-#### 🤖 AOSP Center — Build/Deploy/Test theo đúng thư mục source của project
+8. **🤖 AOSP Center — Build/Deploy/Test theo đúng thư mục source của project**:
+   - **Tự động chạy đúng thư mục source**: Tab **🤖 AOSP** luôn thực thi `tel b` / `tel test` / shortcut từ thư mục source của project đang chọn (`<AOSP_TOP>/<SOURCE_CODE_RELATIVE_PATH>`, ví dụ `.../android/qssi/vendor/bosch/services/car/oemcarservice`), không cần `cd` thủ công. Header console hiển thị `(cd <source_dir>)` để xác nhận thư mục thực thi.
+   - **Tự động tạo `apk.config` khi chọn project**: Khi user chọn project (dropdown **Project** trên compact bar, modal **⚙️ Config Settings**, hoặc chip `project:`), backend tự động:
+     1. Tạo `<source_dir>/apk.config` từ template `config/apk.config` nếu chưa có;
+     2. Merge overlay cá nhân `config/overlay/apk_overlays.config` qua `python/config_overlay.py` (đầy đủ các branch profile `oemcarservice`, `car_audio`, `vehicle_service`, `kitchen_sink`, `overlay_bosch_audio`, ...);
+     3. Cập nhật `ACTIVE_PROJECT="<project>"` trong file đó — đồng bộ cả `apk.config` gốc và overlay.
+   - **Kiểm tra trạng thái**: Hover vào pill **Source** trên compact bar để xem đường dẫn source dir tuyệt đối và trạng thái `apk.config` (✔ đã có / sẽ tự tạo khi đổi project). API trả về thêm `source_dir`, `source_dir_exists`, `apk_config_in_source` tại `GET /api/aosp/config`.
+   - **Nạp APK 1-Click (Amethyst Pulse Glow)**: Nút `⚡ Upload & Deploy APK` hỗ trợ chọn file APK đã build, xác thực tên file so với `OUTPUT_FILE_NAME`, đẩy thẳng vào `/system/priv-app/` hoặc `/product/app/` và tự khởi động lại package.
 
-> **⚠️ Quan trọng — `tel b` phụ thuộc thư mục hiện tại:** `build_apk.sh` tìm `apk.config` từ thư mục hiện tại duyệt ngược lên cây AOSP. Vì vậy **phải `cd` vào thư mục source của project trước** (ví dụ `cd <AOSP_TOP>/vendor/bosch/services/car/oemcarservice`) rồi mới chạy `tel b`; nếu không, script sẽ rơi vào template `config/apk.config` của toolkit và báo `ERROR: Unknown ACTIVE_PROJECT ...` với danh sách profile không khớp.
+9. **📱 Mirror Tab — Screen Mirroring & Android Remote Control (Zero-Dependency)**:
+   - **Truyền hình ảnh Canvas mượt mà**: Chụp trực tiếp từ frame buffer của thiết bị qua `adb exec-out screencap -p` và hiển thị trên Canvas HTML5 không cần cài đặt thêm `scrcpy`, `ffmpeg` hay driver phụ trợ.
+   - **Tự động nhận diện kích thước từ Target**:
+     - Đọc độ phân giải vật lý (`Physical size` / `Override size`) qua `adb shell wm size` và mật độ điểm ảnh qua `wm density`.
+     - Tự động co giãn theo hướng xoay màn hình (Landscape xe hơi ô tô `1920×1080` hoặc Portrait điện thoại `1080×1920`).
+     - Tự động nhận diện AOSP `TARGET_PRODUCT` (ví dụ `car_x86_64`) khi thiết bị offline để hiển thị khung preview chuẩn.
+   - **Tương tác cảm ứng & Điều khiển từ xa (Interactive Remote Control)**:
+     - Click chuột để chạm (Tap), kéo rê chuột để vuốt cuộn trang (Swipe/Scroll) với vòng tròn phản hồi chạm (Touch Ripple Animation). Tọa độ click chuột tự động được ánh xạ 1:1 chuẩn xác sang tọa độ pixel thực tế của target.
+     - Phím cứng ảo Android: `◀ Back`, `⌂ Home`, `▢ Recents`, `⚡ Power`, `🔔 Notifications`, `🔊 Vol+`, `🔉 Vol-`, `⚙ Settings`.
+     - Nhập liệu bàn phím: Ô gõ văn bản và nút gửi text trực tiếp vào input field của Android qua `adb shell input text`.
+     - Chụp ảnh màn hình HD: Nút `📸 Screenshot` lưu ảnh PNG độ nét cao về máy tính.
+   - **Chạy ngầm liên tục (Background Streaming)**: Stream vẫn tiếp tục chạy ngầm trong Canvas khi chuyển sang các tab khác, tab `📱 Mirror` hiển thị chấm xanh nhấp nháy `.tab-streaming`, khi quay lại tab Mirror màn hình hiển thị ngay lập tức với 0 độ trễ (zero latency).
 
-- **Tự động chạy đúng thư mục source**: Tab **🤖 AOSP** luôn thực thi `tel b` / `tel test` / shortcut từ thư mục source của project đang chọn (`<AOSP_TOP>/<SOURCE_CODE_RELATIVE_PATH>`, ví dụ `.../android/qssi/vendor/bosch/services/car/oemcarservice`), không cần `cd` thủ công. Header console hiển thị `(cd <source_dir>)` để xác nhận thư mục thực thi.
-- **Tự động tạo `apk.config` khi chọn project**: Khi user chọn project (dropdown **Project** trên compact bar, modal **⚙️ Config Settings**, hoặc chip `project:`), backend tự động:
-  1. Tạo `<source_dir>/apk.config` từ template `config/apk.config` nếu chưa có;
-  2. Merge overlay cá nhân `config/overlay/apk_overlays.config` qua `python/config_overlay.py` (đầy đủ các branch profile `oemcarservice`, `car_audio`, `vehicle_service`, `kitchen_sink`, `overlay_bosch_audio`, ...);
-  3. Cập nhật `ACTIVE_PROJECT="<project>"` trong file đó — đồng bộ cả `apk.config` gốc và overlay.
-- **Kiểm tra trạng thái**: Hover vào pill **Source** trên compact bar để xem đường dẫn source dir tuyệt đối và trạng thái `apk.config` (✔ đã có / sẽ tự tạo khi đổi project). API trả về thêm `source_dir`, `source_dir_exists`, `apk_config_in_source` tại `GET /api/aosp/config`.
+10. **📋 Logcat Studio Tab — Real-time Android Logcat Analyzer**:
+    - **Bắt log thời gian thực**: Stream logcat từ thiết bị với bộ lọc đa tầng theo Log Level (`V`, `D`, `I`, `W`, `E`, `F`), Tag ô tô/AOSP, PID và biểu thức chính quy (Regex).
+    - **Lưu bộ lọc theo dự án & cá nhân**: Hỗ trợ lưu cấu hình bộ lọc vào `config/overlay/logcat_filters.json` (cá nhân) hoặc `config/logcat_filters.json` (dùng chung cho team).
+    - **Tự động nhận diện mất kết nối (Auto-Recovery)**: Phát hiện thiết bị mất kết nối và cung cấp nút tải nhanh kịch bản `adb_remote_pc.bat` để kết nối lại.
+
+---
+
+### 5.12 Hướng Dẫn Làm Việc Từ Xa & Truy Cập Phòng Lab (Remote Work & Remote Lab Setup)
+
+Telua Web được thiết kế để hỗ trợ lập trình viên làm việc từ xa (Work from Home / Remote Lab) mà không cần ngồi trực tiếp trước máy trạm build hoặc board phần cứng AOSP. Dưới đây là các phương thức kết nối từ xa phổ biến và an toàn nhất:
+
+#### 🚀 Cách 1: Sử Dụng SSH Port Forwarding (Khuyên Dùng Nhất — Không Cần Sửa Code, Bảo Mật Tuyệt Đối)
+
+Đây là cách đơn giản và an toàn nhất vì toàn bộ dữ liệu (Mirror, Logcat, Terminal) đều được mã hóa qua đường truyền SSH có sẵn của bạn:
+
+1. **Khởi chạy Telua Web trên máy trạm Linux tại công ty/lab:**
+   ```bash
+   tel web start                         # Khởi chạy ngầm trên port 8788
+   ```
+
+2. **Trên laptop ở nhà (Windows PowerShell, macOS hoặc Linux Terminal), chạy 1 lệnh duy nhất:**
+   ```bash
+   ssh -L 8788:localhost:8788 user@ip_may_cong_ty
+   ```
+   *(Thay `user@ip_may_cong_ty` bằng tài khoản SSH vào máy trạm của bạn)*
+
+3. **Mở trình duyệt trên máy ở nhà:**
+   👉 Truy cập: `http://localhost:8788`
+   - Toàn bộ giao diện Telua Web, xem màn hình Mirror, bắt Logcat và chạy lệnh Terminal sẽ hoạt động trơn tru hệt như bạn đang ngồi tại văn phòng!
+
+---
+
+#### 🌐 Cách 2: Chạy Trực Tiếp Qua Mạng Nội Bộ LAN hoặc VPN (Tailscale, WireGuard, OpenVPN)
+
+Nếu máy trạm công ty và laptop ở nhà cùng kết nối vào một mạng VPN nội bộ (như **Tailscale**, **WireGuard**, hoặc mạng VPN công ty):
+
+1. **Khởi chạy Web UI cho phép truy cập từ mọi IP trong mạng (`--host 0.0.0.0`):**
+   ```bash
+   python3 web/telua_web.py --host 0.0.0.0 --port 8788
+   ```
+   *Hoặc đặt biến môi trường trong `~/.bashrc`:*
+   ```bash
+   export TELUA_WEB_HOST="0.0.0.0"
+   export TELUA_WEB_PORT="8788"
+   tel web start
+   ```
+
+2. **Mở trình duyệt trên laptop từ xa:**
+   👉 Truy cập: `http://<IP_MAY_TRAM>:8788` (Ví dụ: `http://100.85.120.45:8788` nếu dùng Tailscale hoặc `http://192.168.1.50:8788` trong mạng LAN công ty).
+
+---
+
+#### ☁️ Cách 3: Kết Nối Qua Cloudflare Zero Trust Tunnel (Miễn Phí, Có HTTPS & Domain Riêng)
+
+Nếu muốn truy cập từ xa qua internet công cộng an toàn mà không cần mở port modem router:
+
+1. Cài đặt tiện ích `cloudflared` trên máy trạm Linux.
+2. Chạy tunnel nhanh trỏ vào Telua Web:
+   ```bash
+   cloudflared tunnel --url http://localhost:8788
+   ```
+3. Cloudflare sẽ cấp cho bạn một đường dẫn HTTPS an toàn (ví dụ: `https://your-random-domain.trycloudflare.com`) để mở trên bất kỳ thiết bị nào (laptop, tablet, điện thoại).
+
+---
+
+#### 🔌 Cách 4: Kết Nối Thiết Bị Android / Board Phần Cứng Từ Xa (Remote ADB Bridge)
+
+Khi thiết bị thật (điện thoại hoặc board ô tô) đang cắm cáp USB vào máy tính Windows của bạn, nhưng mã nguồn và máy chủ build AOSP lại nằm trên máy chủ Linux từ xa:
+
+1. Trên giao diện Telua Web, click vào chip cảnh báo thiết bị offline hoặc vào đường dẫn:
+   `http://<server-ip>:8788/api/adb/remote-script`
+2. Trình duyệt sẽ tự động tải về file `adb_remote_pc.bat`.
+3. Nhấp đúp chạy `adb_remote_pc.bat` trên máy tính Windows có cắm thiết bị: kịch bản sẽ tự động mở cổng `adb forward` và thiết lập kết nối ADB từ xa về máy chủ Linux. Tab **📱 Mirror** và **📋 Logcat** sẽ tự động nhận diện thiết bị ngay lập tức!
 
 ---
 
