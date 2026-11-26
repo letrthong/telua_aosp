@@ -1071,13 +1071,28 @@ Local engineering skills and design patterns are indexed in a persistent vector 
 * **Dynamic Multi-Source Management:** Add local directories or clone remote Git repositories directly in the Web UI (`⚙ Config` modal).
 * **Automated Sync Scheduler:** Triggers re-indexing automatically on web startup and at configurable intervals (every 3h, 6h, 12h, or manual).
 
-### 9.3 Token Shield & Infinite Loop Guardrails
+### 9.3 Public vs Private Isolation & Vector DB Architecture
+To protect proprietary company code, NDA documentation, and internal architecture while enabling seamless team sharing:
+* **Public vs Private Source Isolation:**
+  - **Public Sources** (e.g. `telua_skill`, `claude_code_java`) are saved in `config/mcp_skills_config.json` and tracked in Git for the whole team.
+  - **Private Sources** (e.g. confidential OEM rules, proprietary vehicle repos, internal specs) are automatically separated and saved into `config/overlay/mcp_skills_private.json` (protected by `.gitignore: config/overlay/*.json`).
+  - **Zero Git Leakage:** Teammates and public remotes never see your private file paths or internal Git URLs.
+  - **Web UI Security Switch:** Click the `🌐 Public` $\leftrightarrow$ `🔒 Private` badge in the Web UI to toggle any source's visibility instantly.
+* **"Source-as-Code" Architecture & Incremental MD5 Hashing:**
+  - `ai_agent/data/chroma.sqlite3` is intentionally kept in `.gitignore` to prevent binary merge conflicts and repository bloat.
+  - **No Redundant Re-indexing:** When new private sources are added, MD5 content hashing checks existing files and **skips already-indexed public skills** (`mcp_skills_hashes.json`). Only new or modified files are embedded, completing in milliseconds.
+* **Symmetric Read & Write Embedding Model (`all-MiniLM-L6-v2`):**
+  - Uses a lightweight local ONNX embedding model (`all-MiniLM-L6-v2`, 384 dimensions, ~80 MB memory footprint).
+  - **100% Offline & $0 Cost:** Runs locally on CPU (~5 ms/query) without requiring external API keys or consuming LLM tokens.
+  - **Mathematical Symmetry:** Both the indexing pipeline (Write: `sync_skills_to_chroma`) and retrieval tool (Read: `_tool_search_knowledge`) share the exact same embedding model instance, eliminating `DimensionMismatchError` and vector divergence.
+
+### 9.4 Token Shield & Infinite Loop Guardrails
 To prevent runaway LLM costs and context exhaustion:
 * **Loop Breaker Shield:** Intercepts and stops duplicate tool calls if the Agent attempts to invoke the same tool with identical arguments repeatedly.
 * **Max Iterations Limit:** Enforces a configurable cap (default 5 turns) per user prompt.
 * **Monthly Token Tracking:** Logs prompt tokens, completion tokens, and request counts per month into `config/overlay/ai_token_usage.json`, retaining history for the current and past 2–6 months with UI metric cards and a monthly breakdown table.
 
-### 9.4 Hardware Relay Power Controls
+### 9.5 Hardware Relay Power Controls
 Automated dual-output hardware relay control (**Main Power** & **Ignition ACC**) for bench-test DUTs:
 * Toggle power outputs directly from the Web UI or via `web/telua_web_power_controls.py`.
 * Power states and timestamped switch events are persisted in `config/target_power_state.json`.

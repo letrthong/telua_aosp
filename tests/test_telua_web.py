@@ -671,6 +671,17 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertTrue(any(s["id"] == "my_confidential_rules" and s["visibility"] == "private" for s in all_srcs))
         self.assertTrue(any(s["id"] == "telua_skill" and s["visibility"] == "public" for s in all_srcs))
 
+        # Restore default sources
+        save_mcp_skill_config({
+            "sources": [
+                {"id": "telua_skill", "name": "Telua Java/Android & AAOS", "local_path": "repos/telua_skill/Java_Android", "visibility": "public"},
+                {"id": "claude_code_java", "name": "Claude Code Java Agent Skills", "local_path": "repos/claude-code-java", "visibility": "public"}
+            ]
+        })
+        p_priv = _repo_root() / "config" / "overlay" / "mcp_skills_private.json"
+        if p_priv.is_file():
+            p_priv.unlink()
+
 
 if __name__ == "__main__":
     unittest.main()

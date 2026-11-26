@@ -226,6 +226,19 @@ To prevent runaway token costs and infinite agent loops:
    - Automatically retains the current month and up to 5 previous months (2–6 months history).
    - Displayed in the UI via metric summary cards and a historical monthly breakdown table.
 
+#### 4.7.4 Public vs Private Knowledge Isolation & Embedding Architecture
+* **Public vs Private Isolation:**
+  - Public sources are tracked in `config/mcp_skills_config.json` for team collaboration.
+  - Private sources are isolated in `config/overlay/mcp_skills_private.json` (`.gitignore`), preventing NDA/proprietary leakage.
+  - Web UI allows toggling visibility directly with a single click.
+* **Source-as-Code Vector DB & Incremental Hashing:**
+  - `ai_agent/data/chroma.sqlite3` is kept in `.gitignore` to prevent binary repository bloat and Git merge conflicts.
+  - Incremental MD5 hashing (`mcp_skills_hashes.json`) ensures previously indexed public skills are **skipped without redundant re-creation**.
+* **Symmetric Read & Write Embedding Model (`all-MiniLM-L6-v2`):**
+  - Uses the default local ONNX embedding model (384 dimensions, ~80 MB) on CPU (~5 ms inference).
+  - Cost is $0 and runs 100% offline without API tokens.
+  - Write (`sync_skills_to_chroma`) and Read (`_tool_search_knowledge`) share the exact same embedding model, guaranteeing mathematical vector space consistency.
+
 ---
 
 ## 5. Sequential Macro Pipelines (`telua run <group>`)

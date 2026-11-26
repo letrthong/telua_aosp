@@ -590,8 +590,10 @@ def sync_skills_to_chroma(collection_name: str = "telua_knowledge", incremental:
                     continue
 
                 file_hash = hashlib.md5(content.encode("utf-8")).hexdigest()
-                clean_name = s['name'].replace('.', '_').replace('-', '_')
-                doc_id = f"skill_{s['source_id']}_{s['category']}_{clean_name}"
+                clean_rel = s['rel_path'].replace('/', '_').replace('\\', '_').replace('.', '_').replace('-', '_')
+                doc_id = f"skill_{s['source_id']}_{clean_rel}"
+                if doc_id in ids:
+                    continue
 
                 # Incremental skip: if hash matches, no re-embedding needed
                 if incremental and previous_hashes.get(doc_id) == file_hash:
