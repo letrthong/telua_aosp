@@ -1292,7 +1292,10 @@
       </div>
 
       <div class="settings-section">
-        <h4>Raw JSON (advanced)</h4>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <h4 style="margin:0;">Raw JSON (advanced)</h4>
+          <button class="btn btn-xs ghost" id="btn-ai-load-template" title="Nạp mẫu JSON có sẵn (DeepSeek, OpenAI, Ollama, LiteLLM)">📋 Load Template</button>
+        </div>
         <textarea id="ai-cfg-json" class="term-input mono"
           style="width:100%;min-height:220px;box-sizing:border-box;font-size:11px;"
           spellcheck="false" placeholder='[{ "name": "DeepSeek (litellm)", "apiType": "chat-completions", "apiKey": "", "models": [ … ] }]'></textarea>

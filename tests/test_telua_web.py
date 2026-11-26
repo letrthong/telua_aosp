@@ -189,7 +189,7 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
     def test_static_js_modular_scripts(self):
         scripts = [
             "core.js", "tab_files.js", "tab_pipelines.js", "tab_terminal.js",
-            "tab_docs.js", "tab_aosp.js", "tab_logcat.js", "tab_mirror.js", "tab_power.js", "tab_bi.js", "app.js",
+            "tab_docs.js", "tab_aosp.js", "tab_logcat.js", "tab_mirror.js", "tab_power.js", "tab_ai.js", "tab_bi.js", "app.js",
         ]
         for s in scripts:
             res = self.client.get(f"/static/js/{s}")
@@ -538,6 +538,29 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
 
         # 7. Restore to ON (Master)
         self.client.post("/api/power/set", json={"state": "ON"})
+
+    def test_api_ai_endpoints(self):
+        """Test AI agent status and provider config endpoints."""
+        res_st = self.client.get("/api/ai/status")
+        self.assertEqual(res_st.status_code, 200)
+        data_st = res_st.get_json()
+        self.assertTrue(data_st["ok"])
+        self.assertIn("provider", data_st)
+        self.assertIn("tools", data_st)
+
+        res_cfg = self.client.get("/api/ai/config")
+        self.assertEqual(res_cfg.status_code, 200)
+        data_cfg = res_cfg.get_json()
+        self.assertTrue(data_cfg["ok"])
+        self.assertIsInstance(data_cfg["providers"], list)
+
+        # Test loading template from config file
+        res_tpl = self.client.get("/api/ai/template")
+        self.assertEqual(res_tpl.status_code, 200)
+        data_tpl = res_tpl.get_json()
+        self.assertTrue(data_tpl["ok"])
+        self.assertIsInstance(data_tpl["template"], list)
+        self.assertGreater(data_tpl["count"], 0)
 
 
 if __name__ == "__main__":

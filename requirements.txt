@@ -25,3 +25,5 @@
 
 cryptography>=3.4.8
 openpyxl>=3.0.0
+
+# pip install anthropic

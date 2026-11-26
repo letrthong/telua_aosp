@@ -62,6 +62,11 @@ AI_PROVIDERS_JSON_CANDIDATES = [
     "config/ai_providers.json",
 ]
 
+AI_PROVIDERS_TEMPLATE_CANDIDATES = [
+    "config/overlay/ai_providers.template.json",
+    "config/ai_providers.template.json",
+]
+
 DEFAULT_PROVIDER = "anthropic"
 DEFAULT_MODEL = "claude-sonnet-4-5"
 DEFAULT_MAX_ITERATIONS = 8
@@ -124,6 +129,21 @@ def _write_providers_json(providers: list) -> None:
         Path(__file__).resolve().parent.parent / "config" / "ai_providers.json")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(providers, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _read_template_json() -> list:
+    """Read default provider templates from file."""
+    root = Path(__file__).resolve().parent.parent
+    for cand in AI_PROVIDERS_TEMPLATE_CANDIDATES:
+        path = root / cand
+        if path.is_file():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+                if isinstance(data, list):
+                    return data
+            except Exception:
+                pass
+    return []
 
 
 def _active_provider_entry(providers: list, active_name: str = "") -> Optional[dict]:
@@ -567,6 +587,13 @@ def api_ai_config_get():
     """Return the RAW provider registry JSON (including apiKey field so the
     settings dialog can round-trip the file without wiping stored keys)."""
     return jsonify({"ok": True, "providers": _read_providers_json()})
+
+
+@ai_bp.get("/api/ai/template")
+def api_ai_template():
+    """Return standard provider templates loaded from configuration file."""
+    tpl = _read_template_json()
+    return jsonify({"ok": True, "template": tpl, "count": len(tpl)})
 
 
 @ai_bp.post("/api/ai/config")

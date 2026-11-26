@@ -1,0 +1,108 @@
+[
+  {
+    "name": "Google Gemini (Official)",
+    "vendor": "customendpoint",
+    "apiKey": "",
+    "apiType": "chat-completions",
+    "models": [
+      {
+        "id": "gemini-4-hydrogen",
+        "name": "Gemini 4 Hydrogen (Best for Coding & Agent)",
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        "toolCalling": true
+      },
+      {
+        "id": "gemini-3.8-flash",
+        "name": "Gemini 3.8 Flash (Fast & Smart)",
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        "toolCalling": true
+      },
+      {
+        "id": "gemini-3.5-flash-lite",
+        "name": "Gemini 3.5 Flash-Lite (High Free Quota)",
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        "toolCalling": true
+      },
+      {
+        "id": "gemini-3.1-flash-lite",
+        "name": "Gemini 3.1 Flash-Lite (Ultra Fast)",
+        "url": "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        "toolCalling": true
+      }
+    ]
+  },
+  {
+    "name": "DeepSeek (Official)",
+    "vendor": "customendpoint",
+    "apiKey": "",
+    "apiType": "chat-completions",
+    "models": [
+      {
+        "id": "deepseek-chat",
+        "name": "DeepSeek-V3 (Chat)",
+        "url": "https://api.deepseek.com/v1/chat/completions",
+        "toolCalling": true
+      },
+      {
+        "id": "deepseek-reasoner",
+        "name": "DeepSeek-R1 (Reasoner)",
+        "url": "https://api.deepseek.com/v1/chat/completions",
+        "toolCalling": true
+      }
+    ]
+  },
+  {
+    "name": "OpenAI (Official)",
+    "vendor": "customendpoint",
+    "apiKey": "",
+    "apiType": "chat-completions",
+    "models": [
+      {
+        "id": "gpt-4o-mini",
+        "name": "GPT-4o Mini",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "toolCalling": true
+      },
+      {
+        "id": "gpt-4o",
+        "name": "GPT-4o",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "toolCalling": true
+      }
+    ]
+  },
+  {
+    "name": "Ollama (Local - No Key)",
+    "vendor": "customendpoint",
+    "apiKey": "",
+    "apiType": "chat-completions",
+    "models": [
+      {
+        "id": "qwen2.5-coder:7b",
+        "name": "Qwen 2.5 Coder 7B (Local)",
+        "url": "http://localhost:11434/v1/chat/completions",
+        "toolCalling": true
+      },
+      {
+        "id": "llama3.3:70b",
+        "name": "Llama 3.3 70B (Local)",
+        "url": "http://localhost:11434/v1/chat/completions",
+        "toolCalling": true
+      }
+    ]
+  },
+  {
+    "name": "Custom / LiteLLM Proxy",
+    "vendor": "customendpoint",
+    "apiKey": "",
+    "apiType": "chat-completions",
+    "models": [
+      {
+        "id": "esc/glm-5.3-flash",
+        "name": "GLM 5.3 Flash (LiteLLM)",
+        "url": "http://localhost:8000/v1/chat/completions",
+        "toolCalling": true
+      }
+    ]
+  }
+]

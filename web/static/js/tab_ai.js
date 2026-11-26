@@ -102,6 +102,28 @@ async function initAI() {
   });
   $("#btn-ai-key-save")?.addEventListener("click", saveAIKey);
   $("#btn-ai-cfg-save")?.addEventListener("click", saveAIConfigJson);
+  $("#btn-ai-load-template")?.addEventListener("click", async () => {
+    try {
+      const res = await api("/api/ai/template");
+      if (res && Array.isArray(res.template) && res.template.length > 0) {
+        _aiProviders = res.template;
+        const jsonArea = $("#ai-cfg-json");
+        if (jsonArea) jsonArea.value = JSON.stringify(_aiProviders, null, 2);
+        const provSel = $("#ai-cfg-provider-select");
+        if (provSel) {
+          provSel.innerHTML = _aiProviders.map(p =>
+            `<option value="${esc(p.name)}">${esc(p.name)}</option>`
+          ).join("");
+          renderAIConfigModels();
+        }
+        toast("Template Loaded 📋", "Mẫu cấu hình JSON đã nạp từ server file. Bấm '💾 Save JSON' để áp dụng.", "ok", 4000);
+      } else {
+        toast("Load Template", "Không tìm thấy mẫu cấu hình trên server.", "err");
+      }
+    } catch (err) {
+      toast("Load Template Error", err.message, "err");
+    }
+  });
 
   // Load provider/model status
   try {
