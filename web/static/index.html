@@ -49,19 +49,12 @@
     <div class="statusbar">
       <div class="chip hidden" id="chip-draft"
         title="Unsaved edits kept in browser draft (survives refresh). Click to discard.">✎ draft</div>
-      <div class="chip" id="chip-version" title="Toolkit version">v—</div>
       <div class="chip" id="chip-project" title="Active project (apk.config)">project: —</div>
       <div class="chip" id="chip-crypto" title="Private overlay encryption &amp; apply (config/overlay/)">🔐 crypto
       </div>
       <div class="chip" id="chip-adb" title="Connected ADB devices">adb: —</div>
       <div class="chip" id="chip-ram" title="System RAM">ram: —</div>
-      <select class="theme-select" id="theme-select" title="Select UI color theme (saved in browser)">
-        <option value="dark">🌙 Dark (Default)</option>
-        <option value="jade">💎 Jade (Emerald)</option>
-        <option value="ocean">🌊 Ocean (Deep Blue)</option>
-        <option value="amethyst">🔮 Amethyst (Purple)</option>
-        <option value="light">☀️ Light</option>
-      </select>
+      <button class="btn ghost" id="btn-settings" title="⚙ Settings — UI theme (background color) &amp; tab visibility">⚙</button>
       <button class="btn ghost" id="btn-refresh" title="Reload status &amp; file list">⟳ Refresh</button>
     </div>
   </header>
@@ -1239,6 +1232,36 @@
       <div id="profile-list" class="profile-list"></div>
       <div class="modal-actions">
         <button class="btn" id="btn-profile-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Settings modal (theme + tab visibility) ============ -->
+  <div class="modal hidden" id="modal-settings">
+    <div class="modal-box">
+      <h3>⚙ Settings <span id="settings-version" class="meta mono" title="Toolkit version">v—</span></h3>
+      <p class="meta">Cấu hình giao diện — lưu trong trình duyệt (localStorage), mặc định hiện tất cả tab.</p>
+
+      <div class="settings-section">
+        <h4>🎨 Background Color (Theme)</h4>
+        <select id="settings-theme-select" class="theme-select" title="Select UI color theme (saved in browser)">
+          <option value="dark">🌙 Dark (Default)</option>
+          <option value="jade">💎 Jade (Emerald)</option>
+          <option value="ocean">🌊 Ocean (Deep Blue)</option>
+          <option value="amethyst">🔮 Amethyst (Purple)</option>
+          <option value="light">☀️ Light</option>
+        </select>
+      </div>
+
+      <div class="settings-section">
+        <h4>📑 Hiện tab nào? (Tab Visibility)</h4>
+        <p class="meta">Tích chọn = tab được hiện trên thanh tab. Bỏ tích = ẩn tab (mặc định: tất cả đều hiện).</p>
+        <div id="settings-tab-list" class="settings-tab-list"></div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn" id="btn-settings-reset" title="Khôi phục mặc định: hiện tất cả tab + theme Dark">↺ Reset default</button>
+        <button class="btn primary" id="btn-settings-close">Close</button>
       </div>
     </div>
   </div>

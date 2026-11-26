@@ -36,10 +36,88 @@ function applyTheme(theme) {
   const t = THEME_LABELS[theme] ? theme : "dark";
   document.documentElement.setAttribute("data-theme", t);
   try { localStorage.setItem(THEME_KEY, t); } catch { /* ignore */ }
-  const sel = $("#theme-select");
-  if (sel && sel.value !== t) {
-    sel.value = t;
+}
+
+/* ---------------- Settings: tab visibility (default: all visible) -------- */
+const TABS_VISIBLE_KEY = "telua_web_tabs_visible";   // JSON { tabId: bool } — missing = visible (default)
+const SETTINGS_TABS = [
+  { id: "files", icon: "📄", label: "Files", desc: "Browse & edit config files" },
+  { id: "pipelines", icon: "⚡", label: "Pipelines", desc: "MY_CMD_* / MULTI / CAR / DUMP" },
+  { id: "system", icon: "🖥", label: "System", desc: "System & Docker CLI pipelines" },
+  { id: "aosp", icon: "🤖", label: "AOSP", desc: "Build, Deploy & Test Center" },
+  { id: "terminal", icon: "💻", label: "Terminal", desc: "Interactive Web CLI" },
+  { id: "logcat", icon: "📱", label: "Logcat", desc: "Live logcat stream & filter" },
+  { id: "mirror", icon: "🖥", label: "Mirror", desc: "Screen mirroring & control" },
+  { id: "power", icon: "⚡", label: "Power", desc: "Target power controls" },
+  { id: "docs", icon: "📚", label: "Docs", desc: "Sphinx Doc-as-Code" },
+  { id: "bi", icon: "📊", label: "BI Studio", desc: "Excel → JSON & Dashboard" },
+];
+
+function loadTabsVisible() {
+  try {
+    const raw = localStorage.getItem(TABS_VISIBLE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveTabsVisible(map) {
+  try { localStorage.setItem(TABS_VISIBLE_KEY, JSON.stringify(map)); } catch { /* ignore */ }
+}
+
+function isTabVisible(tabId) {
+  const map = loadTabsVisible();
+  return map[tabId] !== false; // default: visible
+}
+
+function applyTabVisibility() {
+  const map = loadTabsVisible();
+  SETTINGS_TABS.forEach(t => {
+    const btn = $(`#tab-${t.id}`);
+    if (btn) btn.classList.toggle("hidden", map[t.id] === false);
+  });
+}
+
+function renderSettingsTabList() {
+  const list = $("#settings-tab-list");
+  if (!list) return;
+  const map = loadTabsVisible();
+  list.innerHTML = "";
+  SETTINGS_TABS.forEach(t => {
+    const visible = map[t.id] !== false;
+    const item = document.createElement("label");
+    item.className = "settings-tab-item";
+    item.innerHTML =
+      `<input type="checkbox" data-tab="${t.id}" ${visible ? "checked" : ""}>` +
+      `<span class="settings-tab-icon">${t.icon}</span>` +
+      `<span>${t.label}</span>` +
+      `<span class="settings-tab-desc">${t.desc}</span>`;
+    item.querySelector("input").addEventListener("change", (e) => {
+      const m = loadTabsVisible();
+      m[t.id] = e.target.checked;
+      saveTabsVisible(m);
+      applyTabVisibility();
+      // If the active tab was just hidden, fall back to the first visible tab.
+      if (!e.target.checked) {
+        const activeBtn = document.querySelector(".tabs .tab.active");
+        if (activeBtn && activeBtn.id === `tab-${t.id}`) {
+          const firstVisible = SETTINGS_TABS.find(x => isTabVisible(x.id));
+          if (firstVisible) switchTab(firstVisible.id);
+        }
+      }
+    });
+    list.appendChild(item);
+  });
+}
+
+function openSettingsModal() {
+  const sel = $("#settings-theme-select");
+  if (sel) {
+    let cur = "dark";
+    try { cur = localStorage.getItem(THEME_KEY) || "dark"; } catch { /* ignore */ }
+    sel.value = THEME_LABELS[cur] ? cur : "dark";
   }
+  renderSettingsTabList();
+  $("#modal-settings")?.classList.remove("hidden");
 }
 
 function draftSaveFile() {
@@ -202,7 +280,8 @@ async function api(path, options = {}) {
 /* ---------------- Status bar ---------------- */
 function renderStatus(s) {
   state.status = s;
-  $("#chip-version").innerHTML = `v<b>${esc(s.version)}</b>`;
+  const verEl = $("#settings-version");
+  if (verEl) verEl.innerHTML = `v<b>${esc(s.version)}</b>`;
   $("#chip-project").innerHTML = `project: <b>${esc(s.active_project || "—")}</b>`;
   const adb = s.adb_devices || [];
   const chipAdb = $("#chip-adb");

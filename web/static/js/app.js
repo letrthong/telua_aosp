@@ -4,10 +4,23 @@
    ============================================================================== */
 function wire() {
   try { applyTheme(localStorage.getItem(THEME_KEY) || "dark"); } catch { applyTheme("dark"); }
-  $("#theme-select")?.addEventListener("change", (e) => {
+
+  // Settings modal (gear icon): theme picker + tab visibility list
+  $("#btn-settings")?.addEventListener("click", openSettingsModal);
+  $("#btn-settings-close")?.addEventListener("click", () => $("#modal-settings")?.classList.add("hidden"));
+  $("#settings-theme-select")?.addEventListener("change", (e) => {
     const val = e.target.value;
     applyTheme(val);
     toast("Theme updated 🎨", `${THEME_LABELS[val] || val} — saved in browser.`, "info", 5000);
+  });
+  $("#btn-settings-reset")?.addEventListener("click", () => {
+    try { localStorage.removeItem(TABS_VISIBLE_KEY); } catch { /* ignore */ }
+    applyTheme("dark");
+    const sel = $("#settings-theme-select");
+    if (sel) sel.value = "dark";
+    applyTabVisibility();
+    renderSettingsTabList();
+    toast("Settings reset ↺", "All tabs visible again, theme back to Dark.", "ok", 4000);
   });
   $("#search")?.addEventListener("input", (e) => renderFiles(e.target.value));
   $("#btn-refresh")?.addEventListener("click", () => { refreshStatus(); refreshFiles(); });
@@ -538,6 +551,7 @@ async function boot() {
     try { sessionStorage.removeItem("telua_dom_healed"); } catch { /* ignore */ }
   }
   wire();
+  applyTabVisibility();
   await Promise.all([refreshStatus(), refreshFiles(), refreshCryptoStatus()]);
 
   // Restore the last-used source from draft or localStorage so F5 keeps the active tab/source.
@@ -564,6 +578,9 @@ async function boot() {
   await loadPipelines(pipeDraft);
   updateDraftChip();
 
+  if (savedTab && !isTabVisible(savedTab)) {
+    savedTab = null; // tab was hidden in Settings → fall back below
+  }
   if (savedTab === "terminal") {
     switchTab("terminal");
   } else if (savedTab === "aosp") {

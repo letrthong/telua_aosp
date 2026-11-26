@@ -29,6 +29,7 @@ const LAST_TAB_KEY = "telua_web_last_tab";           // "files" | "pipelines" | 
 const LAST_SOURCE_KEY = "telua_web_last_source";     // "my" | "multi" | "car" | "dump" | "system"
 const LAST_FILE_KEY = "telua_web_last_file";         // last opened file name in Files tab
 const THEME_KEY = "telua_web_theme";                 // "dark" | "jade" | "ocean" | "amethyst" | "light"
+const TABS_VISIBLE_KEY = "telua_web_tabs_visible";   // JSON { tabId: bool } — missing = visible (default)
 const THEME_LABELS = {
   dark: "🌙 Dark (Default)",
   jade: "💎 Jade (Emerald)",
@@ -36,6 +37,87 @@ const THEME_LABELS = {
   amethyst: "🔮 Amethyst (Purple)",
   light: "☀️ Light",
 };
+
+/* ---------------- Settings: tab visibility (default: all visible) -------- */
+const SETTINGS_TABS = [
+  { id: "files", icon: "📄", label: "Files", desc: "Browse & edit config files" },
+  { id: "pipelines", icon: "⚡", label: "Pipelines", desc: "MY_CMD_* / MULTI / CAR / DUMP" },
+  { id: "system", icon: "🖥", label: "System", desc: "System & Docker CLI pipelines" },
+  { id: "aosp", icon: "🤖", label: "AOSP", desc: "Build, Deploy & Test Center" },
+  { id: "terminal", icon: "💻", label: "Terminal", desc: "Interactive Web CLI" },
+  { id: "logcat", icon: "📱", label: "Logcat", desc: "Live logcat stream & filter" },
+  { id: "mirror", icon: "🖥", label: "Mirror", desc: "Screen mirroring & control" },
+  { id: "power", icon: "⚡", label: "Power", desc: "Target power controls" },
+  { id: "docs", icon: "📚", label: "Docs", desc: "Sphinx Doc-as-Code" },
+  { id: "bi", icon: "📊", label: "BI Studio", desc: "Excel → JSON & Dashboard" },
+];
+
+function loadTabsVisible() {
+  try {
+    const raw = localStorage.getItem(TABS_VISIBLE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveTabsVisible(map) {
+  try { localStorage.setItem(TABS_VISIBLE_KEY, JSON.stringify(map)); } catch { /* ignore */ }
+}
+
+function isTabVisible(tabId) {
+  const map = loadTabsVisible();
+  return map[tabId] !== false; // default: visible
+}
+
+function applyTabVisibility() {
+  const map = loadTabsVisible();
+  SETTINGS_TABS.forEach(t => {
+    const btn = $(`#tab-${t.id}`);
+    if (btn) btn.classList.toggle("hidden", map[t.id] === false);
+  });
+}
+
+function renderSettingsTabList() {
+  const list = $("#settings-tab-list");
+  if (!list) return;
+  const map = loadTabsVisible();
+  list.innerHTML = "";
+  SETTINGS_TABS.forEach(t => {
+    const visible = map[t.id] !== false;
+    const item = document.createElement("label");
+    item.className = "settings-tab-item";
+    item.innerHTML =
+      `<input type="checkbox" data-tab="${t.id}" ${visible ? "checked" : ""}>` +
+      `<span class="settings-tab-icon">${t.icon}</span>` +
+      `<span>${t.label}</span>` +
+      `<span class="settings-tab-desc">${t.desc}</span>`;
+    item.querySelector("input").addEventListener("change", (e) => {
+      const m = loadTabsVisible();
+      m[t.id] = e.target.checked;
+      saveTabsVisible(m);
+      applyTabVisibility();
+      // If the active tab was just hidden, fall back to the first visible tab.
+      if (!e.target.checked) {
+        const activeBtn = document.querySelector(".tabs .tab.active");
+        if (activeBtn && activeBtn.id === `tab-${t.id}`) {
+          const firstVisible = SETTINGS_TABS.find(x => isTabVisible(x.id));
+          if (firstVisible) switchTab(firstVisible.id);
+        }
+      }
+    });
+    list.appendChild(item);
+  });
+}
+
+function openSettingsModal() {
+  const sel = $("#settings-theme-select");
+  if (sel) {
+    let cur = "dark";
+    try { cur = localStorage.getItem(THEME_KEY) || "dark"; } catch { /* ignore */ }
+    sel.value = THEME_LABELS[cur] ? cur : "dark";
+  }
+  renderSettingsTabList();
+  $("#modal-settings")?.classList.remove("hidden");
+}
 
 function applyTheme(theme) {
   const t = THEME_LABELS[theme] ? theme : "dark";
@@ -6018,6 +6100,28 @@ function wire() {
     applyTheme(val);
     toast("Theme updated 🎨", `${THEME_LABELS[val] || val} — saved in browser.`, "info", 5000);
   });
+
+  // Settings modal (gear icon): theme picker + tab visibility list
+  $("#btn-settings")?.addEventListener("click", openSettingsModal);
+  $("#btn-settings-close")?.addEventListener("click", () => $("#modal-settings")?.classList.add("hidden"));
+  $("#settings-theme-select")?.addEventListener("change", (e) => {
+    const val = e.target.value;
+    applyTheme(val);
+    const topSel = $("#theme-select");
+    if (topSel) topSel.value = val;
+    toast("Theme updated 🎨", `${THEME_LABELS[val] || val} — saved in browser.`, "info", 5000);
+  });
+  $("#btn-settings-reset")?.addEventListener("click", () => {
+    try { localStorage.removeItem(TABS_VISIBLE_KEY); } catch { /* ignore */ }
+    applyTheme("dark");
+    const topSel = $("#theme-select");
+    if (topSel) topSel.value = "dark";
+    const sel = $("#settings-theme-select");
+    if (sel) sel.value = "dark";
+    applyTabVisibility();
+    renderSettingsTabList();
+    toast("Settings reset ↺", "All tabs visible again, theme back to Dark.", "ok", 4000);
+  });
   $("#search")?.addEventListener("input", (e) => renderFiles(e.target.value));
   $("#btn-refresh")?.addEventListener("click", () => { refreshStatus(); refreshFiles(); });
   $("#btn-edit")?.addEventListener("click", () => {
@@ -9305,6 +9409,7 @@ function biRenderTable(container, vis) {
             try { sessionStorage.removeItem("telua_dom_healed"); } catch { /* ignore */ }
           }
           wire();
+          applyTabVisibility();
           await Promise.all([refreshStatus(), refreshFiles(), refreshCryptoStatus()]);
 
           // Restore the last-used source from draft or localStorage so F5 keeps the active tab/source.
@@ -9331,6 +9436,9 @@ function biRenderTable(container, vis) {
           await loadPipelines(pipeDraft);
           updateDraftChip();
 
+          if (savedTab && !isTabVisible(savedTab)) {
+            savedTab = null; // tab was hidden in Settings → fall back below
+          }
           if (savedTab === "terminal") {
             switchTab("terminal");
           } else if (savedTab === "aosp") {
