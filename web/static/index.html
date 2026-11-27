@@ -1045,29 +1045,29 @@
           <span class="mono" style="color:var(--accent);font-weight:700">🤖 AI Agent</span>
           <span id="ai-model-badge" class="chip" title="Active LLM provider &amp; model">model: —</span>
           <span id="ai-status-badge" class="run-badge">Idle</span>
-          <span id="ai-header-token-badge" class="chip" style="font-size:11px;cursor:pointer;background:rgba(255,255,255,0.06);" title="Nhấn để mở cấu hình &amp; xem chi tiết thống kê token">📊 Tháng này: 0 tokens</span>
+          <span id="ai-header-token-badge" class="chip" style="font-size:11px;cursor:pointer;background:rgba(255,255,255,0.06);" title="Click to open config &amp; view detailed token statistics">📊 This month: 0 tokens</span>
         </div>
         <div class="editor-actions">
-          <button class="btn" id="btn-ai-config" title="⚙ Cấu hình AI Provider — endpoint, model &amp; API key">⚙ Config</button>
-          <button class="btn" id="btn-ai-clear" title="Xóa hội thoại">🧹 Clear</button>
+          <button class="btn" id="btn-ai-config" title="⚙ Configure AI Provider — endpoint, model &amp; API key">⚙ Config</button>
+          <button class="btn" id="btn-ai-clear" title="Clear conversation">🧹 Clear</button>
         </div>
       </div>
       <!-- Target File & Auto-Coding Bar -->
       <div class="ai-target-bar" style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:rgba(255,255,255,0.025);border-bottom:1px solid var(--border);flex-shrink:0;">
         <span class="mono" style="font-size:11px;font-weight:700;color:var(--accent);white-space:nowrap;">📁 Target Path (File / Folder):</span>
         <input type="text" id="ai-target-file" class="term-input mono" style="flex:1;font-size:11px;padding:4px 8px;min-width:180px;"
-          placeholder="Đường dẫn file hoặc folder (vd: src/com/android/car/ hoặc src/CarService.java)">
-        <button class="btn" id="btn-ai-target-read" title="Đọc phân tích file hoặc quét danh sách file trong thư mục" style="font-size:11px;padding:4px 9px;white-space:nowrap;">📖 Read / Scan</button>
-        <button class="btn primary" id="btn-ai-target-code" title="Yêu cầu AI tự động lập trình nhiều file trong thư mục hoặc file này" style="font-size:11px;padding:4px 10px;white-space:nowrap;">⚡ Auto-Code</button>
+          placeholder="Path to file or folder (e.g., src/com/android/car/ or src/CarService.java)">
+        <button class="btn" id="btn-ai-target-read" title="Inspect file or scan folder structure" style="font-size:11px;padding:4px 9px;white-space:nowrap;">📖 Read / Scan</button>
+        <button class="btn primary" id="btn-ai-target-code" title="Ask AI to autonomously code files in target path" style="font-size:11px;padding:4px 10px;white-space:nowrap;">⚡ Auto-Code</button>
       </div>
       <div id="ai-chat-log" class="ai-chat-log">
-        <div class="ai-msg ai-msg-assistant">Xin chào! Tôi là <b>Telua AI Agent</b> — tôi có thể tự chạy
-          <code>tel</code>, <code>adb</code>, đọc file config/source để giúp bạn build &amp; debug AOSP.
-          Hỏi thử: <i>“Kiểm tra thiết bị adb và cho biết build hiện tại”</i>.</div>
+        <div class="ai-msg ai-msg-assistant">Hello! I am <b>Telua AI Agent</b> — your autonomous engineer for AOSP &amp; Android Automotive.
+          I can autonomously execute <code>tel</code> and <code>adb</code>, inspect code structures, query ChromaDB knowledge, and debug builds.
+          Try asking: <i>"Check connected adb devices and show current build target"</i> or <i>"Inspect CarAudioService.java outline"</i>.</div>
       </div>
       <div class="ai-input-bar">
-        <textarea id="ai-input" rows="2" placeholder="Hỏi AI agent… (Enter = gửi, Shift+Enter = xuống dòng)"></textarea>
-        <button class="btn primary" id="btn-ai-send" title="Gửi câu hỏi cho AI agent">➤ Send</button>
+        <textarea id="ai-input" rows="2" placeholder="Ask AI agent… (Enter = Send, Shift+Enter = New line)"></textarea>
+        <button class="btn primary" id="btn-ai-send" title="Send message to AI agent">➤ Send</button>
       </div>
     </section>
   </main>
@@ -1274,9 +1274,9 @@
   <div class="modal hidden" id="modal-ai-config">
     <div class="modal-box wide">
       <h3>🤖 AI Provider Configuration</h3>
-      <p class="meta">Cấu hình endpoint LLM (OpenAI chat-completions compatible). Lưu vào
-        <code>config/ai_providers.json</code> — API key lưu trực tiếp trong file này (đảm bảo thư mục
-        <code>config/overlay/</code> hoặc file nằm ngoài Git nếu key nhạy cảm).</p>
+      <p class="meta">Configure LLM endpoints (OpenAI chat-completions compatible). Saved in
+        <code>config/ai_providers.json</code> — sensitive API keys can be stored securely in
+        <code>config/overlay/</code> (git-ignored).</p>
 
       <div class="settings-section">
         <h4>Provider (endpoint)</h4>
@@ -1294,8 +1294,8 @@
         <h4>API Key</h4>
         <div style="display:flex;gap:8px;align-items:center;">
           <input type="password" id="ai-cfg-key-input" class="term-input mono" style="flex:1;"
-            placeholder="Paste API key… (endpoint nội bộ có thể để trống)" autocomplete="off">
-          <button class="btn" id="btn-ai-key-save" title="Lưu API key cho provider đang chọn">💾 Save key</button>
+            placeholder="Paste API key… (leave empty for local endpoints)" autocomplete="off">
+          <button class="btn" id="btn-ai-key-save" title="Save API key for selected provider">💾 Save key</button>
         </div>
         <div class="meta" style="margin-top:6px;" id="ai-cfg-key-status"></div>
       </div>
@@ -1303,7 +1303,7 @@
       <div class="settings-section">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
           <h4 style="margin:0;">Raw JSON (advanced)</h4>
-          <button class="btn btn-xs ghost" id="btn-ai-load-template" title="Nạp mẫu JSON có sẵn (DeepSeek, OpenAI, Ollama, LiteLLM)">📋 Load Template</button>
+          <button class="btn btn-xs ghost" id="btn-ai-load-template" title="Load preconfigured templates (DeepSeek, OpenAI, Ollama, LiteLLM)">📋 Load Template</button>
         </div>
         <textarea id="ai-cfg-json" class="term-input mono"
           style="width:100%;min-height:220px;box-sizing:border-box;font-size:11px;"
@@ -1312,18 +1312,18 @@
 
       <div class="settings-section" style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <h4 style="margin:0;">📦 Quản lý Nguồn Kỹ năng (MCP Skills &amp; Knowledge Sources)</h4>
+          <h4 style="margin:0;">📦 MCP Skills &amp; Knowledge Sources Management</h4>
           <span id="ai-mcp-status-pill" class="chip" style="font-size:11px;">ChromaDB: —</span>
         </div>
         <p class="meta" style="margin-bottom:8px;">
-          Thêm bất kỳ repository Git hoặc thư mục kỹ năng nào trên máy tính (đường dẫn tương đối như <code>repos/telua_skill/Java_Android</code> hoặc tuyệt đối như <code>D:\code\my_skills</code>). Toàn bộ file quy chuẩn, code mẫu, kiến trúc sẽ được lập chỉ mục vào ChromaDB để AI tra cứu.
+          Add any Git repository or skill directory on your workstation (relative paths like <code>repos/telua_skill/Java_Android</code> or absolute paths like <code>D:\code\my_skills</code>). Architectural patterns and code guidelines are indexed into ChromaDB for AI retrieval.
         </p>
 
         <!-- Dynamic Sources List -->
         <div style="margin-bottom:10px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-            <label class="meta" style="font-weight:600;color:var(--text);font-size:11px;">📂 Danh sách các nguồn kỹ năng đang cấu hình:</label>
-            <span class="meta" style="font-size:10px;opacity:0.8;">Hỗ trợ đường dẫn tương đối hoặc tuyệt đối</span>
+            <label class="meta" style="font-weight:600;color:var(--text);font-size:11px;">📂 Configured Knowledge Sources:</label>
+            <span class="meta" style="font-size:10px;opacity:0.8;">Supports relative or absolute paths</span>
           </div>
           <div id="ai-mcp-sources-list" style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;background:rgba(0,0,0,0.15);padding:6px;border-radius:6px;border:1px solid var(--border);"></div>
         </div>
@@ -1331,60 +1331,60 @@
         <!-- Add Source Form -->
         <div style="background:rgba(255,255,255,0.02);border:1px dashed var(--border);border-radius:6px;padding:8px;margin-bottom:10px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-            <span style="font-size:11px;font-weight:600;color:var(--accent);">➕ Thêm nguồn repository / thư mục mới:</span>
-            <span class="meta" style="font-size:10px;">🔒 Private lưu trong <code>config/overlay</code> (không push Git). Hỗ trợ tự động nhận diện AOSP A12-A16.</span>
+            <span style="font-size:11px;font-weight:600;color:var(--accent);">➕ Add new repository / folder source:</span>
+            <span class="meta" style="font-size:10px;">🔒 Private sources are stored in <code>config/overlay</code> (git-ignored). Auto-detects AOSP versions A12-A16.</span>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:6px;align-items:center;margin-bottom:6px;">
-            <input type="text" id="ai-mcp-new-name" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Tên nguồn (vd: AOSP A16 Car Audio)">
-            <input type="text" id="ai-mcp-new-path" class="term-input mono" style="font-size:11px;padding:4px 6px;" placeholder="Đường dẫn (vd: repos/private_skill hoặc D:\aosp_a16\frameworks\opt\car)">
-            <input type="text" id="ai-mcp-new-url" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Git URL (tùy chọn)">
+            <input type="text" id="ai-mcp-new-name" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Source name (e.g. AOSP A16 Car Audio)">
+            <input type="text" id="ai-mcp-new-path" class="term-input mono" style="font-size:11px;padding:4px 6px;" placeholder="Path (e.g. repos/private_skill or D:\aosp_a16\frameworks\opt\car)">
+            <input type="text" id="ai-mcp-new-url" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Git URL (optional)">
           </div>
           <div style="display:grid;grid-template-columns:1.2fr 1.4fr 130px auto;gap:6px;align-items:center;">
-            <input type="text" id="ai-mcp-new-project" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Dự án (vd: aosp_aaos)" value="aosp_aaos">
-            <select id="ai-mcp-new-version" class="theme-select" style="font-size:11px;padding:4px 6px;" title="Phiên bản AOSP">
-              <option value="auto" selected>⚡ Tự động nhận diện (A12-A16)</option>
+            <input type="text" id="ai-mcp-new-project" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Project (e.g. aosp_aaos)" value="aosp_aaos">
+            <select id="ai-mcp-new-version" class="theme-select" style="font-size:11px;padding:4px 6px;" title="AOSP Version">
+              <option value="auto" selected>⚡ Auto-detect (A12-A16)</option>
               <option value="a16">Android 16 (Baklava / API 36)</option>
               <option value="a15">Android 15 (VanillaIceCream / API 35)</option>
               <option value="a14">Android 14 (UpsideDownCake / API 34)</option>
               <option value="a13">Android 13 (Tiramisu / API 33)</option>
               <option value="a12">Android 12 (SnowCone / API 31-32)</option>
-              <option value="custom">Tùy biến khác</option>
+              <option value="custom">Custom / Other</option>
             </select>
-            <select id="ai-mcp-new-visibility" class="theme-select" style="font-size:11px;padding:4px 6px;" title="Chế độ bảo vệ Git">
+            <select id="ai-mcp-new-visibility" class="theme-select" style="font-size:11px;padding:4px 6px;" title="Git Privacy Mode">
               <option value="private" selected>🔒 Private (No Git)</option>
               <option value="public">🌐 Public (Git)</option>
             </select>
-            <button class="btn" id="btn-ai-mcp-add-source" style="font-size:11px;padding:4px 10px;white-space:nowrap;">➕ Thêm nguồn</button>
+            <button class="btn" id="btn-ai-mcp-add-source" style="font-size:11px;padding:4px 10px;white-space:nowrap;">➕ Add Source</button>
           </div>
         </div>
 
         <!-- Controls: Save & Sync -->
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
-          <button class="btn primary" id="btn-ai-mcp-save-sources" title="Lưu danh sách nguồn vào cấu hình">💾 Lưu danh sách nguồn</button>
-          <button class="btn" id="btn-ai-mcp-sync" title="Đồng bộ toàn bộ các nguồn đang bật vào ChromaDB">🔄 Sync to ChromaDB</button>
+          <button class="btn primary" id="btn-ai-mcp-save-sources" title="Save source list to configuration">💾 Save Sources</button>
+          <button class="btn" id="btn-ai-mcp-sync" title="Sync all enabled sources to ChromaDB">🔄 Sync to ChromaDB</button>
         </div>
 
         <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;flex-wrap:wrap;background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:8px;border:1px solid var(--border);">
           <div style="flex:1;min-width:240px;">
-            <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);">⏱ Lịch tự động Train Data (Auto-Sync &amp; Trigger):</label>
+            <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);">⏱ Auto-Sync &amp; Indexing Schedule:</label>
             <select id="ai-mcp-schedule-select" class="theme-select" style="width:100%;font-size:12px;">
-              <option value="3">⚡ Khởi động Web + Tự động trigger mỗi 3 giờ (Khuyên dùng)</option>
-              <option value="6">⚡ Khởi động Web + Tự động trigger mỗi 6 giờ</option>
-              <option value="12">⚡ Khởi động Web + Tự động trigger mỗi 12 giờ</option>
-              <option value="startup_only">⚡ Chỉ chạy khi khởi động Web (Startup only)</option>
-              <option value="manual">🛑 Tắt tự động (Chỉ đồng bộ thủ công)</option>
+              <option value="3">⚡ Web startup + Trigger every 3 hours (Recommended)</option>
+              <option value="6">⚡ Web startup + Trigger every 6 hours</option>
+              <option value="12">⚡ Web startup + Trigger every 12 hours</option>
+              <option value="startup_only">⚡ Run on web startup only</option>
+              <option value="manual">🛑 Manual sync only</option>
             </select>
           </div>
           <div style="align-self:flex-end;">
-            <button class="btn" id="btn-ai-mcp-save-schedule" title="Lưu chu kỳ tự động">💾 Lưu lịch</button>
+            <button class="btn" id="btn-ai-mcp-save-schedule" title="Save sync schedule">💾 Save Schedule</button>
           </div>
         </div>
 
-        <div class="meta" id="ai-mcp-sync-info">Đang kết nối ChromaDB...</div>
+        <div class="meta" id="ai-mcp-sync-info">Connecting to ChromaDB...</div>
 
         <!-- Skills preview collapsible -->
         <details style="margin-top:8px;">
-          <summary class="meta" style="cursor:pointer;color:var(--accent);font-weight:600;">📑 Danh sách kỹ năng (<span id="ai-mcp-count">0</span> files)</summary>
+          <summary class="meta" style="cursor:pointer;color:var(--accent);font-weight:600;">📑 Indexed Skills (<span id="ai-mcp-count">0</span> files)</summary>
           <div id="ai-mcp-skills-list" style="max-height:160px;overflow-y:auto;margin-top:6px;font-size:11px;font-family:var(--mono);padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px;"></div>
         </details>
       </div>
@@ -1392,38 +1392,38 @@
       <!-- ============ Token Guardrails & Loop Protection Section ============ -->
       <div class="settings-section" style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <h4 style="margin:0;">🛡 Chống "Đốt" Token &amp; Chặn Vòng Lặp Vô Tận (Guardrails)</h4>
+          <h4 style="margin:0;">🛡 Token Shield &amp; Loop Protection (Guardrails)</h4>
           <span class="chip ok" style="font-size:11px;">Token Shield: Active</span>
         </div>
         <p class="meta" style="margin-bottom:8px;">
-          Giới hạn số bước suy nghĩ của Agent và độ dài đọc file để tránh cạn kiệt token khi xử lý file lớn (ngàn dòng) hoặc khi Agent bị kẹt vòng lặp.
+          Limit agent reasoning steps and file read length to prevent token depletion on large files and break infinite tool loops.
         </p>
 
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
           <div>
-            <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);font-weight:600;">🔄 Giới hạn bước gọi Tool (Max Turns):</label>
+            <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);font-weight:600;">🔄 Max Tool Turns:</label>
             <select id="ai-guard-max-iter" class="theme-select" style="width:100%;font-size:12px;">
-              <option value="3">3 bước (Siêu tiết kiệm)</option>
-              <option value="5" selected>5 bước (Khuyên dùng - Cân bằng)</option>
-              <option value="8">8 bước (Phức tạp)</option>
-              <option value="12">12 bước (Chuyên sâu)</option>
+              <option value="3">3 turns (Conservative)</option>
+              <option value="5" selected>5 turns (Recommended - Balanced)</option>
+              <option value="8">8 turns (Complex)</option>
+              <option value="12">12 turns (Deep dive)</option>
             </select>
           </div>
           <div>
-            <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);font-weight:600;">📄 Số dòng đọc tối đa / lần (Lines):</label>
+            <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);font-weight:600;">📄 Max Lines Per Read:</label>
             <select id="ai-guard-max-lines" class="theme-select" style="width:100%;font-size:12px;">
-              <option value="80">80 dòng / lần</option>
-              <option value="150" selected>150 dòng / lần (Khuyên dùng)</option>
-              <option value="250">250 dòng / lần</option>
-              <option value="500">500 dòng / lần</option>
+              <option value="80">80 lines / read</option>
+              <option value="150" selected>150 lines / read (Recommended)</option>
+              <option value="250">250 lines / read</option>
+              <option value="500">500 lines / read</option>
             </select>
           </div>
           <div>
-            <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);font-weight:600;">✂ Giới hạn Output Tool (Chars):</label>
+            <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);font-weight:600;">✂ Max Tool Output (Chars):</label>
             <select id="ai-guard-max-chars" class="theme-select" style="width:100%;font-size:12px;">
-              <option value="3000">3.000 ký tự (~750 token)</option>
-              <option value="6000" selected>6.000 ký tự (~1.500 token)</option>
-              <option value="10000">10.000 ký tự (~2.500 token)</option>
+              <option value="3000">3,000 chars (~750 tokens)</option>
+              <option value="6000" selected>6,000 chars (~1,500 tokens)</option>
+              <option value="10000">10,000 chars (~2,500 tokens)</option>
             </select>
           </div>
         </div>
@@ -1431,26 +1431,26 @@
         <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.02);padding:8px 10px;border-radius:6px;border:1px solid var(--border);">
           <label style="font-size:11px;display:flex;align-items:center;gap:6px;cursor:pointer;">
             <input type="checkbox" id="ai-guard-loop-breaker" checked>
-            <span>🛑 Bật <b>Loop Breaker</b> (Tự động ngắt nếu Agent gọi lại cùng 1 tool với cùng tham số)</span>
+            <span>🛑 Enable <b>Loop Breaker</b> (Halts duplicate tool calls with identical arguments)</span>
           </label>
-          <button class="btn primary" id="btn-ai-save-guardrails" style="font-size:11px;padding:4px 12px;">💾 Lưu Guardrails</button>
+          <button class="btn primary" id="btn-ai-save-guardrails" style="font-size:11px;padding:4px 12px;">💾 Save Guardrails</button>
         </div>
       </div>
 
       <!-- ============ Monthly Token Usage & History Section ============ -->
       <div class="settings-section" style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <h4 style="margin:0;">📊 Thống Kê Sử Dụng Token (Monthly Token Usage &amp; History)</h4>
-          <span class="chip ok" id="ai-token-current-month-badge" style="font-size:11px;">Tháng này: 0 tokens</span>
+          <h4 style="margin:0;">📊 Monthly Token Usage &amp; History</h4>
+          <span class="chip ok" id="ai-token-current-month-badge" style="font-size:11px;">This month: 0 tokens</span>
         </div>
         <p class="meta" style="margin-bottom:8px;">
-          Ghi nhận tổng số token tiêu thụ trong tháng hiện tại và lưu trữ lịch sử 2–3 tháng trước (lưu an toàn trong <code>config/overlay/ai_token_usage.json</code>).
+          Tracks token consumption for the current month and archives previous months (safely stored in <code>config/overlay/ai_token_usage.json</code>).
         </p>
 
         <!-- Current Month Summary Metric Cards -->
         <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:8px;margin-bottom:12px;" id="ai-token-summary-cards">
           <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;">
-            <div class="meta" style="font-size:11px;">🎯 Tổng Token Tháng</div>
+            <div class="meta" style="font-size:11px;">🎯 Total Tokens</div>
             <div id="ai-metric-total-tokens" class="mono" style="font-size:16px;font-weight:700;color:var(--accent);margin-top:2px;">0</div>
           </div>
           <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;">
@@ -1462,7 +1462,7 @@
             <div id="ai-metric-completion-tokens" class="mono" style="font-size:16px;font-weight:700;color:var(--text);margin-top:2px;">0</div>
           </div>
           <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;">
-            <div class="meta" style="font-size:11px;">💬 Số Lượt Hỏi</div>
+            <div class="meta" style="font-size:11px;">💬 Total Queries</div>
             <div id="ai-metric-requests" class="mono" style="font-size:16px;font-weight:700;color:var(--text);margin-top:2px;">0</div>
           </div>
         </div>
@@ -1472,15 +1472,15 @@
           <table class="data-table" style="width:100%;font-size:11px;margin:0;">
             <thead>
               <tr style="background:rgba(255,255,255,0.02);">
-                <th style="padding:6px 10px;text-align:left;">Tháng (Month)</th>
+                <th style="padding:6px 10px;text-align:left;">Month</th>
                 <th style="padding:6px 10px;text-align:right;">Prompt Tokens</th>
                 <th style="padding:6px 10px;text-align:right;">Completion Tokens</th>
-                <th style="padding:6px 10px;text-align:right;">Tổng Token</th>
-                <th style="padding:6px 10px;text-align:center;">Số Lượt Hỏi</th>
+                <th style="padding:6px 10px;text-align:right;">Total Tokens</th>
+                <th style="padding:6px 10px;text-align:center;">Queries</th>
               </tr>
             </thead>
             <tbody id="ai-token-history-tbody">
-              <tr><td colspan="5" style="text-align:center;padding:10px;color:var(--text-muted);">Đang tải thống kê...</td></tr>
+              <tr><td colspan="5" style="text-align:center;padding:10px;color:var(--text-muted);">Loading statistics...</td></tr>
             </tbody>
           </table>
         </div>
@@ -1488,7 +1488,7 @@
 
       <div class="modal-actions">
         <button class="btn" id="btn-ai-cfg-cancel">Cancel</button>
-        <button class="btn primary" id="btn-ai-cfg-save" title="Lưu toàn bộ JSON provider registry">💾 Save JSON</button>
+        <button class="btn primary" id="btn-ai-cfg-save" title="Save entire provider JSON registry">💾 Save JSON</button>
       </div>
     </div>
   </div>
@@ -1497,7 +1497,7 @@
   <div class="modal hidden" id="modal-settings">
     <div class="modal-box">
       <h3>⚙ Settings <span id="settings-version" class="meta mono" title="Toolkit version">v—</span></h3>
-      <p class="meta">Cấu hình giao diện — lưu trong trình duyệt (localStorage), mặc định hiện tất cả tab.</p>
+      <p class="meta">UI configuration — saved in browser (localStorage), shows all tabs by default.</p>
 
       <div class="settings-section">
         <h4>🎨 Background Color (Theme)</h4>
@@ -1511,13 +1511,13 @@
       </div>
 
       <div class="settings-section">
-        <h4>📑 Hiện tab nào? (Tab Visibility)</h4>
-        <p class="meta">Tích chọn = tab được hiện trên thanh tab. Bỏ tích = ẩn tab (mặc định: tất cả đều hiện).</p>
+        <h4>📑 Tab Visibility</h4>
+        <p class="meta">Checked = tab is visible in header bar. Unchecked = tab hidden (default: all tabs visible).</p>
         <div id="settings-tab-list" class="settings-tab-list"></div>
       </div>
 
       <div class="modal-actions">
-        <button class="btn" id="btn-settings-reset" title="Khôi phục mặc định: hiện tất cả tab + theme Dark">↺ Reset default</button>
+        <button class="btn" id="btn-settings-reset" title="Restore defaults: show all tabs and Dark theme">↺ Reset default</button>
         <button class="btn primary" id="btn-settings-close">Close</button>
       </div>
     </div>

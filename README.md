@@ -401,7 +401,7 @@ This ensures `Log.isLoggable(TAG, Log.DEBUG)` returns `true` in Java code and pe
 
 ### 5.3b AAOS Car & Audio Control (`config/const_car.config`)
 
-Các lệnh ADB điều khiển âm lượng và ứng dụng test âm thanh (KitchenSink) được quản lý tập trung trong file cố định **`config/const_car.config`** (nằm trong thư mục `config/` của toolkit gốc), gọi qua `telua car [action]` hoặc `telua audio [action]`:
+ADB volume control commands and audio test app (KitchenSink) triggers are centrally managed in **`config/const_car.config`** (located in the toolkit's `config/` directory), invoked via `telua car [action]` or `telua audio [action]`:
 
 | Variable | Default | Description |
 |---|---|---|
@@ -411,20 +411,20 @@ Các lệnh ADB điều khiển âm lượng và ứng dụng test âm thanh (Ki
 | `ADB_SHELL_CAR_KS_START` | `"am start com.google.android.car.kitchensink/.KitchenSinkActivity"` | Launch KitchenSink test app |
 | `ADB_SHELL_CAR_KS_STOP` | `"am force-stop com.google.android.car.kitchensink"` | Force-stop KitchenSink test app |
 | `ADB_SHELL_CAR_STATUS` | `"dumpsys car_service --list"` | List all services registered in CarService |
-| `CAR_CLI_LIST` | Mảng lệnh CLI (`vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`, `status`) | Danh sách lệnh hiển thị cho người dùng khi chạy `telua car` hoặc `telua audio` |
+| `CAR_CLI_LIST` | Array of CLI actions (`vol-up`, `vol-down`, `vol-mute`, `ks`, `ks-stop`, `status`) | Action list displayed when running `telua car` or `telua audio` |
 
-> **An toàn kết nối thiết bị (`device offline`):**
-> Trước khi thực thi bất kỳ lệnh ADB nào (như `telua car ks`), hệ thống tự động kiểm tra trạng thái thiết bị (`check_car_device_connected` trong `src/telua_car.sh`). Nếu thiết bị chưa kết nối hoặc ở trạng thái offline/unauthorized, lệnh sẽ dừng ngay lập tức và thông báo lỗi rõ ràng: `[ERROR] device offline: No Android device connected.` (hoặc `Connected Android device is not ready`).
+> **Device Connection Safety (`device offline`):**
+> Before executing any ADB command (such as `telua car ks`), the system automatically verifies device connectivity (`check_car_device_connected` in `src/telua_car.sh`). If no device is connected or if it is offline/unauthorized, execution immediately halts with a descriptive error: `[ERROR] device offline: No Android device connected.` (or `Connected Android device is not ready`).
 
-> **Ghi chú về tách biệt cấu hình:**
-> - `config/const_car.config` là file cấu hình thuần túy (pure declarative config), không chứa logic code, giữ các giá trị mặc định dùng chung cho mọi dự án.
-> - Nếu một dự án cụ thể cần tùy biến riêng câu lệnh âm thanh, bạn có thể khai báo đè (override) trực tiếp các biến này trong file `apk.config` hoặc `apk_overlays.config`.
+> **Configuration Separation Notes:**
+> - `config/const_car.config` is a pure declarative configuration file containing no executable logic, maintaining shared defaults across all projects.
+> - Project-specific customizations can directly override these variables in `apk.config` or `apk_overlays.config`.
 
 ---
 
 ### 5.3c Dumpsys & Diagnostics (`config/const_dumpsys.config`)
 
-Các lệnh ADB dumpsys chẩn đoán hệ thống được quản lý tập trung trong file cố định **`config/const_dumpsys.config`** (gọi qua `telua dump <target>` hoặc `telua --dump <target>`):
+ADB system diagnostics dumpsys commands are centrally managed in **`config/const_dumpsys.config`** (invoked via `telua dump <target>` or `telua --dump <target>`):
 
 | Variable | Default | Description |
 |---|---|---|
@@ -434,63 +434,63 @@ Các lệnh ADB dumpsys chẩn đoán hệ thống được quản lý tập tru
 | `ADB_SHELL_DUMP_MEDIA_SESSION` | `"dumpsys media_session"` | Command for `telua dump media` |
 | `ADB_SHELL_DUMP_BATTERY` | `"dumpsys battery"` | Command for `telua dump battery` |
 | `ADB_SHELL_DUMP_ACTIVITY` | `"dumpsys activity top"` | Command for `telua dump activity` |
-| `DUMP_CLI_LIST` | Mảng 6 mục chẩn đoán | Danh sách mục dumpsys hiển thị khi chạy `telua dump` |
+| `DUMP_CLI_LIST` | Array of 6 diagnostic targets | Diagnostic items displayed when running `telua dump` |
 
 ---
 
 ### 5.3d Multi-Command Sequential Pipelines (`config/const_multi_cli.config`)
 
-Các quy trình chạy tuần tự nhiều bước (pipeline / macro) được cấu hình tập trung trong **`config/const_multi_cli.config`** (gọi qua `telua run <group>` hoặc `telua multi <group>`):
+Multi-step sequential workflows (pipelines / macros) are centrally configured in **`config/const_multi_cli.config`** (invoked via `telua run <group>` or `telua multi <group>`):
 
 | Variable / Group | Commands in Pipeline | Purpose |
 |---|---|---|
-| `MULTI_CMD_AUDIO_CYCLE` | `am force-stop` $\rightarrow$ `sleep` $\rightarrow$ `am start` $\rightarrow$ `inject-key 24/25` | Chu trình khởi động KitchenSink và test phím volume |
-| `MULTI_CMD_DEV_PREP` | `adb root` $\rightarrow$ `adb remount` $\rightarrow$ `setprop persist.log.tag.* DEBUG` | Chuẩn bị quyền root, remount và bật log debug CarAudio |
-| `MULTI_CMD_REMOUNT_REBOOT` | `adb root` $\rightarrow$ `adb remount` $\rightarrow$ `adb reboot` | Root, remount phân vùng hệ thống và khởi động lại thiết bị |
-| `MULTI_CMD_AUDIO_DUMP` | `dumpsys audio` $\rightarrow$ `dumpsys car_audio` $\rightarrow$ `dumpsys media_session` | Thu thập chẩn đoán toàn diện âm thanh hệ thống |
-| `MULTI_CMD_LOGCAT_START` | `wait-for-device` $\rightarrow$ `kill old pid` $\rightarrow$ `logcat -c` $\rightarrow$ `nohup adb logcat ... &` | Đợi thiết bị, dọn tiến trình cũ, xóa buffer & ghi logcat mới ra file |
-| `MULTI_CMD_LOGCAT_STOP` | `kill $(cat .logcat.pid) \|\| pkill adb logcat` $\rightarrow$ `ls -lh device_logcat.log` | Dừng tiến trình logcat trên máy tính và hiển thị kích thước file log |
-| `MULTI_GROUP_LIST` | Danh sách đăng ký các nhóm | Hiển thị bảng tra cứu khi chạy `telua run` |
+| `MULTI_CMD_AUDIO_CYCLE` | `am force-stop` $\rightarrow$ `sleep` $\rightarrow$ `am start` $\rightarrow$ `inject-key 24/25` | Restart KitchenSink cycle and verify volume key injection |
+| `MULTI_CMD_DEV_PREP` | `adb root` $\rightarrow$ `adb remount` $\rightarrow$ `setprop persist.log.tag.* DEBUG` | Acquire root privileges, remount, and enable CarAudio debug logging |
+| `MULTI_CMD_REMOUNT_REBOOT` | `adb root` $\rightarrow$ `adb remount` $\rightarrow$ `adb reboot` | Root, remount system partition, and reboot device |
+| `MULTI_CMD_AUDIO_DUMP` | `dumpsys audio` $\rightarrow$ `dumpsys car_audio` $\rightarrow$ `dumpsys media_session` | Collect comprehensive system audio diagnostic dump |
+| `MULTI_CMD_LOGCAT_START` | `wait-for-device` $\rightarrow$ `kill old pid` $\rightarrow$ `logcat -c` $\rightarrow$ `nohup adb logcat ... &` | Wait for device, terminate stale process, clear buffer, and logcat to file |
+| `MULTI_CMD_LOGCAT_STOP` | `kill $(cat .logcat.pid) \|\| pkill adb logcat` $\rightarrow$ `ls -lh device_logcat.log` | Stop host logcat process and display output file size |
+| `MULTI_GROUP_LIST` | Registered pipeline group list | Lookup table displayed when running `telua run` |
 
-> **Cơ chế Fail-Fast:** Nếu bất kỳ bước nào trong pipeline trả về mã lỗi (`exit code != 0`), kịch bản sẽ lập tức dừng lại và thông báo chính xác bước thất bại, bảo vệ an toàn cho thiết bị.
+> **Fail-Fast Mechanism:** If any command in the pipeline returns a non-zero exit code (`exit code != 0`), execution aborts immediately and pinpoints the failing step, preventing unstable device states.
 
 ---
 
 ### 5.3e Personal Pipelines (`config/overlay/const_my_cli.config`)
 
-Các quy trình chạy tuần tự riêng tư của cá nhân Developer được cấu hình trong **`config/overlay/const_my_cli.config`** (tự động tạo từ `config/overlay/const_my_cli.config.example` khi chạy `tel init`, gọi qua `telua my <action>` hoặc alias `telua proj <action>`):
+Developer personal sequential workflows are configured in **`config/overlay/const_my_cli.config`** (automatically initialized from `config/overlay/const_my_cli.config.example` during `tel init`, invoked via `telua my <action>` or alias `telua proj <action>`):
 
 | Variable / Action | Commands in Pipeline | Purpose |
 |---|---|---|
-| `MY_CMD_HELLO` | `echo "Hello World"` $\rightarrow$ `sleep 1` | Ví dụ mẫu in Hello World và sleep 1s |
-| `MY_GROUP_LIST` | Danh sách đăng ký các action cá nhân | Hiển thị bảng tra cứu khi chạy `telua my` |
+| `MY_CMD_HELLO` | `echo "Hello World"` $\rightarrow$ `sleep 1` | Sample action printing Hello World and sleeping 1s |
+| `MY_GROUP_LIST` | List of registered personal actions | Lookup table displayed when running `telua my` |
 
 ---
 
 ### 5.3f Java Source Hygiene, Static Report & AI Skills (`telua java` / `src/telua_clean.sh`)
 
-Công cụ chuẩn hóa mã nguồn Java tự động (`python/clean_java.py` và `python/unused_methods_report.py` điều khiển qua wrapper `src/telua_clean.sh`), giúp tự động format theo chuẩn Google/AOSP Java Style và kiểm tra tĩnh 6 tầng:
+Automated Java source hygiene tools (`python/clean_java.py` and `python/unused_methods_report.py` driven by wrapper `src/telua_clean.sh`), enforcing Google / AOSP Java Style and running a 6-tier static audit:
 
 ```bash
-tel java                    # Quét và tự động sửa các file .java thuộc commit HEAD + working tree
-tel java diff               # Tương đương lệnh trên
-tel java all                # Quét và tự động sửa TOÀN BỘ file .java trong toàn bộ workspace
-tel java <path>             # Dọn dẹp một file .java cụ thể hoặc toàn bộ file trong thư mục <path>
-tel java report             # Báo cáo tĩnh 6 tầng trên thư mục hiện tại (lưu vào unused_java_report.txt)
-tel java report <t>         # Report với target: diff | all | <file|dir>
-tel java skill              # Tạo thư mục .skill/java/ liên kết kho tri thức & AI skills cho dự án
-tel java help               # Hiển thị hướng dẫn chi tiết
+tel java                    # Scan and automatically clean .java files in HEAD commit + working tree
+tel java diff               # Equivalent to above
+tel java all                # Scan and clean ALL .java files across the entire workspace
+tel java <path>             # Clean a specific .java file or all files in directory <path>
+tel java report             # 6-tier static audit on current directory (saved to unused_java_report.txt)
+tel java report <t>         # Report on target: diff | all | <file|dir>
+tel java skill              # Generate .skill/java/ directory linking knowledge base & AI skills
+tel java help               # Show detailed usage instructions
 ```
 
-**`tel java report`** (`python/unused_methods_report.py`) thực hiện kiểm tra tĩnh **6 phần** ở chế độ **Read-Only** (không bao giờ sửa file gốc):
-- **[1] Unused methods**: method được khai báo nhưng tên không xuất hiện lần nào trong code (đã loại bỏ string/comment), trong phạm vi module `src/` của file. Tool tự bỏ qua constructor, `@Override`, method interface/abstract, `main()`, các override của `Object` (`toString`/`equals`/`hashCode`) và các file/method JUnit test (`@Test`, `@RunWith`, `test/`/`androidTest/`).
-- **[2] Unused parameters**: parameter không được dùng trong thân method (warning `-Wunused-parameter`, tự miễn trừ `main(String[] args)`). Fix theo kiểu comment tên giữ lại type: `void f(int data, int /*spare*/)`.
-- **[3] Whitespace violations**: bản xem trước (read-only preview) các lỗi khoảng trắng mà `tel java` sẽ sửa: trailing whitespace, leading tab, khoảng cách từ khóa điều khiển (`if(x)` $\rightarrow$ `if (x)`), dòng trống liên tiếp ($\ge 2$ dòng), và xuống dòng `CRLF`.
-- **[4] google-java-format violations**: kiểm tra định dạng chuẩn Google / AOSP Java Style (phát hiện thiếu dấu cách trước `{` / sau `,`, dấu `{` đứng riêng dòng, thiếu cặp ngoặc nhọn `{}` quanh `if (...)` / `else`, độ dài dòng > 100 ký tự; hỗ trợ cả `google-java-format` JAR tự tải về `third_party/google-java-format/`).
-- **[5] Unused imports**: phát hiện các dòng `import` thừa không được sử dụng trong code hay Javadoc (bỏ qua wildcard `.*`).
-- **[6] Unused private fields**: phát hiện các biến thành viên `private` được khai báo nhưng không được đọc/ghi ở đâu khác ngoài dòng khai báo (tự miễn trừ `serialVersionUID`, `TAG`, `LOG_TAG`).
+**`tel java report`** (`python/unused_methods_report.py`) executes a **6-tier static audit** in **Read-Only** mode (never alters source files):
+- **[1] Unused methods**: declared methods whose names do not appear anywhere in code (stripping strings/comments) within the file's module `src/`. Automatically ignores constructors, `@Override`, interface/abstract methods, `main()`, `Object` overrides (`toString`/`equals`/`hashCode`), and JUnit test files/methods (`@Test`, `@RunWith`, `test/`/`androidTest/`).
+- **[2] Unused parameters**: parameters unreferenced in method bodies (`-Wunused-parameter` warning, exempts `main(String[] args)`). Fixes by commenting parameter names while preserving types: `void f(int data, int /*spare*/)`.
+- **[3] Whitespace violations**: read-only preview of formatting issues addressed by `tel java`: trailing whitespace, leading tabs, control keyword spacing (`if(x)` $\rightarrow$ `if (x)`), consecutive blank lines ($\ge 2$ lines), and `CRLF` line endings.
+- **[4] google-java-format violations**: verifies compliance with Google / AOSP Java Style (detects missing space before `{` / after `,`, `{` on new line, missing braces around `if` / `else`, line length > 100 chars; supports downloading `google-java-format` JAR to `third_party/google-java-format/`).
+- **[5] Unused imports**: flags redundant imports unused in source code or Javadoc (skips wildcard `.*`).
+- **[6] Unused private fields**: detects private member variables declared but never read/written outside their declaration line (exempts `serialVersionUID`, `TAG`, `LOG_TAG`).
 
-Report luôn được lưu ra file `unused_java_report.txt` (đổi tên bằng `--out FILE` khi gọi trực tiếp python):
+Report is saved to `unused_java_report.txt` (customize filename with `--out FILE` when calling python directly):
 
 ```bash
 tel java report src/com/example/app/MyService.java
@@ -523,55 +523,55 @@ Placeholder variables reserved in `config/apk.config` for future QNX Hypervisor 
 
 ### 5.5 Private Overlay Encryption & Security (`tel crypto` / `python/config_crypto.py`)
 
-Mã hóa và giải mã các file cấu hình riêng tư trong **`config/overlay/`** (`apk_overlays.config` và `const_my_cli.config`) để bảo vệ tuyệt đối thông tin nội bộ, đường dẫn dự án mật và lệnh riêng trước khi sao lưu hoặc chia sẻ qua Git:
+Encrypt and decrypt private configuration files in **`config/overlay/`** (`apk_overlays.config` and `const_my_cli.config`) to safeguard internal paths, confidential project settings, and personal macros before backing up or sharing across Git:
 
-* **Cryptographic Scheme**: PBKDF2-HMAC-SHA256 (600,000 iterations) với 16-byte random salt riêng biệt cho từng file để sinh khóa 256-bit cho [Fernet](https://cryptography.io/en/latest/fernet/) (AES-128-CBC + HMAC-SHA256).
-* **Format**: Base64 text `base64(salt(16 bytes) || Fernet token)`, an toàn để commit lên Git (`!config/overlay/enc_*.config` được cho phép trong `.gitignore`, trong khi bản rõ `config/overlay/*.config` bị chặn hoàn toàn).
-* **File Permissions**: Các file đầu ra được gán quyền truy cập hạn chế (`0600` / chỉ owner mới đọc-ghi được).
-* **Kiểm tra tồn tại thông minh (Fast-Fail)**: Trước khi hỏi mật khẩu, `tel crypto` tự động kiểm tra sự tồn tại của `apk_overlays.config` và `const_my_cli.config` (hoặc `enc_*.config`). File nào tồn tại sẽ được xử lý tự động.
+* **Cryptographic Scheme**: PBKDF2-HMAC-SHA256 (600,000 iterations) with a unique 16-byte random salt per file to derive a 256-bit encryption key for [Fernet](https://cryptography.io/en/latest/fernet/) (AES-128-CBC + HMAC-SHA256).
+* **Format**: Base64 text `base64(salt(16 bytes) || Fernet token)`, safe to commit to Git (`!config/overlay/enc_*.config` is whitelisted in `.gitignore`, while plain-text `config/overlay/*.config` is strictly ignored).
+* **File Permissions**: Output files are assigned restrictive filesystem permissions (`0600` / owner read-write only).
+* **Smart Existence Detection (Fast-Fail)**: Before prompting for a password, `tel crypto` automatically checks the presence of `apk_overlays.config` and `const_my_cli.config` (or `enc_*.config`). Existing files are processed automatically.
 
 #### Commands & Usage:
 
 ```bash
-# 1. Kiểm tra trạng thái các file private và bản mã hóa trong config/overlay/:
-tel crypto                            # Hoặc: tel crypto status / tel crypto check
+# 1. Check status of private files and encrypted payloads in config/overlay/:
+tel crypto                            # Or: tel crypto status / tel crypto check
 
-# 2. Mã hóa các file private đang tồn tại trong config/overlay/ (hỏi mật khẩu ẩn):
-tel enc                               # Hoặc: tel crypto encrypt / tel encrypt
+# 2. Encrypt existing private files in config/overlay/ (prompts for hidden passphrase):
+tel enc                               # Or: tel crypto encrypt / tel encrypt
 
-# Hoặc truyền trực tiếp mật khẩu trên dòng lệnh:
+# Or pass passphrase directly on CLI:
 tel enc "MySecretPassword"
 
-# 3. Giải mã các file enc_*.config trong config/overlay/ về lại bản rõ:
-tel dec                               # Hoặc: tel crypto decrypt / tel decrypt
+# 3. Decrypt enc_*.config in config/overlay/ back to plain text:
+tel dec                               # Or: tel crypto decrypt / tel decrypt
 
-# 4. Mã hóa / giải mã một file tùy chỉnh bất kỳ:
+# 4. Encrypt / decrypt an arbitrary custom file:
 tel enc -i my.config -o my_enc.config
 tel dec -i my_enc.config -o my_dec.config
 ```
 
 | Action | Default Targets in `config/overlay/` | Output in `config/overlay/` | Behavior |
 |---|---|---|---|
-| `tel crypto status` | `apk_overlays.config`, `const_my_cli.config` | *(read-only status table)* | Báo cáo `SYNCED`, `MODIFIED`, `UNENCRYPTED`, `ENCRYPTED ONLY` hoặc `NOT CREATED` |
-| `tel enc` (`encrypt`) | `apk_overlays.config`, `const_my_cli.config` *(nếu tồn tại)* | `enc_apk_overlays.config`, `enc_const_my_cli.config` | Mã hóa mọi file private đang tồn tại bằng cùng mật khẩu |
-| `tel dec` (`decrypt`) | `enc_apk_overlays.config`, `enc_const_my_cli.config` *(nếu tồn tại)* | `apk_overlays.config`, `const_my_cli.config` | Giải mã khôi phục về file cấu hình cá nhân |
+| `tel crypto status` | `apk_overlays.config`, `const_my_cli.config` | *(read-only status table)* | Reports `SYNCED`, `MODIFIED`, `UNENCRYPTED`, `ENCRYPTED ONLY`, or `NOT CREATED` |
+| `tel enc` (`encrypt`) | `apk_overlays.config`, `const_my_cli.config` *(if present)* | `enc_apk_overlays.config`, `enc_const_my_cli.config` | Encrypts all existing private files using the same passphrase |
+| `tel dec` (`decrypt`) | `enc_apk_overlays.config`, `enc_const_my_cli.config` *(if present)* | `apk_overlays.config`, `const_my_cli.config` | Decrypts and restores personal configuration files |
 
 ---
 
 ### 5.5b Personal Overrides & Smart Merge (`config/overlay/apk_overlays.config` & `python/config_overlay.py`)
 
-Bộ công cụ hỗ trợ cơ chế nạp đè cấu hình cá nhân (**Personal & Private Overrides**) nhằm tách biệt hoàn toàn giữa cấu hình chuẩn (`config/apk.config`) và các thông số riêng tư của từng lập trình viên/dự án mật (`config/overlay/`):
+The toolkit supports personal and private override mechanisms to maintain strict separation between base configuration (`config/apk.config`) and developer-specific or confidential parameters (`config/overlay/`):
 
-* **File cấu hình cá nhân:** `config/overlay/apk_overlays.config` (được giải mã từ `enc_apk_overlays.config` hoặc tạo tự động từ `config/overlay/apk_overlays.config.example` khi chạy `tel init`).
-* **Bảo mật tuyệt đối (Zero Git Leak):** `config/overlay/*.config` được đưa vào `.gitignore`, ngăn chặn triệt để nguy cơ commit nhầm đường dẫn nội bộ hay profile dự án riêng lên Git.
-* **Quy tắc Smart Merge (`python/config_overlay.py`):**
-  1. **Top-level variables:** Các biến ngoài cùng (`ACTIVE_PROJECT`, `BUILD_JOBS`, `CONFIG_TARGET_PRODUCT`, ...) được thay thế chính xác tại chỗ (in-place replacement) trong `apk.config`.
-  2. **Case branch merge:** Các nhánh profile trong khối `case "$ACTIVE_PROJECT" in` (ví dụ `"oem_service")`) được thay thế theo từng nhánh độc lập. Các nhánh khác (`car_audio`, `vehicle_service`) hoàn toàn không bị ảnh hưởng.
-  3. **Custom profile addition:** Nếu bạn khai báo một profile mới (ví dụ `"my_custom_service")`), engine sẽ tự động chèn nhánh mới ngay trước nhánh mặc định `*)`.
-  4. **Multi-command macros:** Hỗ trợ mảng nhiều dòng (như `MULTI_CMD_CUSTOM_SETUP=(...)`).
+* **Personal Configuration File:** `config/overlay/apk_overlays.config` (decrypted from `enc_apk_overlays.config` or automatically created from `config/overlay/apk_overlays.config.example` during `tel init`).
+* **Zero Git Leak:** `config/overlay/*.config` is included in `.gitignore`, permanently preventing accidental commits of internal paths or proprietary project profiles to Git.
+* **Smart Merge Rules (`python/config_overlay.py`):**
+  1. **Top-level variables:** Top-level variables (`ACTIVE_PROJECT`, `BUILD_JOBS`, `CONFIG_TARGET_PRODUCT`, ...) are substituted in-place inside `apk.config`.
+  2. **Case branch merge:** Profile branches within `case "$ACTIVE_PROJECT" in` (e.g. `"oem_service")`) are merged independently per branch. Other branches (`car_audio`, `vehicle_service`) remain unaffected.
+  3. **Custom profile addition:** Declaring a new profile (e.g. `"my_custom_service")`) causes the merge engine to automatically inject the new branch immediately before the default `*)` branch.
+  4. **Multi-command macros:** Supports multi-line arrays (such as `MULTI_CMD_CUSTOM_SETUP=(...)`).
 
 ```bash
-# Kiểm tra thử kết quả merge mà không làm thay đổi file (Dry-run mode):
+# Test merge results without modifying files (Dry-run mode):
 python3 python/config_overlay.py ./apk.config --dry-run
 ```
 
@@ -579,112 +579,112 @@ python3 python/config_overlay.py ./apk.config --dry-run
 
 ### 5.6 Toolkit Auto-Update (`telua update` / `--update`)
 
-Tự động cập nhật kho lưu trữ master của bộ công cụ `telua` lên commit mới nhất từ nhánh `origin/main` với cơ chế bảo vệ file cá nhân toàn diện:
+Automatically updates the toolkit's master repository to the latest commit from `origin/main` with end-to-end protection for personal configurations:
 
 ```bash
 tel update
-# Hoặc:
+# Or:
 ./build_apk.sh --update
 ```
 
-* **Bảo vệ cấu hình cá nhân (Personal Configs Protection):**
-  1. Trước khi thực hiện `git pull`, script tự động sao lưu an toàn các file cá nhân trong `config/overlay/` (`config/overlay/apk_overlays.config` và `config/overlay/const_my_cli.config`) vào thư mục tạm `/tmp/`.
-  2. Tiến hành kéo mã nguồn từ `origin/main`.
-  3. **Tự phục hồi xung đột (Self-Healing / Auto-Recovery):** Nếu phát hiện merge conflict hoặc tree bị dirty, kịch bản tự kích hoạt `git fetch origin main` và `git reset --hard origin/main`.
-  4. Sau khi cập nhật xong, các file cá nhân được **tự động phục hồi nguyên vẹn** từ bản sao lưu tạm, đảm bảo không bao giờ bị mất cấu hình riêng khi update.
-  5. Tự động đồng bộ Git submodules (`repos/`) và khôi phục quyền thực thi (`chmod +x`) cho tất cả các script trong bộ công cụ.
+* **Personal Configs Protection:**
+  1. Prior to running `git pull`, the script automatically backs up personal files in `config/overlay/` (`config/overlay/apk_overlays.config` and `config/overlay/const_my_cli.config`) to temporary `/tmp/`.
+  2. Fetches and pulls latest code from `origin/main`.
+  3. **Self-Healing / Auto-Recovery:** If a merge conflict or dirty tree is detected, the script triggers `git fetch origin main` and `git reset --hard origin/main`.
+  4. After updating, personal files are **automatically restored intact** from the temporary backup, ensuring private configs are never lost.
+  5. Automatically synchronizes Git submodules (`repos/`) and restores execution permissions (`chmod +x`) across all scripts.
 
 ---
 
 ### 5.7 Bash & Zsh Tab Auto-completion Engine (`src/telua_completion.sh`)
 
-Bộ gợi ý phím Tab hai lần (<kbd>Tab</kbd><kbd>Tab</kbd>) có cơ chế **Auto-Reload** tự động nạp lại khi file `src/telua_completion.sh` được cập nhật:
+Double-tab completion (<kbd>Tab</kbd><kbd>Tab</kbd>) features an **Auto-Reload** mechanism that automatically reloads when `src/telua_completion.sh` is updated:
 
 ```bash
-# Cài đặt tự động vào ~/.bashrc:
+# Automatically install into ~/.bashrc:
 tel install
 
-# Sau đó mở tab terminal mới hoặc:
+# Then open a new terminal tab or run:
 source ~/.bashrc
 ```
 
-**Tính năng nổi bật:**
-- **Nhận diện cả 2 alias & Tự động Reload:** Hoạt động bình đẳng khi gõ `telua ` hoặc `tel `, tự kiểm tra timestamp (`mtime`) của `src/telua_completion.sh` để nạp lại ngay khi có thay đổi mà không cần `source ~/.bashrc` lại.
-- **Gợi ý cấp 1 (Subcommands & Options):** Gõ `tel <Tab><Tab>` hiển thị danh sách toàn bộ lệnh chính (`build`, `b`, `test`, `t`, `sync`, `reset`, `car`, `dump`, `sec`, `java`, `docs`, `web`, `crypto`, `enc`, `dec`, `run`, `my`, `replace`, `info`, `init`, ...).
-- **Gợi ý ngữ cảnh chuyên sâu (Context-aware):**
-  - `tel b -p <Tab><Tab>` / `tel --profile <Tab><Tab>`: Tự động đọc danh sách profile từ `apk.config` / `config/apk.config` (`oem_service`, `car_audio`, `vehicle_service` , ...).
-  - `tel web <Tab><Tab>`: Gợi ý `start`, `stop`, `status`, `restart`, `log`, `help`.
-  - `tel crypto <Tab><Tab>`: Gợi ý `status`, `check`, `encrypt`, `decrypt`, `enc`, `dec`, `help`.
-  - `tel java <Tab><Tab>`: Gợi ý `clean`, `diff`, `all`, `report`, `skill`, `help`.
-  - `tel java report <Tab><Tab>`: Gợi ý `diff`, `all`, `help` và đường dẫn file/thư mục.
-  - `tel docs <Tab><Tab>`: Gợi ý `start`, `serve`, `sync`, `metadata`, `build`, `check`, `clean`, `init`, `help`.
-  - `tel docs init -t <Tab><Tab>`: Gợi ý các template Sphinx (`basic`, `architecture`, `minimal`, `api`).
-  - `tel car <Tab><Tab>`, `tel dump <Tab><Tab>`, `tel sec <Tab><Tab>`, `tel run <Tab><Tab>`, `tel my <Tab><Tab>`: Tự động trích xuất danh sách action từ các file `config/const_*.config` và `config/overlay/const_my_cli.config`.
+**Key Capabilities:**
+- **Dual Alias Recognition & Auto-Reload:** Operates identically for both `telua ` and `tel `, inspecting `src/telua_completion.sh` timestamp (`mtime`) to reload immediately upon changes without requiring `source ~/.bashrc`.
+- **Level-1 Suggestions (Subcommands & Options):** Pressing `tel <Tab><Tab>` displays all primary commands (`build`, `b`, `test`, `t`, `sync`, `reset`, `car`, `dump`, `sec`, `java`, `docs`, `web`, `crypto`, `enc`, `dec`, `run`, `my`, `replace`, `info`, `init`, ...).
+- **Context-Aware Suggestions:**
+  - `tel b -p <Tab><Tab>` / `tel --profile <Tab><Tab>`: Automatically reads available profiles from `apk.config` / `config/apk.config` (`oem_service`, `car_audio`, `vehicle_service`, ...).
+  - `tel web <Tab><Tab>`: Suggests `start`, `stop`, `status`, `restart`, `log`, `help`.
+  - `tel crypto <Tab><Tab>`: Suggests `status`, `check`, `encrypt`, `decrypt`, `enc`, `dec`, `help`.
+  - `tel java <Tab><Tab>`: Suggests `clean`, `diff`, `all`, `report`, `skill`, `help`.
+  - `tel java report <Tab><Tab>`: Suggests `diff`, `all`, `help` and file/directory paths.
+  - `tel docs <Tab><Tab>`: Suggests `start`, `serve`, `sync`, `metadata`, `build`, `check`, `clean`, `init`, `help`.
+  - `tel docs init -t <Tab><Tab>`: Suggests Sphinx templates (`basic`, `architecture`, `minimal`, `api`).
+  - `tel car <Tab><Tab>`, `tel dump <Tab><Tab>`, `tel sec <Tab><Tab>`, `tel run <Tab><Tab>`, `tel my <Tab><Tab>`: Automatically extracts registered actions from `config/const_*.config` and `config/overlay/const_my_cli.config`.
 
 ---
 
 ### 5.8 Security, SELinux & Diagnostics Control (`telua sec` / `telua security`)
 
-Chẩn đoán và kiểm soát bảo mật hệ thống Android / AAOS qua module `src/telua_security.sh` và cấu hình khai báo `config/const_security.config`:
+Android / AAOS system security audit and diagnostics control via `src/telua_security.sh` and declarative configuration `config/const_security.config`:
 
 ```bash
-tel sec                               # Hiển thị bảng tra cứu nhanh các lệnh bảo mật
-tel sec help                          # Hiển thị chi tiết từng action kèm câu lệnh ADB thực thi
+tel sec                               # Display quick-reference security command table
+tel sec help                          # Show detailed action descriptions with underlying ADB commands
 ```
 
-| Action | Chức năng | Câu lệnh thực thi |
+| Action | Function | Executed Command |
 |---|---|---|
-| `host` | Kiểm tra an ninh môi trường máy host Linux (OS, LSM, ulimit, /tmp, keys) | Kiểm tra trực tiếp trên Linux host (không cần cắm thiết bị) |
-| `status` | Kiểm tra tổng thể trạng thái bảo mật thiết bị | `getenforce`, `ro.build.type`, `ro.debuggable`, `ro.secure`, `partition.system.verified` |
-| `perm` | Chuyển SELinux sang Permissive để debug | `adb shell setenforce 0` |
-| `enforce` | Chuyển SELinux về Enforcing | `adb shell setenforce 1` |
-| `avc` | Soi nhanh log vi phạm chính sách SELinux | Lọc `avc:` từ `logcat -d -b all` và `dmesg` |
-| `privapp` | Dump phân quyền Privileged App & whitelist | `dumpsys package --privapp-permissions` / `cmd package dump-privapp-permissions` |
-| `appops` | Truy vấn các hạn chế và quyền AppOps | `cmd appops query-op --user 0` / `dumpsys appops` |
-| `keystore` | Trích xuất trạng thái Android Keystore | `dumpsys keystore` |
-| `policy` | Trích xuất trạng thái DevicePolicyManager | `dumpsys device_policy` |
-| `root` | Khởi động lại adbd với quyền root | `adb root` |
-| `unroot` | Trả adbd về chế độ không root | `adb unroot` |
-| `remount` | Remount các phân vùng hệ thống sang RW | `adb remount` |
-| `disable-verity` | Tắt cơ chế kiểm tra phân vùng dm-verity | `adb disable-verity` |
+| `host` | Audit Linux build host security environment (OS, LSM, ulimit, /tmp, keys) | Direct inspection on Linux host (no device required) |
+| `status` | Comprehensive device security posture check | `getenforce`, `ro.build.type`, `ro.debuggable`, `ro.secure`, `partition.system.verified` |
+| `perm` | Switch SELinux to Permissive mode for debugging | `adb shell setenforce 0` |
+| `enforce` | Switch SELinux back to Enforcing mode | `adb shell setenforce 1` |
+| `avc` | Inspect SELinux policy violation audit denials | Greps `avc:` from `logcat -d -b all` and `dmesg` |
+| `privapp` | Dump Privileged App permissions & whitelists | `dumpsys package --privapp-permissions` / `cmd package dump-privapp-permissions` |
+| `appops` | Query AppOps permissions and operational restrictions | `cmd appops query-op --user 0` / `dumpsys appops` |
+| `keystore` | Extract Android Keystore status | `dumpsys keystore` |
+| `policy` | Extract DevicePolicyManager configuration | `dumpsys device_policy` |
+| `root` | Restart adbd with root permissions | `adb root` |
+| `unroot` | Restart adbd in non-root mode | `adb unroot` |
+| `remount` | Remount system partitions as read-write | `adb remount` |
+| `disable-verity` | Disable dm-verity partition verification | `adb disable-verity` |
 
-> **Ghi chú an toàn:** Tương tự `telua car`, toàn bộ các lệnh `telua sec` đều tự động kiểm tra trạng thái thiết bị online trước khi chạy, dừng ngay với cảnh báo `[ERROR] device offline: ...` nếu thiết bị bị ngắt kết nối.
+> **Safety Notice:** Like `telua car`, all `telua sec` commands automatically verify device connectivity prior to execution, aborting with `[ERROR] device offline: ...` if the target is disconnected.
 
 ---
 
-### 5.9 Quản lý tài liệu Sphinx Doc-as-Code (`telua docs` / `doc`)
+### 5.9 Sphinx Doc-as-Code Management (`telua docs` / `doc`)
 
-Hệ thống quản lý tài liệu dạng mã nguồn chuẩn quốc tế theo mô hình mô-đun (Modular Documentation) sử dụng **Sphinx** và theme **Furo**, hỗ trợ 4 bộ template chuyên biệt (`basic`, `architecture`, `minimal`, `api`), tự động hóa toàn diện từ khởi tạo template, đồng bộ `metadata.json`, kiểm tra tính toàn vẹn đến mở xem trước trực tiếp trên trình duyệt:
+Modular technical documentation system built on **Sphinx** and the **Furo** theme, supporting 4 specialized templates (`basic`, `architecture`, `minimal`, `api`) with automated scaffolding, `metadata.json` synchronization, integrity validation, and instant browser preview:
 
 ```bash
-# 1. Khởi tạo tài liệu trong thư mục ./docs (hỗ trợ chọn 1 trong 4 template):
-tel docs init                         # Chọn template tương tác (hoặc mặc định 'basic')
-tel docs init -t architecture         # Khởi tạo theo template kiến trúc (basic | architecture | minimal | api)
+# 1. Initialize documentation in ./docs (supports selecting from 4 templates):
+tel docs init                         # Interactive template selection (defaults to 'basic')
+tel docs init -t architecture         # Initialize using architecture template (basic | architecture | minimal | api)
 
-# 2. Kiểm tra tính toàn vẹn đường dẫn section và liên kết ảnh:
+# 2. Validate section paths and image references:
 tel docs check
 
-# 3. Tự động kiểm tra format & đồng bộ file/folder mới vào metadata.json:
-tel docs sync                         # Tự động trích xuất Title, tạo chapter wrapper & điền 'must update'
+# 3. Synchronize new files/folders into metadata.json:
+tel docs sync                         # Extracts titles, creates chapter wrappers, populates 'must update'
 
-# 4. Tự động merge các section và biên dịch HTML tĩnh:
+# 4. Merge sections and compile static HTML:
 tel docs build
 
-# 5. Khởi chạy HTTP server và TỰ ĐỘNG MỞ trình duyệt xem tài liệu (mặc định port 8789):
-tel docs start                        # Tự động build (nếu chưa có) & mở browser tại http://localhost:8789
-tel docs start 8789                   # Tùy chỉnh port nếu cần
-tel docs serve                        # Alias cho lệnh start
+# 5. Start HTTP server and launch browser preview (default port 8789):
+tel docs start                        # Builds if needed & launches browser at http://localhost:8789
+tel docs start 8789                   # Custom port
+tel docs serve                        # Alias for start
 
-# 6. Dọn dẹp thư mục build:
+# 6. Clean build output directory:
 tel docs clean
 
-# 7. Đồng bộ cấu hình cho dự án CŨ để hỗ trợ PlantUML (ghi vĩnh viễn vào conf.py):
+# 7. Upgrade legacy project to support PlantUML (persists into conf.py):
 tel docs upgrade [dir]                # Alias: tel docs sync-config
 ```
 
-#### Sơ đồ PlantUML (`.. uml::` / `.. plantuml::`)
+#### PlantUML Diagrams (`.. uml::` / `.. plantuml::`)
 
-Viết sơ đồ trực tiếp trong file `.rst`. Bạn **không cần cài Java/PlantUML**: khi build, sơ đồ được biên dịch thành ảnh SVG (`_build/html/_images/plantuml-*.svg`) và hiển thị bằng thẻ `<img>`.
+Author diagrams directly in `.rst` files. **No local Java/PlantUML installation required**: during compilation, diagrams render to SVG images (`_build/html/_images/plantuml-*.svg`) and embed via `<img>` tags.
 
 ```rst
 .. uml::
@@ -700,251 +700,219 @@ Viết sơ đồ trực tiếp trong file `.rst`. Bạn **không cần cài Java
    @enduml
 ```
 
-* **Cách biên dịch** ([`sphinx/scripts/plantuml_wrapper.py`](sphinx/scripts/plantuml_wrapper.py)), thử lần lượt: lệnh `plantuml` trong PATH → `java -jar plantuml.jar` (biến `PLANTUML_JAR`) → server online `plantuml.com` → nếu offline thì dùng ảnh thay thế, build không bị lỗi.
-* **Template mới** (`tel docs init`): đã có sẵn cấu hình PlantUML trong `conf.py`.
-* **Dự án cũ** (`conf.py` chưa có PlantUML):
-  * **Tự động**: `tel docs build` / `tel docs start` / nút Build trên Web tự thêm cấu hình vào bản `conf.py` trong thư mục tạm `_build/.staging`. File gốc **không bị sửa**.
-  * **Ghi vĩnh viễn**: `tel docs upgrade [dir]` thêm một đoạn cấu hình (có đánh dấu `# --- telua-plantuml-autoconfig ---`) vào cuối `conf.py`, đồng thời copy `plantuml_wrapper.py` và `_telua_static/telua_plantuml.css` vào dự án. Nên dùng cách này khi chia sẻ dự án hoặc build trực tiếp bằng `sphinx-build`. Chạy lại nhiều lần cũng không bị thêm trùng.
-  * Cấu hình của bạn được giữ nguyên: chỉ thêm extension còn thiếu; chỉ thay `plantuml` khi lệnh đã khai báo không chạy được; chỉ đổi `plantuml_output_format` khi chưa đặt hoặc đang là `'svg'` (đổi sang `'svg_img'`).
+* **Compilation Strategy** ([`sphinx/scripts/plantuml_wrapper.py`](sphinx/scripts/plantuml_wrapper.py)): checks `plantuml` command in PATH $\rightarrow$ `java -jar plantuml.jar` (`PLANTUML_JAR` env) $\rightarrow$ online `plantuml.com` server $\rightarrow$ fallback placeholder image on network outage.
+* **New Templates** (`tel docs init`): pre-configured with PlantUML support in `conf.py`.
+* **Legacy Projects** (`conf.py` lacking PlantUML):
+  * **Automatic**: `tel docs build` / `tel docs start` / Web UI Build dynamically injects configuration into staged `conf.py` in `_build/.staging`. Original source file **remains untouched**.
+  * **Permanent Upgrade**: `tel docs upgrade [dir]` appends configuration block (marked `# --- telua-plantuml-autoconfig ---`) to `conf.py`, copying `plantuml_wrapper.py` and `_telua_static/telua_plantuml.css`. Recommended when sharing repositories or running standalone `sphinx-build`. Idempotent across repeated executions.
+  * Preserves existing settings: only appends missing extensions; replaces `plantuml` only if current executable fails; updates `plantuml_output_format` only when unset or currently set to `'svg'` (migrates to `'svg_img'`).
 
 ---
 
-### 5.10 Tự động làm sạch & chuẩn hóa Google/AOSP Java Style (`telua java` / `clean-java`)
+### 5.10 Google/AOSP Java Style Hygiene & Static Audit (`telua java` / `clean-java`)
 
-Module `src/telua_clean.sh` kết hợp `python/clean_java.py` và `python/unused_methods_report.py` giúp tự động chỉnh sửa format và kiểm tra tĩnh mã nguồn Java:
+Module `src/telua_clean.sh` combines `python/clean_java.py` and `python/unused_methods_report.py` to automate code formatting and run static source audits:
 
 ```bash
-# 1. Tự động sửa các file .java thuộc commit Git hiện tại (HEAD) + file đang sửa (Working Tree):
+# 1. Clean .java files in current Git commit (HEAD) + uncommitted changes (Working Tree):
 tel java
 tel java diff
 
-# 2. Tự động quét và sửa TOÀN BỘ file .java trong thư mục hiện tại:
+# 2. Scan and clean ALL .java files across the workspace:
 tel java all
 
-# 3. Tự động sửa một file hoặc thư mục cụ thể:
+# 3. Clean a specific file or directory:
 tel java src/com/example/MyService.java
 
-# 4. Xuất báo cáo tĩnh 6 tầng (Read-only, lưu vào unused_java_report.txt):
-tel java report                       # Quét toàn bộ thư mục hiện tại
-tel java report diff                  # Quét các file thuộc commit Git hiện tại (HEAD) + working tree
+# 4. Generate 6-tier static audit report (Read-only, saved to unused_java_report.txt):
+tel java report                       # Scan entire current directory
+tel java report diff                  # Scan files in current Git commit (HEAD) + working tree
 
-# 5. Liên kết kho tri thức & AI Skills (.skill/java/) vào dự án hiện tại:
+# 5. Link knowledge base & AI Skills (.skill/java/) to current project:
 tel java skill
 ```
 
-* **Các lỗi được `tel java diff` và `tel java all` tự động sửa tại chỗ (In-place Auto-Fix)**:
-  1. **Tab & Khoảng trắng**: Đổi leading `\t` thành 4 dấu cách, xóa khoảng trắng thừa cuối dòng, chuyển `CRLF` $\rightarrow$ `LF`, thu gọn nhiều dòng trống liên tiếp.
-  2. **Chuẩn hóa từ khóa điều khiển**: `if(x)` $\rightarrow$ `if (x)`, `if ( x )` $\rightarrow$ `if (x)` cho `if`, `for`, `while`, `switch`, `catch`, `try`, `synchronized`.
-  3. **Thêm dấu cách trước `{` và sau `,`**: `public class Foo{` $\rightarrow$ `public class Foo {`, `if (x){` $\rightarrow$ `if (x) {`, `}else{` $\rightarrow$ `} else {`, `foo(a,b)` $\rightarrow$ `foo(a, b)`.
-  4. **Đưa dấu `{` đứng riêng lẻ lên cuối dòng trước (K&R Style §4.1.2)**: `void f()\n{` $\rightarrow$ `void f() {`.
-  5. **Tự động bọc ngoặc nhọn `{}` cho `if (...)` và `else` đơn dòng / 2 dòng (Google Java Style §4.1.1)**:
-     - `if (a > 0) return;` $\rightarrow$ khối `if (a > 0) {\n    return;\n}` chuẩn chỉnh.
-     - `if (a < 0)\n    a = 0;\nelse\n    a = 1;` $\rightarrow$ tự động bọc `{ ... } else { ... }`.
-* **An toàn tuyệt đối cho Chuỗi & Comment**: Mọi nội dung bên trong `"..."`, `'...'`, `//` và `/* ... */` được bảo toàn nguyên vẹn 100%.
+* **Issues Automatically Fixed In-Place by `tel java diff` and `tel java all`**:
+  1. **Tabs & Whitespace**: Converts leading `\t` to 4 spaces, removes trailing whitespace, converts `CRLF` $\rightarrow$ `LF`, consolidates consecutive blank lines.
+  2. **Control Keyword Spacing**: `if(x)` $\rightarrow$ `if (x)`, `if ( x )` $\rightarrow$ `if (x)` for `if`, `for`, `while`, `switch`, `catch`, `try`, `synchronized`.
+  3. **Brace & Comma Spacing**: `public class Foo{` $\rightarrow$ `public class Foo {`, `if (x){` $\rightarrow$ `if (x) {`, `}else{` $\rightarrow$ `} else {`, `foo(a,b)` $\rightarrow$ `foo(a, b)`.
+  4. **K&R Style §4.1.2 Opening Braces**: Moves standalone `{` onto preceding line: `void f()\n{` $\rightarrow$ `void f() {`.
+  5. **Mandatory Braces for `if (...)` and `else` (Google Java Style §4.1.1)**:
+     - `if (a > 0) return;` $\rightarrow$ structured `if (a > 0) {\n    return;\n}` block.
+     - `if (a < 0)\n    a = 0;\nelse\n    a = 1;` $\rightarrow$ wrapped `{ ... } else { ... }`.
+* **String & Comment Protection**: Contents within `"..."`, `'...'`, `//`, and `/* ... */` are 100% preserved.
 
 ---
 
 ### 5.11 Config Manager & Web Dashboard (`telua web` / `web/telua_web.py`)
 
-Giao diện web quản trị toàn diện trên trình duyệt (Flask backend + Vanilla JS frontend thuần, không phụ thuộc thư viện ngoài) thông qua module `src/telua_web.sh` và `web/telua_web.py`:
+Comprehensive browser-based management interface (Flask backend + Vanilla JS frontend with zero external dependencies) via `src/telua_web.sh` and `web/telua_web.py`:
 
 ```bash
-tel web start                         # Khởi chạy Web UI ngầm (mặc định port 8788) & tự động mở trình duyệt
-tel web start 9000                    # Khởi chạy trên port tùy chỉnh
-tel web status                        # Kiểm tra trạng thái server (PID, URL, health probe /api/ping, uptime)
-tel web restart                       # Khởi động lại Web UI server
-tel web log                           # Xem log trực tiếp (.telua_web.log)
-tel web stop                          # Dừng Web UI server
+tel web start                         # Launch background Web UI (default port 8788) & open browser
+tel web start 9000                    # Launch on custom port
+tel web status                        # Check server status (PID, URL, health probe /api/ping, uptime)
+tel web restart                       # Restart Web UI server
+tel web log                           # Stream server log (.telua_web.log)
+tel web stop                          # Stop Web UI server
 ```
 
-#### 🌟 Các phân hệ & Tính năng chính trên Web Dashboard:
+#### 🌟 Key Modules & Features on Web Dashboard:
 
-1. **📄 Files Tab — Trình Quản Lý & Chỉnh Sửa Cấu Hình An Toàn**:
-   - **Tự động quét & phân loại**: Liệt kê toàn bộ cấu hình dự án (`config/apk.config`), cấu hình bảo mật cá nhân (`config/overlay/*.config`) và các bộ macro hằng số (`config/const_*.config`) với thông tin size, mtime và trạng thái read-only.
-   - **Bộ lọc tìm kiếm tức thì**: Lọc file theo từ khóa nhanh chóng trong sidebar.
-   - **Chế độ xem an toàn (Lock/Edit mode)**: Mặc định ở chế độ chỉ đọc để tránh vô tình sửa đổi; chỉ mở khóa khi nhấn `✎ Edit`.
-   - **Bảo toàn bản nháp (Draft Persistence)**: Thay đổi chưa lưu được tự động ghi nhận vào `localStorage` (hiển thị chip thông báo `✎ draft`), không lo mất dữ liệu khi refresh trang hay đóng nhầm trình duyệt.
-   - **Xác thực cú pháp trước khi lưu**: Tự động chạy kiểm tra cú pháp `bash -n` cho các file shell/config và `json.loads` cho file JSON; ngăn chặn hoàn toàn việc lưu file hỏng.
-   - **Tự động sao lưu & Diff**: Tự động tạo bản sao lưu an toàn `.bak` trước khi ghi đè, hỗ trợ xem so sánh thay đổi (diff) trực quan.
+1. **📄 Files Tab — Safe Configuration Management & Editor**:
+   - **Automatic Scanning & Classification**: Lists base project configs (`config/apk.config`), private security overlays (`config/overlay/*.config`), and constant macros (`config/const_*.config`) with size, mtime, and read-only status.
+   - **Instant Search Filter**: Quickly filters files by keyword in the sidebar.
+   - **Safe View (Lock/Edit mode)**: Defaults to read-only mode to prevent unintended changes; unlocked by clicking `✎ Edit`.
+   - **Draft Persistence**: Unsaved modifications are cached in `localStorage` (displaying a `✎ draft` badge), preventing data loss on page refreshes or accidental tab closures.
+   - **Pre-Save Syntax Validation**: Runs `bash -n` for shell/config files and `json.loads` for JSON files before saving, blocking malformed saves.
+   - **Automatic Backup & Diff**: Creates timestamped `.bak` files before overwriting and provides visual side-by-side diff comparisons.
 
-2. **⚡ Pipelines Tab — Trình Thiết Kế & Thực Thi Macro Trực Quan**:
-   - **Hỗ trợ đa nguồn pipeline**: Dễ dàng chuyển đổi giữa các nhóm cấu hình:
-     - `MY`: Macro cá nhân riêng tư (`const_my_cli.config` / `tel my <action>`)
-     - `MULTI`: Kịch bản phối hợp tuần tự (`const_multi_cli.config` / `tel run <group>`)
-     - `CAR`: Phím bấm & kiểm thử âm thanh ô tô AAOS (`const_car.config` / `tel car <action>`)
-     - `DUMP`: Chẩn đoán dumpsys dịch vụ (`const_dumpsys.config` / `tel dump <target>`)
-   - **Trình chỉnh sửa bước (Step Editor)**: Thêm mới, đổi tên nhóm, mô tả, thêm/sửa/xóa từng bước lệnh, kéo thả và sắp xếp thứ tự thực thi.
-   - **Thực thi trực tiếp với Live Streaming Logs**: Nhấn `▶ Run` để chạy ngay pipeline trên máy mục tiêu với Server-Sent Events (SSE) streaming output trực tiếp theo thời gian thực, có nút `⏹ Stop` ngắt tiến trình tức thì, `↻ Re-run` và `📋 Copy output`.
+2. **⚡ Pipelines Tab — Visual Macro Designer & Execution Engine**:
+   - **Multi-Source Pipeline Support**: Easily toggles between configuration categories:
+     - `MY`: Private developer macros (`const_my_cli.config` / `tel my <action>`)
+     - `MULTI`: Sequential coordinated workflows (`const_multi_cli.config` / `tel run <group>`)
+     - `CAR`: AAOS vehicle key injection & audio tests (`const_car.config` / `tel car <action>`)
+     - `DUMP`: Subsystem dumpsys diagnostics (`const_dumpsys.config` / `tel dump <target>`)
+   - **Step Editor**: Add, rename groups, modify descriptions, add/edit/delete commands, and reorder execution sequence.
+   - **Live Streaming Logs**: Click `▶ Run` to execute pipelines with real-time Server-Sent Events (SSE) output streaming, featuring `⏹ Stop` (SIGINT abort), `↻ Re-run`, and `📋 Copy output`.
 
-3. **🖥 System Tab — Quản Trị Hệ Thống & Docker Pipelines**:
-   - Tích hợp trực tiếp với `config/const_system_cli.config` (`tel system <action>`).
-   - Cung cấp giao diện chạy các kịch bản kiểm tra dịch vụ hệ điều hành, dọn dẹp dung lượng đĩa, quản trị vòng đời Docker containers và kiểm tra kết nối mạng.
+3. **🖥 System Tab — System Administration & Docker Pipelines**:
+   - Integrates directly with `config/const_system_cli.config` (`tel system <action>`).
+   - Provides visual controls for OS service health, disk cleanup, Docker container lifecycle management, and network reachability tests.
 
 4. **💻 Terminal Tab — Interactive Web CLI Console**:
-   - Bảng điều khiển dòng lệnh trực tiếp trên trình duyệt, cho phép thực thi bất kỳ lệnh `tel`, Bash, Git, ADB hay lệnh hệ thống nào.
-   - **Real-time SSE Output Streaming**: Log xuất hiện mượt mà theo từng dòng tương tự terminal máy thật.
-   - **Kiểm soát tiến trình (Process Control)**: Hỗ trợ nút `⏹ Stop` gửi tín hiệu ngắt tiến trình `SIGINT` (Ctrl+C) an toàn nếu lệnh bị treo hoặc chạy quá lâu.
-   - Hỗ trợ các phím tắt lệnh mẫu nhanh (e.g. `tel system ram`, `git status -s`, `df -h`, `tel --network-help`).
+   - Browser-embedded CLI console executing any `tel`, Bash, Git, ADB, or system utility.
+   - **Real-Time SSE Streaming**: Line-by-line streaming identical to native terminal sessions.
+   - **Process Control**: Includes `⏹ Stop` sending safe `SIGINT` (Ctrl+C) signals to terminate hung or long-running tasks.
+   - Quick-action shortcuts (e.g., `tel system ram`, `git status -s`, `df -h`, `tel --network-help`).
 
 5. **📚 Docs Tab — Sphinx Doc-as-Code & Visual Editor**:
-   - **Soạn thảo trực quan 2 chiều (RST $\leftrightarrow$ HTML)**: Tích hợp trình soạn thảo trực quan hiện đại (**Quill.js**, lưu trữ offline 100%) cho phép viết tài liệu kiến trúc kỹ thuật như Word/Google Docs mà không cần thuộc cú pháp RST khắt khe.
-   - **Chuyển đổi 2 chiều tự động**: Tự động chuyển đổi mượt mà giữa HTML và reStructuredText (RST) thông qua `docutils` và engine phân tích cú pháp Python (`web/telua_web_docs.py`), hỗ trợ bảo toàn toàn diện: tiêu đề các cấp, danh sách, bảng biểu (`.. list-table::`), hình ảnh (`.. image::`), khối mã `code-block`, hộp chú thích (`.. note::`, `.. warning::`), biểu đồ kiến trúc Mermaid (`.. mermaid::`) và PlantUML (`.. uml::` / `.. plantuml::`).
-   - **3 Chế độ làm việc linh hoạt**:
-     - 🎨 *Visual*: Soạn thảo tài liệu bằng giao diện trực quan thân thiện.
-     - 📝 *Raw RST*: Chỉnh sửa trực tiếp mã nguồn reStructuredText với font monospace chuẩn.
-     - 👁 *Split View*: Chia đôi màn hình, vừa soạn thảo vừa xem Live HTML Preview thời gian thực.
-   - **Quản lý thư mục linh hoạt & Chọn file**: Tự động quét và phân nhóm 46+ file tài liệu trong các template Sphinx (`architecture`, `api`, `basic`, `minimal`, `docs/`), hỗ trợ nút **📁 Change Dir** để đổi sang bất kỳ thư mục tài liệu thực tế nào của dự án.
-   - **An toàn & Tự động Build/Preview**: Tự động sinh bản sao lưu `.rst.bak` trước khi lưu, kèm nút **🔨 Build Docs** để biên dịch trực tiếp và nút **🚀 Start Docs** để khởi chạy preview server ngầm tại `http://localhost:8789`.
+   - **Bidirectional Editing (RST $\leftrightarrow$ HTML)**: Modern visual editor (**Quill.js**, 100% offline) enabling WYSIWYG documentation authoring without needing strict RST syntax.
+   - **Automatic Bidirectional Conversion**: Converts smoothly between HTML and reStructuredText (RST) via `docutils` and Python parser engine (`web/telua_web_docs.py`), preserving headings, lists, tables (`.. list-table::`), images (`.. image::`), `code-block` blocks, callout boxes (`.. note::`, `.. warning::`), Mermaid (`.. mermaid::`), and PlantUML diagrams (`.. uml::` / `.. plantuml::`).
+   - **3 Flexible Work Modes**:
+     - 🎨 *Visual*: Author using an intuitive rich-text interface.
+     - 📝 *Raw RST*: Directly edit reStructuredText source with monospace typography.
+     - 👁 *Split View*: Side-by-side authoring with real-time Live HTML Preview.
+   - **Directory Management & File Picker**: Automatically indexes 46+ documentation files across Sphinx templates (`architecture`, `api`, `basic`, `minimal`, `docs/`), with **📁 Change Dir** to switch to any project documentation root.
+   - **Safety & Build/Preview Controls**: Generates `.rst.bak` prior to saving, accompanied by **🔨 Build Docs** for direct compilation and **🚀 Start Docs** to launch background preview server on `http://localhost:8789`.
 
-6. **🎛 Thanh Trạng Thái & Quản Trị Toàn Cục (Top Statusbar & Modals)**:
-   - **Chuyển đổi Active Project Profile**: Click vào chip `project: <name>` để mở modal chọn đổi `ACTIVE_PROJECT` trong `apk.config` với 1 cú click chuột (tự động backup `.bak`).
-   - **🔐 Quản trị mã hóa Crypto Overlay (`#modal-crypto`)**: Click vào chip `🔐 crypto` để kiểm tra trạng thái các file overlay bí mật (`apk_overlays.config`, `const_my_cli.config`), hỗ trợ nhập mật khẩu để `Encrypt` (mã hóa sang `enc_*.config`), `Decrypt` (giải mã xem thử) hoặc `Decrypt & Override` (giải mã và áp dụng đè lên cấu hình đang chạy).
-   - **Giám sát thời gian thực**: Theo dõi số lượng thiết bị ADB đang kết nối và dung lượng/tỷ lệ phần trăm sử dụng RAM máy chủ build.
-   - **Palette 5 Chủ Đề Màu Sắc (Theme Selector)**: Hỗ trợ chuyển đổi tức thì giữa 🌙 *Dark (Mặc định)*, 💎 *Jade (Emerald)*, 🌊 *Ocean (Deep Blue)*, 🔮 *Amethyst (Purple)*, và ☀️ *Light*, tự động ghi nhớ sở thích giao diện của từng người dùng.
-   - **Quick Actions Bar**: Nút tắt chạy nhanh `tel info` (thông tin môi trường/thiết bị) và `tel run unittest` (chạy toàn bộ 120+ unit test suite của cả Python và Shell) với modal xem log chi tiết.
+6. **🎛 Top Statusbar & Global Modals**:
+   - **Active Project Switching**: Click `project: <name>` chip to open a modal switching `ACTIVE_PROJECT` in `apk.config` with 1 click (auto `.bak` backup).
+   - **🔐 Crypto Overlay Management (`#modal-crypto`)**: Click `🔐 crypto` chip to inspect encryption status of confidential overlays (`apk_overlays.config`, `const_my_cli.config`), prompting for passphrase to `Encrypt` (to `enc_*.config`), `Decrypt`, or `Decrypt & Override`.
+   - **Real-Time System Monitoring**: Live counters for connected ADB devices and build-host RAM utilization.
+   - **5 Theme Color Palettes (Theme Selector)**: Instantly switch between 🌙 *Dark (Default)*, 💎 *Jade (Emerald)*, 🌊 *Ocean (Deep Blue)*, 🔮 *Amethyst (Purple)*, and ☀️ *Light*, persisting preferences across sessions.
+   - **Quick Actions Bar**: Shortcuts for `tel info` (environment/device info) and `tel run unittest` (executing 120+ unit test suite) with detailed terminal modal.
 
-7. **📊 BI Studio Tab — Power BI-Style Analytics Engine (Phân Tích Dữ Liệu Đa Chiều)**:
-   - **Tự động nhận diện Schema & Kiểu dữ liệu (Schema-Agnostic)**: Hỗ trợ kéo thả / tải lên bất kỳ file Excel (.xlsx, .xls), CSV, TSV hoặc dán trực tiếp dữ liệu bảng từ clipboard. Tự động nhận diện và phân loại kiểu dữ liệu từng cột: Số (🔢 NUM), Chữ (🔤 TXT), Ngày tháng (📅 DATE), Boolean (🔘 BOOL).
-   - **4 Thẻ Chỉ Số KPI Động**: Tự động tính toán và hiển thị tức thì Tổng số bản ghi (Total Records), Tổng chỉ số số học chính (Numeric Metric Sum), Số lượng phân nhóm danh mục (Categorical Groups), và Tổng số trường dữ liệu (Total Columns).
-   - **Thanh Slicers Lọc Cắt Lát Đa Chiều & Bộ Lọc Nhập Liệu (Input Filter & Multi-Select)**:
-     - **Ô điền giá trị lọc linh hoạt (Input Filter)**: Người dùng có thể tự tay điền giá trị muốn lọc (ví dụ gõ tên Hãng xe như `TOYOTA`, `VinFast`, `BMW`...) với tính năng tự động gợi ý giá trị (Autocomplete datalist) và phím tắt Enter.
-     - **Bộ chọn đa năng cấp 2 (Cascade Multi-Select Serial)**: Dropdown danh sách cho phép tick chọn một hoặc nhiều Vehicle Series / Serials cụ thể; tự động đồng bộ theo hãng xe đã lọc và hiển thị huy hiệu đếm số lượng (ví dụ: `2 / 10`).
-     - Tự động tạo các chip lọc tương tác thời gian thực cho các cột phân loại; hỗ trợ chọn nhiều điều kiện đồng thời với cơ chế lọc chéo (Cross-filtering) tự động cập nhật toàn bộ biểu đồ và bảng dữ liệu.
-   - **Click Biểu Đồ Để Lọc Chéo (Interactive Chart Cross-Highlighting)**: Nhấp chuột trực tiếp vào bất kỳ cột nào trên Column Chart / Bar Chart hoặc miếng bánh trên Donut Chart:
-     - Phần tử được click sẽ **sáng rõ và có viền nổi bật (glow border)**.
-     - Tất cả các phần tử còn lại sẽ **tự động mờ đi (dimmed opacity)** hệt như cơ chế Cross-Highlighting của Power BI Desktop.
-     - Toàn bộ dashboard (KPI, Table, các visual khác) lập tức lọc dữ liệu theo giá trị được chọn; click lại lần nữa để bỏ lọc.
-     - **Tỷ Lệ Phần Được Chọn vs Phần Còn Lại (Selected vs. Remaining 20% / 80%)**: Khi chọn lọc một nhóm phân cấp (ví dụ Slicer chọn hãng `TOYOTA` có 10 Serial, sau đó chọn 2 Serial cụ thể): biểu đồ Donut tự động chuyển sang chế độ phân tích tổng thể — hiển thị rõ ràng phần đã chọn **20% (2 Serial)** và phần còn lại **80% (8 Serial)**, trung tâm biểu đồ hiển thị huy hiệu `ĐÃ CHỌN 20% (2 / 10)` chuẩn xác.
-   - **Kéo Thả & Thay Đổi Kích Thước Biểu Đồ (Drag & Drop Canvas)**:
-     - **Kéo thả sắp xếp**: Giữ tay cầm kéo thả **⋮⋮** trên tiêu đề thẻ biểu đồ để di chuyển hoán đổi vị trí widget tùy ý trên lưới dashboard (HTML5 Drag & Drop).
-     - **Co giãn kích thước**: Nút **⤢** cho phép chuyển đổi linh hoạt giữa kích thước chuẩn 1 cột (50%) và kích thước mở rộng 2 cột (100% full width) phù hợp cho bảng số liệu chi tiết hay biểu đồ xu hướng.
-   - **Công Thức Tính Toán Tùy Biến (Mini-DAX / Calculated Columns & Measures)**:
-     - Nút **fx Measure** cho phép tạo các cột chỉ số đo lường tùy biến bằng các phép toán số học: `+`, `-`, `*`, `/`, `( )` kết hợp cú pháp `[Tên_Cột]`.
-     - Tích hợp các mẫu công thức 1-click: Biên lợi nhuận / Tỷ lệ (([Profit] / [Revenue]) * 100), Chênh lệch ngân sách ([Actual] - [Budget]), Tích số ([Price] * [Quantity]).
-     - Cột tính toán mới được gắn huy hiệu **fx CALC** trong danh sách Fields và có thể sử dụng ngay trong các biểu đồ, Slicers và bảng dữ liệu.
-   - **Thanh Điều Hướng Sheet Đa Tab (Multi-Tab Sheet Tabs Bar)**:
-     - Đặt tại chân dashboard tương tự Excel / Power BI, cho phép chuyển đổi mượt mà giữa các Worksheet trong file Excel.
-     - Tự động sinh sheet tổng hợp **All_Sheets (Combined)** hợp nhất dữ liệu từ tất cả các sheet kèm cột nguồn gốc Sheet.
-   - **Báo Cáo Quan Hệ Đa Bảng (Cross-Tab Relational Report & Sphinx Docs)**:
-     - Nút **📑 Multi-Tab Report** tự động phân tích đối chiếu giữa các sheet, phát hiện khóa chung (Join Keys), lập bảng ma trận so sánh, vẽ sơ đồ thực thể liên kết **Mermaid ER Diagram**, biểu đồ tròn tỷ trọng và biểu đồ cột so sánh khối lượng.
-     - Hỗ trợ nút 1-click **📚 Open in Docs** để tự động lưu báo cáo vào docs/cross_sheet_report.rst và chuyển sang xem trực tiếp trên tab Docs / Sphinx.
-   - **Visual Builder Linh Hoạt**: Nút **＋ Add Visual** cho phép tạo thêm không giới hạn các biểu đồ tùy biến: Combo Chart (Cột + Đường xu hướng), Column Chart, Horizontal Bar, Line Chart, Donut Chart, hoặc Bảng dữ liệu tương tác.
-   - **Cấu Hình Biểu Đồ Hướng Dữ Liệu (Config-Driven Visuals & GUI Chart Manager)**:
-     - BI Studio **không tự ý vẽ biểu đồ ngẫu nhiên** khi mở dataset; hệ thống yêu cầu hoặc chờ file cấu hình JSON (`bi_dashboard_config.json`) định nghĩa chính xác biểu đồ nào cần vẽ (loại biểu đồ, trục X, trục Y, hàm tổng hợp `agg`, kích thước `isWide`).
-     - **Giao Diện Đồ Họa Quản Lý Biểu Đồ (Visual GUI Manager)**: Không cần phải gõ hay sửa code JSON thủ công! Cửa sổ `⚙️ Config JSON` tích hợp sẵn giao diện GUI trực quan:
-       - **Thêm biểu đồ mới**: Chọn chip loại biểu đồ, nhập tiêu đề, chọn trục X, trục Y, trục Y2 và hàm gom nhóm (`SUM`, `AVG`, `COUNT`, `MIN`, `MAX`) từ dropdown cột của dataset.
-       - **Sửa biểu đồ (✏️ Edit)**: Nhấp nút sửa trên bất kỳ biểu đồ nào để nạp lại vào form và điều chỉnh thông số.
-       - **Xóa biểu đồ (🗑️ Delete)**: Xóa từng biểu đồ khỏi danh sách cấu hình bằng 1 click.
-       - **Sắp xếp thứ tự (⬆ / ⬇)**: Di chuyển biểu đồ lên hoặc xuống trong mảng cấu hình JSON.
-       - **Đổi kích thước (⤢ Width)**: Chuyển đổi linh hoạt giữa 1 cột và 2 cột (full width).
-       - **Đồng bộ hai chiều với Raw JSON**: Tự động sinh và cập nhật mã JSON khi thao tác trên GUI; hỗ trợ tab `📝 Raw JSON Code` cho người dùng muốn xem hoặc sao chép mã.
-     - Hỗ trợ đầy đủ hai chiều **Upload (Import JSON)** và **Download (Export JSON)**: người dùng có thể lưu lại layout dashboard thành file `.json` để tái sử dụng hoặc chia sẻ.
-     - **Thanh Bộ Lọc Tổng Quát (Generic Slicers & Multi-Select Checklist)**:
-       - Cung cấp ô lọc nhanh đa năng **`🔍 Filter:`** cho phép chọn bất kỳ cột phân loại nào (Brand, Region, Department, Category,...) và nhập giá trị lọc nhanh kèm gợi ý tự động (Datalist Autocomplete).
-       - Dropdown đa chọn **`☑ <Tên_Cột>`** tự động cập nhật nhãn theo cột thực tế trong bảng (ví dụ: `☑ Vehicle Series`, `☑ Product`, `☑ Region`), hỗ trợ tìm kiếm nhanh, badge đếm số lượng `Đã chọn / Tổng số` và nút thao tác nhanh `All` / `Clear`.
-     - **Biểu Đồ Donut Tỷ Trọng Phân Bổ (Share-of-Context & Hover Tooltip Chi Tiết)**:
-       - Khi lọc theo hãng (Brand/OEM) và chọn 1 số Serial (ví dụ chọn 2 trong tổng 14 serials), biểu đồ Donut tự động giữ ngữ cảnh của hãng và chia lát cắt: **Selected** vs **Remaining**, tâm tròn hiển thị huy hiệu thống kê chuẩn tiếng Anh: `SELECTED 29%` (hoặc `SELECTED 50%`) và số lượng `X / N serials`.
-       - **Hover hiển thị danh sách còn lại**: Khi rê chuột vào lát cắt hoặc mục chú giải `⚪ Remaining (12 other serials)`, Tooltip sẽ hiển thị danh sách chi tiết các mã serial chưa chọn dưới dạng thẻ huy hiệu (Pill badges) kèm số lượng và tỷ trọng.
-       - Khi rê chuột vào tâm hình tròn (Center badge), Tooltip hiển thị tổng quan đối chiếu cả 2 nhóm `🟢 Selected` và `⚪ Remaining`.
-     - Tích hợp nút **🪄 Gợi ý biểu đồ mẫu** (Auto-Suggest) khi người dùng muốn nhanh chóng tạo bộ biểu đồ mặc định mà không cần thiết lập thủ công.
-   - **Bộ Thư Viện Mẫu Nghiệp Vụ Chuẩn `bi_studio/`**: Tự động phát hiện và hiển thị các file Excel mẫu nghiệp vụ chung (Bán lẻ global_retail_sales.xlsx, Quản trị nhân sự hr_workforce_analytics.xlsx, Dự án công nghệ it_project_portfolio.xlsx, Tài chính vận hành financial_budget_opex.xlsx), menu dropdown tự cập nhật động mà không cần can thiệp mã nguồn HTML.
-   - **Xuất Dữ Liệu Hai Chiều**: Hỗ trợ xem/sao chép/tải xuống dữ liệu dưới dạng JSON ({} JSON) hoặc xuất ngược tập dữ liệu đã lọc ra file Excel .xlsx (⬇ Excel).
+7. **📊 BI Studio Tab — Power BI-Style Analytics Engine**:
+   - **Schema-Agnostic Ingestion**: Drag-and-drop or upload Excel (.xlsx, .xls), CSV, TSV files, or paste tables from clipboard. Automatically infers column types: Numbers (🔢 NUM), Text (🔤 TXT), Dates (📅 DATE), Booleans (🔘 BOOL).
+   - **4 Dynamic KPI Metric Cards**: Computes and displays Total Records, Numeric Metric Sum, Categorical Groups, and Total Columns.
+   - **Multi-Dimensional Slicers & Input Filters**:
+     - **Flexible Input Filter**: Filter values with autocomplete datalist and Enter key shortcut.
+     - **Cascade Multi-Select Serial**: Dropdown checklist to select specific Vehicle Series / Serials, synchronizing with filtered OEM brand and displaying selection badge (`2 / 10`).
+     - Interactive filter chips for categorical dimensions with cross-filtering across all visuals.
+   - **Interactive Chart Cross-Highlighting**: Clicking on any Column, Bar, or Donut Chart slice:
+     - Selected element highlights with a glow border.
+     - Unselected elements dim in opacity, matching Power BI Desktop behavior.
+     - Whole dashboard immediately filters to selection; clicking again clears filter.
+     - **Selected vs. Remaining (20% / 80%)**: When selecting a hierarchical subset, Donut chart presents Selected **20% (2 Serials)** vs Remaining **80% (8 Serials)** with center badge `SELECTED 20% (2 / 10)`.
+   - **Drag & Drop Canvas**:
+     - **Reorder Widgets**: Drag handle **⋮⋮** on card headers to reposition visuals across dashboard grid (HTML5 Drag & Drop).
+     - **Responsive Resizing**: Toggle **⤢** between single column (50%) and full-width 2 columns (100%).
+   - **Calculated Columns & Measures (Mini-DAX)**:
+     - **fx Measure** button enables custom arithmetic formulas: `+`, `-`, `*`, `/`, `( )` using `[Column_Name]` syntax.
+     - 1-click formula presets: Profit Margin (([Profit] / [Revenue]) * 100), Variance ([Actual] - [Budget]), Product ([Price] * [Quantity]).
+     - Computed columns display **fx CALC** badge in Fields list.
+   - **Multi-Tab Sheet Tabs Bar**: Bottom tabs bar similar to Excel/Power BI, with automated **All_Sheets (Combined)** union view.
+   - **Cross-Tab Relational Report & Sphinx Docs**: **📑 Multi-Tab Report** detects Join Keys across sheets, builds comparative matrices, renders Mermaid ER Diagrams, and offers 1-click **📚 Open in Docs** export to Sphinx.
+   - **Visual Builder & GUI Chart Manager**: **＋ Add Visual** to create Combo, Column, Bar, Line, Donut charts or Interactive Tables. `⚙️ Config JSON` includes visual GUI management (Add, Edit, Delete, Reorder, Resize, Import/Export JSON).
+   - **Business Dataset Templates**: Discovers business Excel templates in `bi_studio/` (global_retail_sales.xlsx, hr_workforce_analytics.xlsx, it_project_portfolio.xlsx, financial_budget_opex.xlsx).
+   - **Bidirectional Data Export**: Export filtered data to JSON ({} JSON) or Excel .xlsx (⬇ Excel).
 
-8. **🤖 AOSP Center — Build/Deploy/Test theo đúng thư mục source của project**:
-   - **Tự động chạy đúng thư mục source**: Tab **🤖 AOSP** luôn thực thi `tel b` / `tel test` / shortcut từ thư mục source của project đang chọn (`<AOSP_TOP>/<SOURCE_CODE_RELATIVE_PATH>`, ví dụ `.../android/qssi/vendor/bosch/services/car/oemcarservice`), không cần `cd` thủ công. Header console hiển thị `(cd <source_dir>)` để xác nhận thư mục thực thi.
-   - **Tự động tạo `apk.config` khi chọn project**: Khi user chọn project (dropdown **Project** trên compact bar, modal **⚙️ Config Settings**, hoặc chip `project:`), backend tự động:
-     1. Tạo `<source_dir>/apk.config` từ template `config/apk.config` nếu chưa có;
-     2. Merge overlay cá nhân `config/overlay/apk_overlays.config` qua `python/config_overlay.py` (đầy đủ các branch profile `oemcarservice`, `car_audio`, `vehicle_service`, `kitchen_sink`, `overlay_bosch_audio`, ...);
-     3. Cập nhật `ACTIVE_PROJECT="<project>"` trong file đó — đồng bộ cả `apk.config` gốc và overlay.
-   - **Kiểm tra trạng thái**: Hover vào pill **Source** trên compact bar để xem đường dẫn source dir tuyệt đối và trạng thái `apk.config` (✔ đã có / sẽ tự tạo khi đổi project). API trả về thêm `source_dir`, `source_dir_exists`, `apk_config_in_source` tại `GET /api/aosp/config`.
-   - **Nạp APK 1-Click (Amethyst Pulse Glow)**: Nút `⚡ Upload & Deploy APK` hỗ trợ chọn file APK đã build, xác thực tên file so với `OUTPUT_FILE_NAME`, đẩy thẳng vào `/system/priv-app/` hoặc `/product/app/` và tự khởi động lại package.
+8. **🤖 AOSP Center — Project Source Root Execution & Automation**:
+   - **Source Root Alignment**: Automatically runs `tel b` / `tel test` inside active project's source directory (`<AOSP_TOP>/<SOURCE_CODE_RELATIVE_PATH>`, e.g., `.../android/qssi/vendor/bosch/services/car/oemcarservice`), without manual `cd`. Console header indicates `(cd <source_dir>)`.
+   - **Automatic `apk.config` Scaffolding**: Selecting a project profile automatically creates `<source_dir>/apk.config` from template, merges `config/overlay/apk_overlays.config`, and sets `ACTIVE_PROJECT="<project>"`.
+   - **Status Verification**: Hovering over **Source** pill inspects absolute path and config status. Backend exposes `source_dir`, `source_dir_exists`, `apk_config_in_source` via `GET /api/aosp/config`.
+   - **1-Click APK Deployment**: `⚡ Upload & Deploy APK` pushes compiled APK directly to `/system/priv-app/` or `/product/app/` and restarts the package.
 
 9. **📱 Mirror Tab — Screen Mirroring & Android Remote Control (Zero-Dependency)**:
-   - **Truyền hình ảnh Canvas mượt mà**: Chụp trực tiếp từ frame buffer của thiết bị qua `adb exec-out screencap -p` và hiển thị trên Canvas HTML5 không cần cài đặt thêm `scrcpy`, `ffmpeg` hay driver phụ trợ.
-   - **Tự động nhận diện kích thước từ Target**:
-     - Đọc độ phân giải vật lý (`Physical size` / `Override size`) qua `adb shell wm size` và mật độ điểm ảnh qua `wm density`.
-     - Tự động co giãn theo hướng xoay màn hình (Landscape xe hơi ô tô `1920×1080` hoặc Portrait điện thoại `1080×1920`).
-     - Tự động nhận diện AOSP `TARGET_PRODUCT` (ví dụ `car_x86_64`) khi thiết bị offline để hiển thị khung preview chuẩn.
-   - **Tương tác cảm ứng & Điều khiển từ xa (Interactive Remote Control)**:
-     - Click chuột để chạm (Tap), kéo rê chuột để vuốt cuộn trang (Swipe/Scroll) với vòng tròn phản hồi chạm (Touch Ripple Animation). Tọa độ click chuột tự động được ánh xạ 1:1 chuẩn xác sang tọa độ pixel thực tế của target.
-     - Phím cứng ảo Android: `◀ Back`, `⌂ Home`, `▢ Recents`, `⚡ Power`, `🔔 Notifications`, `🔊 Vol+`, `🔉 Vol-`, `⚙ Settings`.
-     - Nhập liệu bàn phím: Ô gõ văn bản và nút gửi text trực tiếp vào input field của Android qua `adb shell input text`.
-     - Chụp ảnh màn hình HD: Nút `📸 Screenshot` lưu ảnh PNG độ nét cao về máy tính.
-   - **Chạy ngầm liên tục (Background Streaming)**: Stream vẫn tiếp tục chạy ngầm trong Canvas khi chuyển sang các tab khác, tab `📱 Mirror` hiển thị chấm xanh nhấp nháy `.tab-streaming`, khi quay lại tab Mirror màn hình hiển thị ngay lập tức với 0 độ trễ (zero latency).
+   - **Canvas Streaming**: Captures device framebuffer via `adb exec-out screencap -p` onto HTML5 Canvas without requiring `scrcpy`, `ffmpeg`, or extra drivers.
+   - **Target Resolution Detection**: Reads physical and override display resolutions via `adb shell wm size` and density via `wm density`. Auto-adapts to landscape (`1920×1080`) or portrait (`1080×1920`). Recognizes `TARGET_PRODUCT` (e.g. `car_x86_64`) for offline preview frame.
+   - **Interactive Remote Control**: Touch tap, swipe, and scroll mapped 1:1 to target coordinates with touch ripple animation. Virtual hardware buttons (`◀ Back`, `⌂ Home`, `▢ Recents`, `⚡ Power`, `🔔 Notifications`, `🔊 Vol+`, `🔉 Vol-`, `⚙ Settings`). Keyboard text injection via `adb shell input text`. High-resolution PNG screenshots via `📸 Screenshot`.
+   - **Background Streaming**: Stream continues in background when switching tabs; Mirror tab shows active pulse badge `.tab-streaming`.
 
 10. **📋 Logcat Studio Tab — Real-time Android Logcat Analyzer**:
-    - **Bắt log thời gian thực**: Stream logcat từ thiết bị với bộ lọc đa tầng theo Log Level (`V`, `D`, `I`, `W`, `E`, `F`), Tag ô tô/AOSP, PID và biểu thức chính quy (Regex).
-    - **Lưu bộ lọc theo dự án & cá nhân**: Hỗ trợ lưu cấu hình bộ lọc vào `config/overlay/logcat_filters.json` (cá nhân) hoặc `config/logcat_filters.json` (dùng chung cho team).
-    - **Tự động nhận diện mất kết nối (Auto-Recovery)**: Phát hiện thiết bị mất kết nối và cung cấp nút tải nhanh kịch bản `adb_remote_pc.bat` để kết nối lại.
+    - **Real-Time Streaming**: Multi-tier filtering by Log Level (`V`, `D`, `I`, `W`, `E`, `F`), AAOS/AOSP tags, PID, and regex.
+    - **Filter Persistence**: Stores filters in `config/overlay/logcat_filters.json` (personal) or `config/logcat_filters.json` (shared).
+    - **Auto-Recovery**: Detects disconnects and generates `adb_remote_pc.bat` script for remote re-connection.
 
 ---
 
-### 5.12 Hướng Dẫn Làm Việc Từ Xa & Truy Cập Phòng Lab (Remote Work & Remote Lab Setup)
+### 5.12 Remote Work & Remote Lab Setup
 
-Telua Web được thiết kế để hỗ trợ lập trình viên làm việc từ xa (Work from Home / Remote Lab) mà không cần ngồi trực tiếp trước máy trạm build hoặc board phần cứng AOSP. Dưới đây là các phương thức kết nối từ xa phổ biến và an toàn nhất:
+Telua Web is engineered for remote development (Work from Home / Remote Lab) without requiring physical access to the build server or hardware boards:
 
-#### 🚀 Cách 1: Sử Dụng SSH Port Forwarding (Khuyên Dùng Nhất — Không Cần Sửa Code, Bảo Mật Tuyệt Đối)
+#### 🚀 Method 1: SSH Port Forwarding (Recommended — Zero Code Changes, Maximum Security)
 
-Đây là cách đơn giản và an toàn nhất vì toàn bộ dữ liệu (Mirror, Logcat, Terminal) đều được mã hóa qua đường truyền SSH có sẵn của bạn:
+This is the simplest and most secure approach because all traffic (Mirror, Logcat, Terminal) tunnels through your existing encrypted SSH connection:
 
-1. **Khởi chạy Telua Web trên máy trạm Linux tại công ty/lab:**
+1. **Launch Telua Web on Linux build server in office/lab:**
    ```bash
-   tel web start                         # Khởi chạy ngầm trên port 8788
+   tel web start                         # Launch background server on port 8788
    ```
 
-2. **Trên laptop ở nhà (Windows PowerShell, macOS hoặc Linux Terminal), chạy 1 lệnh duy nhất:**
+2. **On local machine (Windows PowerShell, macOS, or Linux Terminal), run:**
    ```bash
-   ssh -L 8788:localhost:8788 user@ip_may_cong_ty
+   ssh -L 8788:localhost:8788 user@remote_server_ip
    ```
-   *(Thay `user@ip_may_cong_ty` bằng tài khoản SSH vào máy trạm của bạn)*
+   *(Replace `user@remote_server_ip` with your SSH credentials)*
 
-3. **Mở trình duyệt trên máy ở nhà:**
-   👉 Truy cập: `http://localhost:8788`
-   - Toàn bộ giao diện Telua Web, xem màn hình Mirror, bắt Logcat và chạy lệnh Terminal sẽ hoạt động trơn tru hệt như bạn đang ngồi tại văn phòng!
+3. **Open browser:**
+   👉 Navigate to: `http://localhost:8788`
+   - Complete Telua Web interface, Screen Mirroring, Logcat streaming, and Terminal execution operate seamlessly as if you were working locally!
 
 ---
 
-#### 🌐 Cách 2: Chạy Trực Tiếp Qua Mạng Nội Bộ LAN hoặc VPN (Tailscale, WireGuard, OpenVPN)
+#### 🌐 Method 2: Internal LAN or VPN (Tailscale, WireGuard, OpenVPN)
 
-Nếu máy trạm công ty và laptop ở nhà cùng kết nối vào một mạng VPN nội bộ (như **Tailscale**, **WireGuard**, hoặc mạng VPN công ty):
+When both the workstation and remote client join the same VPN network (such as **Tailscale**, **WireGuard**, or corporate VPN):
 
-1. **Khởi chạy Web UI cho phép truy cập từ mọi IP trong mạng (`--host 0.0.0.0`):**
+1. **Launch Web UI binding to all network interfaces (`--host 0.0.0.0`):**
    ```bash
    python3 web/telua_web.py --host 0.0.0.0 --port 8788
    ```
-   *Hoặc đặt biến môi trường trong `~/.bashrc`:*
+   *Or set environment variables in `~/.bashrc`:*
    ```bash
    export TELUA_WEB_HOST="0.0.0.0"
    export TELUA_WEB_PORT="8788"
    tel web start
    ```
 
-2. **Mở trình duyệt trên laptop từ xa:**
-   👉 Truy cập: `http://<IP_MAY_TRAM>:8788` (Ví dụ: `http://100.85.120.45:8788` nếu dùng Tailscale hoặc `http://192.168.1.50:8788` trong mạng LAN công ty).
+2. **Open browser on remote machine:**
+   👉 Navigate to: `http://<SERVER_IP>:8788` (e.g., `http://100.85.120.45:8788` via Tailscale or `http://192.168.1.50:8788` on office LAN).
 
 ---
 
-#### ☁️ Cách 3: Kết Nối Qua Cloudflare Zero Trust Tunnel (Miễn Phí, Có HTTPS & Domain Riêng)
+#### ☁️ Method 3: Cloudflare Zero Trust Tunnel (Free, HTTPS & Custom Domain)
 
-Nếu muốn truy cập từ xa qua internet công cộng an toàn mà không cần mở port modem router:
+For secure remote access across the public internet without port forwarding:
 
-1. Cài đặt tiện ích `cloudflared` trên máy trạm Linux.
-2. Chạy tunnel nhanh trỏ vào Telua Web:
+1. Install `cloudflared` on the Linux build host.
+2. Launch a quick tunnel to Telua Web:
    ```bash
    cloudflared tunnel --url http://localhost:8788
    ```
-3. Cloudflare sẽ cấp cho bạn một đường dẫn HTTPS an toàn (ví dụ: `https://your-random-domain.trycloudflare.com`) để mở trên bất kỳ thiết bị nào (laptop, tablet, điện thoại).
+3. Cloudflare provisions a secure HTTPS URL (e.g., `https://your-domain.trycloudflare.com`) accessible from any browser.
 
 ---
 
-#### 🔌 Cách 4: Kết Nối Thiết Bị Android / Board Phần Cứng Từ Xa (Remote ADB Bridge)
+#### 🔌 Method 4: Remote Hardware / Android Board Connection (Remote ADB Bridge)
 
-Khi thiết bị thật (điện thoại hoặc board ô tô) đang cắm cáp USB vào máy tính Windows của bạn, nhưng mã nguồn và máy chủ build AOSP lại nằm trên máy chủ Linux từ xa:
+When a physical Android device or automotive board is plugged into your local Windows PC via USB, but AOSP source code and build environments reside on a remote Linux server:
 
-1. Trên giao diện Telua Web, click vào chip cảnh báo thiết bị offline hoặc vào đường dẫn:
+1. In Telua Web, click the offline device banner or open:
    `http://<server-ip>:8788/api/adb/remote-script`
-2. Trình duyệt sẽ tự động tải về file `adb_remote_pc.bat`.
-3. Nhấp đúp chạy `adb_remote_pc.bat` trên máy tính Windows có cắm thiết bị: kịch bản sẽ tự động mở cổng `adb forward` và thiết lập kết nối ADB từ xa về máy chủ Linux. Tab **📱 Mirror** và **📋 Logcat** sẽ tự động nhận diện thiết bị ngay lập tức!
+2. Browser automatically downloads `adb_remote_pc.bat`.
+3. Run `adb_remote_pc.bat` on the Windows PC with the connected device: the script establishes an `adb forward` reverse bridge to the remote Linux server. The **📱 Mirror** and **📋 Logcat** tabs will recognize the device immediately!
 
 ---
 

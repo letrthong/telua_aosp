@@ -653,7 +653,7 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertIn("Git History", hist)
         diff = _tool_get_commit_diff({"commit_hash": "HEAD"})
         self.assertTrue(len(diff) > 0)
-        self.assertNotIn("[ERROR]", diff)
+        self.assertFalse(diff.startswith("[ERROR]"))
 
         # Test Public vs Private MCP skills source separation
         from ai.telua_mcp_skill import save_mcp_skill_config, get_all_configured_sources, get_private_sources
