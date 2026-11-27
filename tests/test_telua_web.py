@@ -364,7 +364,7 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertEqual(data_post["count"], 1)
         self.assertTrue(data_post["personal"])
         self.assertEqual(data_post["path"], "config/overlay/logcat_filters.json")
-        overlay_file = telua_web.ROOT / "config" / "overlay" / "logcat_filters.json"
+        overlay_file = telua_web.ROOT / "config" / "overlay" / "json" / "logcat_filters.json"
         self.assertTrue(overlay_file.is_file())
 
         # Verify saved — GET now reads from the personal overlay
@@ -391,7 +391,7 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
     def test_api_logcat_filters_overlay_priority_and_migration(self):
         """Personal overlay wins over shared template; one-time migration copies
         a customized shared file into the overlay."""
-        overlay_file = telua_web.ROOT / "config" / "overlay" / "logcat_filters.json"
+        overlay_file = telua_web.ROOT / "config" / "overlay" / "json" / "logcat_filters.json"
         shared_file = telua_web.ROOT / "config" / "json" / "logcat_filters.json"
         saved_overlay = saved_shared = None
         try:
@@ -410,7 +410,7 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
             self.assertEqual(res.status_code, 200)
             data = res.get_json()
             self.assertTrue(data["personal"])
-            self.assertEqual(data["path"], "config/overlay/logcat_filters.json")
+            self.assertEqual(data["path"], "config/overlay/json/logcat_filters.json")
             self.assertTrue(overlay_file.is_file(), "migration should create overlay file")
             self.assertEqual(data["filters"][0]["name"], "My Bosch Rule")
 
