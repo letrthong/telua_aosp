@@ -102,9 +102,12 @@ def get_filters_file() -> Path:
          backed up/restored by 'telua update' via PERSONAL_CONFIG_FILES).
       2. config/logcat_filters.json — shared template tracked in Git.
     """
-    overlay = get_root() / "config" / "overlay" / "logcat_filters.json"
+    overlay = get_overlay_filters_file()
     if overlay.is_file():
         return overlay
+    legacy_ov = get_root() / "config" / "overlay" / "logcat_filters.json"
+    if legacy_ov.is_file():
+        return legacy_ov
     return get_shared_filters_file()
 
 
@@ -117,8 +120,8 @@ def get_shared_filters_file() -> Path:
 
 
 def get_overlay_filters_file() -> Path:
-    """Personal (git-ignored) overlay path: config/overlay/logcat_filters.json."""
-    return get_root() / "config" / "overlay" / "logcat_filters.json"
+    """Personal (git-ignored) overlay path: config/overlay/json/logcat_filters.json."""
+    return get_root() / "config" / "overlay" / "json" / "logcat_filters.json"
 
 
 def _apply_shared_locked_defaults(rules):

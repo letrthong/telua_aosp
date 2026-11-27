@@ -27,15 +27,18 @@ def is_editable_name(name: str) -> bool:
 
 
 def ensure_overlay_configs(root: Path):
-    """Auto-create missing personal configs in config/overlay/ from .example templates (never overwrites)."""
+    """Auto-create missing personal configs in config/overlay/ (and overlay/cli/) from .example templates."""
     overlay_dir = root / "config" / "overlay"
     if not overlay_dir.is_dir():
         return
-    for base in PRIVATE_OVERLAY_NAMES:
-        dst = overlay_dir / base
-        src = overlay_dir / (base + ".example")
+    mapping = [
+        (overlay_dir / "apk_overlays.config", overlay_dir / "apk_overlays.config.example"),
+        (overlay_dir / "cli" / "const_my_cli.config", overlay_dir / "cli" / "const_my_cli.config.example"),
+    ]
+    for dst, src in mapping:
         if not dst.exists() and src.is_file():
             try:
+                dst.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(str(src), str(dst))
             except OSError:
                 pass
@@ -74,8 +77,11 @@ def scan_files_in_root(root: Path):
     except OSError:
         pass
 
-    # 2. Then config/ and its organized subfolders (cli/, json/, ai_agent/, overlay/)
-    for sub in ("config", "config/cli", "config/json", "config/ai_agent", "config/overlay"):
+    # 2. Then config/ and its organized subfolders (cli/, json/, ai_agent/, overlay/*)
+    for sub in (
+        "config", "config/cli", "config/json", "config/ai_agent",
+        "config/overlay", "config/overlay/cli", "config/overlay/json",
+    ):
         sub_dir = root / sub
         if sub_dir.is_dir():
             for name in sorted(os.listdir(sub_dir)):
@@ -88,6 +94,7 @@ def scan_files_in_root(root: Path):
         "config/overlay/apk_overlays.config": 1,
         "config/apk_overlays.config": 1,
         "apk_overlays.config": 1,
+        "config/overlay/cli/const_my_cli.config": 1,
         "config/overlay/const_my_cli.config": 1,
         "config/const_my_cli.config": 1,
         "config/cli/const_multi_cli.config": 2,
@@ -222,9 +229,20 @@ def crypto_items_for_root(root: Path):
     overlay_dir = root / "config" / "overlay"
     items = []
     for name in PRIVATE_OVERLAY_NAMES:
-        plain_path = overlay_dir / name
-        enc_path = overlay_dir / ("enc_" + name)
-        dec_path = overlay_dir / ("dec_" + name)
+        # const_my_cli.config lives under config/overlay/cli/ (fallback to config/overlay/)
+        if name == "const_my_cli.config" and (
+            (overlay_dir / "cli" / name).is_file()
+            or (overlay_dir / "cli" / ("enc_" + name)).is_file()
+            or not (overlay_dir / name).is_file()
+        ):
+            base_dir = overlay_dir / "cli"
+            rel_prefix = "config/overlay/cli"
+        else:
+            base_dir = overlay_dir
+            rel_prefix = "config/overlay"
+        plain_path = base_dir / name
+        enc_path = base_dir / ("enc_" + name)
+        dec_path = base_dir / ("dec_" + name)
         p_exists = plain_path.is_file()
         e_exists = enc_path.is_file()
         d_exists = dec_path.is_file()
@@ -233,9 +251,9 @@ def crypto_items_for_root(root: Path):
         d_stat = dec_path.stat() if d_exists else None
         items.append({
             "name": name,
-            "plain_rel": "config/overlay/%s" % name,
-            "enc_rel": "config/overlay/enc_%s" % name,
-            "dec_rel": "config/overlay/dec_%s" % name,
+            "plain_rel": f"{rel_prefix}/{name}",
+            "enc_rel": f"{rel_prefix}/enc_{name}",
+            "dec_rel": f"{rel_prefix}/dec_{name}",
             "plain_exists": p_exists,
             "plain_size": p_stat.st_size if p_stat else 0,
             "plain_mtime": datetime.fromtimestamp(p_stat.st_mtime).strftime("%Y-%m-%d %H:%M") if p_stat else None,

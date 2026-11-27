@@ -160,7 +160,7 @@ def decrypt_single_file(src: str, dst: str, password: str) -> None:
 def resolve_encrypt_targets(overlay_dir: str | None = None) -> list[tuple[str, str]]:
     """Find existing private config files (apk_overlays.config, const_my_cli.config) to encrypt."""
     base_overlay = overlay_dir or OVERLAY_DIR
-    search_dirs = [base_overlay]
+    search_dirs = [os.path.join(base_overlay, "cli"), base_overlay]
     if overlay_dir is None:
         search_dirs.extend([CONFIG_DIR, REPO_ROOT])
 
@@ -181,7 +181,7 @@ def resolve_decrypt_targets(overlay_dir: str | None = None, force: bool = False)
     - With --force (force=True): outputs to <name> (e.g., apk_overlays.config), overwriting active config.
     """
     base_overlay = overlay_dir or OVERLAY_DIR
-    search_dirs = [base_overlay]
+    search_dirs = [os.path.join(base_overlay, "cli"), base_overlay]
     if overlay_dir is None:
         search_dirs.extend([CONFIG_DIR, REPO_ROOT])
 

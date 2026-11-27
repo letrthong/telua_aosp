@@ -43,7 +43,7 @@ OVERLAY_CONFIG_FILE_NAME="apk_overlays.config"
 # Personal (untracked, git-ignored) files relative to the toolkit repo.
 # 'telua init' creates them from '<file>.example' if missing; 'telua update' backs them up and restores them.
 # Both live in config/overlay/ (git-ignored — see .gitignore 'config/overlay/*.config').
-PERSONAL_CONFIG_FILES=("config/overlay/apk_overlays.config" "config/overlay/const_my_cli.config")
+PERSONAL_CONFIG_FILES=("config/overlay/apk_overlays.config" "config/overlay/cli/const_my_cli.config" "config/overlay/const_my_cli.config")
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Resolve master script directory (even if executed through symlink)
@@ -110,7 +110,11 @@ CONST_CONFIG_DIR_NAME="config"
 # Tìm các file const_*.config: ưu tiên tại config/ của MASTER_SCRIPT_DIR, sau đó là root (tương thích ngược)
 find_const_config_file() {
     local fname="$1"
-    # 0. Personal overlay first (config/overlay/, git-ignored — see config/overlay/ReadMe.txt)
+    # 0. Personal overlay first (config/overlay/cli/ then config/overlay/, git-ignored)
+    if [ -f "$MASTER_SCRIPT_DIR/config/overlay/cli/$fname" ]; then
+        echo "$MASTER_SCRIPT_DIR/config/overlay/cli/$fname"
+        return 0
+    fi
     if [ -f "$MASTER_SCRIPT_DIR/config/overlay/$fname" ]; then
         echo "$MASTER_SCRIPT_DIR/config/overlay/$fname"
         return 0

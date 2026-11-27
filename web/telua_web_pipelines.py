@@ -36,10 +36,10 @@ def get_root() -> Path:
 def get_pipeline_sources() -> Dict[str, Any]:
     root = get_root()
     my_cli = (
-        (root / "config" / "overlay" / "const_my_cli.config")
-        if (root / "config" / "overlay" / "const_my_cli.config").is_file()
-        or not (root / "config" / "const_my_cli.config").is_file()
-        else (root / "config" / "const_my_cli.config")
+        (root / "config" / "overlay" / "cli" / "const_my_cli.config")
+        if (root / "config" / "overlay" / "cli" / "const_my_cli.config").is_file()
+        or not (root / "config" / "overlay" / "const_my_cli.config").is_file()
+        else (root / "config" / "overlay" / "const_my_cli.config")
     )
     def _cli_cfg(fname: str) -> Path:
         p = root / "config" / "cli" / fname
@@ -101,13 +101,16 @@ def _pipeline_config_path(source):
     key, _ = _pipeline_source(source)
     if key == "my":
         candidates = [
+            root / "config" / "overlay" / "cli" / "const_my_cli.config",
             root / "config" / "overlay" / "const_my_cli.config",
             root / "config" / "const_my_cli.config",
+            root / "config" / "overlay" / "cli" / "const_my_cli.config.example",
             root / "config" / "overlay" / "const_my_cli.config.example",
             root / "config" / "const_my_cli.config.example",
         ]
     elif key in ("docker", "system"):
         candidates = [
+            root / "config" / "overlay" / "cli" / "const_system_cli.config",
             root / "config" / "overlay" / "const_system_cli.config",
             root / "config" / "cli" / "const_system_cli.config",
             root / "config" / "const_system_cli.config",
@@ -115,6 +118,7 @@ def _pipeline_config_path(source):
         ]
     elif key == "car":
         candidates = [
+            root / "config" / "overlay" / "cli" / "const_car.config",
             root / "config" / "overlay" / "const_car.config",
             root / "config" / "cli" / "const_car.config",
             root / "config" / "const_car.config",
@@ -122,6 +126,7 @@ def _pipeline_config_path(source):
         ]
     elif key == "dump":
         candidates = [
+            root / "config" / "overlay" / "cli" / "const_dumpsys.config",
             root / "config" / "overlay" / "const_dumpsys.config",
             root / "config" / "cli" / "const_dumpsys.config",
             root / "config" / "const_dumpsys.config",

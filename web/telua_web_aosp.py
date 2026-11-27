@@ -588,7 +588,14 @@ def api_overlay_upload():
     if err:
         abort(400, description="File contains invalid bash syntax: %s" % err)
 
-    dest_path = overlay_dir / target_name
+    if target_name == "const_my_cli.config":
+        dest_dir = overlay_dir / "cli"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_path = dest_dir / target_name
+        rel_out = f"config/overlay/cli/{target_name}"
+    else:
+        dest_path = overlay_dir / target_name
+        rel_out = f"config/overlay/{target_name}"
     backup = None
     if dest_path.is_file():
         try:
@@ -623,7 +630,7 @@ def api_overlay_upload():
     return jsonify({
         "ok": True,
         "filename": target_name,
-        "path": f"config/overlay/{target_name}",
+        "path": rel_out,
         "bytes": len(content_str.encode("utf-8")),
         "backup": backup,
         "aosp_info": _parse_aosp_info() if target_name == "apk_overlays.config" else None,

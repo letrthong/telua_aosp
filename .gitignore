@@ -248,6 +248,10 @@ config/overlay/*.bak
 config/overlay/*.json
 !config/overlay/enc_*.config
 !config/overlay/ReadMe.txt
+config/overlay/cli/*.config
+config/overlay/cli/*.bak
+!config/overlay/cli/enc_*.config
+config/overlay/json/*.json
 # AI agent personal config / secrets / runtime state (API keys, private MCP sources, hashes, token usage)
 config/overlay/ai_agent/*
 !config/overlay/ai_agent/ReadMe.txt
