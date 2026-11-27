@@ -1803,7 +1803,7 @@ def api_ai_chroma_status():
 @ai_bp.get("/api/ai/mcp/config")
 def api_ai_mcp_config_get():
     """Return MCP skill configuration and local status."""
-    from .telua_mcp_skill import get_mcp_skill_config, scan_skills, get_all_configured_sources
+    from .telua_mcp_skill import get_mcp_skill_config, scan_skills, get_all_configured_sources, DEFAULT_AOSP_VERSIONS
     cfg = get_mcp_skill_config()
     skills = scan_skills()
     categories = sorted(set(s["category"] for s in skills))
@@ -1816,12 +1816,17 @@ def api_ai_mcp_config_get():
         "config": cfg,
         "skills_count": len(skills),
         "categories": categories,
+        "aosp_versions": cfg.get("aosp_versions") or [dict(v) for v in DEFAULT_AOSP_VERSIONS],
         "sources": [
             {
                 "id": s["id"],
                 "name": s["name"],
                 "repo_url": s["repo_url"],
                 "local_path": s["local_path"],
+                "project": s.get("project", "aosp_aaos"),
+                "aosp_version": s.get("aosp_version", ""),
+                "api_level": s.get("api_level"),
+                "branch": s.get("branch", ""),
                 "enabled": s.get("enabled", True),
                 "visibility": s.get("visibility", "public"),
                 "is_private": bool(s.get("visibility") == "private" or s.get("is_private")),

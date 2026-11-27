@@ -215,7 +215,9 @@ async function initAI() {
     const isPrivate = (visibility === "private");
     const project = (projInput?.value.trim()) || "aosp_aaos";
     let aospVer = verInput?.value || "";
-    if (aospVer === "auto" || aospVer === "custom") aospVer = "";
+    if (aospVer === "auto" || aospVer === "__manage__" || aospVer === "custom") aospVer = "";
+    const verObj = _aiAospVersions.find(v => v.id === (verInput?.value || ""));
+    const apiLevel = verObj?.api_level || null;
 
     _aiMcpSources.push({
       id: cleanId,
@@ -224,6 +226,7 @@ async function initAI() {
       repo_url: url,
       project: project,
       aosp_version: aospVer,
+      api_level: apiLevel,
       enabled: true,
       exists: true,
       count: 0,
@@ -237,6 +240,77 @@ async function initAI() {
 
     renderAIMcpSourcesList();
     toast(`Added ${isPrivate ? '🔒 Private' : '🌐 Public'} source ➕`, "Click '💾 Save Sources' to persist configuration.", "ok", 3500);
+  });
+
+  // ---- AOSP Versions Manager Dialog ----
+  $("#btn-ai-manage-versions")?.addEventListener("click", openAospVersionsModal);
+  $("#ai-mcp-new-version")?.addEventListener("change", (e) => {
+    if (e.target.value === "__manage__") {
+      e.target.value = "auto";
+      openAospVersionsModal();
+    }
+  });
+  $("#btn-ai-version-close")?.addEventListener("click", () => {
+    $("#modal-aosp-versions")?.classList.add("hidden");
+    renderAIAospVersionsSelect();
+  });
+  $("#btn-ai-version-add")?.addEventListener("click", () => {
+    const idInput = $("#ai-version-new-id");
+    const nameInput = $("#ai-version-new-name");
+    const apiInput = $("#ai-version-new-api");
+    const id = (idInput?.value || "").trim().toLowerCase().replace(/[^a-z0-9_\-]/g, "_");
+    if (!id) {
+      toast("Invalid ID", "Please enter a valid version ID (alphanumeric, e.g. a14_qssi).", "err");
+      idInput?.focus();
+      return;
+    }
+    if (_aiAospVersions.some(v => v.id === id)) {
+      toast("Duplicate ID", `AOSP version ID "${id}" already exists.`, "err");
+      idInput?.focus();
+      return;
+    }
+    const name = (nameInput?.value || "").trim() || id;
+    const apiLevel = apiInput?.value ? parseInt(apiInput.value, 10) : null;
+
+    _aiAospVersions.push({
+      id: id,
+      name: name,
+      api_level: apiLevel,
+      is_custom: true,
+      is_auto: false,
+    });
+
+    if (idInput) idInput.value = "";
+    if (nameInput) nameInput.value = "";
+    if (apiInput) apiInput.value = "";
+
+    renderAIAospVersionsList();
+    renderAIAospVersionsSelect(id);
+    toast("Version Added 🏷️", `Added "${name}" (${id}). Click "Save Versions" to persist.`, "ok", 3000);
+  });
+
+  $("#btn-ai-version-save")?.addEventListener("click", async () => {
+    const btn = $("#btn-ai-version-save");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "⏳ Saving...";
+    }
+    try {
+      await api("/api/ai/mcp/config", {
+        method: "POST",
+        body: JSON.stringify({ aosp_versions: _aiAospVersions }),
+      });
+      toast("Versions Saved 💾", "AOSP target versions updated successfully.", "ok", 3500);
+      $("#modal-aosp-versions")?.classList.add("hidden");
+      renderAIAospVersionsSelect();
+    } catch (err) {
+      toast("Save Versions Error", err.message, "err");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "💾 Save Versions";
+      }
+    }
   });
 
   $("#btn-ai-mcp-save-schedule")?.addEventListener("click", async () => {
@@ -541,7 +615,74 @@ async function saveAIConfigJson() {
 }
 
 /* ---------------- MCP Skill & ChromaDB Integration ---------------- */
+const DEFAULT_AOSP_VERSIONS = [
+  { id: "auto", name: "⚡ Auto-detect (A12-A16+)", api_level: null, is_auto: true },
+  { id: "a16", name: "Android 16 (Baklava / API 36)", api_level: 36 },
+  { id: "a15", name: "Android 15 (VanillaIceCream / API 35)", api_level: 35 },
+  { id: "a14", name: "Android 14 (UpsideDownCake / API 34)", api_level: 34 },
+  { id: "a13", name: "Android 13 (Tiramisu / API 33)", api_level: 33 },
+  { id: "a12", name: "Android 12 (SnowCone / API 31-32)", api_level: 32 },
+];
+let _aiAospVersions = [...DEFAULT_AOSP_VERSIONS];
 let _aiMcpSources = [];
+
+function renderAIAospVersionsSelect(selectedId) {
+  const sel = $("#ai-mcp-new-version");
+  if (!sel) return;
+  const currentVal = selectedId !== undefined ? selectedId : (sel.value || "auto");
+  sel.innerHTML = _aiAospVersions.map(v =>
+    `<option value="${esc(v.id)}" ${v.id === currentVal ? "selected" : ""}>${esc(v.name || v.id)}</option>`
+  ).join("") + `<option value="__manage__" style="color:var(--accent);font-weight:600;">➕ Manage / Add custom version...</option>`;
+}
+
+function renderAIAospVersionsList() {
+  const container = $("#ai-aosp-versions-list");
+  const countEl = $("#ai-version-count");
+  if (countEl) countEl.textContent = String(_aiAospVersions.length);
+  if (!container) return;
+
+  container.innerHTML = _aiAospVersions.map((v, idx) => {
+    const isBuiltin = !v.is_custom && ["auto", "a16", "a15", "a14", "a13", "a12"].includes(v.id);
+    const tagBadge = isBuiltin
+      ? `<span class="chip" style="font-size:10px;padding:1px 5px;background:rgba(255,255,255,0.06);color:#8b949e;">Standard</span>`
+      : `<span class="chip ok" style="font-size:10px;padding:1px 5px;">Custom</span>`;
+    const apiBadge = v.api_level
+      ? `<span class="chip" style="font-size:10px;padding:1px 5px;background:rgba(74,222,128,0.12);color:#4ade80;">API ${v.api_level}</span>`
+      : '';
+    const delBtn = isBuiltin
+      ? ''
+      : `<button class="btn danger ai-ver-del" data-idx="${idx}" style="padding:1px 6px;font-size:10px;" title="Delete this custom version">🗑</button>`;
+
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0;">
+          <code class="mono" style="font-size:11px;color:var(--accent);font-weight:700;">${esc(v.id)}</code>
+          <span style="font-size:11px;color:var(--text);">${esc(v.name || v.id)}</span>
+          ${apiBadge}
+          ${tagBadge}
+        </div>
+        ${delBtn}
+      </div>
+    `;
+  }).join("");
+
+  container.querySelectorAll(".ai-ver-del").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      const item = _aiAospVersions[idx];
+      if (!item) return;
+      if (!confirm(`Delete custom AOSP version "${item.name || item.id}"?`)) return;
+      _aiAospVersions.splice(idx, 1);
+      renderAIAospVersionsList();
+      renderAIAospVersionsSelect();
+    });
+  });
+}
+
+function openAospVersionsModal() {
+  renderAIAospVersionsList();
+  $("#modal-aosp-versions")?.classList.remove("hidden");
+}
 
 function renderAIMcpSourcesList() {
   const container = $("#ai-mcp-sources-list");
@@ -637,6 +778,11 @@ async function loadAIMcpStatus() {
         pill.className = "chip";
       }
     }
+
+    if (cfgRes.aosp_versions || cfgRes.config?.aosp_versions) {
+      _aiAospVersions = cfgRes.aosp_versions || cfgRes.config?.aosp_versions || DEFAULT_AOSP_VERSIONS;
+    }
+    renderAIAospVersionsSelect();
 
     _aiMcpSources = cfgRes.sources || [];
     renderAIMcpSourcesList();

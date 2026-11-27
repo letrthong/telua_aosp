@@ -682,6 +682,20 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         if p_priv.is_file():
             p_priv.unlink()
 
+        # Test Dynamic Custom AOSP Versions Configuration
+        res_post_ver = self.client.post("/api/ai/mcp/config", json={
+            "aosp_versions": [
+                {"id": "auto", "name": "⚡ Auto-detect (A12-A16+)", "api_level": None},
+                {"id": "a16", "name": "Android 16 (Baklava / API 36)", "api_level": 36},
+                {"id": "a14_qssi", "name": "Android 14 QSSI Qualcomm IVI", "api_level": 34, "is_custom": True},
+            ]
+        })
+        self.assertEqual(res_post_ver.status_code, 200)
+        res_get_ver = self.client.get("/api/ai/mcp/config")
+        self.assertEqual(res_get_ver.status_code, 200)
+        data_vers = res_get_ver.get_json().get("aosp_versions", [])
+        self.assertTrue(any(v["id"] == "a14_qssi" and v.get("api_level") == 34 for v in data_vers))
+
 
 if __name__ == "__main__":
     unittest.main()

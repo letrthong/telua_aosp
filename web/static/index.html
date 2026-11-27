@@ -1339,17 +1339,12 @@
             <input type="text" id="ai-mcp-new-path" class="term-input mono" style="font-size:11px;padding:4px 6px;" placeholder="Path (e.g. repos/private_skill or D:\aosp_a16\frameworks\opt\car)">
             <input type="text" id="ai-mcp-new-url" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Git URL (optional)">
           </div>
-          <div style="display:grid;grid-template-columns:1.2fr 1.4fr 130px auto;gap:6px;align-items:center;">
+          <div style="display:grid;grid-template-columns:1fr 1.5fr 115px auto;gap:6px;align-items:center;">
             <input type="text" id="ai-mcp-new-project" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Project (e.g. aosp_aaos)" value="aosp_aaos">
-            <select id="ai-mcp-new-version" class="theme-select" style="font-size:11px;padding:4px 6px;" title="AOSP Version">
-              <option value="auto" selected>⚡ Auto-detect (A12-A16)</option>
-              <option value="a16">Android 16 (Baklava / API 36)</option>
-              <option value="a15">Android 15 (VanillaIceCream / API 35)</option>
-              <option value="a14">Android 14 (UpsideDownCake / API 34)</option>
-              <option value="a13">Android 13 (Tiramisu / API 33)</option>
-              <option value="a12">Android 12 (SnowCone / API 31-32)</option>
-              <option value="custom">Custom / Other</option>
-            </select>
+            <div style="display:flex;gap:4px;align-items:center;">
+              <select id="ai-mcp-new-version" class="theme-select" style="flex:1;font-size:11px;padding:4px 6px;" title="AOSP Version / Branch Target"></select>
+              <button type="button" class="btn btn-xs ghost" id="btn-ai-manage-versions" title="Manage / Add custom AOSP versions" style="padding:4px 7px;font-size:11px;white-space:nowrap;">⚙️</button>
+            </div>
             <select id="ai-mcp-new-visibility" class="theme-select" style="font-size:11px;padding:4px 6px;" title="Git Privacy Mode">
               <option value="private" selected>🔒 Private (No Git)</option>
               <option value="public">🌐 Public (Git)</option>
@@ -1489,6 +1484,37 @@
       <div class="modal-actions">
         <button class="btn" id="btn-ai-cfg-cancel">Cancel</button>
         <button class="btn primary" id="btn-ai-cfg-save" title="Save entire provider JSON registry">💾 Save JSON</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ AOSP Versions Manager Modal ============ -->
+  <div class="modal hidden" id="modal-aosp-versions" style="z-index:1100;">
+    <div class="modal-box">
+      <h3>🏷️ Manage AOSP Versions &amp; Targets</h3>
+      <p class="meta">Configure standard or custom AOSP target tags (e.g., A12–A16, QSSI branches, OEM custom IVI builds). Saved in MCP configuration.</p>
+
+      <div class="settings-section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <label class="meta" style="font-weight:600;color:var(--text);font-size:11px;">Available Versions (<span id="ai-version-count">0</span>):</label>
+          <span class="meta" style="font-size:10px;">Selectable in Knowledge Sources</span>
+        </div>
+        <div id="ai-aosp-versions-list" style="display:flex;flex-direction:column;gap:5px;max-height:190px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;"></div>
+      </div>
+
+      <div class="settings-section" style="background:rgba(255,255,255,0.02);border:1px dashed var(--border);border-radius:6px;padding:8px;">
+        <span style="font-size:11px;font-weight:600;color:var(--accent);display:block;margin-bottom:6px;">➕ Add Custom AOSP Version:</span>
+        <div style="display:grid;grid-template-columns:1fr 1.6fr 90px auto;gap:6px;align-items:center;">
+          <input type="text" id="ai-version-new-id" class="term-input mono" style="font-size:11px;padding:4px 6px;" placeholder="ID (e.g. a14_qssi)">
+          <input type="text" id="ai-version-new-name" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Label (e.g. Android 14 QSSI Car)">
+          <input type="number" id="ai-version-new-api" class="term-input mono" style="font-size:11px;padding:4px 6px;" placeholder="API (e.g. 34)">
+          <button type="button" class="btn primary" id="btn-ai-version-add" style="font-size:11px;padding:4px 10px;white-space:nowrap;">➕ Add</button>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn" id="btn-ai-version-close">Close</button>
+        <button class="btn primary" id="btn-ai-version-save" title="Save versions to configuration">💾 Save Versions</button>
       </div>
     </div>
   </div>

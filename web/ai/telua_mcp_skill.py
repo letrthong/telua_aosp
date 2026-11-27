@@ -58,6 +58,15 @@ DEFAULT_SOURCES = [
     },
 ]
 
+DEFAULT_AOSP_VERSIONS = [
+    {"id": "auto", "name": "⚡ Auto-detect (A12-A16+)", "api_level": None, "is_auto": True},
+    {"id": "a16", "name": "Android 16 (Baklava / API 36)", "api_level": 36},
+    {"id": "a15", "name": "Android 15 (VanillaIceCream / API 35)", "api_level": 35},
+    {"id": "a14", "name": "Android 14 (UpsideDownCake / API 34)", "api_level": 34},
+    {"id": "a13", "name": "Android 13 (Tiramisu / API 33)", "api_level": 33},
+    {"id": "a12", "name": "Android 12 (SnowCone / API 31-32)", "api_level": 32},
+]
+
 CONFIG_FILE_CANDIDATES = [
     "config/overlay/mcp_skills_config.json",
     "config/mcp_skills_config.json",
@@ -207,6 +216,7 @@ def get_mcp_skill_config() -> dict:
         "local_path": DEFAULT_SKILL_LOCAL_PATH,
         "collection_name": "telua_knowledge",
         "sources": [dict(s) for s in DEFAULT_SOURCES],
+        "aosp_versions": [dict(v) for v in DEFAULT_AOSP_VERSIONS],
         "last_sync": "",
         "indexed_count": 0,
     }
@@ -218,6 +228,15 @@ def get_mcp_skill_config() -> dict:
                 # Ensure sources list exists
                 if "sources" not in data or not data.get("sources"):
                     default_cfg["sources"] = [dict(s) for s in DEFAULT_SOURCES]
+                # Merge or load custom AOSP versions
+                if "aosp_versions" in data and isinstance(data["aosp_versions"], list) and data["aosp_versions"]:
+                    known_ids = {v["id"] for v in DEFAULT_AOSP_VERSIONS}
+                    merged_vers = [dict(v) for v in DEFAULT_AOSP_VERSIONS]
+                    for custom in data["aosp_versions"]:
+                        if isinstance(custom, dict) and custom.get("id") and custom["id"] not in known_ids:
+                            merged_vers.append(custom)
+                            known_ids.add(custom["id"])
+                    default_cfg["aosp_versions"] = merged_vers
         except Exception:
             pass
     # Merge overlay dynamic state without modifying static config file
@@ -236,6 +255,28 @@ def save_mcp_skill_config(cfg: dict) -> dict:
             state_updates[k] = cleaned.pop(k)
     if state_updates:
         save_mcp_skill_state(state_updates)
+
+    # Clean and validate custom AOSP versions if passed
+    if "aosp_versions" in cleaned and isinstance(cleaned["aosp_versions"], list):
+        sanitized_versions = []
+        for v in cleaned["aosp_versions"]:
+            if not isinstance(v, dict) or not v.get("id"):
+                continue
+            v_id = str(v["id"]).strip().lower()
+            if not v_id:
+                continue
+            v_name = str(v.get("name") or v_id).strip()
+            v_api = int(v["api_level"]) if v.get("api_level") else None
+            is_auto = bool(v_id == "auto" or v.get("is_auto"))
+            is_custom = bool(v_id not in {"auto", "a16", "a15", "a14", "a13", "a12"})
+            sanitized_versions.append({
+                "id": v_id,
+                "name": v_name,
+                "api_level": v_api,
+                "is_auto": is_auto,
+                "is_custom": is_custom,
+            })
+        cleaned["aosp_versions"] = sanitized_versions
 
     # Clean and validate sources if passed
     if "sources" in cleaned and isinstance(cleaned["sources"], list):
