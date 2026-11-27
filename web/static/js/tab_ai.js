@@ -5,9 +5,54 @@
    ============================================================================== */
 "use strict";
 
+const AI_CHAT_HISTORY_KEY = "telua_web_ai_chat_history";
+const AI_CHAT_LOG_KEY = "telua_web_ai_chat_log";
+const AI_INPUT_DRAFT_KEY = "telua_web_ai_input_draft";
+
 let _aiInitialized = false;
 let _aiBusy = false;
 let _aiHistory = []; // [{ role: "user"|"assistant", content }]
+let _aiChatLog = []; // [{ type: "msg", role, html } | { type: "tool", tool, args, output }]
+
+function saveAIChatCache() {
+  try {
+    if (_aiHistory.length > 60) _aiHistory = _aiHistory.slice(-60);
+    if (_aiChatLog.length > 120) _aiChatLog = _aiChatLog.slice(-120);
+    localStorage.setItem(AI_CHAT_HISTORY_KEY, JSON.stringify(_aiHistory));
+    localStorage.setItem(AI_CHAT_LOG_KEY, JSON.stringify(_aiChatLog));
+  } catch { /* ignore quota / storage errors */ }
+}
+
+function clearAIChatCache() {
+  _aiHistory = [];
+  _aiChatLog = [];
+  try {
+    localStorage.removeItem(AI_CHAT_HISTORY_KEY);
+    localStorage.removeItem(AI_CHAT_LOG_KEY);
+  } catch { /* ignore */ }
+}
+
+function restoreAIChatCache() {
+  try {
+    const savedHistory = JSON.parse(localStorage.getItem(AI_CHAT_HISTORY_KEY) || "[]");
+    const savedLog = JSON.parse(localStorage.getItem(AI_CHAT_LOG_KEY) || "[]");
+    if (Array.isArray(savedHistory)) _aiHistory = savedHistory;
+    if (Array.isArray(savedLog) && savedLog.length) {
+      _aiChatLog = savedLog;
+      const log = $("#ai-chat-log");
+      if (log) {
+        log.innerHTML = "";
+        for (const item of _aiChatLog) {
+          if (item.type === "tool") {
+            aiAppendToolTrace(item.tool, item.args, item.output, false);
+          } else if (item.type === "msg") {
+            aiAppendMsg(item.role, item.html, false);
+          }
+        }
+      }
+    }
+  } catch { /* ignore corrupted cache */ }
+}
 
 function aiSetBusy(busy) {
   _aiBusy = busy;
@@ -23,7 +68,7 @@ function aiSetBusy(busy) {
   }
 }
 
-function aiAppendMsg(role, html) {
+function aiAppendMsg(role, html, persist = true) {
   const log = $("#ai-chat-log");
   if (!log) return;
   const div = document.createElement("div");
@@ -31,10 +76,14 @@ function aiAppendMsg(role, html) {
   div.innerHTML = html;
   log.appendChild(div);
   log.scrollTop = log.scrollHeight;
+  if (persist) {
+    _aiChatLog.push({ type: "msg", role, html });
+    saveAIChatCache();
+  }
   return div;
 }
 
-function aiAppendToolTrace(tool, args, output) {
+function aiAppendToolTrace(tool, args, output, persist = true) {
   const log = $("#ai-chat-log");
   if (!log) return;
   const div = document.createElement("div");
@@ -46,6 +95,10 @@ function aiAppendToolTrace(tool, args, output) {
     `<pre class="ai-tool-out">${outEsc || "(no output)"}</pre>`;
   log.appendChild(div);
   log.scrollTop = log.scrollHeight;
+  if (persist) {
+    _aiChatLog.push({ type: "tool", tool, args, output: String(output || "").slice(0, 1200) });
+    saveAIChatCache();
+  }
 }
 
 async function aiSend() {
@@ -54,6 +107,7 @@ async function aiSend() {
   const msg = (input?.value || "").trim();
   if (!msg) return;
   input.value = "";
+  try { localStorage.removeItem(AI_INPUT_DRAFT_KEY); } catch { /* ignore */ }
 
   const targetInput = $("#ai-target-file");
   const targetFile = (targetInput?.value || "").trim();
@@ -64,6 +118,7 @@ async function aiSend() {
 
   aiAppendMsg("user", esc(msg));
   _aiHistory.push({ role: "user", content: fullMsg });
+  saveAIChatCache();
   aiSetBusy(true);
 
   try {
@@ -75,6 +130,7 @@ async function aiSend() {
     const answer = res.answer || res.error || "(no answer)";
     aiAppendMsg("assistant", esc(answer).replace(/\n/g, "<br>"));
     _aiHistory.push({ role: "assistant", content: answer });
+    saveAIChatCache();
     loadAITokenUsage();
   } catch (err) {
     aiAppendMsg("assistant", `⚠️ <b>Error:</b> ${esc(err.message)}`);
@@ -88,6 +144,22 @@ async function initAI() {
   if (_aiInitialized) return;
   _aiInitialized = true;
 
+  // Restore cached chat conversation & unsent prompt draft across page refresh / tab reopen
+  restoreAIChatCache();
+  const aiInputEl = $("#ai-input");
+  if (aiInputEl) {
+    try {
+      const savedDraft = localStorage.getItem(AI_INPUT_DRAFT_KEY);
+      if (savedDraft && !aiInputEl.value) aiInputEl.value = savedDraft;
+    } catch { /* ignore */ }
+    aiInputEl.addEventListener("input", () => {
+      try {
+        if (aiInputEl.value) localStorage.setItem(AI_INPUT_DRAFT_KEY, aiInputEl.value);
+        else localStorage.removeItem(AI_INPUT_DRAFT_KEY);
+      } catch { /* ignore */ }
+    });
+  }
+
   $("#btn-ai-send")?.addEventListener("click", aiSend);
   $("#ai-input")?.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -96,13 +168,31 @@ async function initAI() {
     }
   });
   $("#btn-ai-clear")?.addEventListener("click", () => {
-    _aiHistory = [];
+    clearAIChatCache();
     const log = $("#ai-chat-log");
     if (log) log.innerHTML =
       `<div class="ai-msg ai-msg-assistant">🧹 Conversation cleared. How can I help you with AOSP?</div>`;
   });
 
-  // ---- Target Path (File / Folder) Quick Actions ----
+  // ---- Target Path (File / Folder) Quick Actions & LocalStorage Cache ----
+  const AI_TARGET_PATH_KEY = "telua_web_ai_target_path";
+  const targetPathEl = $("#ai-target-file");
+  if (targetPathEl) {
+    try {
+      const cachedPath = localStorage.getItem(AI_TARGET_PATH_KEY);
+      if (cachedPath && !targetPathEl.value) targetPathEl.value = cachedPath;
+    } catch { /* ignore storage errors */ }
+    const persistTargetPath = () => {
+      try {
+        const val = targetPathEl.value.trim();
+        if (val) localStorage.setItem(AI_TARGET_PATH_KEY, val);
+        else localStorage.removeItem(AI_TARGET_PATH_KEY);
+      } catch { /* ignore storage errors */ }
+    };
+    targetPathEl.addEventListener("input", persistTargetPath);
+    targetPathEl.addEventListener("change", persistTargetPath);
+  }
+
   $("#btn-ai-target-read")?.addEventListener("click", () => {
     const targetInput = $("#ai-target-file");
     const targetPath = (targetInput?.value || "").trim();
@@ -151,9 +241,12 @@ async function initAI() {
   });
 
   // ---- Provider config modal (⚙ Config) ----
-  $("#btn-ai-config")?.addEventListener("click", openAIConfigModal);
-  $("#ai-header-token-badge")?.addEventListener("click", openAIConfigModal);
+  $("#btn-ai-config")?.addEventListener("click", () => openAIConfigModal("provider"));
+  $("#ai-header-token-badge")?.addEventListener("click", () => openAIConfigModal("usage"));
   $("#btn-ai-cfg-cancel")?.addEventListener("click", () => $("#modal-ai-config")?.classList.add("hidden"));
+  document.querySelectorAll("#modal-ai-config .ai-cfg-tab").forEach(btn => {
+    btn.addEventListener("click", () => switchAIConfigTab(btn.dataset.aiCfgTab || "provider"));
+  });
   $("#ai-cfg-provider-select")?.addEventListener("change", () => {
     renderAIConfigModels();
   });
@@ -204,7 +297,8 @@ async function initAI() {
     }
   });
 
-  $("#btn-ai-mcp-add-source")?.addEventListener("click", () => {
+  $("#btn-ai-mcp-add-source")?.addEventListener("click", async () => {
+    const addBtn = $("#btn-ai-mcp-add-source");
     const nameInput = $("#ai-mcp-new-name");
     const pathInput = $("#ai-mcp-new-path");
     const urlInput = $("#ai-mcp-new-url");
@@ -221,13 +315,17 @@ async function initAI() {
     const cleanId = path.replace(/[\\/]/g, "_").toLowerCase().replace(/[^a-z0-9_]/g, "");
     const visibility = visInput?.value || "private";
     const isPrivate = (visibility === "private");
-    const project = (projInput?.value.trim()) || "aosp_aaos";
+    let project = (projInput?.value || "").trim();
+    if (!project || project === "__manage__") {
+      const firstEnabled = _aiProjects.find(p => p.enabled !== false);
+      project = firstEnabled ? firstEnabled.id : "aosp_aaos";
+    }
     let aospVer = verInput?.value || "";
     if (aospVer === "auto" || aospVer === "__manage__" || aospVer === "custom") aospVer = "";
     const verObj = _aiAospVersions.find(v => v.id === (verInput?.value || ""));
     const apiLevel = verObj?.api_level || null;
 
-    _aiMcpSources.push({
+    const newSrc = {
       id: cleanId,
       name: name,
       local_path: path,
@@ -240,14 +338,101 @@ async function initAI() {
       count: 0,
       visibility: visibility,
       is_private: isPrivate,
-    });
-
-    if (nameInput) nameInput.value = "";
-    if (pathInput) pathInput.value = "";
-    if (urlInput) urlInput.value = "";
-
+    };
+    _aiMcpSources.push(newSrc);
     renderAIMcpSourcesList();
-    toast(`Added ${isPrivate ? '🔒 Private' : '🌐 Public'} source ➕`, "Click '💾 Save Sources' to persist configuration.", "ok", 3500);
+
+    if (addBtn) {
+      addBtn.disabled = true;
+      addBtn.textContent = "⏳ Saving...";
+    }
+    try {
+      await api("/api/ai/mcp/config", {
+        method: "POST",
+        body: JSON.stringify({ sources: _aiMcpSources }),
+      });
+      if (nameInput) nameInput.value = "";
+      if (pathInput) pathInput.value = "";
+      if (urlInput) urlInput.value = "";
+      toast(
+        `Added & Saved ${isPrivate ? '🔒 Private' : '🌐 Public'} source 💾`,
+        `"${name}" saved to ${isPrivate ? 'config/overlay/ai_agent' : 'config/ai_agent'}.`,
+        "ok",
+        3500
+      );
+      await loadAIMcpStatus();
+    } catch (err) {
+      // Roll back optimistic push if backend save failed
+      const idx = _aiMcpSources.indexOf(newSrc);
+      if (idx !== -1) _aiMcpSources.splice(idx, 1);
+      renderAIMcpSourcesList();
+      toast("Add Source Error", err.message, "err");
+    } finally {
+      if (addBtn) {
+        addBtn.disabled = false;
+        addBtn.textContent = "➕ Add Source";
+      }
+    }
+  });
+
+  // ---- Projects Manager Dialog (editable & disable-only, no delete) ----
+  $("#btn-ai-manage-projects")?.addEventListener("click", openAIProjectsModal);
+  $("#ai-mcp-new-project")?.addEventListener("change", (e) => {
+    if (e.target.value === "__manage__") {
+      const firstEnabled = _aiProjects.find(p => p.enabled !== false);
+      e.target.value = firstEnabled ? firstEnabled.id : "";
+      openAIProjectsModal();
+    }
+  });
+  $("#btn-ai-project-close")?.addEventListener("click", () => {
+    $("#modal-ai-projects")?.classList.add("hidden");
+    renderAIProjectsSelect();
+  });
+  $("#btn-ai-project-add")?.addEventListener("click", () => {
+    const idInput = $("#ai-project-new-id");
+    const nameInput = $("#ai-project-new-name");
+    const id = (idInput?.value || "").trim().toLowerCase().replace(/[^a-z0-9_\-]/g, "_").replace(/^_+|_+$/g, "");
+    if (!id) {
+      toast("Invalid ID", "Please enter a valid project ID (alphanumeric, e.g. car_ivi).", "err");
+      idInput?.focus();
+      return;
+    }
+    if (_aiProjects.some(p => p.id === id)) {
+      toast("Duplicate ID", `Project ID "${id}" already exists.`, "err");
+      idInput?.focus();
+      return;
+    }
+    const name = (nameInput?.value || "").trim() || id;
+    _aiProjects.push({ id, name, enabled: true });
+    if (idInput) idInput.value = "";
+    if (nameInput) nameInput.value = "";
+    renderAIProjectsList();
+    renderAIProjectsSelect(id);
+    toast("Project Added 📁", `Added "${name}" (${id}). Click "Save Projects" to persist.`, "ok", 3000);
+  });
+  $("#btn-ai-project-save")?.addEventListener("click", async () => {
+    const btn = $("#btn-ai-project-save");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "⏳ Saving...";
+    }
+    try {
+      const res = await api("/api/ai/mcp/config", {
+        method: "POST",
+        body: JSON.stringify({ projects: _aiProjects }),
+      });
+      if (res?.config?.projects) _aiProjects = res.config.projects;
+      toast("Projects Saved 💾", "Project list updated successfully.", "ok", 3500);
+      $("#modal-ai-projects")?.classList.add("hidden");
+      renderAIProjectsSelect();
+    } catch (err) {
+      toast("Save Projects Error", err.message, "err");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "💾 Save Projects";
+      }
+    }
   });
 
   // ---- AOSP Versions Manager Dialog ----
@@ -379,14 +564,14 @@ async function initAI() {
     if (isBuiltin) {
       if (!st.has_api_key) {
         aiAppendMsg("assistant",
-          `ℹ️ Local endpoint has no API key set — if gateway requires auth, open <b>⚙ Config</b> to enter key.`);
+          `ℹ️ Local endpoint has no API key set — if gateway requires auth, open <b>⚙ Config</b> to enter key.`, false);
       }
     } else if (!st.has_api_key || st.sdk_installed === "missing") {
       aiAppendMsg("assistant",
         `⚠️ <b>Not ready:</b> ` +
         (st.sdk_installed === "missing"
           ? `missing SDK (<code>pip install ${st.provider === "openai" ? "openai" : "anthropic"}</code>) — or open <b>⚙ Config</b> to configure a custom endpoint (no SDK needed).`
-          : `missing API key (set <code>TELUA_AI_API_KEY</code> or open <b>⚙ Config</b>).`));
+          : `missing API key (set <code>TELUA_AI_API_KEY</code> or open <b>⚙ Config</b>).`), false);
     }
   } catch { /* status optional */ }
 
@@ -398,7 +583,23 @@ let _aiProviders = [];
 let _aiActiveProvider = "";
 let _aiActiveModel = "";
 
-async function openAIConfigModal() {
+function switchAIConfigTab(tabName = "provider") {
+  const target = typeof tabName === "string" && tabName ? tabName : "provider";
+  document.querySelectorAll("#modal-ai-config .ai-cfg-tab").forEach(btn => {
+    const active = btn.dataset.aiCfgTab === target;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  document.querySelectorAll("#modal-ai-config .ai-cfg-pane").forEach(pane => {
+    pane.classList.toggle("hidden", pane.dataset.aiCfgPane !== target);
+  });
+  // Show "Save JSON" only on the API Key & Provider tab; other tabs have their own save buttons.
+  $("#btn-ai-cfg-save")?.classList.toggle("hidden", target !== "provider");
+}
+
+async function openAIConfigModal(initialTab = "provider") {
+  const tab = typeof initialTab === "string" ? initialTab : "provider";
+  switchAIConfigTab(tab);
   try {
     // Fetch BOTH: status (active selection) and raw config (full JSON with
     // apiKey fields — the status endpoint strips keys for display).
@@ -631,8 +832,73 @@ const DEFAULT_AOSP_VERSIONS = [
   { id: "a13", name: "Android 13 (Tiramisu / API 33)", api_level: 33 },
   { id: "a12", name: "Android 12 (SnowCone / API 31-32)", api_level: 32 },
 ];
+const DEFAULT_PROJECTS = [
+  { id: "aosp_aaos", name: "AOSP AAOS (Android Automotive)", enabled: true },
+];
+let _aiProjects = [...DEFAULT_PROJECTS];
 let _aiAospVersions = [...DEFAULT_AOSP_VERSIONS];
 let _aiMcpSources = [];
+
+function renderAIProjectsSelect(selectedId) {
+  const sel = $("#ai-mcp-new-project");
+  if (!sel) return;
+  const enabledList = _aiProjects.filter(p => p.enabled !== false);
+  const currentVal = selectedId !== undefined ? selectedId : (sel.value || (enabledList[0] && enabledList[0].id) || "");
+  const opts = enabledList.length
+    ? enabledList.map(p =>
+        `<option value="${esc(p.id)}" ${p.id === currentVal ? "selected" : ""}>${esc(p.name || p.id)} (${esc(p.id)})</option>`
+      ).join("")
+    : `<option value="" disabled selected>(No enabled projects)</option>`;
+  sel.innerHTML = opts + `<option value="__manage__" style="color:var(--accent);font-weight:600;">➕ Manage / Edit projects...</option>`;
+}
+
+function renderAIProjectsList() {
+  const container = $("#ai-projects-list");
+  const countEl = $("#ai-project-count");
+  if (countEl) countEl.textContent = String(_aiProjects.length);
+  if (!container) return;
+
+  container.innerHTML = _aiProjects.map((p, idx) => {
+    const isEnabled = p.enabled !== false;
+    const statusChip = isEnabled
+      ? `<span class="chip ok" style="font-size:10px;padding:1px 6px;">Enabled</span>`
+      : `<span class="chip" style="font-size:10px;padding:1px 6px;background:rgba(255,255,255,0.06);color:#8b949e;">Disabled</span>`;
+    return `
+      <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--bg);border:1px solid ${isEnabled ? 'var(--border)' : 'rgba(255,255,255,0.06)'};border-radius:4px;opacity:${isEnabled ? '1' : '0.6'};">
+        <input type="checkbox" class="ai-proj-toggle" data-idx="${idx}" ${isEnabled ? 'checked' : ''} title="${isEnabled ? 'Enabled (uncheck to disable)' : 'Disabled (check to enable)'}">
+        <code class="mono" style="font-size:11px;color:var(--accent);font-weight:700;flex-shrink:0;">${esc(p.id)}</code>
+        <input type="text" class="term-input ai-proj-name-input" data-idx="${idx}" value="${esc(p.name || p.id)}" style="flex:1;font-size:11px;padding:3px 6px;min-width:0;" placeholder="Project label">
+        ${statusChip}
+      </div>
+    `;
+  }).join("");
+
+  container.querySelectorAll(".ai-proj-toggle").forEach(cb => {
+    cb.addEventListener("change", (e) => {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      if (_aiProjects[idx]) {
+        _aiProjects[idx].enabled = e.target.checked;
+        renderAIProjectsList();
+        renderAIProjectsSelect();
+      }
+    });
+  });
+
+  container.querySelectorAll(".ai-proj-name-input").forEach(inp => {
+    inp.addEventListener("input", (e) => {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      if (_aiProjects[idx]) {
+        _aiProjects[idx].name = e.target.value;
+      }
+    });
+    inp.addEventListener("change", () => renderAIProjectsSelect());
+  });
+}
+
+function openAIProjectsModal() {
+  renderAIProjectsList();
+  $("#modal-ai-projects")?.classList.remove("hidden");
+}
 
 function renderAIAospVersionsSelect(selectedId) {
   const sel = $("#ai-mcp-new-version");
@@ -786,6 +1052,11 @@ async function loadAIMcpStatus() {
         pill.className = "chip";
       }
     }
+
+    if (cfgRes.projects || cfgRes.config?.projects) {
+      _aiProjects = cfgRes.projects || cfgRes.config?.projects || DEFAULT_PROJECTS;
+    }
+    renderAIProjectsSelect();
 
     if (cfgRes.aosp_versions || cfgRes.config?.aosp_versions) {
       _aiAospVersions = cfgRes.aosp_versions || cfgRes.config?.aosp_versions || DEFAULT_AOSP_VERSIONS;

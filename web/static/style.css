@@ -799,6 +799,178 @@ code,
   flex-wrap: wrap;
 }
 
+.ai-cfg-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  margin: 10px 0 14px;
+}
+
+.ai-cfg-tab {
+  flex: 1 1 auto;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  text-align: center;
+  transition: background .15s, color .15s;
+}
+
+.ai-cfg-tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ai-cfg-tab.active {
+  background: #1f6feb;
+  color: #fff;
+}
+
+.ai-cfg-pane.hidden {
+  display: none;
+}
+
+#modal-ai-config .modal-box {
+  height: 85vh;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#modal-ai-config .ai-cfg-tabs,
+#modal-ai-config .modal-actions {
+  flex-shrink: 0;
+}
+
+#modal-ai-config .ai-cfg-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* Tactile 3D action buttons */
+.btn.btn-3d {
+  position: relative;
+  color: #fff;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+  box-shadow:
+    0 3px 0 #1e3a8a,
+    0 5px 10px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+  transition: transform 0.1s ease, box-shadow 0.1s ease, filter 0.15s ease;
+}
+
+.btn.btn-3d:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow:
+    0 4px 0 #1e3a8a,
+    0 7px 14px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.btn.btn-3d:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 #1e3a8a,
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.btn.btn-3d.btn-3d-emerald {
+  background: linear-gradient(180deg, #22c55e 0%, #15803d 100%);
+  box-shadow:
+    0 3px 0 #14532d,
+    0 5px 10px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.btn.btn-3d.btn-3d-emerald:hover:not(:disabled) {
+  box-shadow:
+    0 4px 0 #14532d,
+    0 7px 14px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.btn.btn-3d.btn-3d-emerald:active:not(:disabled) {
+  box-shadow:
+    0 1px 0 #14532d,
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.btn.btn-3d.btn-3d-violet {
+  background: linear-gradient(180deg, #8b5cf6 0%, #6d28d9 100%);
+  box-shadow:
+    0 3px 0 #4c1d95,
+    0 5px 10px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.btn.btn-3d.btn-3d-violet:hover:not(:disabled) {
+  box-shadow:
+    0 4px 0 #4c1d95,
+    0 7px 14px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.btn.btn-3d.btn-3d-violet:active:not(:disabled) {
+  box-shadow:
+    0 1px 0 #4c1d95,
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.btn.btn-3d.btn-3d-amber {
+  background: linear-gradient(180deg, #f59e0b 0%, #b45309 100%);
+  box-shadow:
+    0 3px 0 #78350f,
+    0 5px 10px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.btn.btn-3d.btn-3d-amber:hover:not(:disabled) {
+  box-shadow:
+    0 4px 0 #78350f,
+    0 7px 14px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.btn.btn-3d.btn-3d-amber:active:not(:disabled) {
+  box-shadow:
+    0 1px 0 #78350f,
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.btn.btn-3d.btn-3d-red {
+  background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
+  box-shadow:
+    0 3px 0 #7f1d1d,
+    0 5px 10px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.btn.btn-3d.btn-3d-red:hover:not(:disabled) {
+  box-shadow:
+    0 4px 0 #7f1d1d,
+    0 7px 14px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.btn.btn-3d.btn-3d-red:active:not(:disabled) {
+  box-shadow:
+    0 1px 0 #7f1d1d,
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    inset 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
 .profile-list {
   display: flex;
   flex-direction: column;

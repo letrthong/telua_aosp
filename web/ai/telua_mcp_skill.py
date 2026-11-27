@@ -67,6 +67,10 @@ DEFAULT_AOSP_VERSIONS = [
     {"id": "a12", "name": "Android 12 (SnowCone / API 31-32)", "api_level": 32},
 ]
 
+DEFAULT_PROJECTS = [
+    {"id": "aosp_aaos", "name": "AOSP AAOS (Android Automotive)", "enabled": True},
+]
+
 try:
     from .ai_config_paths import candidates as _ai_cfg_candidates, overlay_file as _ai_overlay_file, \
         shared_file as _ai_shared_file
@@ -222,6 +226,7 @@ def get_mcp_skill_config() -> dict:
         "collection_name": "telua_knowledge",
         "sources": [dict(s) for s in DEFAULT_SOURCES],
         "aosp_versions": [dict(v) for v in DEFAULT_AOSP_VERSIONS],
+        "projects": [dict(p) for p in DEFAULT_PROJECTS],
         "last_sync": "",
         "indexed_count": 0,
     }
@@ -242,6 +247,24 @@ def get_mcp_skill_config() -> dict:
                             merged_vers.append(custom)
                             known_ids.add(custom["id"])
                     default_cfg["aosp_versions"] = merged_vers
+                # Load projects (editable & disable-only; always keep defaults)
+                if "projects" in data and isinstance(data["projects"], list) and data["projects"]:
+                    merged_projs = []
+                    seen_pids = set()
+                    for item in data["projects"]:
+                        if isinstance(item, dict) and item.get("id"):
+                            pid = str(item["id"]).strip().lower()
+                            if pid and pid not in seen_pids:
+                                merged_projs.append({
+                                    "id": pid,
+                                    "name": str(item.get("name") or pid).strip(),
+                                    "enabled": bool(item.get("enabled", True)),
+                                })
+                                seen_pids.add(pid)
+                    for dp in DEFAULT_PROJECTS:
+                        if dp["id"] not in seen_pids:
+                            merged_projs.insert(0, dict(dp))
+                    default_cfg["projects"] = merged_projs
         except Exception:
             pass
     # Merge overlay dynamic state without modifying static config file
@@ -282,6 +305,38 @@ def save_mcp_skill_config(cfg: dict) -> dict:
                 "is_custom": is_custom,
             })
         cleaned["aosp_versions"] = sanitized_versions
+
+    # Clean and validate projects if passed (edit & disable only — never delete existing projects)
+    if "projects" in cleaned and isinstance(cleaned["projects"], list):
+        existing_cfg = get_mcp_skill_config()
+        existing_projs = {
+            str(p["id"]).strip().lower(): dict(p)
+            for p in (existing_cfg.get("projects") or DEFAULT_PROJECTS)
+            if isinstance(p, dict) and p.get("id")
+        }
+        incoming_order = []
+        seen_pids = set()
+        for p in cleaned["projects"]:
+            if not isinstance(p, dict) or not p.get("id"):
+                continue
+            p_id = re.sub(r"[^a-z0-9_\-]", "_", str(p["id"]).strip().lower()).strip("_")
+            if not p_id or p_id in seen_pids:
+                continue
+            seen_pids.add(p_id)
+            incoming_order.append({
+                "id": p_id,
+                "name": str(p.get("name") or p_id).strip(),
+                "enabled": bool(p.get("enabled", True)),
+            })
+        # Preserve any previously saved project that was omitted (no deletion allowed)
+        for pid, old_p in existing_projs.items():
+            if pid not in seen_pids:
+                incoming_order.append({
+                    "id": pid,
+                    "name": str(old_p.get("name") or pid).strip(),
+                    "enabled": bool(old_p.get("enabled", False)),
+                })
+        cleaned["projects"] = incoming_order
 
     # Clean and validate sources if passed
     if "sources" in cleaned and isinstance(cleaned["sources"], list):

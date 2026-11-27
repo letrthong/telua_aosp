@@ -28,7 +28,7 @@
       "project": "aosp_aaos",
       "aosp_version": "",
       "api_level": null,
-      "branch": "",
+      "branch": "main",
       "enabled": true,
       "visibility": "public",
       "is_private": false
