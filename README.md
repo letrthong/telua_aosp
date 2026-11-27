@@ -26,11 +26,13 @@ An automated developer workflow script for building and deploying privileged sys
 | `python/clean_java.py` | Enforces Java whitespace, tab expansion, keyword spacing, K&R braces & Google Java Style |
 | `python/unused_methods_report.py` | 6-in-1 static Java report: unused methods, unused params, whitespace, `google-java-format`, unused imports & unused private fields (`tel java report`) |
 | `src/telua_web.sh` & `web/telua_web.py` | Config Manager, BI Studio, Hardware Power & AI Agent Web UI (`tel web start`) |
-| `web/ai/telua_web_ai.py` | Autonomous AI Agent engine: tool-calling loop, auto-coding, token guardrails & monthly usage tracker |
+| `web/ai/telua_web_ai.py` | Autonomous AI Agent engine: tool-calling loop (`grep_search`, AST `read_file`, Git, `run_tel`), token guardrails & monthly usage tracker |
 | `web/ai/code_structure_engine.py` | AST & Pygments Perception Engine: outline mode, complete symbol extraction & boundary snapping |
-| `web/ai/telua_mcp_skill.py` | Multi-source MCP Skills manager, ChromaDB vector store & A12-A16 dual-layer versioning |
+| `web/ai/telua_mcp_skill.py` | Multi-source MCP Skills manager, multi-threaded background sync (live progress + cancel) & A12-A16 versioning |
+| `web/ai/db/` | Pluggable sharded `VectorDB` interface (`base.py`), sharded ChromaDB backend (`chroma/`) & Weaviate template (`weaviate/`) |
+| `web/ai/ai_config_paths.py` | Centralized AI config resolver: shared (`config/ai_agent/`) vs git-ignored private/runtime (`config/overlay/ai_agent/`) |
 | `web/telua_web_power_controls.py` | Hardware Power Switch: dual-output relay (Main Power & Ignition ACC) with state persistence & event history |
-| `config/ai_agent/mcp_skills_config.json` | MCP skills sources configuration (local paths & Git repositories) |
+| `config/ai_agent/` | Shared AI configs tracked in Git (`ai_providers.json`, `ai_providers.template.json`, `mcp_skills_config.json`) |
 | `config/target_power_state.json` | Persistent hardware relay state & switch history log |
 | `web/telua_web_bi.py` | BI Studio backend: Excel/CSV to JSON converter, multi-sheet consolidator & cross-tab report engine |
 | `bi_studio/` | Sample multi-tab generic business Excel workbooks (Retail, HR, IT, Finance) with dynamic auto-discovery |
@@ -1056,13 +1058,14 @@ $$\text{Tel Agent} = \text{Pluggable LLM (Cloud / On-Premise GPU)} + \text{Telua
 |     • Symbol Extraction: Extracts complete method bodies from signature to closing brace '}'     |
 |     • Smart Boundary Snapping: Automatically snaps line ranges forward to prevent chopped code   |
 |                                                                                                  |
-|  [🧠 LONG-TERM MEMORY: Persistent ChromaDB Vector Knowledge]                                     |
-|     • 100% Local Vector Store: Stored on-premise at ai_agent/data/chroma.sqlite3 (Zero Cloud Leak)  |
-|     • Dual-Layer AOSP Versioning: Strict metadata & header separation for Android 12 through A16  |
-|     • Function-as-a-Chunk: Embeds complete methods with Class & Package Provenance Context       |
-|     • Auto-Version Detection: Infers AOSP version (A12-A16) via build/make/core/version_defaults.mk|
+|  [🧠 LONG-TERM MEMORY: Sharded Pluggable VectorDB (ChromaDB / Weaviate-ready)]                   |
+|     • Sharded by Project + Version: ai_agent/data/shards/<project>__<aosp_version>/ (Zero Leak)  |
+|     • Pluggable VectorDB Interface: web/ai/db/ (ChromaDB default; Weaviate template ready)       |
+|     • Multi-Threaded Sync: 1 walker -> N readers -> 1 writer/shard + live progress & 30s resume  |
+|     • Function-as-a-Chunk: Embeds complete methods with Project, AOSP Version & Class Context    |
 |                                                                                                  |
 |  [🦾 ACTUATORS: Autonomous Workspace Execution Tools]                                            |
+|     • grep_search: Ripgrep / pruned os.scandir fast symbol & regex search across large AOSP trees|
 |     • run_tel: Directly executes tel, telua, AOSP make/build, ADB logcat, and dumpsys diagnostics|
 |     • write_file & edit_file: Surgical, autonomous code generation and refactoring               |
 |     • get_file_git_history & get_commit_diff: Automated git forensics and regression root-causing|
@@ -1093,13 +1096,15 @@ In automotive platforms, CarAudio, CarProperty, and AIDL HAL interfaces mutate s
    // ==============================================================================
    public void setVolumeGroupIndex(int zoneId, int groupId, int index, int flags) { ... }
    ```
-2. **ChromaDB Metadata Filtering:** Stored with exact filter keys (`project`, `aosp_version`, `api_level`, `branch`), enabling zero-hallucination queries (`where={"aosp_version": "a16"}`).
-3. **Automated AOSP Version Detection:** The `detect_aosp_version_from_path()` engine automatically scans `build/make/core/version_defaults.mk`, git branches, and folder heuristics to tag A12–A16 versions without manual input.
-4. **Cross-Version Migration Analysis:** Enables the Agent to compare A12 and A16 implementations side-by-side to produce precise migration guides for vehicle software engineers.
+2. **Sharded VectorDB & Metadata Filtering:** Each `(project, aosp_version)` pair is stored in its own isolated shard (`ai_agent/data/shards/<project>__<version>/`), so querying A16 only loads the A16 index into RAM and never mixes with A12. Both `search_knowledge` and `/api/ai/chroma/query` support optional `project`, `aosp_version`, and `source_id` filters.
+3. **Chat Context Bar & Editable Projects:** Select **🎯 Context (`Project` + `AOSP Version`)** directly on the AI Chat toolbar so every agent search automatically targets the active Android release. Projects (default `aosp_aaos`) are managed via a dedicated modal (add/edit/disable-only, no accidental deletion).
+4. **Automated AOSP Version Detection:** The `detect_aosp_version_from_path()` engine automatically scans `build/make/core/version_defaults.mk`, git branches, and folder heuristics to tag A12–A16 versions without manual input.
+5. **Cross-Version Migration Analysis:** Enables the Agent to compare A12 and A16 implementations side-by-side to produce precise migration guides for vehicle software engineers.
 
 ### 9.6 Autonomous Coding & Direct Workspace Tools
 The AI Agent operates inside an iterative thinking loop, selecting and executing workspace tools autonomously:
-* **Target File & Directory Auto-Coding Bar:** Set a target path (e.g. `src/com/android/car/` or `src/CarService.java`), click `📖 Read / Scan` for situational awareness, or click `⚡ Auto-Code` to refactor multiple files across the target.
+* **Target Path Bar & Session Persistence:** Set a target path (cached in `localStorage` across refreshes along with chat history and prompt drafts), click `📖 Read / Scan` for situational awareness, or click `⚡ Auto-Code` to refactor files across the target.
+* **`grep_search`**: Fast recursive text/regex search powered by `ripgrep` (`rg`) with an automatic pruned `os.scandir` Python fallback across the workspace and configured knowledge sources (skips `.git`, `.repo`, `out`, binaries).
 * **`read_file`**: Outline, method extraction, or smart-snapped line-range reads with line numbers (`0042 | code`).
 * **`write_file`**: Directly creates or overwrites workspace files with path traversal security.
 * **`edit_file`**: Replaces exact code snippets with surgical precision without rewriting whole files.
@@ -1110,19 +1115,22 @@ The AI Agent operates inside an iterative thinking loop, selecting and executing
 Local engineering skills and design patterns are indexed in a persistent vector database ([ai_agent/data/](ai_agent/data/)):
 * **`telua_skill` (Java_Android):** Vehicle HAL, Power HAL, CarAudioService, CarPropertyService, Audio policy, AIDL / Binder rules.
 * **`claude-code-java`:** Concurrency reviews, Spring Boot patterns, JPA performance, Clean Code, Security audits, and SOLID design.
-* **Dynamic Multi-Source Management:** Add local directories or clone remote Git repositories directly in the Web UI (`⚙ Config` modal).
+* **Organized 4-Tab Config Modal (`⚙ Config`):** Cleanly separated into **🔑 API Key & Provider**, **📦 MCP & Knowledge**, **🛡 Token Shield**, and **📊 Token Usage**.
+* **Multi-Threaded Background Sync & Live Progress:** Syncing large 100–200 GB AOSP repositories runs asynchronously (`POST /api/ai/mcp/sync` → `202`) with a bounded pipeline (`1 walker → N parallel readers → 1 writer per shard`), live progress bar (`%`, ETA, files/s, MB/s), **⏹ Cancel Sync**, and atomic 30s checkpoints so restarts resume automatically without re-indexing completed files.
 * **Automated Sync Scheduler:** Triggers re-indexing automatically on web startup and at configurable intervals (every 3h, 6h, 12h, or manual).
 
-### 9.8 Public vs Private Isolation & Vector DB Architecture
+### 9.8 Public vs Private Isolation & Pluggable Vector DB Architecture
 To protect proprietary company code, NDA documentation, and internal architecture while enabling seamless team sharing:
-* **Public vs Private Source Isolation:**
-  - **Public Sources** (e.g. `telua_skill`, `claude_code_java`) are saved in `config/ai_agent/mcp_skills_config.json` and tracked in Git for the whole team.
-  - **Private Sources** (e.g. confidential OEM rules, proprietary vehicle repos, internal specs) are automatically separated and saved into `config/overlay/ai_agent/mcp_skills_private.json` (protected by `.gitignore: config/overlay/ai_agent/*`).
-  - **Zero Git Leakage:** Teammates and public remotes never see your private file paths or internal Git URLs.
+* **Centralized AI Config Layout (`config/ai_agent/` vs `config/overlay/ai_agent/`):**
+  - **Public / Shared Configs** (`ai_providers.json`, `ai_providers.template.json`, `mcp_skills_config.json`) live in `config/ai_agent/` and are tracked in Git.
+  - **Private / Runtime Configs** (`ai_providers.json` with API keys, `mcp_skills_private.json`, `mcp_skills_hashes_<backend>.json`, `mcp_skills_state.json`, `ai_guardrails.json`, `ai_token_usage.json`) live in `config/overlay/ai_agent/` (protected by `.gitignore: config/overlay/ai_agent/*`).
+  - **Zero Git Leakage:** Teammates and public remotes never see your private file paths, API keys, or internal Git URLs.
   - **Web UI Security Switch:** Click the `🌐 Public` $\leftrightarrow$ `🔒 Private` badge in the Web UI to toggle any source's visibility instantly.
-* **"Source-as-Code" Architecture & Incremental MD5 Hashing:**
-  - `ai_agent/data/chroma.sqlite3` is intentionally kept in `.gitignore` to prevent binary merge conflicts and repository bloat.
-  - **No Redundant Re-indexing:** When new private sources are added, MD5 content hashing checks existing files and **skips already-indexed public skills** (`mcp_skills_hashes.json`). Only new or modified files are embedded, completing in milliseconds.
+* **Pluggable `VectorDB` Interface (`web/ai/db/`) & Sharded Storage:**
+  - All AI search and indexing goes through the backend-agnostic `VectorDB` ABC ([web/ai/db/base.py](web/ai/db/base.py)) via `get_vector_db()` (`TELUA_VECTOR_DB=chroma` by default).
+  - **ChromaDB Shards (`web/ai/db/chroma/`):** Isolated per `(project, aosp_version)` under `ai_agent/data/shards/<project>__<version>/` (git-ignored).
+  - **Weaviate Ready (`web/ai/db/weaviate/`):** Includes a ready-to-fill skeleton for [Weaviate](https://weaviate.io) Multi-Tenancy + Hybrid Search (BM25 + Vector).
+  - **Per-Backend Incremental Hashing:** Fast `(size, mtime, shard)` skip + MD5 verification stored per backend (`mcp_skills_hashes_<backend>.json`), so switching between ChromaDB and Weaviate works automatically without losing cache.
 * **Symmetric Read & Write Embedding Model (`all-MiniLM-L6-v2`):**
   - Uses a lightweight local ONNX embedding model (`all-MiniLM-L6-v2`, 384 dimensions, ~80 MB memory footprint).
   - **100% Offline & $0 Cost:** Runs locally on CPU (~5 ms/query) without requiring external API keys or consuming LLM tokens.
