@@ -250,6 +250,8 @@ Rules:
 - You can create, write, and edit code files directly using write_file and edit_file.
 - Use get_file_git_history to inspect commit history (hash, author, date, message) of a specific file.
 - Use get_commit_diff to inspect lines added/removed in a specific commit when investigating regressions, bug causes, or historical changes.
+- When a bug, crash, or regression is discovered during inspection or build, use create_github_issue to report an issue with stack traces and AST context.
+- When code fixes or features are completed and verified, use create_git_fix_branch to commit changes and push a fix branch to remote for review. Never push directly to main.
 - When inspecting or debugging source code files (> 150 lines):
   1. Call read_file with outline=True first to see classes, methods, and line ranges without token bloat.
   2. Call read_file with method="<name>" to read the exact complete function body with class context.
@@ -748,6 +750,186 @@ def _tool_get_commit_diff(args: dict) -> str:
         return f"[ERROR reading commit diff] {exc}"
 
 
+def _get_github_token() -> str:
+    """Resolve GitHub token from environment or config/overlay/github_token.json."""
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token:
+        return token.strip()
+    root = _repo_root()
+    overlay_path = root / "config" / "overlay" / "github_token.json"
+    if overlay_path.is_file():
+        try:
+            data = json.loads(overlay_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return str(data.get("token") or data.get("github_token") or "").strip()
+        except Exception:
+            pass
+    return ""
+
+
+def _detect_github_repo() -> str:
+    """Infer 'owner/repo' from git remote origin url."""
+    root = _repo_root()
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(root), "remote", "get-url", "origin"],
+            capture_output=True, text=True, timeout=5
+        )
+        url = proc.stdout.strip()
+        m = re.search(r"github\.com[:/]([a-zA-Z0-9_\-\.]+)/([a-zA-Z0-9_\-\.]+?)(?:\.git)?$", url)
+        if m:
+            return f"{m.group(1)}/{m.group(2)}"
+    except Exception:
+        pass
+    return ""
+
+
+def _tool_create_github_issue(args: dict) -> str:
+    """Create an Issue on GitHub repository (e.g. when bugs or regressions are detected)."""
+    title = str(args.get("title", "")).strip()
+    body = str(args.get("body", "")).strip()
+    if not title:
+        return "[ERROR] missing 'title' parameter"
+    if not body:
+        return "[ERROR] missing 'body' parameter"
+
+    token = _get_github_token()
+    if not token:
+        return (
+            "[ERROR] GitHub token not found. Please set GITHUB_TOKEN environment variable "
+            "or save {\"token\": \"ghp_...\"} into config/overlay/github_token.json (Git-ignored)."
+        )
+
+    repo = str(args.get("repo", "")).strip() or _detect_github_repo()
+    if not repo:
+        return "[ERROR] cannot infer repository name. Please provide 'repo' parameter (e.g. 'owner/repo')."
+
+    labels = args.get("labels")
+    if labels and not isinstance(labels, list):
+        labels = [str(labels)]
+
+    payload = {"title": title, "body": body}
+    if labels:
+        payload["labels"] = [str(l).strip() for l in labels if str(l).strip()]
+
+    import urllib.request
+    import urllib.error
+    url = f"https://api.github.com/repos/{repo}/issues"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json",
+        "User-Agent": "Telua-AI-Agent",
+    }
+    try:
+        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            issue_num = data.get("number")
+            issue_url = data.get("html_url")
+            return f"✓ [SUCCESS] GitHub Issue #{issue_num} created: {issue_url}"
+    except urllib.error.HTTPError as err:
+        err_body = err.read().decode("utf-8", errors="replace")
+        return f"[ERROR creating GitHub Issue] HTTP {err.code}: {err.reason} - {err_body[:300]}"
+    except Exception as exc:
+        return f"[ERROR creating GitHub Issue] {exc}"
+
+
+def _tool_create_git_fix_branch(args: dict) -> str:
+    """Create a new git fix/feature branch, commit staged/modified changes, and optionally push to remote."""
+    root = _repo_root()
+    branch = str(args.get("branch_name", "") or args.get("branch", "")).strip()
+    commit_msg = str(args.get("commit_msg", "") or args.get("message", "")).strip()
+    should_push = bool(args.get("push", True))
+    remote = str(args.get("remote", "origin")).strip() or "origin"
+
+    if not branch:
+        return "[ERROR] missing 'branch_name' parameter"
+    if not commit_msg:
+        return "[ERROR] missing 'commit_msg' parameter"
+
+    # Security check: never allow committing/pushing directly to main or master
+    cleaned_branch = branch.lstrip("/")
+    if cleaned_branch.lower() in ("main", "master", "head", "origin/main", "origin/master"):
+        return f"[BLOCKED] Direct commits to '{cleaned_branch}' are blocked for safety. Please use a fix branch (e.g. 'fix/...', 'patch/...')."
+
+    if not re.match(r"^[a-zA-Z0-9_\-\./]+$", cleaned_branch):
+        return f"[ERROR] invalid branch name format: '{cleaned_branch}'"
+
+    # Step 1: Check status
+    try:
+        st_proc = subprocess.run(
+            ["git", "-C", str(root), "status", "--porcelain"],
+            capture_output=True, text=True, timeout=10
+        )
+        status_out = st_proc.stdout.strip()
+        if not status_out:
+            return "[ERROR] Working tree is clean. No modified or untracked files to commit."
+    except Exception as exc:
+        return f"[ERROR checking git status] {exc}"
+
+    # Step 2: Checkout / create branch
+    try:
+        curr_b_proc = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, timeout=5
+        )
+        curr_branch = curr_b_proc.stdout.strip()
+
+        if curr_branch != cleaned_branch:
+            co_proc = subprocess.run(
+                ["git", "-C", str(root), "checkout", "-b", cleaned_branch],
+                capture_output=True, text=True, timeout=10
+            )
+            if co_proc.returncode != 0:
+                co_exist = subprocess.run(
+                    ["git", "-C", str(root), "checkout", cleaned_branch],
+                    capture_output=True, text=True, timeout=10
+                )
+                if co_exist.returncode != 0:
+                    return f"[ERROR checkout branch {cleaned_branch}] {co_proc.stderr or co_exist.stderr}"
+
+        # Step 3: Git add modified files
+        subprocess.run(["git", "-C", str(root), "add", "-u"], capture_output=True, timeout=15)
+        files = args.get("files")
+        if files and isinstance(files, list):
+            for f in files:
+                subprocess.run(["git", "-C", str(root), "add", str(f)], capture_output=True, timeout=10)
+
+        # Step 4: Commit
+        commit_proc = subprocess.run(
+            ["git", "-C", str(root), "commit", "-m", commit_msg],
+            capture_output=True, text=True, timeout=20
+        )
+        if commit_proc.returncode != 0:
+            return f"[ERROR git commit] {commit_proc.stderr.strip() or commit_proc.stdout.strip()}"
+
+        # Step 5: Get commit hash
+        hash_proc = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5
+        )
+        commit_hash = hash_proc.stdout.strip()
+
+        push_msg = ""
+        if should_push:
+            push_proc = subprocess.run(
+                ["git", "-C", str(root), "push", "-u", remote, cleaned_branch],
+                capture_output=True, text=True, timeout=30
+            )
+            if push_proc.returncode == 0:
+                push_msg = f"\n✓ Pushed to {remote}/{cleaned_branch}"
+            else:
+                push_msg = f"\n⚠️ Commit created ({commit_hash}) but push failed: {push_proc.stderr.strip()[:200]}"
+
+        return (
+            f"✓ [SUCCESS] Created branch '{cleaned_branch}' with commit {commit_hash}: '{commit_msg}'.{push_msg}"
+        )
+    except Exception as exc:
+        return f"[ERROR creating git fix branch] {exc}"
+
+
 TOOL_EXECUTORS = {
     "run_tel": _tool_run_tel,
     "read_file": _tool_read_file,
@@ -758,6 +940,8 @@ TOOL_EXECUTORS = {
     "save_training_knowledge": _tool_save_training_knowledge,
     "get_file_git_history": _tool_get_file_git_history,
     "get_commit_diff": _tool_get_commit_diff,
+    "create_github_issue": _tool_create_github_issue,
+    "create_git_fix_branch": _tool_create_git_fix_branch,
     "get_telua_skill": lambda args: _tool_get_telua_skill(args),
     "list_telua_skills": lambda args: _tool_list_telua_skills(args),
 }
@@ -946,6 +1130,40 @@ TOOL_SCHEMAS = [
                     "filepath": {"type": "string", "description": "Optional file path filter to see only changes to this file in the commit"}
                 },
                 "required": ["commit_hash"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_github_issue",
+            "description": "Create an Issue on GitHub repository (e.g. when bugs, crashes, or regressions are detected during code analysis or build).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Issue title (e.g. '[AI-Bug] NullPointerException in CarAudioService')"},
+                    "body": {"type": "string", "description": "Detailed markdown description of the bug, AST context, stack trace, and proposed fix"},
+                    "labels": {"type": "array", "items": {"type": "string"}, "description": "Optional list of labels (e.g. ['bug', 'aosp', 'ai-detected'])"},
+                    "repo": {"type": "string", "description": "Optional 'owner/repo' target (defaults to repository inferred from git remote origin)"}
+                },
+                "required": ["title", "body"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_git_fix_branch",
+            "description": "Create a new git fix/feature branch, automatically stage and commit changes, and optionally push to private remote repository.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "branch_name": {"type": "string", "description": "Name of the new branch (e.g. 'fix/audio-null-pointer' or 'feature/vhal-property')"},
+                    "commit_msg": {"type": "string", "description": "Conventional commit message (e.g. 'fix(audio): handle NullPointerException in CarAudioService')"},
+                    "push": {"type": "boolean", "description": "Whether to push the branch to remote repository (default true)"},
+                    "remote": {"type": "string", "description": "Remote name (default 'origin')"}
+                },
+                "required": ["branch_name", "commit_msg"],
             },
         },
     },
