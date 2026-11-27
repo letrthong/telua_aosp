@@ -131,7 +131,12 @@ MY_CLI_CONFIG = (
     or not (ROOT / "config" / "const_my_cli.config").is_file()
     else (ROOT / "config" / "const_my_cli.config")
 )
-LOGCAT_FILTERS_FILE = ROOT / "config" / "logcat_filters.json"
+LOGCAT_FILTERS_FILE = (
+    (ROOT / "config" / "json" / "logcat_filters.json")
+    if (ROOT / "config" / "json" / "logcat_filters.json").is_file()
+    or not (ROOT / "config" / "logcat_filters.json").is_file()
+    else (ROOT / "config" / "logcat_filters.json")
+)
 
 START_TIME = time.time()
 FLASK_VERSION = ""

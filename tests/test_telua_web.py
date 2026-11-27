@@ -382,7 +382,7 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         data_shared = res_shared.get_json()
         self.assertTrue(data_shared["ok"])
         self.assertFalse(data_shared["personal"])
-        self.assertEqual(data_shared["path"], "config/logcat_filters.json")
+        self.assertEqual(data_shared["path"], "config/json/logcat_filters.json")
 
         # Restore default filters (personal overlay + shared template)
         self.client.post("/api/logcat/filters", json={"filters": telua_web.DEFAULT_LOGCAT_FILTERS})
@@ -392,7 +392,7 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         """Personal overlay wins over shared template; one-time migration copies
         a customized shared file into the overlay."""
         overlay_file = telua_web.ROOT / "config" / "overlay" / "logcat_filters.json"
-        shared_file = telua_web.ROOT / "config" / "logcat_filters.json"
+        shared_file = telua_web.ROOT / "config" / "json" / "logcat_filters.json"
         saved_overlay = saved_shared = None
         try:
             saved_overlay = overlay_file.read_bytes() if overlay_file.is_file() else None
@@ -494,7 +494,7 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         data = res.get_json()
         self.assertTrue(data["ok"])
         self.assertIn(data["state"], ("ON", "OFF"))
-        self.assertEqual(data["config_file"], "config/target_power_state.json")
+        self.assertEqual(data["config_file"], "config/json/target_power_state.json")
 
         # 2. Set OFF
         res_off = self.client.post("/api/power/set", json={"state": "OFF"})

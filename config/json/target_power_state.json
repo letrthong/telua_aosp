@@ -1,0 +1,142 @@
+{
+  "state": "ON",
+  "voltage": 12.0,
+  "current_a": 1.33,
+  "mode": "config_simulation",
+  "target_name": "AOSP Target Board",
+  "last_changed": "2026-11-27T23:19:59.855164",
+  "history": [
+    {
+      "from": "ON",
+      "to": "OFF",
+      "timestamp": "2026-11-26T08:39:53.675065",
+      "client_ip": "127.0.0.1",
+      "reason": "manual_button_click"
+    },
+    {
+      "from": "OFF",
+      "to": "ON",
+      "timestamp": "2026-11-26T08:39:53.688449",
+      "client_ip": "127.0.0.1",
+      "reason": "manual_button_click"
+    },
+    {
+      "from": "ON",
+      "to": "OFF",
+      "timestamp": "2026-11-26T08:39:53.699508",
+      "client_ip": "127.0.0.1",
+      "reason": "toggle_button_click"
+    },
+    {
+      "from": "OFF",
+      "to": "ON",
+      "timestamp": "2026-11-26T08:39:53.712498",
+      "client_ip": "127.0.0.1",
+      "reason": "manual_button_click"
+    },
+    {
+      "from": "ON",
+      "to": "OFF",
+      "timestamp": "2026-11-26T08:42:41.849924",
+      "client_ip": "127.0.0.1",
+      "reason": "manual_button_click"
+    },
+    {
+      "from": "OFF",
+      "to": "ON",
+      "timestamp": "2026-11-26T08:42:46.679175",
+      "client_ip": "127.0.0.1",
+      "reason": "manual_button_click"
+    },
+    {
+      "from": "ON",
+      "to": "OFF",
+      "timestamp": "2026-11-26T08:42:50.756024",
+      "client_ip": "127.0.0.1",
+      "reason": "manual_button_click"
+    },
+    {
+      "from": "OFF",
+      "to": "ON",
+      "timestamp": "2026-11-26T08:42:54.645711",
+      "client_ip": "127.0.0.1",
+      "reason": "manual_button_click"
+    },
+    {
+      "from": "ON",
+      "to": "OFF",
+      "timestamp": "2026-11-26T08:43:02.429786",
+      "client_ip": "127.0.0.1",
+      "reason": "manual_button_click"
+    },
+    {
+      "output": "all",
+      "to": "OFF",
+      "timestamp": "2026-11-27T23:19:59.783154",
+      "client_ip": "127.0.0.1",
+      "reason": "switch_toggle",
+      "from": "OFF"
+    },
+    {
+      "output": "all",
+      "to": "ON",
+      "timestamp": "2026-11-27T23:19:59.796726",
+      "client_ip": "127.0.0.1",
+      "reason": "switch_toggle",
+      "from": "OFF"
+    },
+    {
+      "output": "out1",
+      "from": "ON",
+      "to": "OFF",
+      "timestamp": "2026-11-27T23:19:59.811005",
+      "client_ip": "127.0.0.1",
+      "reason": "output_switch_click"
+    },
+    {
+      "output": "out1",
+      "from": "OFF",
+      "to": "OFF",
+      "timestamp": "2026-11-27T23:19:59.826497",
+      "client_ip": "127.0.0.1",
+      "reason": "output_switch_click"
+    },
+    {
+      "output": "out2",
+      "from": "ON",
+      "to": "ON",
+      "timestamp": "2026-11-27T23:19:59.839538",
+      "client_ip": "127.0.0.1",
+      "reason": "output_switch_click"
+    },
+    {
+      "output": "all",
+      "to": "ON",
+      "timestamp": "2026-11-27T23:19:59.855164",
+      "client_ip": "127.0.0.1",
+      "reason": "switch_toggle",
+      "from": "ON"
+    }
+  ],
+  "notes": "Target power state managed by telua_web_power_controls. Ready for hardware relay integration.",
+  "outputs": {
+    "out1": {
+      "id": "out1",
+      "name": "Ngõ ra 1: Main Power (BATT+ / 12V)",
+      "state": "ON",
+      "voltage": 12.0,
+      "current_a": 1.25,
+      "channel": "RELAY_CH1",
+      "desc": "Nguồn chính cấp điện áp 12V nuôi board mạch AOSP / IVI"
+    },
+    "out2": {
+      "id": "out2",
+      "name": "Ngõ ra 2: ACC / Ignition (IGN)",
+      "state": "ON",
+      "voltage": 12.0,
+      "current_a": 0.08,
+      "channel": "RELAY_CH2",
+      "desc": "Tín hiệu bật khóa điện ô tô (ACC/Ignition) điều khiển trạng thái thức/ngủ"
+    }
+  }
+}

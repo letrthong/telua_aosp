@@ -115,7 +115,11 @@ find_const_config_file() {
         echo "$MASTER_SCRIPT_DIR/config/overlay/$fname"
         return 0
     fi
-    # 1. Ưu tiên trong thư mục config/ của MASTER_SCRIPT_DIR
+    # 1. Ưu tiên trong thư mục config/cli/ rồi đến config/ của MASTER_SCRIPT_DIR
+    if [ -f "$MASTER_SCRIPT_DIR/$CONST_CONFIG_DIR_NAME/cli/$fname" ]; then
+        echo "$MASTER_SCRIPT_DIR/$CONST_CONFIG_DIR_NAME/cli/$fname"
+        return 0
+    fi
     if [ -f "$MASTER_SCRIPT_DIR/$CONST_CONFIG_DIR_NAME/$fname" ]; then
         echo "$MASTER_SCRIPT_DIR/$CONST_CONFIG_DIR_NAME/$fname"
         return 0
@@ -125,7 +129,11 @@ find_const_config_file() {
         echo "$MASTER_SCRIPT_DIR/$fname"
         return 0
     fi
-    # 3. Tìm trong thư mục config/ hoặc gốc của SCRIPT_DIR
+    # 3. Tìm trong thư mục config/cli/, config/ hoặc gốc của SCRIPT_DIR
+    if [ -f "$SCRIPT_DIR/$CONST_CONFIG_DIR_NAME/cli/$fname" ]; then
+        echo "$SCRIPT_DIR/$CONST_CONFIG_DIR_NAME/cli/$fname"
+        return 0
+    fi
     if [ -f "$SCRIPT_DIR/$CONST_CONFIG_DIR_NAME/$fname" ]; then
         echo "$SCRIPT_DIR/$CONST_CONFIG_DIR_NAME/$fname"
         return 0

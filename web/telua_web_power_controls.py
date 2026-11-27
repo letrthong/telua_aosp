@@ -19,7 +19,9 @@ power_bp = Blueprint("power", __name__)
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 CONFIG_DIR = REPO_ROOT / "config"
-POWER_CONFIG_FILE = CONFIG_DIR / "target_power_state.json"
+_POWER_JSON_NEW = CONFIG_DIR / "json" / "target_power_state.json"
+_POWER_JSON_LEGACY = CONFIG_DIR / "target_power_state.json"
+POWER_CONFIG_FILE = _POWER_JSON_NEW if (_POWER_JSON_NEW.is_file() or not _POWER_JSON_LEGACY.is_file()) else _POWER_JSON_LEGACY
 
 DEFAULT_OUTPUTS: Dict[str, Any] = {
     "out1": {
@@ -116,7 +118,7 @@ def api_power_status():
         "mode": cfg.get("mode", "config_simulation"),
         "target_name": cfg.get("target_name", "AOSP Automotive Target Board"),
         "last_changed": cfg.get("last_changed", ""),
-        "config_file": "config/target_power_state.json",
+        "config_file": "config/json/target_power_state.json",
         "outputs": {
             "out1": out1,
             "out2": out2,

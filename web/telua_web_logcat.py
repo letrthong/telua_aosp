@@ -105,11 +105,14 @@ def get_filters_file() -> Path:
     overlay = get_root() / "config" / "overlay" / "logcat_filters.json"
     if overlay.is_file():
         return overlay
-    return get_root() / "config" / "logcat_filters.json"
+    return get_shared_filters_file()
 
 
 def get_shared_filters_file() -> Path:
-    """Shared (Git-tracked) template path: config/logcat_filters.json."""
+    """Shared (Git-tracked) template path: config/json/logcat_filters.json (legacy fallback: config/)."""
+    new_p = get_root() / "config" / "json" / "logcat_filters.json"
+    if new_p.is_file() or not (get_root() / "config" / "logcat_filters.json").is_file():
+        return new_p
     return get_root() / "config" / "logcat_filters.json"
 
 

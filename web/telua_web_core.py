@@ -74,19 +74,13 @@ def scan_files_in_root(root: Path):
     except OSError:
         pass
 
-    # 2. Then the config/ directory (const_*.config cheatsheets & pipelines)
-    cfg_dir = root / "config"
-    if cfg_dir.is_dir():
-        for name in sorted(os.listdir(cfg_dir)):
-            if is_editable_name(name) and (cfg_dir / name).is_file():
-                add("config/" + name)
-
-    # 2b. Personal overlay dir (git-ignored): apk_overlays.config, const_my_cli.config
-    overlay_dir = root / "config" / "overlay"
-    if overlay_dir.is_dir():
-        for name in sorted(os.listdir(overlay_dir)):
-            if is_editable_name(name) and (overlay_dir / name).is_file():
-                add("config/overlay/" + name)
+    # 2. Then config/ and its organized subfolders (cli/, json/, ai_agent/, overlay/)
+    for sub in ("config", "config/cli", "config/json", "config/ai_agent", "config/overlay"):
+        sub_dir = root / sub
+        if sub_dir.is_dir():
+            for name in sorted(os.listdir(sub_dir)):
+                if is_editable_name(name) and (sub_dir / name).is_file():
+                    add(sub + "/" + name)
 
     priority = {
         "config/apk.config": 0,
@@ -96,6 +90,10 @@ def scan_files_in_root(root: Path):
         "apk_overlays.config": 1,
         "config/overlay/const_my_cli.config": 1,
         "config/const_my_cli.config": 1,
+        "config/cli/const_multi_cli.config": 2,
+        "config/cli/const_system_cli.config": 2,
+        "config/cli/const_car.config": 2,
+        "config/cli/const_dumpsys.config": 2,
         "config/const_multi_cli.config": 2,
         "config/const_system_cli.config": 2,
         "config/const_car.config": 2,

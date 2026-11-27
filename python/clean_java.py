@@ -65,8 +65,12 @@ Examples:
 # (bash-style KEY="VALUE" lines, '#' comments). The config file is optional.
 # ------------------------------------------------------------------------------
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-CLEAN_JAVA_CONFIG_FILE = os.path.normpath(
+_CLEAN_JAVA_CLI_CFG = os.path.normpath(
+    os.path.join(SCRIPT_DIR, '..', 'config', 'cli', 'const_clean_java.config'))
+_CLEAN_JAVA_LEGACY_CFG = os.path.normpath(
     os.path.join(SCRIPT_DIR, '..', 'config', 'const_clean_java.config'))
+CLEAN_JAVA_CONFIG_FILE = (
+    _CLEAN_JAVA_CLI_CFG if os.path.isfile(_CLEAN_JAVA_CLI_CFG) else _CLEAN_JAVA_LEGACY_CFG)
 
 SETTINGS = {
     'ENSURE_TRAILING_NEWLINE': '1',    # 1 = file ends with exactly one newline

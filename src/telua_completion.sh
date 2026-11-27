@@ -159,11 +159,13 @@ _telua_completions() {
             ;;
         sec|security|--sec|--security)
             local sec_actions="host status perm enforce avc privapp appops keystore policy root unroot remount disable-verity help"
-            local config_dir
+            local config_dir sec_cfg
             config_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../config" 2>/dev/null && pwd)"
-            if [ -f "$config_dir/const_security.config" ]; then
+            sec_cfg="$config_dir/cli/const_security.config"
+            [ ! -f "$sec_cfg" ] && sec_cfg="$config_dir/const_security.config"
+            if [ -f "$sec_cfg" ]; then
                 local dynamic_sec
-                dynamic_sec=$(grep -E '^[[:space:]]*"[^:]+::' "$config_dir/const_security.config" 2>/dev/null | sed -E 's/^[[:space:]]*"([^[:space:]]+).*/\1/' | tr '\n' ' ')
+                dynamic_sec=$(grep -E '^[[:space:]]*"[^:]+::' "$sec_cfg" 2>/dev/null | sed -E 's/^[[:space:]]*"([^[:space:]]+).*/\1/' | tr '\n' ' ')
                 if [ -n "$dynamic_sec" ]; then
                     sec_actions="$dynamic_sec help"
                 fi
@@ -174,11 +176,13 @@ _telua_completions() {
         car|--car)
             local car_actions="vol-up vol-down vol-mute ks ks-stop status help"
             # Try to read dynamic actions from const_car.config if present
-            local config_dir
+            local config_dir car_cfg
             config_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../config" 2>/dev/null && pwd)"
-            if [ -f "$config_dir/const_car.config" ]; then
+            car_cfg="$config_dir/cli/const_car.config"
+            [ ! -f "$car_cfg" ] && car_cfg="$config_dir/const_car.config"
+            if [ -f "$car_cfg" ]; then
                 local dynamic_car
-                dynamic_car=$(grep -E '^[[:space:]]*"[^:]+::' "$config_dir/const_car.config" 2>/dev/null | sed -E 's/^[[:space:]]*"([^[:space:]]+).*/\1/' | tr '\n' ' ')
+                dynamic_car=$(grep -E '^[[:space:]]*"[^:]+::' "$car_cfg" 2>/dev/null | sed -E 's/^[[:space:]]*"([^[:space:]]+).*/\1/' | tr '\n' ' ')
                 if [ -n "$dynamic_car" ]; then
                     car_actions="$dynamic_car help"
                 fi
@@ -188,11 +192,13 @@ _telua_completions() {
             ;;
         dump|--dump)
             local dump_targets="audio car-service car-audio media battery activity help"
-            local config_dir
+            local config_dir dump_cfg
             config_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../config" 2>/dev/null && pwd)"
-            if [ -f "$config_dir/const_dumpsys.config" ]; then
+            dump_cfg="$config_dir/cli/const_dumpsys.config"
+            [ ! -f "$dump_cfg" ] && dump_cfg="$config_dir/const_dumpsys.config"
+            if [ -f "$dump_cfg" ]; then
                 local dynamic_dumps
-                dynamic_dumps=$(grep -E '^[[:space:]]*"[^:]+::' "$config_dir/const_dumpsys.config" 2>/dev/null | sed -E 's/^[[:space:]]*"([^[:space:]]+).*/\1/' | tr '\n' ' ')
+                dynamic_dumps=$(grep -E '^[[:space:]]*"[^:]+::' "$dump_cfg" 2>/dev/null | sed -E 's/^[[:space:]]*"([^[:space:]]+).*/\1/' | tr '\n' ' ')
                 if [ -n "$dynamic_dumps" ]; then
                     dump_targets="$dynamic_dumps help"
                 fi
@@ -202,11 +208,13 @@ _telua_completions() {
             ;;
         run|multi|--run|--multi)
             local run_groups="audio-cycle media-mute-cycle dev-prep remount-reboot audio-dump logcat-start logcat-stop net-up unittest help"
-            local config_dir
+            local config_dir multi_cfg
             config_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../config" 2>/dev/null && pwd)"
-            if [ -f "$config_dir/const_multi_cli.config" ]; then
+            multi_cfg="$config_dir/cli/const_multi_cli.config"
+            [ ! -f "$multi_cfg" ] && multi_cfg="$config_dir/const_multi_cli.config"
+            if [ -f "$multi_cfg" ]; then
                 local dynamic_groups
-                dynamic_groups=$(grep -E '^[[:space:]]*"[^:]+::' "$config_dir/const_multi_cli.config" 2>/dev/null | sed -E 's/^[[:space:]]*"([^[:space:]]+).*/\1/' | tr '\n' ' ')
+                dynamic_groups=$(grep -E '^[[:space:]]*"[^:]+::' "$multi_cfg" 2>/dev/null | sed -E 's/^[[:space:]]*"([^[:space:]]+).*/\1/' | tr '\n' ' ')
                 if [ -n "$dynamic_groups" ]; then
                     run_groups="$dynamic_groups help"
                 fi

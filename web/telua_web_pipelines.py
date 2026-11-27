@@ -41,6 +41,10 @@ def get_pipeline_sources() -> Dict[str, Any]:
         or not (root / "config" / "const_my_cli.config").is_file()
         else (root / "config" / "const_my_cli.config")
     )
+    def _cli_cfg(fname: str) -> Path:
+        p = root / "config" / "cli" / fname
+        return p if p.is_file() else (root / "config" / fname)
+
     return {
         "my": {
             "file": my_cli,
@@ -48,29 +52,29 @@ def get_pipeline_sources() -> Dict[str, Any]:
             "label": "Personal pipelines (telua my <name>)",
         },
         "multi": {
-            "file": root / "config" / "const_multi_cli.config",
+            "file": _cli_cfg("const_multi_cli.config"),
             "prefix": "MULTI",
             "label": "Multi-CLI pipelines (telua run <group>)",
         },
         "system": {
-            "file": root / "config" / "const_system_cli.config",
+            "file": _cli_cfg("const_system_cli.config"),
             "prefix": "SYSTEM",
             "label": "System CLI pipelines (telua system <action>)",
         },
         "docker": {
-            "file": root / "config" / "const_system_cli.config",
+            "file": _cli_cfg("const_system_cli.config"),
             "prefix": "SYSTEM",
             "label": "Docker CLI pipelines (telua system <action>)",
         },
         "car": {
-            "file": root / "config" / "const_car.config",
+            "file": _cli_cfg("const_car.config"),
             "prefix": "CAR",
             "label": "Android Car pipelines (telua car <action>)",
             "list_var": "CAR_CLI_LIST",
             "var_prefix": "ADB_SHELL_CAR_",
         },
         "dump": {
-            "file": root / "config" / "const_dumpsys.config",
+            "file": _cli_cfg("const_dumpsys.config"),
             "prefix": "DUMP",
             "label": "Android Dumpsys pipelines (telua dump <service>)",
             "list_var": "DUMP_CLI_LIST",
@@ -105,24 +109,30 @@ def _pipeline_config_path(source):
     elif key in ("docker", "system"):
         candidates = [
             root / "config" / "overlay" / "const_system_cli.config",
+            root / "config" / "cli" / "const_system_cli.config",
             root / "config" / "const_system_cli.config",
             root / "const_system_cli.config",
         ]
     elif key == "car":
         candidates = [
             root / "config" / "overlay" / "const_car.config",
+            root / "config" / "cli" / "const_car.config",
             root / "config" / "const_car.config",
             root / "const_car.config",
         ]
     elif key == "dump":
         candidates = [
             root / "config" / "overlay" / "const_dumpsys.config",
+            root / "config" / "cli" / "const_dumpsys.config",
             root / "config" / "const_dumpsys.config",
             root / "const_dumpsys.config",
         ]
     else:
-        path = root / "config" / "const_multi_cli.config"
-        candidates = [path, path.with_suffix(".config.example")]
+        candidates = [
+            root / "config" / "cli" / "const_multi_cli.config",
+            root / "config" / "const_multi_cli.config",
+            root / "config" / "const_multi_cli.config.example",
+        ]
     for cand in candidates:
         if cand.is_file():
             return cand
