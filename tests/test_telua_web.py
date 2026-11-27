@@ -363,7 +363,7 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertTrue(data_post["ok"])
         self.assertEqual(data_post["count"], 1)
         self.assertTrue(data_post["personal"])
-        self.assertEqual(data_post["path"], "config/overlay/logcat_filters.json")
+        self.assertEqual(data_post["path"], "config/overlay/json/logcat_filters.json")
         overlay_file = telua_web.ROOT / "config" / "overlay" / "json" / "logcat_filters.json"
         self.assertTrue(overlay_file.is_file())
 
@@ -374,7 +374,7 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertEqual(len(data_verify["filters"]), 1)
         self.assertEqual(data_verify["filters"][0]["name"], "UnitTest Rule")
         self.assertTrue(data_verify["personal"])
-        self.assertEqual(data_verify["path"], "config/overlay/logcat_filters.json")
+        self.assertEqual(data_verify["path"], "config/overlay/json/logcat_filters.json")
 
         # 5. Test shared=true — writes the Git-tracked template instead
         res_shared = self.client.post("/api/logcat/filters", json={"filters": sample_filters, "shared": True})
