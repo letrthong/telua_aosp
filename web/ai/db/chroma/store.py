@@ -10,18 +10,35 @@
 #   chroma.sqlite3                                    (legacy root fallback, read-only)
 # ==============================================================================
 
+import shutil
 import threading
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..base import (
     DEFAULT_COLLECTION_NAME,
     VectorDB,
-    build_where_filter,
     clean_tag,
     parse_shard_key,
     shard_key,
 )
+
+
+def _chroma_where(project: str = "", aosp_version: str = "", source_id: str = "") -> Optional[dict]:
+    """Translate neutral filter arguments into ChromaDB's `$and` where-dict syntax."""
+    conds = []
+    p = clean_tag(project, "")
+    v = clean_tag(aosp_version, "")
+    s = clean_tag(source_id, "")
+    if p:
+        conds.append({"project": p})
+    if v:
+        conds.append({"aosp_version": v})
+    if s:
+        conds.append({"source_id": s})
+    if not conds:
+        return None
+    return conds[0] if len(conds) == 1 else {"$and": conds}
 
 
 class ChromaVectorDB(VectorDB):
@@ -29,8 +46,8 @@ class ChromaVectorDB(VectorDB):
 
     backend_name = "chroma"
 
-    def __init__(self, base_dir: Optional[Path] = None):
-        super().__init__(base_dir=base_dir)
+    def __init__(self, base_dir: Optional[Path] = None, config: Optional[Dict[str, Any]] = None):
+        super().__init__(base_dir=base_dir, config=config)
         self._lock = threading.Lock()
         self._clients: Dict[str, object] = {}
 
@@ -107,11 +124,15 @@ class ChromaVectorDB(VectorDB):
         project: str = "",
         aosp_version: str = "",
         collection_name: str = DEFAULT_COLLECTION_NAME,
+        embeddings: Optional[List[List[float]]] = None,
     ) -> None:
         if not ids:
             return
         col = self._get_collection(project, aosp_version, collection_name)
-        col.upsert(ids=ids, documents=documents, metadatas=metadatas)
+        kwargs: Dict[str, Any] = {"ids": ids, "documents": documents, "metadatas": metadatas}
+        if embeddings is not None:
+            kwargs["embeddings"] = embeddings
+        col.upsert(**kwargs)
 
     def add(
         self,
@@ -121,9 +142,13 @@ class ChromaVectorDB(VectorDB):
         project: str = "",
         aosp_version: str = "",
         collection_name: str = DEFAULT_COLLECTION_NAME,
+        embedding: Optional[List[float]] = None,
     ) -> str:
         col = self._get_collection(project, aosp_version, collection_name)
-        col.add(ids=[doc_id], documents=[document], metadatas=[metadata])
+        kwargs: Dict[str, Any] = {"ids": [doc_id], "documents": [document], "metadatas": [metadata]}
+        if embedding is not None:
+            kwargs["embeddings"] = [embedding]
+        col.add(**kwargs)
         return shard_key(project, aosp_version)
 
     def query(
@@ -134,7 +159,11 @@ class ChromaVectorDB(VectorDB):
         aosp_version: str = "",
         source_id: str = "",
         collection_name: str = DEFAULT_COLLECTION_NAME,
+        search_mode: str = "hybrid",
+        alpha: float = 0.5,
+        query_embedding: Optional[List[float]] = None,
     ) -> Tuple[List[dict], List[str]]:
+        # ChromaDB performs vector similarity search (search_mode / alpha accepted for interface compatibility).
         dbs = self._matching_shards(project=project, aosp_version=aosp_version)
         if not dbs:
             return [], []
@@ -149,12 +178,16 @@ class ChromaVectorDB(VectorDB):
                 if cnt <= 0:
                     continue
                 queried.append(key)
-                where = build_where_filter(
+                where = _chroma_where(
                     project=project if is_legacy else "",
                     aosp_version=aosp_version if is_legacy else "",
                     source_id=source_id,
                 )
-                q_kwargs = {"query_texts": [query_text], "n_results": min(n_results, cnt)}
+                q_kwargs: Dict[str, Any] = {"n_results": min(n_results, cnt)}
+                if query_embedding is not None:
+                    q_kwargs["query_embeddings"] = [query_embedding]
+                else:
+                    q_kwargs["query_texts"] = [query_text]
                 if where:
                     q_kwargs["where"] = where
                 res = col.query(**q_kwargs)
@@ -174,6 +207,43 @@ class ChromaVectorDB(VectorDB):
 
         hits.sort(key=lambda h: h["distance"])
         return hits[:n_results], queried
+
+    def delete_by_source(
+        self,
+        source_id: str,
+        project: str = "",
+        aosp_version: str = "",
+        collection_name: str = DEFAULT_COLLECTION_NAME,
+    ) -> int:
+        sid = clean_tag(source_id, "")
+        if not sid:
+            return 0
+        deleted = 0
+        for _key, path, _is_legacy in self._matching_shards(project=project, aosp_version=aosp_version):
+            try:
+                client = self._get_client(path)
+                col = client.get_or_create_collection(name=collection_name)
+                before = col.count()
+                col.delete(where={"source_id": sid})
+                deleted += max(0, before - col.count())
+            except Exception:
+                continue
+        return deleted
+
+    def drop_shard(
+        self,
+        project: str,
+        aosp_version: str = "",
+        collection_name: str = DEFAULT_COLLECTION_NAME,
+    ) -> bool:
+        sk = shard_key(project, aosp_version)
+        target = (self.shards_dir / sk).resolve()
+        with self._lock:
+            self._clients.pop(str(target), None)
+        if target.is_dir():
+            shutil.rmtree(target, ignore_errors=True)
+            return True
+        return False
 
     def status(self, collection_name: str = DEFAULT_COLLECTION_NAME) -> dict:
         ok, err = self.is_available()
@@ -221,3 +291,7 @@ class ChromaVectorDB(VectorDB):
             "shard_count": len(shards_info),
             "path": str(self.shards_dir),
         }
+
+    def close(self) -> None:
+        with self._lock:
+            self._clients.clear()

@@ -3,17 +3,17 @@
 # Copyright (C) 2026 Thong Le <letrthong@gmail.com>
 # Licensed under the Apache License, Version 2.0
 # ==============================================================================
-# web/ai/db/base.py — Abstract VectorDB interface & shard naming helpers.
+# web/ai/db/base.py — Backend-agnostic VectorDB interface & shard helpers.
 #
 # All application code (telua_web_ai.py, telua_mcp_skill.py) talks ONLY to this
-# interface. Swapping ChromaDB for Qdrant / LanceDB / Milvus / FAISS later only
-# requires implementing a new subclass under web/ai/db/<backend>/.
+# interface. Swapping ChromaDB for Weaviate / Qdrant / LanceDB / Milvus later
+# requires ONLY implementing a subclass under web/ai/db/<backend>/store.py.
 # ==============================================================================
 
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 DEFAULT_DATA_DIR = REPO_ROOT / "ai_agent" / "data"
@@ -29,7 +29,7 @@ def clean_tag(val, default: str = "") -> str:
 
 
 def shard_key(project: str = "", aosp_version: str = "") -> str:
-    """Canonical shard identifier: '<project>__<aosp_version|shared>'."""
+    """Canonical shard / tenant identifier: '<project>__<aosp_version|shared>'."""
     p = clean_tag(project, "aosp_aaos")
     v = clean_tag(aosp_version, "shared")
     return f"{p}__{v}"
@@ -42,33 +42,18 @@ def parse_shard_key(key: str) -> Tuple[str, str]:
     return key, ""
 
 
-def build_where_filter(project: str = "", aosp_version: str = "", source_id: str = "") -> Optional[dict]:
-    conds = []
-    p = clean_tag(project, "")
-    v = clean_tag(aosp_version, "")
-    s = clean_tag(source_id, "")
-    if p:
-        conds.append({"project": p})
-    if v:
-        conds.append({"aosp_version": v})
-    if s:
-        conds.append({"source_id": s})
-    if not conds:
-        return None
-    return conds[0] if len(conds) == 1 else {"$and": conds}
-
-
 class VectorDB(ABC):
     """Backend-agnostic Vector Database interface with (project, aosp_version) sharding."""
 
     backend_name: str = "base"
 
-    def __init__(self, base_dir: Optional[Path] = None):
+    def __init__(self, base_dir: Optional[Path] = None, config: Optional[Dict[str, Any]] = None):
         self.base_dir: Path = Path(base_dir) if base_dir is not None else DEFAULT_DATA_DIR
+        self.config: Dict[str, Any] = dict(config or {})
 
     @abstractmethod
     def is_available(self) -> Tuple[bool, str]:
-        """Return (available, error_message_if_not)."""
+        """Return (available, reason_if_unavailable)."""
 
     @abstractmethod
     def upsert(
@@ -79,8 +64,9 @@ class VectorDB(ABC):
         project: str = "",
         aosp_version: str = "",
         collection_name: str = DEFAULT_COLLECTION_NAME,
+        embeddings: Optional[List[List[float]]] = None,
     ) -> None:
-        """Insert or update a batch of documents in the (project, aosp_version) shard."""
+        """Insert or update a batch of documents in the (project, aosp_version) shard/tenant."""
 
     @abstractmethod
     def add(
@@ -91,8 +77,9 @@ class VectorDB(ABC):
         project: str = "",
         aosp_version: str = "",
         collection_name: str = DEFAULT_COLLECTION_NAME,
+        embedding: Optional[List[float]] = None,
     ) -> str:
-        """Add a single document and return the shard key where it was stored."""
+        """Add a single document and return the shard/tenant key where it was stored."""
 
     @abstractmethod
     def query(
@@ -103,12 +90,40 @@ class VectorDB(ABC):
         aosp_version: str = "",
         source_id: str = "",
         collection_name: str = DEFAULT_COLLECTION_NAME,
+        search_mode: str = "hybrid",
+        alpha: float = 0.5,
+        query_embedding: Optional[List[float]] = None,
     ) -> Tuple[List[dict], List[str]]:
         """Query matching shard(s) and return (records, queried_shard_keys).
 
+        search_mode: 'hybrid' (BM25 + vector when supported, else vector), 'vector', or 'keyword'.
+        alpha: hybrid weighting (0.0 = pure keyword, 1.0 = pure vector).
         Each record has shape: {"text": str, "meta": dict, "distance": float, "shard": str}
         """
 
     @abstractmethod
+    def delete_by_source(
+        self,
+        source_id: str,
+        project: str = "",
+        aosp_version: str = "",
+        collection_name: str = DEFAULT_COLLECTION_NAME,
+    ) -> int:
+        """Delete all documents belonging to source_id from matching shard(s)."""
+
+    @abstractmethod
+    def drop_shard(
+        self,
+        project: str,
+        aosp_version: str = "",
+        collection_name: str = DEFAULT_COLLECTION_NAME,
+    ) -> bool:
+        """Delete/drop an entire (project, aosp_version) shard or tenant."""
+
+    @abstractmethod
     def status(self, collection_name: str = DEFAULT_COLLECTION_NAME) -> dict:
         """Return aggregated status & per-shard stats."""
+
+    def close(self) -> None:
+        """Release any open connections / sockets (override for networked DBs like Weaviate)."""
+        return None

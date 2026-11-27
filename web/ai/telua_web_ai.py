@@ -243,6 +243,7 @@ Rules:
 - Use search_knowledge to query local persistent ChromaDB documentation and training data.
 - Use save_training_knowledge to persist verified solutions or architectural notes for long-term recall.
 - You can create, write, and edit code files directly using write_file and edit_file.
+- Use grep_search to quickly find symbol definitions, callers, strings, or regex matches across files and directories before reading full files.
 - Use get_file_git_history to inspect commit history (hash, author, date, message) of a specific file.
 - Use get_commit_diff to inspect lines added/removed in a specific commit when investigating regressions, bug causes, or historical changes.
 - When a bug, crash, or regression is discovered during inspection or build, use create_github_issue to report an issue with stack traces and AST context.
@@ -628,6 +629,163 @@ def _tool_list_files(args: dict) -> str:
         return f"[ERROR] {exc}"
 
 
+_GREP_IGNORE_DIRS = {
+    ".git", ".repo", "out", "node_modules", "build", "target",
+    "__pycache__", ".idea", ".gradle", "ai_agent",
+}
+_GREP_BINARY_EXTS = {
+    ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".pdf", ".zip", ".gz",
+    ".tar", ".jar", ".apk", ".dex", ".so", ".a", ".o", ".class", ".bin",
+    ".sqlite3", ".db", ".exe", ".dll", ".pyc", ".woff", ".woff2", ".ttf",
+}
+
+
+def _resolve_grep_target(raw_path: str) -> Tuple[Optional[Path], str]:
+    """Allow searching inside toolkit root or any configured MCP knowledge source."""
+    root = _repo_root().resolve()
+    p_str = (raw_path or ".").strip()
+    cand = Path(p_str)
+    target = cand.resolve() if cand.is_absolute() else (root / p_str.lstrip("/\\")).resolve()
+
+    allowed_roots = [root]
+    try:
+        from .telua_mcp_skill import get_all_configured_sources
+        for s in get_all_configured_sources():
+            d = s.get("dir")
+            if d and Path(d).is_dir():
+                allowed_roots.append(Path(d).resolve())
+    except Exception:
+        pass
+
+    for base in allowed_roots:
+        try:
+            target.relative_to(base)
+            return target, ""
+        except ValueError:
+            continue
+    return None, "[ERROR] path outside toolkit root and configured knowledge sources is not allowed"
+
+
+def _tool_grep_search(args: dict) -> str:
+    """Fast recursive text/regex search across files (uses ripgrep if available,
+    otherwise pruned os.scandir Python fallback)."""
+    import fnmatch
+    import shutil
+
+    query = str(args.get("query", "")).strip()
+    if not query:
+        return "[ERROR] missing 'query' parameter"
+
+    raw_path = str(args.get("path", ".") or ".").strip()
+    target, err = _resolve_grep_target(raw_path)
+    if err or target is None:
+        return err
+    if not target.exists():
+        return f"[ERROR] path not found: {raw_path}"
+
+    is_regex = bool(args.get("is_regex", False))
+    case_sensitive = bool(args.get("case_sensitive", True))
+    include_glob = str(args.get("include", "") or "").strip()
+    try:
+        max_results = max(1, min(int(args.get("max_results", 50)), 200))
+    except (TypeError, ValueError):
+        max_results = 50
+
+    # 1. Fast path: ripgrep (rg) if installed on host
+    rg_bin = shutil.which("rg")
+    if rg_bin:
+        cmd = [
+            rg_bin, "--no-heading", "--line-number", "--color=never",
+            "--max-filesize=2M", "--max-count=20",
+        ]
+        if not is_regex:
+            cmd.append("--fixed-strings")
+        if not case_sensitive:
+            cmd.append("--ignore-case")
+        if include_glob:
+            cmd.extend(["--glob", include_glob])
+        for ig in _GREP_IGNORE_DIRS:
+            cmd.extend(["--glob", f"!{ig}/**"])
+        cmd.extend(["--", query, str(target)])
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15)
+            lines = [l for l in proc.stdout.splitlines() if l.strip()]
+            if not lines:
+                return f"(No matches for '{query}' in {raw_path})"
+            truncated = len(lines) > max_results
+            out_lines = lines[:max_results]
+            # Shorten absolute prefix relative to target when searching a directory
+            prefix = str(target).rstrip("\\/") + os.sep
+            cleaned = [l[len(prefix):] if l.startswith(prefix) else l for l in out_lines]
+            header = f"Found {len(out_lines)}{'+' if truncated else ''} match(es) for '{query}' in {raw_path}:\n"
+            return header + "\n".join(cleaned)
+        except Exception:
+            pass  # fall through to Python walker
+
+    # 2. Pure-Python fallback (pruned os.scandir)
+    flags = 0 if case_sensitive else re.IGNORECASE
+    try:
+        pattern = re.compile(query if is_regex else re.escape(query), flags)
+    except re.error as exc:
+        return f"[ERROR] invalid regex '{query}': {exc}"
+
+    matches: List[str] = []
+    files_scanned = 0
+    max_file_bytes = 2 * 1024 * 1024
+
+    def scan_file(fpath: Path, rel_label: str) -> None:
+        nonlocal files_scanned
+        if len(matches) >= max_results:
+            return
+        if fpath.suffix.lower() in _GREP_BINARY_EXTS:
+            return
+        if include_glob and not fnmatch.fnmatch(fpath.name, include_glob):
+            return
+        try:
+            if fpath.stat().st_size > max_file_bytes:
+                return
+            files_scanned += 1
+            with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
+                for lineno, line in enumerate(fh, 1):
+                    if pattern.search(line):
+                        matches.append(f"{rel_label}:{lineno}: {line.rstrip()[:240]}")
+                        if len(matches) >= max_results:
+                            return
+        except OSError:
+            return
+
+    if target.is_file():
+        scan_file(target, target.name)
+    else:
+        base_str = str(target)
+        prefix = base_str.rstrip("\\/") + os.sep
+        stack = [base_str]
+        while stack and len(matches) < max_results:
+            cur = stack.pop()
+            try:
+                it = os.scandir(cur)
+            except OSError:
+                continue
+            with it:
+                for entry in it:
+                    if len(matches) >= max_results:
+                        break
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            if entry.name not in _GREP_IGNORE_DIRS:
+                                stack.append(entry.path)
+                        elif entry.is_file(follow_symlinks=False):
+                            rel = entry.path[len(prefix):] if entry.path.startswith(prefix) else entry.name
+                            scan_file(Path(entry.path), rel.replace("\\", "/"))
+                    except OSError:
+                        continue
+
+    if not matches:
+        return f"(No matches for '{query}' in {raw_path}; scanned {files_scanned} files)"
+    more = "+" if len(matches) >= max_results else ""
+    return f"Found {len(matches)}{more} match(es) for '{query}' in {raw_path}:\n" + "\n".join(matches)
+
+
 def _clean_filter_val(val) -> str:
     s = str(val or "").strip().lower()
     return "" if s in ("", "all", "auto", "any", "*") else s
@@ -984,6 +1142,7 @@ TOOL_EXECUTORS = {
     "write_file": _tool_write_file,
     "edit_file": _tool_edit_file,
     "list_files": _tool_list_files,
+    "grep_search": _tool_grep_search,
     "search_knowledge": _tool_search_knowledge,
     "save_training_knowledge": _tool_save_training_knowledge,
     "get_file_git_history": _tool_get_file_git_history,
@@ -1151,6 +1310,25 @@ TOOL_SCHEMAS = [
                 "type": "object",
                 "properties": {"path": {"type": "string", "description": "Relative directory path"}},
                 "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "grep_search",
+            "description": "Fast text or regex search across files in the workspace or any configured knowledge source directory. Returns matching 'file:line: content' lines. Use to find symbol definitions, callers, constants, or log tags before reading full files.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Exact text or regex pattern to search for"},
+                    "path": {"type": "string", "description": "Directory or file path to search (relative to workspace or inside a configured source; default '.')"},
+                    "is_regex": {"type": "boolean", "description": "Treat query as a regular expression (default false)"},
+                    "case_sensitive": {"type": "boolean", "description": "Case-sensitive match (default true)"},
+                    "include": {"type": "string", "description": "Optional filename glob filter (e.g. '*.java', '*.py', '*.aidl')"},
+                    "max_results": {"type": "integer", "description": "Maximum matching lines to return (default 50, max 200)"}
+                },
+                "required": ["query"],
             },
         },
     },

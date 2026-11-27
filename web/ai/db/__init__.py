@@ -5,7 +5,7 @@
 # ==============================================================================
 # web/ai/db/__init__.py — VectorDB factory & registry.
 #
-# To swap vector databases in the future (e.g. Qdrant, LanceDB, Milvus, FAISS):
+# To swap vector databases in the future (e.g. Weaviate, Qdrant, LanceDB, FAISS):
 #   1. Implement a subclass of VectorDB in web/ai/db/<backend>/store.py
 #   2. Register it in _BACKENDS below
 #   3. Set TELUA_VECTOR_DB=<backend> (or pass backend="<backend>")
@@ -14,21 +14,22 @@
 import os
 import threading
 from pathlib import Path
-from typing import Dict, Optional, Tuple, Type
+from typing import Any, Dict, Optional, Tuple, Type
 
 from .base import (
     DEFAULT_COLLECTION_NAME,
     DEFAULT_DATA_DIR,
     VectorDB,
-    build_where_filter,
     clean_tag,
     parse_shard_key,
     shard_key,
 )
 from .chroma import ChromaVectorDB
+from .weaviate import WeaviateVectorDB
 
 _BACKENDS: Dict[str, Type[VectorDB]] = {
     "chroma": ChromaVectorDB,
+    "weaviate": WeaviateVectorDB,
 }
 
 _INSTANCE_LOCK = threading.Lock()
@@ -43,6 +44,7 @@ def register_vector_db(name: str, cls: Type[VectorDB]) -> None:
 def get_vector_db(
     backend: Optional[str] = None,
     base_dir: Optional[Path] = None,
+    config: Optional[Dict[str, Any]] = None,
 ) -> VectorDB:
     """Return a cached VectorDB instance for the configured backend."""
     name = (backend or os.environ.get("TELUA_VECTOR_DB") or "chroma").strip().lower()
@@ -54,7 +56,7 @@ def get_vector_db(
     with _INSTANCE_LOCK:
         inst = _INSTANCES.get(cache_key)
         if inst is None:
-            inst = cls(base_dir=resolved_dir)
+            inst = cls(base_dir=resolved_dir, config=config)
             _INSTANCES[cache_key] = inst
         return inst
 
@@ -62,12 +64,12 @@ def get_vector_db(
 __all__ = [
     "VectorDB",
     "ChromaVectorDB",
+    "WeaviateVectorDB",
     "DEFAULT_COLLECTION_NAME",
     "DEFAULT_DATA_DIR",
     "clean_tag",
     "shard_key",
     "parse_shard_key",
-    "build_where_filter",
     "register_vector_db",
     "get_vector_db",
 ]

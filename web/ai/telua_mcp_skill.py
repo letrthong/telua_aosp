@@ -787,9 +787,22 @@ def get_skill_content(rel_path: str) -> Optional[dict]:
 HASH_FILE_CANDIDATES = _ai_cfg_candidates("mcp_skills_hashes.json")
 
 
-def _load_skill_hashes() -> dict:
+def _hash_filename(backend: str = "chroma") -> str:
+    b = re.sub(r"[^a-z0-9_\-]", "_", str(backend or "chroma").strip().lower()).strip("_") or "chroma"
+    return f"mcp_skills_hashes_{b}.json"
+
+
+def _load_skill_hashes(backend: str = "chroma") -> dict:
+    """Load incremental sync hashes isolated per VectorDB backend (chroma, weaviate, ...).
+
+    Falls back to legacy mcp_skills_hashes.json only for the default 'chroma' backend.
+    """
     root = _repo_root()
-    for cand in HASH_FILE_CANDIDATES:
+    fname = _hash_filename(backend)
+    cands = list(_ai_cfg_candidates(fname))
+    if str(backend or "chroma").strip().lower() == "chroma":
+        cands.extend(HASH_FILE_CANDIDATES)
+    for cand in cands:
         p = root / cand
         if p.is_file():
             try:
@@ -799,8 +812,8 @@ def _load_skill_hashes() -> dict:
     return {}
 
 
-def _save_skill_hashes(hashes: dict):
-    path = _ai_overlay_file("mcp_skills_hashes.json")
+def _save_skill_hashes(hashes: dict, backend: str = "chroma"):
+    path = _ai_overlay_file(_hash_filename(backend))
     path.parent.mkdir(parents=True, exist_ok=True)
     # Compact + atomic write: the map can hold millions of entries for large
     # sources and is checkpointed periodically during a sync.
@@ -951,13 +964,15 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
         for sk in shard_specs
     }
 
-    previous_hashes = _load_skill_hashes()      # read-only snapshot for readers
-    current_hashes = dict(previous_hashes)      # guarded by hash_lock across shard writers
+    db_backend = vdb.backend_name
+    previous_hashes = _load_skill_hashes(backend=db_backend)  # isolated per VectorDB backend
+    current_hashes = dict(previous_hashes)                    # guarded by hash_lock across shard writers
     hash_lock = threading.Lock()
     last_hash_save = [time.time()]
 
     _prog_set(
         phase="indexing",
+        backend=db_backend,
         sources_total=len(sources),
         reader_threads=n_readers,
         writer_threads=len(shard_specs),
@@ -984,7 +999,7 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
         with hash_lock:
             now = time.time()
             if force or (now - last_hash_save[0] > _HASH_CHECKPOINT_S):
-                _save_skill_hashes(current_hashes)
+                _save_skill_hashes(current_hashes, backend=db_backend)
                 last_hash_save[0] = now
 
     # ---------------- walker ----------------
