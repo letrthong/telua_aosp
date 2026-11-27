@@ -33,5 +33,28 @@
       "visibility": "public",
       "is_private": false
     }
+  ],
+  "aosp_versions": [
+    {
+      "id": "auto",
+      "name": "⚡ Auto-detect (A12-A16+)",
+      "api_level": null,
+      "is_auto": true,
+      "is_custom": false
+    },
+    {
+      "id": "a16",
+      "name": "Android 16 (Baklava / API 36)",
+      "api_level": 36,
+      "is_auto": false,
+      "is_custom": false
+    },
+    {
+      "id": "a14_qssi",
+      "name": "Android 14 QSSI Qualcomm IVI",
+      "api_level": 34,
+      "is_auto": false,
+      "is_custom": true
+    }
   ]
 }
