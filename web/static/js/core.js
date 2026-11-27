@@ -52,6 +52,7 @@ const SETTINGS_TABS = [
   { id: "docs", icon: "📚", label: "Docs", desc: "Sphinx Doc-as-Code" },
   { id: "bi", icon: "📊", label: "BI Studio", desc: "Excel → JSON & Dashboard" },
   { id: "ai", icon: "🤖", label: "AI Agent", desc: "LLM chat + tel/adb tools" },
+  { id: "flow", icon: "🔀", label: "Flow", desc: "Docs → Code → Build → Run → UnitTest demo" },
 ];
 
 function loadTabsVisible() {
@@ -673,12 +674,13 @@ function switchTab(tab) {
   const isDocs = tab === "docs";
   const isBi = tab === "bi";
   const isAi = tab === "ai";
+  const isFlow = tab === "flow";
   const isMirror = tab === "mirror";
   const isPower = tab === "power";
-  const isPipelinesView = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isAi && !isMirror && !isPower;
+  const isPipelinesView = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isAi && !isFlow && !isMirror && !isPower;
 
-  // Collapse Config Files sidebar in Docs, AOSP, Terminal, Logcat, BI, Mirror & Power views to give maximum full-width canvas
-  $(".layout")?.classList.toggle("no-sidebar", isDocs || isAosp || isTerminal || isLogcat || isBi || isAi || isMirror || isPower);
+  // Collapse Config Files sidebar in Docs, AOSP, Terminal, Logcat, BI, Mirror, Power & Flow views to give maximum full-width canvas
+  $(".layout")?.classList.toggle("no-sidebar", isDocs || isAosp || isTerminal || isLogcat || isBi || isAi || isFlow || isMirror || isPower);
 
   $("#view-files")?.classList.toggle("hidden", !isFiles);
   $("#view-aosp")?.classList.toggle("hidden", !isAosp);
@@ -688,6 +690,7 @@ function switchTab(tab) {
   $("#view-docs")?.classList.toggle("hidden", !isDocs);
   $("#view-bi")?.classList.toggle("hidden", !isBi);
   $("#view-ai")?.classList.toggle("hidden", !isAi);
+  $("#view-flow")?.classList.toggle("hidden", !isFlow);
   $("#view-mirror")?.classList.toggle("hidden", !isMirror);
   $("#view-power")?.classList.toggle("hidden", !isPower);
   if (!isMirror && typeof _mirrorKeepInBackground !== "undefined" && !_mirrorKeepInBackground) {
@@ -714,6 +717,10 @@ function switchTab(tab) {
   if (isAi) {
     initAI();
     setTimeout(() => $("#ai-input")?.focus(), 40);
+    return;
+  }
+  if (isFlow) {
+    if (typeof initFlowTab === "function") initFlowTab();
     return;
   }
   if (isLogcat) {

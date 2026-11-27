@@ -241,6 +241,7 @@ logcat, dumpsys diagnostics, git/repo operations, analyzing source code, and aut
 Rules:
 - Prefer the provided tools over guessing. Use run_tel for tel/telua/shell commands.
 - For exact `tel`/`telua` CLI syntax, subcommands, and non-interactive flags (`-y`), consult `AI.md` via `grep_search(query, path="AI.md")` or `search_knowledge` instead of guessing flags.
+- Before running `tel b` (build) or `tel t` (test), always `cd` into the target project directory (Target Path folder, or `AOSP_ROOT_DIR/<SOURCE_PATH>`) — or pass `cwd` to `run_tel`.
 - Use search_knowledge to query local persistent ChromaDB documentation and training data.
 - Use save_training_knowledge to persist verified solutions or architectural notes for long-term recall.
 - You can create, write, and edit code files directly using write_file and edit_file.
@@ -431,6 +432,34 @@ def _cmd_is_blocked(cmd: str) -> Optional[str]:
     return None
 
 
+_TEL_NEEDS_PROJECT_CWD_RE = re.compile(
+    r"^\s*(?:tel|telua)\s+(?:-[a-zA-Z0-9_-]+(?:\s+[^\s-]+)?\s+)*(?:b|build|t|test)\b"
+)
+
+
+def _resolve_target_project_dir(raw_target: str = "") -> str:
+    """Resolve the working directory for `tel b` / `tel t` from Target Path or AOSP config."""
+    t = str(raw_target or "").strip()
+    if t:
+        p = Path(t)
+        if p.is_dir():
+            return str(p)
+        if p.is_file():
+            return str(p.parent)
+        # Heuristic when path is on Linux or doesn't exist locally yet: if last segment has a dot, treat as file
+        base = t.rstrip("/\\")
+        last = base.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+        if "." in last and not last.startswith("."):
+            return base[: -(len(last) + 1)] or base
+        return base
+    info = _get_aosp_build_info()
+    aosp_root = str(info.get("aosp_root_dir") or "").strip().rstrip("/\\")
+    src_rel = str(info.get("source_path") or "").strip().lstrip("/\\")
+    if aosp_root and src_rel:
+        return f"{aosp_root}/{src_rel}"
+    return aosp_root
+
+
 def _tool_run_tel(args: dict) -> str:
     cmd = str(args.get("cmd", "")).strip()
     if not cmd:
@@ -438,10 +467,34 @@ def _tool_run_tel(args: dict) -> str:
     blocked = _cmd_is_blocked(cmd)
     if blocked:
         return f"[BLOCKED] command matches safety rule '{blocked}' and was not executed."
+
+    # Determine working directory: explicit `cwd` -> Target Path dir (for `tel b`/`tel t`) -> toolkit root
+    run_cwd = str(_repo_root())
+    req_cwd = str(args.get("cwd") or "").strip()
+    if req_cwd:
+        if Path(req_cwd).is_dir():
+            run_cwd = req_cwd
+        else:
+            return f"[ERROR] cwd directory not found: {req_cwd}"
+    elif _TEL_NEEDS_PROJECT_CWD_RE.match(cmd):
+        # Fallback chain: active Target Path dir -> AOSP_ROOT_DIR/<SOURCE_PATH> -> AOSP_ROOT_DIR
+        info = _get_aosp_build_info()
+        aosp_root = str(info.get("aosp_root_dir") or "").strip().rstrip("/\\")
+        src_rel = str(info.get("source_path") or "").strip().lstrip("/\\")
+        candidates = [
+            str(getattr(_CHAT_CTX, "target_dir", "") or "").strip(),
+            f"{aosp_root}/{src_rel}" if (aosp_root and src_rel) else "",
+            aosp_root,
+        ]
+        for cand_dir in candidates:
+            if cand_dir and Path(cand_dir).is_dir():
+                run_cwd = cand_dir
+                break
+
     try:
         proc = subprocess.run(
             ["bash", "-c", cmd],
-            cwd=str(_repo_root()),
+            cwd=run_cwd,
             capture_output=True, text=True, errors="replace", timeout=300,
         )
         out = ((proc.stdout or "") + (proc.stderr or "")).strip()
@@ -841,19 +894,23 @@ def _tool_get_aosp_project_info(args: dict) -> str:
     var = info.get("target_variant") or ""
     lunch = f"{prod}-{var}" if prod and var else (prod or "—")
     profs = ", ".join(info.get("profiles") or []) or "—"
+    aosp_root = str(info.get("aosp_root_dir") or "").strip().rstrip("/\\")
+    src_rel = str(info.get("source_path") or "").strip().lstrip("/\\")
+    work_dir = f"{aosp_root}/{src_rel}" if (aosp_root and src_rel) else (aosp_root or "<AOSP_ROOT_DIR>")
     return (
         f"ACTIVE_PROJECT: {active}\n"
-        f"AOSP_ROOT_DIR: {info.get('aosp_root_dir') or '(auto-detect)'}\n"
+        f"AOSP_ROOT_DIR: {aosp_root or '(auto-detect)'}\n"
         f"LUNCH_TARGET: {lunch}\n"
         f"MODULE_NAME: {info.get('module_name') or '—'} (type: {info.get('module_type') or 'apk'})\n"
-        f"SOURCE_PATH: {info.get('source_path') or '—'}\n"
+        f"SOURCE_PATH: {src_rel or '—'}\n"
+        f"FULL_PROJECT_DIR: {work_dir}\n"
         f"OUTPUT_FILE: {info.get('apk_name') or '—'}\n"
         f"DEPLOY_PATH: {info.get('deploy_path') or '—'}\n"
         f"AVAILABLE_PROFILES: {profs}\n"
-        f"BUILD_DEPLOY_COMMANDS:\n"
-        f"  - Build active project: tel -y build  (or: tel -p {active} -y build)\n"
-        f"  - Deploy to board:      tel -y deploy (or: tel -p {active} -y deploy)\n"
-        f"  - Build + Deploy:       tel -p {active} -y\n"
+        f"BUILD_DEPLOY_COMMANDS (always cd into FULL_PROJECT_DIR or AOSP_ROOT_DIR first):\n"
+        f"  - Build active project: cd {work_dir} && tel b -y  (or: tel b -p {active} -y)\n"
+        f"  - Run unit tests:       cd {work_dir} && tel t\n"
+        f"  - Deploy to board:      cd {work_dir} && tel -y deploy\n"
         f"  - Capture logcat:       tel logcat"
     )
 
@@ -1295,11 +1352,13 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "run_tel",
-            "description": "Run a shell / tel / telua / adb command in the toolkit root "
-                           "(e.g. 'tel build', 'tel dump battery', 'adb devices', 'git status').",
+            "description": "Run a shell / tel / telua / adb command (e.g. 'tel b -y', 'tel t', 'tel dump battery', 'adb devices', 'git status'). For `tel b` (build) and `tel t` (test), pass `cwd` as the target project directory (or `cd <target_dir> && tel b -y`); if omitted, automatically uses the active Target Path directory.",
             "parameters": {
                 "type": "object",
-                "properties": {"cmd": {"type": "string", "description": "The command line to run"}},
+                "properties": {
+                    "cmd": {"type": "string", "description": "The command line to run"},
+                    "cwd": {"type": "string", "description": "Optional working directory (required when building/testing inside a specific AOSP module directory)"}
+                },
                 "required": ["cmd"],
             },
         },
@@ -1974,6 +2033,7 @@ def api_ai_chat():
     _CHAT_CTX.project = chat_project
     _CHAT_CTX.aosp_version = chat_version
     _CHAT_CTX.docs_dir = active_docs_dir
+    _CHAT_CTX.target_dir = _resolve_target_project_dir(data.get("target_path", ""))
 
     provider, model, base_url, max_iter, _active_name, _active_model = _ai_settings()
     guardrails = get_ai_guardrails()
@@ -2114,6 +2174,7 @@ def api_ai_chat():
         _CHAT_CTX.project = ""
         _CHAT_CTX.aosp_version = ""
         _CHAT_CTX.docs_dir = ""
+        _CHAT_CTX.target_dir = ""
 
 
 @ai_bp.get("/api/ai/guardrails")

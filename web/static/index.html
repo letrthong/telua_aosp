@@ -47,6 +47,8 @@
         <button class="tab" id="tab-bi" title="Excel to JSON &amp; Power BI Interactive Dashboard">📊 BI Studio</button>
         <button class="tab" id="tab-ai"
           title="AI Agent — chat với LLM, tự chạy tel/adb/file tools để build &amp; debug">🤖 AI Agent</button>
+        <button class="tab" id="tab-flow"
+          title="Interactive Pipeline Flowchart Demo (Docs → Code → Build → Run → Unit Test)">🔀 Flow</button>
       </nav>
     </div>
     <div class="statusbar">
@@ -1092,6 +1094,49 @@
       <div class="ai-input-bar">
         <textarea id="ai-input" rows="2" placeholder="Ask AI agent… (Enter = Send, Shift+Enter = New line)"></textarea>
         <button class="btn primary" id="btn-ai-send" title="Send message to AI agent">➤ Send</button>
+      </div>
+    </section>
+
+    <!-- ============ Flowchart Demo tab ============ -->
+    <section class="editor-pane hidden" id="view-flow">
+      <div class="editor-head">
+        <div class="editor-title">
+          <span class="mono" style="color:var(--accent);font-weight:700">🔀 Workflow Flowchart</span>
+          <span class="chip" style="font-size:11px;">Demo Mode · No AI Required</span>
+          <span id="flow-status-badge" class="run-badge">Demo Ready</span>
+        </div>
+        <div class="editor-actions" style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-3d btn-3d-violet" id="btn-flow-random" title="Continuously animate random running steps for live demo">🎲 Random Live</button>
+          <button class="btn btn-3d btn-3d-emerald" id="btn-flow-run-ok" title="Simulate full happy-path flow">▶ Run Demo</button>
+          <button class="btn btn-3d btn-3d-amber" id="btn-flow-run-retry" title="Simulate Build fail -> Auto-Fix loop -> Pass">🔁 Demo Retry Loop</button>
+          <button class="btn" id="btn-flow-step" title="Advance one stage at a time">⏭ Step Next</button>
+          <button class="btn ghost" id="btn-flow-reset" title="Reset flowchart">↺ Reset</button>
+        </div>
+      </div>
+
+      <div style="padding:14px 16px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:14px;">
+        <p class="meta" style="margin:0;">
+          Visual demo of the end-to-end AOSP engineering loop (<b>Docs → Code → Build → Run → Unit Test</b>). Click any stage card to inspect its inputs, commands, and future integration hooks.
+        </p>
+
+        <!-- 5-Stage Flowchart Canvas -->
+        <div class="flow-board">
+          <div id="flow-canvas" class="flow-canvas"></div>
+          <div id="flow-retry-loop" class="flow-retry-loop">
+            <span>↩ Self-Healing Retry Loop: if <b>Build</b> or <b>Unit Test</b> fails → loop back to <b>💻 Code</b> → rebuild &amp; re-verify</span>
+          </div>
+        </div>
+
+        <!-- Stage Inspector -->
+        <div id="flow-inspector" class="flow-card"></div>
+
+        <!-- Simulated Execution Log -->
+        <div class="flow-card" style="flex:1;display:flex;flex-direction:column;min-height:140px;">
+          <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px;" class="mono">📟 Demo Execution Trace</div>
+          <div id="flow-demo-log" class="flow-demo-log mono">
+            <div class="meta">(Click ▶ Run Demo, 🔁 Demo Retry Loop, or ⏭ Step Next to preview the pipeline flow.)</div>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -2326,6 +2371,7 @@ RANK,FASKey,BRAND,Vehicle Series,Vehicle Type,Latest Popul.,MY,% of VIO,MVP,Bran
   <script src="/static/js/tab_power.js"></script>
   <script src="/static/js/tab_bi.js"></script>
   <script src="/static/js/tab_ai.js"></script>
+  <script src="/static/js/tab_flow.js"></script>
   <script src="/static/js/app.js"></script>
 </body>
 

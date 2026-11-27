@@ -136,6 +136,7 @@ async function aiSend() {
         project: chatProject,
         aosp_version: chatVersion,
         docs_dir: sphinxDocsDir,
+        target_path: targetFile,
       }),
     });
     (res.trace || []).forEach(t => aiAppendToolTrace(t.tool, t.args, t.output));

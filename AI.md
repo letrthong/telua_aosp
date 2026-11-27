@@ -79,14 +79,14 @@ When the user asks you to perform a task, map their intent to the corresponding 
 | User Intent | Recommended Command | Notes |
 |---|---|---|
 | **View General Help & Commands** | `telua` or `telua -h` | Displays primary subcommands, build options, and config paths |
-| **Build & Deploy APK (Full Reboot)** | `telua build` (or `telua b` / `tel b`) | Builds module, pushes APK, reboots device, captures logcat |
-| **Switch Profile & Build** | `telua b -p <profile>` (or `tel b -p car_audio`) | Updates `ACTIVE_PROJECT` in `apk.config` and runs build |
-| **Fast Build & Deploy (No Reboot)** | `telua build --no-reboot` | Uses `stop && start` runtime framework restart |
-| **Compile APK Only (No Push)** | `telua build --start-deploy false` | Skips ADB remount and device transfer |
+| **Build & Deploy APK (Full Reboot)** | `cd <Target_Path> && tel b -y` (or `telua build`) | **Must `cd` into the target project directory first** (e.g. `AOSP_ROOT_DIR/<SOURCE_PATH>` or Target Path folder) before running `tel b` |
+| **Switch Profile & Build** | `cd <Target_Path> && tel b -p <profile> -y` | Updates `ACTIVE_PROJECT` in `apk.config` and runs build from the project directory |
+| **Fast Build & Deploy (No Reboot)** | `cd <Target_Path> && tel b --no-reboot -y` | Uses `stop && start` runtime framework restart |
+| **Compile APK Only (No Push)** | `cd <Target_Path> && tel b --start-deploy false -y` | Skips ADB remount and device transfer |
 | **Check Environment & Device Status** | `telua info` (or `telua --info`) | Verifies lunch target, module name, paths, and connected DUT |
 | **Sync Source Code via Repo** | `telua --repo-sync` | Runs `repo sync` + executes post-sync hook |
 | **Sync with Clean Reset** | `telua --repo-sync --repo-reset -y` | Hard resets dirty repos before sync (AI must pass `-y`) |
-| **Run Unit Tests** | `telua t` (or `tel t` / `telua test` / `telua --test-mode true`) | Runs project test script configured in `apk.config` |
+| **Run Unit Tests** | `cd <Target_Path> && tel t` (or `telua test` / `telua --test-mode true`) | **Must `cd` into the target project directory first** before running `tel t` |
 | **Find & Replace Text Across Files** | `telua replace <old> <new> [path]` | Fast literal string replacement across directory or single file |
 | **Clean Java Source Files** | `telua java [clean\|diff\|all\|path]` (alias: `telua clean-java`) | Strips trailing whitespace, expands tabs, normalizes `if (x)`, K&R braces & Google Java Style |
 | **Report Unused Java Methods & Style** | `telua java report [diff\|all\|path]` (alias: `telua clean-java report`) | 6-in-1 read-only report: unused methods, unused params, whitespace, `google-java-format`, unused imports & unused private fields |
