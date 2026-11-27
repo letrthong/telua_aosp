@@ -920,32 +920,56 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
         return {"ok": False, "error": "No active skill sources found to index.", "indexed": 0}
 
     try:
-        import chromadb
+        import chromadb  # noqa: F401
     except ImportError:
         return {"ok": False, "error": "chromadb package not installed. Run: pip install chromadb", "indexed": 0}
 
     from .code_structure_engine import CodeStructureEngine
+    try:
+        from .chroma_shards import shard_key as _shard_key, get_shard_collection as _get_shard_collection
+    except ImportError:
+        from chroma_shards import shard_key as _shard_key, get_shard_collection as _get_shard_collection
 
     cfg = get_mcp_skill_config()
     n_readers = _cfg_int(cfg, "sync_reader_threads", min(8, max(2, os.cpu_count() or 4)), 1, 32)
     batch_size = _cfg_int(cfg, "sync_batch_size", 64, 8, 1000)
     max_file_bytes = _cfg_int(cfg, "sync_max_file_kb", 2048, 16, 102400) * 1024
 
-    chroma_dir = _repo_root() / "ai_agent" / "data"
-    chroma_dir.mkdir(parents=True, exist_ok=True)
-    client = chromadb.PersistentClient(path=str(chroma_dir))
-    col = client.get_or_create_collection(
-        name=collection_name,
-        metadata={"description": "Telua Multi-Source Java/Android & Agent Skills Knowledge Base"}
-    )
+    chroma_base = _repo_root() / "ai_agent" / "data"
+    chroma_base.mkdir(parents=True, exist_ok=True)
+
+    # Sharded ChromaDB: 1 independent SQLite DB & 1 dedicated writer thread per (project, aosp_version)
+    shard_specs: Dict[str, Tuple[str, str]] = {}
+    for src in sources:
+        p = str(src.get("project") or "aosp_aaos")
+        v = str(src.get("aosp_version") or "")
+        sk = _shard_key(p, v)
+        if sk not in shard_specs:
+            shard_specs[sk] = (p, v)
+
+    shard_cols = {
+        sk: _get_shard_collection(p, v, collection_name=collection_name, base_dir=chroma_base)
+        for sk, (p, v) in shard_specs.items()
+    }
+    shard_queues: Dict[str, "queue.Queue"] = {
+        sk: queue.Queue(maxsize=max(64, n_readers * 16))
+        for sk in shard_specs
+    }
 
     previous_hashes = _load_skill_hashes()      # read-only snapshot for readers
-    current_hashes = dict(previous_hashes)      # owned by the writer thread only
+    current_hashes = dict(previous_hashes)      # guarded by hash_lock across shard writers
+    hash_lock = threading.Lock()
+    last_hash_save = [time.time()]
 
-    _prog_set(phase="indexing", sources_total=len(sources), reader_threads=n_readers)
+    _prog_set(
+        phase="indexing",
+        sources_total=len(sources),
+        reader_threads=n_readers,
+        writer_threads=len(shard_specs),
+        shards=sorted(shard_specs.keys()),
+    )
 
     file_q: "queue.Queue" = queue.Queue(maxsize=50000)
-    doc_q: "queue.Queue" = queue.Queue(maxsize=max(64, n_readers * 16))
     abort = threading.Event()
     SENTINEL = None
 
@@ -960,6 +984,13 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
             except queue.Full:
                 if stopped():
                     return False
+
+    def checkpoint_hashes(force: bool = False) -> None:
+        with hash_lock:
+            now = time.time()
+            if force or (now - last_hash_save[0] > _HASH_CHECKPOINT_S):
+                _save_skill_hashes(current_hashes)
+                last_hash_save[0] = now
 
     # ---------------- walker ----------------
     def walker():
@@ -986,12 +1017,15 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
         title, summary = _parse_skill_metadata_text(rel.rsplit("/", 1)[-1], content[:1500])
         s = _make_skill_entry(src, rel, ext, size, title, summary)
         is_priv = s["is_private"]
+        proj = str(s.get("project") or "aosp_aaos").strip().lower()
+        aosp_ver = str(s.get("aosp_version") or "").strip().lower()
+        api_lvl = s.get("api_level") or 0
         metadata = {
             "source_id": s_id,
             "source_name": s["source_name"],
-            "project": s.get("project") or "aosp_aaos",
-            "aosp_version": s.get("aosp_version") or "",
-            "api_level": s.get("api_level") or 0,
+            "project": proj,
+            "aosp_version": aosp_ver,
+            "api_level": api_lvl,
             "branch": s.get("branch") or "",
             "category": s["category"],
             "name": s["name"],
@@ -1010,6 +1044,7 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
             chunks = CodeStructureEngine.chunk_code_for_vector_db(content, rel, metadata, max_chunk_chars=4000)
             return [(ch["id"], ch["document"], ch["metadata"]) for ch in chunks]
         full_doc = (
+            f"PROJECT: {proj} | AOSP_VERSION: {aosp_ver or 'generic'} | API_LEVEL: {api_lvl or 'N/A'}\n"
             f"SOURCE: {s['source_name']} ({s_id})\n"
             f"CATEGORY: {s['category']}\n"
             f"TITLE: {s['title']}\n"
@@ -1020,124 +1055,140 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
         return [(doc_id, full_doc[:15000], metadata)]
 
     def reader():
-        while True:
-            try:
-                item = file_q.get(timeout=0.5)
-            except queue.Empty:
-                if stopped():
-                    return
-                continue
-            if item is SENTINEL or stopped():
-                put(doc_q, SENTINEL)
-                return
-            src, full, rel, ext, size, mtime = item
-            doc_id = _skill_doc_id(src["id"], rel)
-            try:
-                if size > max_file_bytes:
-                    _prog_inc(files_processed=1, files_too_large=1, bytes_processed=size)
-                    continue
-                prev = previous_hashes.get(doc_id) if incremental else None
-                mtime_r = round(mtime, 3)
-                # Fast path: unchanged size + mtime -> skip without reading the file
-                if isinstance(prev, dict) and prev.get("s") == size and prev.get("m") == mtime_r:
-                    _prog_inc(files_processed=1, files_skipped=1, bytes_processed=size)
-                    continue
-                with open(full, "r", encoding="utf-8", errors="replace") as fh:
-                    content = fh.read()
-                if not content.strip():
-                    _prog_inc(files_processed=1, files_skipped=1, bytes_processed=size)
-                    continue
-                file_hash = hashlib.md5(content.encode("utf-8")).hexdigest()
-                hash_entry = {"h": file_hash, "m": mtime_r, "s": size}
-                prev_h = prev.get("h") if isinstance(prev, dict) else prev
-                if incremental and prev_h == file_hash:
-                    # Content unchanged (only touched / legacy hash format) -> refresh entry only
-                    put(doc_q, ("hash", doc_id, hash_entry, None))
-                    _prog_inc(files_processed=1, files_skipped=1, bytes_processed=size)
-                    continue
-                records = build_records(src, rel, ext, size, content)
-                _prog_set(current_file=f"{src['id']}/{rel}")
-                put(doc_q, ("docs", doc_id, hash_entry, records))
-                _prog_inc(files_processed=1, bytes_processed=size)
-            except Exception as e:
-                _prog_inc(files_processed=1, files_failed=1, bytes_processed=size)
-                _prog_error(f"{src['id']}/{rel}: {e}")
-
-    # ---------------- writer (single ChromaDB writer) ----------------
-    def writer():
-        ids: list = []
-        docs: list = []
-        metas: list = []
-        seen: set = set()          # per-batch: Chroma rejects duplicate ids in one upsert
-        pending: list = []         # (doc_id, hash_entry, is_indexed_file)
-        last_save = time.time()
-
-        def flush():
-            nonlocal ids, docs, metas, seen, pending, last_save
-            ok = True
-            if ids:
-                try:
-                    col.upsert(ids=ids, documents=docs, metadatas=metas)
-                    _prog_inc(chunks_written=len(ids), batches_written=1)
-                except Exception as e:
-                    ok = False
-                    _prog_error(f"upsert: {e}")
-            n_files = sum(1 for p in pending if p[2])
-            if ok:
-                for did, he, _ in pending:
-                    current_hashes[did] = he
-                if n_files:
-                    _prog_inc(files_indexed=n_files)
-            elif n_files:
-                _prog_inc(files_failed=n_files)
-            ids, docs, metas, seen, pending = [], [], [], set(), []
-            if time.time() - last_save > _HASH_CHECKPOINT_S:
-                _save_skill_hashes(current_hashes)
-                last_save = time.time()
-
-        sentinels = 0
         try:
-            while sentinels < n_readers:
+            while True:
                 try:
-                    item = doc_q.get(timeout=0.5)
+                    item = file_q.get(timeout=0.5)
                 except queue.Empty:
                     if stopped():
-                        break
+                        return
                     continue
-                if item is SENTINEL:
-                    sentinels += 1
-                    continue
-                kind, did, he, records = item
-                if kind == "docs":
-                    for rid, doc, meta in records:
-                        if rid in seen:
-                            continue
-                        seen.add(rid)
-                        ids.append(rid)
-                        docs.append(doc)
-                        metas.append(meta)
-                    pending.append((did, he, True))
-                else:
-                    pending.append((did, he, False))
-                if len(ids) >= batch_size or len(pending) >= 2000:
-                    flush()
-            flush()
-        except Exception as e:
-            _prog_error(f"writer: {e}")
-            abort.set()
+                if item is SENTINEL or stopped():
+                    return
+                src, full, rel, ext, size, mtime = item
+                doc_id = _skill_doc_id(src["id"], rel)
+                s_key = _shard_key(src.get("project"), src.get("aosp_version"))
+                target_q = shard_queues[s_key]
+                try:
+                    if size > max_file_bytes:
+                        _prog_inc(files_processed=1, files_too_large=1, bytes_processed=size)
+                        continue
+                    prev = previous_hashes.get(doc_id) if incremental else None
+                    mtime_r = round(mtime, 3)
+                    # Fast path: unchanged size + mtime + shard key -> skip without reading the file
+                    if (isinstance(prev, dict)
+                            and prev.get("s") == size
+                            and prev.get("m") == mtime_r
+                            and prev.get("k") == s_key):
+                        _prog_inc(files_processed=1, files_skipped=1, bytes_processed=size)
+                        continue
+                    with open(full, "r", encoding="utf-8", errors="replace") as fh:
+                        content = fh.read()
+                    if not content.strip():
+                        _prog_inc(files_processed=1, files_skipped=1, bytes_processed=size)
+                        continue
+                    file_hash = hashlib.md5(content.encode("utf-8")).hexdigest()
+                    hash_entry = {"h": file_hash, "m": mtime_r, "s": size, "k": s_key}
+                    prev_h = prev.get("h") if isinstance(prev, dict) else prev
+                    prev_k = prev.get("k") if isinstance(prev, dict) else None
+                    if incremental and prev_h == file_hash and prev_k == s_key:
+                        # Content & shard unchanged (only touched) -> refresh mtime entry only
+                        put(target_q, ("hash", doc_id, hash_entry, None))
+                        _prog_inc(files_processed=1, files_skipped=1, bytes_processed=size)
+                        continue
+                    records = build_records(src, rel, ext, size, content)
+                    _prog_set(current_file=f"[{s_key}] {src['id']}/{rel}")
+                    put(target_q, ("docs", doc_id, hash_entry, records))
+                    _prog_inc(files_processed=1, bytes_processed=size)
+                except Exception as e:
+                    _prog_inc(files_processed=1, files_failed=1, bytes_processed=size)
+                    _prog_error(f"{src['id']}/{rel}: {e}")
         finally:
+            for q in shard_queues.values():
+                put(q, SENTINEL)
+
+    # ---------------- writers (1 dedicated writer thread per ChromaDB shard) ----------------
+    def make_writer(s_key: str):
+        col = shard_cols[s_key]
+        doc_q = shard_queues[s_key]
+
+        def writer():
+            ids: list = []
+            docs: list = []
+            metas: list = []
+            seen: set = set()          # per-batch: Chroma rejects duplicate ids in one upsert
+            pending: list = []         # (doc_id, hash_entry, is_indexed_file)
+
+            def flush():
+                nonlocal ids, docs, metas, seen, pending
+                ok = True
+                if ids:
+                    try:
+                        col.upsert(ids=ids, documents=docs, metadatas=metas)
+                        _prog_inc(chunks_written=len(ids), batches_written=1)
+                    except Exception as e:
+                        ok = False
+                        _prog_error(f"upsert[{s_key}]: {e}")
+                n_files = sum(1 for p in pending if p[2])
+                if ok:
+                    with hash_lock:
+                        for did, he, _ in pending:
+                            current_hashes[did] = he
+                    if n_files:
+                        _prog_inc(files_indexed=n_files)
+                elif n_files:
+                    _prog_inc(files_failed=n_files)
+                ids, docs, metas, seen, pending = [], [], [], set(), []
+                checkpoint_hashes(force=False)
+
+            sentinels = 0
             try:
-                _save_skill_hashes(current_hashes)
+                while sentinels < n_readers:
+                    try:
+                        item = doc_q.get(timeout=0.5)
+                    except queue.Empty:
+                        if stopped():
+                            break
+                        continue
+                    if item is SENTINEL:
+                        sentinels += 1
+                        continue
+                    kind, did, he, records = item
+                    if kind == "docs":
+                        for rid, doc, meta in records:
+                            if rid in seen:
+                                continue
+                            seen.add(rid)
+                            ids.append(rid)
+                            docs.append(doc)
+                            metas.append(meta)
+                        pending.append((did, he, True))
+                    else:
+                        pending.append((did, he, False))
+                    if len(ids) >= batch_size or len(pending) >= 2000:
+                        flush()
+                flush()
             except Exception as e:
-                _prog_error(f"save hashes: {e}")
+                _prog_error(f"writer[{s_key}]: {e}")
+                abort.set()
+
+        return writer
 
     threads = [threading.Thread(target=walker, name="ChromaSyncWalker", daemon=True)]
     threads += [threading.Thread(target=reader, name=f"ChromaSyncReader-{i}", daemon=True) for i in range(n_readers)]
-    threads.append(threading.Thread(target=writer, name="ChromaSyncWriter", daemon=True))
+    threads += [
+        threading.Thread(target=make_writer(sk), name=f"ChromaSyncWriter-{sk}", daemon=True)
+        for sk in shard_specs
+    ]
     for t in threads:
         t.start()
     for t in threads:
         t.join()
+
+    try:
+        checkpoint_hashes(force=True)
+    except Exception as e:
+        _prog_error(f"save hashes: {e}")
 
     cancelled = _SYNC_CANCEL.is_set()
     p = get_sync_progress()
@@ -1158,10 +1209,11 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
         "errors": p["errors"],
         "total_files": p["files_discovered"],
         "sources_count": len(sources),
+        "shards": sorted(shard_specs.keys()),
         "elapsed_s": p["elapsed_s"],
         "last_sync": timestamp,
         "collection": collection_name,
-        "chroma_path": str(chroma_dir),
+        "chroma_path": str(chroma_base / "shards"),
     }
 
 

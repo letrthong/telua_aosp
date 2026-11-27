@@ -8,6 +8,8 @@
 const AI_CHAT_HISTORY_KEY = "telua_web_ai_chat_history";
 const AI_CHAT_LOG_KEY = "telua_web_ai_chat_log";
 const AI_INPUT_DRAFT_KEY = "telua_web_ai_input_draft";
+const AI_CHAT_PROJECT_KEY = "telua_web_ai_chat_project";
+const AI_CHAT_VERSION_KEY = "telua_web_ai_chat_version";
 
 let _aiInitialized = false;
 let _aiBusy = false;
@@ -122,9 +124,16 @@ async function aiSend() {
   aiSetBusy(true);
 
   try {
+    const chatProject = ($("#ai-chat-project")?.value || "").trim();
+    const chatVersion = ($("#ai-chat-version")?.value || "").trim();
     const res = await api("/api/ai/chat", {
       method: "POST",
-      body: JSON.stringify({ message: fullMsg, history: _aiHistory.slice(-10) }),
+      body: JSON.stringify({
+        message: fullMsg,
+        history: _aiHistory.slice(-10),
+        project: chatProject,
+        aosp_version: chatVersion,
+      }),
     });
     (res.trace || []).forEach(t => aiAppendToolTrace(t.tool, t.args, t.output));
     const answer = res.answer || res.error || "(no answer)";
@@ -159,6 +168,24 @@ async function initAI() {
       } catch { /* ignore */ }
     });
   }
+
+  $("#ai-chat-project")?.addEventListener("change", (e) => {
+    try { localStorage.setItem(AI_CHAT_PROJECT_KEY, e.target.value || ""); } catch { /* ignore */ }
+  });
+  $("#ai-chat-version")?.addEventListener("change", (e) => {
+    try { localStorage.setItem(AI_CHAT_VERSION_KEY, e.target.value || ""); } catch { /* ignore */ }
+  });
+  // Populate Chat Project / AOSP Version selectors immediately on tab init
+  renderAIChatContextSelects();
+  api("/api/ai/mcp/config").then(cfgRes => {
+    if (cfgRes?.projects || cfgRes?.config?.projects) {
+      _aiProjects = cfgRes.projects || cfgRes.config?.projects || DEFAULT_PROJECTS;
+    }
+    if (cfgRes?.aosp_versions || cfgRes?.config?.aosp_versions) {
+      _aiAospVersions = cfgRes.aosp_versions || cfgRes.config?.aosp_versions || DEFAULT_AOSP_VERSIONS;
+    }
+    renderAIChatContextSelects();
+  }).catch(() => { /* optional */ });
 
   $("#btn-ai-send")?.addEventListener("click", aiSend);
   $("#ai-input")?.addEventListener("keydown", (e) => {
@@ -839,6 +866,34 @@ let _aiProjects = [...DEFAULT_PROJECTS];
 let _aiAospVersions = [...DEFAULT_AOSP_VERSIONS];
 let _aiMcpSources = [];
 
+function renderAIChatContextSelects() {
+  const projSel = $("#ai-chat-project");
+  if (projSel) {
+    let savedProj = "";
+    try { savedProj = localStorage.getItem(AI_CHAT_PROJECT_KEY) || ""; } catch { /* ignore */ }
+    const cur = projSel.value || savedProj;
+    const enabledProjs = _aiProjects.filter(p => p.enabled !== false);
+    projSel.innerHTML =
+      `<option value="">All Projects</option>` +
+      enabledProjs.map(p =>
+        `<option value="${esc(p.id)}" ${p.id === cur ? "selected" : ""}>${esc(p.name || p.id)}</option>`
+      ).join("");
+  }
+
+  const verSel = $("#ai-chat-version");
+  if (verSel) {
+    let savedVer = "";
+    try { savedVer = localStorage.getItem(AI_CHAT_VERSION_KEY) || ""; } catch { /* ignore */ }
+    const cur = verSel.value || savedVer;
+    const versions = _aiAospVersions.filter(v => v.id && v.id !== "auto");
+    verSel.innerHTML =
+      `<option value="">All AOSP Versions</option>` +
+      versions.map(v =>
+        `<option value="${esc(v.id)}" ${v.id === cur ? "selected" : ""}>${esc(v.name || v.id)}</option>`
+      ).join("");
+  }
+}
+
 function renderAIProjectsSelect(selectedId) {
   const sel = $("#ai-mcp-new-project");
   if (!sel) return;
@@ -846,10 +901,11 @@ function renderAIProjectsSelect(selectedId) {
   const currentVal = selectedId !== undefined ? selectedId : (sel.value || (enabledList[0] && enabledList[0].id) || "");
   const opts = enabledList.length
     ? enabledList.map(p =>
-        `<option value="${esc(p.id)}" ${p.id === currentVal ? "selected" : ""}>${esc(p.name || p.id)} (${esc(p.id)})</option>`
-      ).join("")
+      `<option value="${esc(p.id)}" ${p.id === currentVal ? "selected" : ""}>${esc(p.name || p.id)} (${esc(p.id)})</option>`
+    ).join("")
     : `<option value="" disabled selected>(No enabled projects)</option>`;
   sel.innerHTML = opts + `<option value="__manage__" style="color:var(--accent);font-weight:600;">➕ Manage / Edit projects...</option>`;
+  renderAIChatContextSelects();
 }
 
 function renderAIProjectsList() {
@@ -907,6 +963,7 @@ function renderAIAospVersionsSelect(selectedId) {
   sel.innerHTML = _aiAospVersions.map(v =>
     `<option value="${esc(v.id)}" ${v.id === currentVal ? "selected" : ""}>${esc(v.name || v.id)}</option>`
   ).join("") + `<option value="__manage__" style="color:var(--accent);font-weight:600;">➕ Manage / Add custom version...</option>`;
+  renderAIChatContextSelects();
 }
 
 function renderAIAospVersionsList() {
@@ -1045,7 +1102,13 @@ async function loadAIMcpStatus() {
     const pill = $("#ai-mcp-status-pill");
     if (pill) {
       if (st.installed) {
-        pill.textContent = `ChromaDB: ${st.doc_count || 0} docs`;
+        const sc = st.shard_count || (st.shards ? st.shards.length : 0);
+        pill.textContent = sc > 0
+          ? `ChromaDB: ${Number(st.doc_count || 0).toLocaleString()} docs (${sc} shard${sc > 1 ? "s" : ""})`
+          : `ChromaDB: ${Number(st.doc_count || 0).toLocaleString()} docs`;
+        if (Array.isArray(st.shards) && st.shards.length) {
+          pill.title = st.shards.map(sh => `${sh.key}: ${sh.doc_count} docs`).join("\n");
+        }
         pill.className = "chip ok";
       } else {
         pill.textContent = "ChromaDB: uninitialized";
@@ -1183,7 +1246,7 @@ function renderAIMcpSyncProgress(p) {
       (p.files_too_large ? ` · too large ${n(p.files_too_large)}` : "") +
       (p.files_failed ? ` · failed ${n(p.files_failed)}` : "") +
       ` · ${p.files_per_s || 0} files/s, ${p.mb_per_s || 0} MB/s` +
-      ` · ${p.reader_threads || 0} readers + 1 writer` +
+      ` · ${p.reader_threads || 0} readers + ${p.writer_threads || 1} shard writer${(p.writer_threads || 1) > 1 ? "s" : ""}` +
       ` · elapsed ${_fmtDuration(p.elapsed_s)}`;
   }
   const fileEl = $("#ai-mcp-sync-progress-file");

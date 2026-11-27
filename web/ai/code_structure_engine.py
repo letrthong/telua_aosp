@@ -600,6 +600,12 @@ class CodeStructureEngine:
         rel_path = metadata_base.get("rel_path", filename_or_ext)
         source_id = metadata_base.get("source_id", "source")
 
+        project = str(metadata_base.get("project") or "aosp_aaos").strip().lower()
+        aosp_ver = str(metadata_base.get("aosp_version") or "").strip().lower()
+        api_lvl = metadata_base.get("api_level") or "N/A"
+        branch = metadata_base.get("branch") or "main"
+        ver_label = aosp_ver or "generic"
+
         # If no methods found (or non-code file), fallback to smart line chunking
         if not struct.methods:
             lines = content.splitlines()
@@ -611,11 +617,15 @@ class CodeStructureEngine:
                     continue
                 part_num = (i // step) + 1
                 doc_text = (
+                    f"PROJECT: {project} | AOSP_VERSION: {ver_label} | API_LEVEL: {api_lvl}\n"
                     f"SOURCE: {metadata_base.get('source_name', source_id)}\n"
                     f"FILE: {rel_path} (Lines {i+1}-{min(len(lines), i+step)})\n\n"
                     f"{chunk_body}"
                 )
                 chunk_meta = dict(metadata_base)
+                chunk_meta["project"] = project
+                chunk_meta["aosp_version"] = aosp_ver
+                chunk_meta["api_level"] = api_lvl if isinstance(api_lvl, int) else 0
                 chunk_meta["chunk_type"] = "text_range"
                 chunk_meta["start_line"] = i + 1
                 chunk_meta["end_line"] = min(len(lines), i + step)
@@ -625,11 +635,6 @@ class CodeStructureEngine:
             return chunks
 
         # Chunk 0: Class & Architecture Context
-        project = metadata_base.get("project") or "aosp_aaos"
-        aosp_ver = metadata_base.get("aosp_version") or "unknown"
-        api_lvl = metadata_base.get("api_level") or "N/A"
-        branch = metadata_base.get("branch") or "main"
-
         class_summary_lines = []
         for c in struct.classes:
             class_summary_lines.append(f"Class: {c.signature}")
@@ -637,7 +642,7 @@ class CodeStructureEngine:
 
         context_doc = (
             f"// ==============================================================================\n"
-            f"// PROJECT: {project} | AOSP_VERSION: {aosp_ver} | API_LEVEL: {api_lvl} | BRANCH: {branch}\n"
+            f"// PROJECT: {project} | AOSP_VERSION: {ver_label} | API_LEVEL: {api_lvl} | BRANCH: {branch}\n"
             f"// SOURCE: {metadata_base.get('source_name', source_id)}\n"
             f"// FILE: {rel_path} (Total Lines: {struct.total_lines}, Language: {struct.language.upper()})\n"
             f"// PACKAGE: {struct.package}\n"
@@ -667,7 +672,7 @@ class CodeStructureEngine:
         for idx, m in enumerate(struct.methods):
             doc_lines = [
                 f"// ==============================================================================",
-                f"// PROJECT: {project} | AOSP_VERSION: {aosp_ver} | API_LEVEL: {api_lvl} | BRANCH: {branch}",
+                f"// PROJECT: {project} | AOSP_VERSION: {ver_label} | API_LEVEL: {api_lvl} | BRANCH: {branch}",
                 f"// SOURCE: {metadata_base.get('source_name', source_id)}",
                 f"// FILE: {rel_path} (Lines {m.start_line}-{m.end_line})",
                 f"// CLASS: {m.enclosing_class or 'Global'}",

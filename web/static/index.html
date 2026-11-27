@@ -40,11 +40,13 @@
           title="Live Android Logcat stream with realtime search, tag &amp; level filter">📱 Logcat</button>
         <button class="tab" id="tab-mirror" title="Live Android Screen Mirroring &amp; Remote Control">📱
           Mirror</button>
-        <button class="tab" id="tab-power" title="Target Power Controls — Dual Output Hardware Switches (Ngõ ra 1 &amp; Ngõ ra 2)">⚡ Power</button>
+        <button class="tab" id="tab-power"
+          title="Target Power Controls — Dual Output Hardware Switches (Ngõ ra 1 &amp; Ngõ ra 2)">⚡ Power</button>
         <button class="tab" id="tab-docs" title="Sphinx Doc-as-Code — WYSIWYG Quill.js &amp; RST Converter">📚
           Docs</button>
         <button class="tab" id="tab-bi" title="Excel to JSON &amp; Power BI Interactive Dashboard">📊 BI Studio</button>
-        <button class="tab" id="tab-ai" title="AI Agent — chat với LLM, tự chạy tel/adb/file tools để build &amp; debug">🤖 AI Agent</button>
+        <button class="tab" id="tab-ai"
+          title="AI Agent — chat với LLM, tự chạy tel/adb/file tools để build &amp; debug">🤖 AI Agent</button>
       </nav>
     </div>
     <div class="statusbar">
@@ -55,7 +57,8 @@
       </div>
       <div class="chip" id="chip-adb" title="Connected ADB devices">adb: —</div>
       <div class="chip" id="chip-ram" title="System RAM">ram: —</div>
-      <button class="btn ghost" id="btn-settings" title="⚙ Settings — UI theme (background color) &amp; tab visibility">⚙</button>
+      <button class="btn ghost" id="btn-settings"
+        title="⚙ Settings — UI theme (background color) &amp; tab visibility">⚙</button>
       <button class="btn ghost" id="btn-refresh" title="Reload status &amp; file list">⟳ Refresh</button>
     </div>
   </header>
@@ -431,8 +434,10 @@
           <span id="power-target-meta" class="meta mono" style="font-size:11px;">AOSP Automotive Target Board</span>
         </div>
         <div class="editor-actions">
-          <button class="btn jade-btn" id="btn-master-power-on" title="Turn ON both Output 1 and Output 2">⚡ Master ALL ON</button>
-          <button class="btn danger" id="btn-master-power-off" title="Turn OFF both Output 1 and Output 2">⏻ Master ALL OFF</button>
+          <button class="btn jade-btn" id="btn-master-power-on" title="Turn ON both Output 1 and Output 2">⚡ Master ALL
+            ON</button>
+          <button class="btn danger" id="btn-master-power-off" title="Turn OFF both Output 1 and Output 2">⏻ Master ALL
+            OFF</button>
           <button class="btn ghost" id="btn-power-refresh" title="Refresh Power Status">↻ Refresh</button>
         </div>
       </div>
@@ -441,7 +446,7 @@
       <div class="power-container">
         <!-- Dual Independent Switches Grid -->
         <div class="power-switches-grid">
-          
+
           <!-- Switch 1: Ngõ ra 1 (Main Power BATT+ 12V) -->
           <div class="power-card channel-active" id="card-power-out1">
             <div class="power-card-header">
@@ -452,7 +457,7 @@
               <span class="power-led on" id="led-out1"></span>
             </div>
             <div class="power-card-desc">Nguồn chính cấp điện áp 12V nuôi board mạch AOSP / IVI Head-Unit</div>
-            
+
             <div class="power-telemetry-row">
               <div class="power-metric">
                 <span class="p-label">Điện áp:</span>
@@ -476,7 +481,7 @@
                 <span>⏻ TẮT NGÕ RA 1</span>
               </button>
             </div>
-            
+
             <div class="power-card-footer">
               <span>Trạng thái: <b id="status-text-out1" class="text-green">BẬT (ACTIVE 🟢)</b></span>
             </div>
@@ -491,8 +496,9 @@
               </div>
               <span class="power-led on" id="led-out2"></span>
             </div>
-            <div class="power-card-desc">Tín hiệu mở khóa điện ô tô (ACC / Ignition) điều khiển chu trình Thức / Ngủ (STR)</div>
-            
+            <div class="power-card-desc">Tín hiệu mở khóa điện ô tô (ACC / Ignition) điều khiển chu trình Thức / Ngủ
+              (STR)</div>
+
             <div class="power-telemetry-row">
               <div class="power-metric">
                 <span class="p-label">Điện áp:</span>
@@ -516,7 +522,7 @@
                 <span>⏻ TẮT NGÕ RA 2</span>
               </button>
             </div>
-            
+
             <div class="power-card-footer">
               <span>Trạng thái: <b id="status-text-out2" class="text-green">BẬT (ACTIVE 🟢)</b></span>
             </div>
@@ -553,7 +559,8 @@
             <div class="power-banner-title">Chế độ Lưu Cấu Hình (Config Persisted Mode)</div>
             <div class="meta" style="font-size:12px;margin-top:2px;">
               Trạng thái 2 ngõ ra hiện được lưu trữ an toàn trong <code>config/target_power_state.json</code>.
-              Khi đấu nối phần cứng thật (Relay USB / Smart Plug / GPIO), module <code>web/telua_web_power_controls.py</code> sẽ kích hoạt tín hiệu đóng ngắt mạch điện vật lý tương ứng.
+              Khi đấu nối phần cứng thật (Relay USB / Smart Plug / GPIO), module
+              <code>web/telua_web_power_controls.py</code> sẽ kích hoạt tín hiệu đóng ngắt mạch điện vật lý tương ứng.
             </div>
           </div>
           <div class="power-banner-time meta mono" id="power-last-changed" style="font-size:11px;">
@@ -576,7 +583,9 @@
                 </tr>
               </thead>
               <tbody id="tbody-power-history">
-                <tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Chưa có sự kiện nào</td></tr>
+                <tr>
+                  <td colspan="5" style="text-align:center;color:var(--text-muted);">Chưa có sự kiện nào</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -1045,25 +1054,42 @@
           <span class="mono" style="color:var(--accent);font-weight:700">🤖 AI Agent</span>
           <span id="ai-model-badge" class="chip" title="Active LLM provider &amp; model">model: —</span>
           <span id="ai-status-badge" class="run-badge">Idle</span>
-          <span id="ai-header-token-badge" class="chip" style="font-size:11px;cursor:pointer;background:rgba(255,255,255,0.06);" title="Click to open config &amp; view detailed token statistics">📊 This month: 0 tokens</span>
+          <span id="ai-header-token-badge" class="chip"
+            style="font-size:11px;cursor:pointer;background:rgba(255,255,255,0.06);"
+            title="Click to open config &amp; view detailed token statistics">📊 This month: 0 tokens</span>
         </div>
         <div class="editor-actions">
-          <button class="btn" id="btn-ai-config" title="⚙ Configure AI Provider — endpoint, model &amp; API key">⚙ Config</button>
+          <button class="btn" id="btn-ai-config" title="⚙ Configure AI Provider — endpoint, model &amp; API key">⚙
+            Config</button>
           <button class="btn" id="btn-ai-clear" title="Clear conversation">🧹 Clear</button>
         </div>
       </div>
-      <!-- Target File & Auto-Coding Bar -->
-      <div class="ai-target-bar" style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:rgba(255,255,255,0.025);border-bottom:1px solid var(--border);flex-shrink:0;">
-        <span class="mono" style="font-size:11px;font-weight:700;color:var(--accent);white-space:nowrap;">📁 Target Path (File / Folder):</span>
-        <input type="text" id="ai-target-file" class="term-input mono" style="flex:1;font-size:11px;padding:4px 8px;min-width:180px;"
+      <!-- Target File & Auto-Coding Bar + Context Filter (Project / AOSP Version) -->
+      <div class="ai-target-bar"
+        style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:rgba(255,255,255,0.025);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+          <span class="mono" style="font-size:11px;font-weight:700;color:var(--accent);white-space:nowrap;">🎯 Context:</span>
+          <select id="ai-chat-project" class="theme-select" style="font-size:11px;padding:3px 6px;max-width:165px;"
+            title="Filter ChromaDB knowledge search by Project"></select>
+          <select id="ai-chat-version" class="theme-select" style="font-size:11px;padding:3px 6px;max-width:170px;"
+            title="Filter ChromaDB knowledge search by AOSP Version (avoids mixing A12 vs A16)"></select>
+        </div>
+        <span class="mono" style="font-size:11px;font-weight:700;color:var(--accent);white-space:nowrap;">📁 Target Path:</span>
+        <input type="text" id="ai-target-file" class="term-input mono"
+          style="flex:1;font-size:11px;padding:4px 8px;min-width:180px;"
           placeholder="Path to file or folder (e.g., src/com/android/car/ or src/CarService.java)">
-        <button class="btn" id="btn-ai-target-read" title="Inspect file or scan folder structure" style="font-size:11px;padding:4px 9px;white-space:nowrap;">📖 Read / Scan</button>
-        <button class="btn primary" id="btn-ai-target-code" title="Ask AI to autonomously code files in target path" style="font-size:11px;padding:4px 10px;white-space:nowrap;">⚡ Auto-Code</button>
+        <button class="btn" id="btn-ai-target-read" title="Inspect file or scan folder structure"
+          style="font-size:11px;padding:4px 9px;white-space:nowrap;">📖 Read / Scan</button>
+        <button class="btn primary" id="btn-ai-target-code" title="Ask AI to autonomously code files in target path"
+          style="font-size:11px;padding:4px 10px;white-space:nowrap;">⚡ Auto-Code</button>
       </div>
       <div id="ai-chat-log" class="ai-chat-log">
-        <div class="ai-msg ai-msg-assistant">Hello! I am <b>Telua AI Agent</b> — your autonomous engineer for AOSP &amp; Android Automotive.
-          I can autonomously execute <code>tel</code> and <code>adb</code>, inspect code structures, query ChromaDB knowledge, and debug builds.
-          Try asking: <i>"Check connected adb devices and show current build target"</i> or <i>"Inspect CarAudioService.java outline"</i>.</div>
+        <div class="ai-msg ai-msg-assistant">Hello! I am <b>Telua AI Agent</b> — your autonomous engineer for AOSP &amp;
+          Android Automotive.
+          I can autonomously execute <code>tel</code> and <code>adb</code>, inspect code structures, query ChromaDB
+          knowledge, and debug builds.
+          Try asking: <i>"Check connected adb devices and show current build target"</i> or <i>"Inspect
+            CarAudioService.java outline"</i>.</div>
       </div>
       <div class="ai-input-bar">
         <textarea id="ai-input" rows="2" placeholder="Ask AI agent… (Enter = Send, Shift+Enter = New line)"></textarea>
@@ -1275,14 +1301,19 @@
     <div class="modal-box wide">
       <h3>🤖 AI Provider Configuration</h3>
       <p class="meta">Configure LLM endpoints, MCP knowledge sources, token guardrails, and usage statistics.
-        Shared config: <code>config/ai_agent/</code> · Personal/keys: <code>config/overlay/ai_agent/</code> (git-ignored).</p>
+        Shared config: <code>config/ai_agent/</code> · Personal/keys: <code>config/overlay/ai_agent/</code>
+        (git-ignored).</p>
 
       <!-- 4 Sub-tabs -->
       <div class="ai-cfg-tabs" role="tablist">
-        <button type="button" class="ai-cfg-tab active" data-ai-cfg-tab="provider" role="tab" aria-selected="true">🔑 API Key &amp; Provider</button>
-        <button type="button" class="ai-cfg-tab" data-ai-cfg-tab="mcp" role="tab" aria-selected="false">📦 MCP &amp; Knowledge</button>
-        <button type="button" class="ai-cfg-tab" data-ai-cfg-tab="guardrails" role="tab" aria-selected="false">🛡 Token Shield</button>
-        <button type="button" class="ai-cfg-tab" data-ai-cfg-tab="usage" role="tab" aria-selected="false">📊 Token Usage</button>
+        <button type="button" class="ai-cfg-tab active" data-ai-cfg-tab="provider" role="tab" aria-selected="true">🔑
+          API Key &amp; Provider</button>
+        <button type="button" class="ai-cfg-tab" data-ai-cfg-tab="mcp" role="tab" aria-selected="false">📦 MCP &amp;
+          Knowledge</button>
+        <button type="button" class="ai-cfg-tab" data-ai-cfg-tab="guardrails" role="tab" aria-selected="false">🛡 Token
+          Shield</button>
+        <button type="button" class="ai-cfg-tab" data-ai-cfg-tab="usage" role="tab" aria-selected="false">📊 Token
+          Usage</button>
       </div>
 
       <!-- Tab 1: API Key & Provider -->
@@ -1312,11 +1343,12 @@
         <div class="settings-section">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <h4 style="margin:0;">Raw JSON (advanced)</h4>
-            <button class="btn btn-xs ghost" id="btn-ai-load-template" title="Load preconfigured templates (DeepSeek, OpenAI, Ollama, LiteLLM)">📋 Load Template</button>
+            <button class="btn btn-xs ghost" id="btn-ai-load-template"
+              title="Load preconfigured templates (DeepSeek, OpenAI, Ollama, LiteLLM)">📋 Load Template</button>
           </div>
           <textarea id="ai-cfg-json" class="term-input mono"
-            style="width:100%;min-height:220px;box-sizing:border-box;font-size:11px;"
-            spellcheck="false" placeholder='[{ "name": "DeepSeek (litellm)", "apiType": "chat-completions", "apiKey": "", "models": [ … ] }]'></textarea>
+            style="width:100%;min-height:220px;box-sizing:border-box;font-size:11px;" spellcheck="false"
+            placeholder='[{ "name": "DeepSeek (litellm)", "apiType": "chat-completions", "apiKey": "", "models": [ … ] }]'></textarea>
         </div>
       </div>
 
@@ -1328,82 +1360,117 @@
             <span id="ai-mcp-status-pill" class="chip" style="font-size:11px;">ChromaDB: —</span>
           </div>
           <p class="meta" style="margin-bottom:8px;">
-            Add any Git repository or skill directory on your workstation (relative paths like <code>repos/telua_skill/Java_Android</code> or absolute paths like <code>D:\code\my_skills</code>). Architectural patterns and code guidelines are indexed into ChromaDB for AI retrieval.
+            Add any Git repository or skill directory on your workstation (relative paths like
+            <code>repos/telua_skill/Java_Android</code> or absolute paths like <code>D:\code\my_skills</code>).
+            Architectural patterns and code guidelines are indexed into ChromaDB for AI retrieval.
           </p>
 
           <!-- Dynamic Sources List -->
           <div style="margin-bottom:10px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-              <label class="meta" style="font-weight:600;color:var(--text);font-size:11px;">📂 Configured Knowledge Sources:</label>
+              <label class="meta" style="font-weight:600;color:var(--text);font-size:11px;">📂 Configured Knowledge
+                Sources:</label>
               <span class="meta" style="font-size:10px;opacity:0.8;">Supports relative or absolute paths</span>
             </div>
-            <div id="ai-mcp-sources-list" style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;background:rgba(0,0,0,0.15);padding:6px;border-radius:6px;border:1px solid var(--border);"></div>
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
-              <span class="meta" style="font-size:10px;opacity:0.85;">After toggling enable/disable, visibility, or removing a source above, save changes:</span>
-              <button class="btn btn-3d" id="btn-ai-mcp-save-sources" style="font-size:11px;padding:5px 12px;" title="Save enable/disable or visibility changes to the source list">💾 Save Sources</button>
+            <div id="ai-mcp-sources-list"
+              style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;background:rgba(0,0,0,0.15);padding:6px;border-radius:6px;border:1px solid var(--border);">
+            </div>
+            <div
+              style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
+              <span class="meta" style="font-size:10px;opacity:0.85;">After toggling enable/disable, visibility, or
+                removing a source above, save changes:</span>
+              <button class="btn btn-3d" id="btn-ai-mcp-save-sources" style="font-size:11px;padding:5px 12px;"
+                title="Save enable/disable or visibility changes to the source list">💾 Save Sources</button>
             </div>
           </div>
 
           <!-- Add Source Form (adds to UI and saves immediately) -->
-          <div style="background:rgba(255,255,255,0.02);border:1px dashed var(--border);border-radius:6px;padding:8px;margin-bottom:12px;">
+          <div
+            style="background:rgba(255,255,255,0.02);border:1px dashed var(--border);border-radius:6px;padding:8px;margin-bottom:12px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-              <span style="font-size:11px;font-weight:600;color:var(--accent);">➕ Add new repository / folder source:</span>
-              <span class="meta" style="font-size:10px;">🔒 Private sources are stored in <code>config/overlay/ai_agent</code> (git-ignored). Auto-detects AOSP versions A12-A16.</span>
+              <span style="font-size:11px;font-weight:600;color:var(--accent);">➕ Add new repository / folder
+                source:</span>
+              <span class="meta" style="font-size:10px;">🔒 Private sources are stored in
+                <code>config/overlay/ai_agent</code> (git-ignored). Auto-detects AOSP versions A12-A16.</span>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:6px;align-items:center;margin-bottom:6px;">
-              <input type="text" id="ai-mcp-new-name" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Source name (e.g. AOSP A16 Car Audio)">
-              <input type="text" id="ai-mcp-new-path" class="term-input mono" style="font-size:11px;padding:4px 6px;" placeholder="Path (e.g. repos/private_skill or D:\aosp_a16\frameworks\opt\car)">
-              <input type="text" id="ai-mcp-new-url" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Git URL (optional)">
+              <input type="text" id="ai-mcp-new-name" class="term-input" style="font-size:11px;padding:4px 6px;"
+                placeholder="Source name (e.g. AOSP A16 Car Audio)">
+              <input type="text" id="ai-mcp-new-path" class="term-input mono" style="font-size:11px;padding:4px 6px;"
+                placeholder="Path (e.g. repos/private_skill or D:\aosp_a16\frameworks\opt\car)">
+              <input type="text" id="ai-mcp-new-url" class="term-input" style="font-size:11px;padding:4px 6px;"
+                placeholder="Git URL (optional)">
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1.3fr 130px;gap:6px;align-items:center;margin-bottom:8px;">
+            <div
+              style="display:grid;grid-template-columns:1fr 1.3fr 130px;gap:6px;align-items:center;margin-bottom:8px;">
               <div style="display:flex;gap:4px;align-items:center;min-width:0;">
-                <select id="ai-mcp-new-project" class="theme-select" style="flex:1;min-width:0;font-size:11px;padding:4px 6px;" title="Project Target"></select>
-                <button type="button" class="btn btn-xs ghost" id="btn-ai-manage-projects" title="Manage / Edit / Add Projects (disable only, no delete)" style="padding:4px 7px;font-size:11px;white-space:nowrap;">⚙️</button>
+                <select id="ai-mcp-new-project" class="theme-select"
+                  style="flex:1;min-width:0;font-size:11px;padding:4px 6px;" title="Project Target"></select>
+                <button type="button" class="btn btn-xs ghost" id="btn-ai-manage-projects"
+                  title="Manage / Edit / Add Projects (disable only, no delete)"
+                  style="padding:4px 7px;font-size:11px;white-space:nowrap;">⚙️</button>
               </div>
               <div style="display:flex;gap:4px;align-items:center;min-width:0;">
-                <select id="ai-mcp-new-version" class="theme-select" style="flex:1;min-width:0;font-size:11px;padding:4px 6px;" title="AOSP Version / Branch Target"></select>
-                <button type="button" class="btn btn-xs ghost" id="btn-ai-manage-versions" title="Manage / Add custom AOSP versions" style="padding:4px 7px;font-size:11px;white-space:nowrap;">⚙️</button>
+                <select id="ai-mcp-new-version" class="theme-select"
+                  style="flex:1;min-width:0;font-size:11px;padding:4px 6px;"
+                  title="AOSP Version / Branch Target"></select>
+                <button type="button" class="btn btn-xs ghost" id="btn-ai-manage-versions"
+                  title="Manage / Add custom AOSP versions"
+                  style="padding:4px 7px;font-size:11px;white-space:nowrap;">⚙️</button>
               </div>
-              <select id="ai-mcp-new-visibility" class="theme-select" style="font-size:11px;padding:4px 6px;" title="Git Privacy Mode">
+              <select id="ai-mcp-new-visibility" class="theme-select" style="font-size:11px;padding:4px 6px;"
+                title="Git Privacy Mode">
                 <option value="private" selected>🔒 Private (No Git)</option>
                 <option value="public">🌐 Public (Git)</option>
               </select>
             </div>
             <div style="display:flex;justify-content:flex-end;">
-              <button class="btn btn-3d btn-3d-emerald" id="btn-ai-mcp-add-source" style="font-size:11px;padding:5px 14px;white-space:nowrap;" title="Add source to list and save immediately">➕ Add Source</button>
+              <button class="btn btn-3d btn-3d-emerald" id="btn-ai-mcp-add-source"
+                style="font-size:11px;padding:5px 14px;white-space:nowrap;"
+                title="Add source to list and save immediately">➕ Add Source</button>
             </div>
           </div>
 
           <!-- Dedicated ChromaDB Sync Card (action + live progress / sync complete) -->
-          <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:rgba(255,255,255,0.03);margin-bottom:10px;">
+          <div
+            style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:rgba(255,255,255,0.03);margin-bottom:10px;">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
               <div>
                 <div style="font-size:12px;font-weight:600;color:var(--text);">🧠 ChromaDB Vector Sync</div>
-                <div class="meta" style="font-size:10px;">Index all enabled sources into local ChromaDB in the background (incremental).</div>
+                <div class="meta" style="font-size:10px;">Index all enabled sources into local ChromaDB in the
+                  background (incremental).</div>
               </div>
               <div style="display:flex;gap:8px;align-items:center;">
-                <button class="btn btn-3d btn-3d-violet" id="btn-ai-mcp-sync" title="Sync all enabled sources to ChromaDB">🔄 Sync to ChromaDB</button>
-                <button class="btn btn-3d btn-3d-red hidden" id="btn-ai-mcp-sync-cancel" title="Stop the running sync (already indexed batches are kept)">⏹ Cancel Sync</button>
+                <button class="btn btn-3d btn-3d-violet" id="btn-ai-mcp-sync"
+                  title="Sync all enabled sources to ChromaDB">🔄 Sync to ChromaDB</button>
+                <button class="btn btn-3d btn-3d-red hidden" id="btn-ai-mcp-sync-cancel"
+                  title="Stop the running sync (already indexed batches are kept)">⏹ Cancel Sync</button>
               </div>
             </div>
 
             <!-- Live sync progress (polled from /api/ai/mcp/sync/status) -->
-            <div id="ai-mcp-sync-progress" class="hidden" style="margin-top:10px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);">
+            <div id="ai-mcp-sync-progress" class="hidden"
+              style="margin-top:10px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);">
               <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;margin-bottom:6px;">
                 <span id="ai-mcp-sync-progress-title" style="font-weight:600;">⏳ Syncing...</span>
                 <span id="ai-mcp-sync-progress-pct" class="mono"></span>
               </div>
-              <div style="height:8px;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:4px;overflow:hidden;">
-                <div id="ai-mcp-sync-progress-bar" style="height:100%;width:0%;background:var(--accent);transition:width .4s;"></div>
+              <div
+                style="height:8px;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:4px;overflow:hidden;">
+                <div id="ai-mcp-sync-progress-bar"
+                  style="height:100%;width:0%;background:var(--accent);transition:width .4s;"></div>
               </div>
               <div id="ai-mcp-sync-progress-stats" class="meta" style="margin-top:6px;font-size:11px;"></div>
-              <div id="ai-mcp-sync-progress-file" class="meta mono" style="margin-top:2px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+              <div id="ai-mcp-sync-progress-file" class="meta mono"
+                style="margin-top:2px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
             </div>
           </div>
 
-          <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;flex-wrap:wrap;background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:8px;border:1px solid var(--border);">
+          <div
+            style="display:flex;gap:12px;align-items:center;margin-bottom:8px;flex-wrap:wrap;background:rgba(255,255,255,0.03);padding:8px 10px;border-radius:8px;border:1px solid var(--border);">
             <div style="flex:1;min-width:240px;">
-              <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);">⏱ Auto-Sync &amp; Indexing Schedule:</label>
+              <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);">⏱ Auto-Sync
+                &amp; Indexing Schedule:</label>
               <select id="ai-mcp-schedule-select" class="theme-select" style="width:100%;font-size:12px;">
                 <option value="3">⚡ Web startup + Trigger every 3 hours (Recommended)</option>
                 <option value="6">⚡ Web startup + Trigger every 6 hours</option>
@@ -1413,7 +1480,8 @@
               </select>
             </div>
             <div style="align-self:flex-end;">
-              <button class="btn btn-3d btn-3d-amber" id="btn-ai-mcp-save-schedule" title="Save sync schedule">💾 Save Schedule</button>
+              <button class="btn btn-3d btn-3d-amber" id="btn-ai-mcp-save-schedule" title="Save sync schedule">💾 Save
+                Schedule</button>
             </div>
           </div>
 
@@ -1421,8 +1489,11 @@
 
           <!-- Skills preview collapsible -->
           <details style="margin-top:8px;">
-            <summary class="meta" style="cursor:pointer;color:var(--accent);font-weight:600;">📑 Indexed Skills (<span id="ai-mcp-count">0</span> files)</summary>
-            <div id="ai-mcp-skills-list" style="max-height:160px;overflow-y:auto;margin-top:6px;font-size:11px;font-family:var(--mono);padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px;"></div>
+            <summary class="meta" style="cursor:pointer;color:var(--accent);font-weight:600;">📑 Indexed Skills (<span
+                id="ai-mcp-count">0</span> files)</summary>
+            <div id="ai-mcp-skills-list"
+              style="max-height:160px;overflow-y:auto;margin-top:6px;font-size:11px;font-family:var(--mono);padding:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px;">
+            </div>
           </details>
         </div>
       </div>
@@ -1435,12 +1506,15 @@
             <span class="chip ok" style="font-size:11px;">Token Shield: Active</span>
           </div>
           <p class="meta" style="margin-bottom:8px;">
-            Limit agent reasoning steps and file read length to prevent token depletion on large files and break infinite tool loops.
+            Limit agent reasoning steps and file read length to prevent token depletion on large files and break
+            infinite tool loops.
           </p>
 
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
             <div>
-              <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);font-weight:600;">🔄 Max Tool Turns:</label>
+              <label class="meta"
+                style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);font-weight:600;">🔄 Max Tool
+                Turns:</label>
               <select id="ai-guard-max-iter" class="theme-select" style="width:100%;font-size:12px;">
                 <option value="3">3 turns (Conservative)</option>
                 <option value="5" selected>5 turns (Recommended - Balanced)</option>
@@ -1449,7 +1523,9 @@
               </select>
             </div>
             <div>
-              <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);font-weight:600;">📄 Max Lines Per Read:</label>
+              <label class="meta"
+                style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);font-weight:600;">📄 Max Lines
+                Per Read:</label>
               <select id="ai-guard-max-lines" class="theme-select" style="width:100%;font-size:12px;">
                 <option value="80">80 lines / read</option>
                 <option value="150" selected>150 lines / read (Recommended)</option>
@@ -1458,7 +1534,9 @@
               </select>
             </div>
             <div>
-              <label class="meta" style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);font-weight:600;">✂ Max Tool Output (Chars):</label>
+              <label class="meta"
+                style="display:block;margin-bottom:4px;font-size:11px;color:var(--text);font-weight:600;">✂ Max Tool
+                Output (Chars):</label>
               <select id="ai-guard-max-chars" class="theme-select" style="width:100%;font-size:12px;">
                 <option value="3000">3,000 chars (~750 tokens)</option>
                 <option value="6000" selected>6,000 chars (~1,500 tokens)</option>
@@ -1467,12 +1545,14 @@
             </div>
           </div>
 
-          <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.02);padding:8px 10px;border-radius:6px;border:1px solid var(--border);">
+          <div
+            style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.02);padding:8px 10px;border-radius:6px;border:1px solid var(--border);">
             <label style="font-size:11px;display:flex;align-items:center;gap:6px;cursor:pointer;">
               <input type="checkbox" id="ai-guard-loop-breaker" checked>
               <span>🛑 Enable <b>Loop Breaker</b> (Halts duplicate tool calls with identical arguments)</span>
             </label>
-            <button class="btn primary" id="btn-ai-save-guardrails" style="font-size:11px;padding:4px 12px;">💾 Save Guardrails</button>
+            <button class="btn primary" id="btn-ai-save-guardrails" style="font-size:11px;padding:4px 12px;">💾 Save
+              Guardrails</button>
           </div>
         </div>
       </div>
@@ -1485,26 +1565,36 @@
             <span class="chip ok" id="ai-token-current-month-badge" style="font-size:11px;">This month: 0 tokens</span>
           </div>
           <p class="meta" style="margin-bottom:8px;">
-            Tracks token consumption for the current month and archives previous months (safely stored in <code>config/overlay/ai_agent/ai_token_usage.json</code>).
+            Tracks token consumption for the current month and archives previous months (safely stored in
+            <code>config/overlay/ai_agent/ai_token_usage.json</code>).
           </p>
 
           <!-- Current Month Summary Metric Cards -->
-          <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:8px;margin-bottom:12px;" id="ai-token-summary-cards">
-            <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;">
+          <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:8px;margin-bottom:12px;"
+            id="ai-token-summary-cards">
+            <div
+              style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;">
               <div class="meta" style="font-size:11px;">🎯 Total Tokens</div>
-              <div id="ai-metric-total-tokens" class="mono" style="font-size:16px;font-weight:700;color:var(--accent);margin-top:2px;">0</div>
+              <div id="ai-metric-total-tokens" class="mono"
+                style="font-size:16px;font-weight:700;color:var(--accent);margin-top:2px;">0</div>
             </div>
-            <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;">
+            <div
+              style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;">
               <div class="meta" style="font-size:11px;">📥 Prompt Tokens</div>
-              <div id="ai-metric-prompt-tokens" class="mono" style="font-size:16px;font-weight:700;color:var(--text);margin-top:2px;">0</div>
+              <div id="ai-metric-prompt-tokens" class="mono"
+                style="font-size:16px;font-weight:700;color:var(--text);margin-top:2px;">0</div>
             </div>
-            <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;">
+            <div
+              style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;">
               <div class="meta" style="font-size:11px;">📤 Completion Tokens</div>
-              <div id="ai-metric-completion-tokens" class="mono" style="font-size:16px;font-weight:700;color:var(--text);margin-top:2px;">0</div>
+              <div id="ai-metric-completion-tokens" class="mono"
+                style="font-size:16px;font-weight:700;color:var(--text);margin-top:2px;">0</div>
             </div>
-            <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;">
+            <div
+              style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;">
               <div class="meta" style="font-size:11px;">💬 Total Queries</div>
-              <div id="ai-metric-requests" class="mono" style="font-size:16px;font-weight:700;color:var(--text);margin-top:2px;">0</div>
+              <div id="ai-metric-requests" class="mono"
+                style="font-size:16px;font-weight:700;color:var(--text);margin-top:2px;">0</div>
             </div>
           </div>
 
@@ -1521,7 +1611,10 @@
                 </tr>
               </thead>
               <tbody id="ai-token-history-tbody">
-                <tr><td colspan="5" style="text-align:center;padding:10px;color:var(--text-muted);">Loading statistics...</td></tr>
+                <tr>
+                  <td colspan="5" style="text-align:center;padding:10px;color:var(--text-muted);">Loading statistics...
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -1530,7 +1623,8 @@
 
       <div class="modal-actions">
         <button class="btn" id="btn-ai-cfg-cancel">Close</button>
-        <button class="btn primary" id="btn-ai-cfg-save" title="Save entire provider JSON registry">💾 Save JSON</button>
+        <button class="btn primary" id="btn-ai-cfg-save" title="Save entire provider JSON registry">💾 Save
+          JSON</button>
       </div>
     </div>
   </div>
@@ -1539,29 +1633,40 @@
   <div class="modal hidden" id="modal-aosp-versions" style="z-index:1100;">
     <div class="modal-box">
       <h3>🏷️ Manage AOSP Versions &amp; Targets</h3>
-      <p class="meta">Configure standard or custom AOSP target tags (e.g., A12–A16, QSSI branches, OEM custom IVI builds). Saved in MCP configuration.</p>
+      <p class="meta">Configure standard or custom AOSP target tags (e.g., A12–A16, QSSI branches, OEM custom IVI
+        builds). Saved in MCP configuration.</p>
 
       <div class="settings-section">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <label class="meta" style="font-weight:600;color:var(--text);font-size:11px;">Available Versions (<span id="ai-version-count">0</span>):</label>
+          <label class="meta" style="font-weight:600;color:var(--text);font-size:11px;">Available Versions (<span
+              id="ai-version-count">0</span>):</label>
           <span class="meta" style="font-size:10px;">Selectable in Knowledge Sources</span>
         </div>
-        <div id="ai-aosp-versions-list" style="display:flex;flex-direction:column;gap:5px;max-height:190px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;"></div>
+        <div id="ai-aosp-versions-list"
+          style="display:flex;flex-direction:column;gap:5px;max-height:190px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;">
+        </div>
       </div>
 
-      <div class="settings-section" style="background:rgba(255,255,255,0.02);border:1px dashed var(--border);border-radius:6px;padding:8px;">
-        <span style="font-size:11px;font-weight:600;color:var(--accent);display:block;margin-bottom:6px;">➕ Add Custom AOSP Version:</span>
+      <div class="settings-section"
+        style="background:rgba(255,255,255,0.02);border:1px dashed var(--border);border-radius:6px;padding:8px;">
+        <span style="font-size:11px;font-weight:600;color:var(--accent);display:block;margin-bottom:6px;">➕ Add Custom
+          AOSP Version:</span>
         <div style="display:grid;grid-template-columns:1fr 1.6fr 90px auto;gap:6px;align-items:center;">
-          <input type="text" id="ai-version-new-id" class="term-input mono" style="font-size:11px;padding:4px 6px;" placeholder="ID (e.g. a14_qssi)">
-          <input type="text" id="ai-version-new-name" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Label (e.g. Android 14 QSSI Car)">
-          <input type="number" id="ai-version-new-api" class="term-input mono" style="font-size:11px;padding:4px 6px;" placeholder="API (e.g. 34)">
-          <button type="button" class="btn primary" id="btn-ai-version-add" style="font-size:11px;padding:4px 10px;white-space:nowrap;">➕ Add</button>
+          <input type="text" id="ai-version-new-id" class="term-input mono" style="font-size:11px;padding:4px 6px;"
+            placeholder="ID (e.g. a14_qssi)">
+          <input type="text" id="ai-version-new-name" class="term-input" style="font-size:11px;padding:4px 6px;"
+            placeholder="Label (e.g. Android 14 QSSI Car)">
+          <input type="number" id="ai-version-new-api" class="term-input mono" style="font-size:11px;padding:4px 6px;"
+            placeholder="API (e.g. 34)">
+          <button type="button" class="btn primary" id="btn-ai-version-add"
+            style="font-size:11px;padding:4px 10px;white-space:nowrap;">➕ Add</button>
         </div>
       </div>
 
       <div class="modal-actions">
         <button class="btn" id="btn-ai-version-close">Close</button>
-        <button class="btn primary" id="btn-ai-version-save" title="Save versions to configuration">💾 Save Versions</button>
+        <button class="btn primary" id="btn-ai-version-save" title="Save versions to configuration">💾 Save
+          Versions</button>
       </div>
     </div>
   </div>
@@ -1570,28 +1675,38 @@
   <div class="modal hidden" id="modal-ai-projects" style="z-index:1100;">
     <div class="modal-box">
       <h3>📁 Manage Projects</h3>
-      <p class="meta">Add or edit project tags (e.g., <code>aosp_aaos</code>, <code>car_ivi</code>). Projects cannot be deleted — uncheck to disable.</p>
+      <p class="meta">Add or edit project tags (e.g., <code>aosp_aaos</code>, <code>car_ivi</code>). Projects cannot be
+        deleted — uncheck to disable.</p>
 
       <div class="settings-section">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <label class="meta" style="font-weight:600;color:var(--text);font-size:11px;">Projects (<span id="ai-project-count">0</span>):</label>
+          <label class="meta" style="font-weight:600;color:var(--text);font-size:11px;">Projects (<span
+              id="ai-project-count">0</span>):</label>
           <span class="meta" style="font-size:10px;">Enabled projects appear in Knowledge Sources</span>
         </div>
-        <div id="ai-projects-list" style="display:flex;flex-direction:column;gap:5px;max-height:210px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;"></div>
+        <div id="ai-projects-list"
+          style="display:flex;flex-direction:column;gap:5px;max-height:210px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px;">
+        </div>
       </div>
 
-      <div class="settings-section" style="background:rgba(255,255,255,0.02);border:1px dashed var(--border);border-radius:6px;padding:8px;">
-        <span style="font-size:11px;font-weight:600;color:var(--accent);display:block;margin-bottom:6px;">➕ Add New Project:</span>
+      <div class="settings-section"
+        style="background:rgba(255,255,255,0.02);border:1px dashed var(--border);border-radius:6px;padding:8px;">
+        <span style="font-size:11px;font-weight:600;color:var(--accent);display:block;margin-bottom:6px;">➕ Add New
+          Project:</span>
         <div style="display:grid;grid-template-columns:1fr 1.6fr auto;gap:6px;align-items:center;">
-          <input type="text" id="ai-project-new-id" class="term-input mono" style="font-size:11px;padding:4px 6px;" placeholder="ID (e.g. aosp_ivi)">
-          <input type="text" id="ai-project-new-name" class="term-input" style="font-size:11px;padding:4px 6px;" placeholder="Label (e.g. OEM Car IVI)">
-          <button type="button" class="btn primary" id="btn-ai-project-add" style="font-size:11px;padding:4px 10px;white-space:nowrap;">➕ Add</button>
+          <input type="text" id="ai-project-new-id" class="term-input mono" style="font-size:11px;padding:4px 6px;"
+            placeholder="ID (e.g. aosp_ivi)">
+          <input type="text" id="ai-project-new-name" class="term-input" style="font-size:11px;padding:4px 6px;"
+            placeholder="Label (e.g. OEM Car IVI)">
+          <button type="button" class="btn primary" id="btn-ai-project-add"
+            style="font-size:11px;padding:4px 10px;white-space:nowrap;">➕ Add</button>
         </div>
       </div>
 
       <div class="modal-actions">
         <button class="btn" id="btn-ai-project-close">Close</button>
-        <button class="btn primary" id="btn-ai-project-save" title="Save projects to configuration">💾 Save Projects</button>
+        <button class="btn primary" id="btn-ai-project-save" title="Save projects to configuration">💾 Save
+          Projects</button>
       </div>
     </div>
   </div>
@@ -1620,7 +1735,8 @@
       </div>
 
       <div class="modal-actions">
-        <button class="btn" id="btn-settings-reset" title="Restore defaults: show all tabs and Dark theme">↺ Reset default</button>
+        <button class="btn" id="btn-settings-reset" title="Restore defaults: show all tabs and Dark theme">↺ Reset
+          default</button>
         <button class="btn primary" id="btn-settings-close">Close</button>
       </div>
     </div>

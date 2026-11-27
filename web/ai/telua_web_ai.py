@@ -27,6 +27,7 @@ import json
 import os
 import re
 import subprocess
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -34,6 +35,7 @@ from typing import Optional
 from flask import Blueprint, jsonify, request
 
 ai_bp = Blueprint("ai", __name__)
+_CHAT_CTX = threading.local()
 
 # All AI config lives in config/ai_agent (shared) and config/overlay/ai_agent
 # (git-ignored); legacy config/ and config/overlay/ files are auto-migrated.
@@ -626,52 +628,105 @@ def _tool_list_files(args: dict) -> str:
         return f"[ERROR] {exc}"
 
 
+def _clean_filter_val(val) -> str:
+    s = str(val or "").strip().lower()
+    return "" if s in ("", "all", "auto", "any", "*") else s
+
+
+def _build_chroma_where(project: str = "", aosp_version: str = "", source_id: str = "") -> Optional[dict]:
+    """Build a ChromaDB `where` metadata filter dict (None if unfiltered)."""
+    conds = []
+    p = _clean_filter_val(project)
+    v = _clean_filter_val(aosp_version)
+    s = _clean_filter_val(source_id)
+    if p:
+        conds.append({"project": p})
+    if v:
+        conds.append({"aosp_version": v})
+    if s:
+        conds.append({"source_id": s})
+    if not conds:
+        return None
+    return conds[0] if len(conds) == 1 else {"$and": conds}
+
+
 def _tool_search_knowledge(args: dict) -> str:
-    """Search persistent ChromaDB knowledge base in ai_agent/data."""
+    """Search sharded persistent ChromaDB knowledge base in ai_agent/data/shards/
+    with automatic project / aosp_version / source_id isolation."""
     query = str(args.get("query", "")).strip()
     if not query:
         return "[ERROR] missing 'query' parameter"
-    col = _get_chroma_collection()
-    if col is None:
-        return "[WARNING] ChromaDB is not initialized or ai_agent/data is unavailable."
     try:
+        from .chroma_shards import query_shards
         n_results = max(1, min(int(args.get("n_results", 4)), 10))
-        results = col.query(query_texts=[query], n_results=n_results)
-        docs = results.get("documents", [[]])[0]
-        metas = results.get("metadatas", [[]])[0]
-        if not docs:
-            return f"(No knowledge records matched query: '{query}')"
+        # Explicit tool arguments override active chat UI context
+        project = _clean_filter_val(args.get("project")) or _clean_filter_val(getattr(_CHAT_CTX, "project", ""))
+        aosp_version = _clean_filter_val(args.get("aosp_version")) or _clean_filter_val(getattr(_CHAT_CTX, "aosp_version", ""))
+        source_id = _clean_filter_val(args.get("source_id"))
+        where = _build_chroma_where(project=project, aosp_version=aosp_version, source_id=source_id)
+
+        records, queried_shards = query_shards(
+            query_text=query,
+            n_results=n_results,
+            project=project,
+            aosp_version=aosp_version,
+            source_id=source_id,
+            collection_name=CHROMA_COLLECTION_NAME,
+            base_dir=CHROMA_DATA_DIR,
+        )
+        if not records:
+            filt_str = f" with filter {where}" if where else ""
+            return f"(No knowledge records matched query: '{query}'{filt_str})"
         out = []
-        for i, (doc, meta) in enumerate(zip(docs, metas)):
-            topic = (meta or {}).get("topic", "general")
-            src = (meta or {}).get("source", "user_train")
-            out.append(f"[{i+1}] (Topic: {topic} | Source: {src})\n{doc}")
+        for i, rec in enumerate(records):
+            m = rec.get("meta") or {}
+            proj = m.get("project") or "—"
+            ver = m.get("aosp_version") or "generic"
+            api_lvl = m.get("api_level")
+            ver_disp = f"{ver} (API {api_lvl})" if api_lvl else ver
+            src_name = m.get("source_name") or ""
+            src_path = m.get("source") or "user_train"
+            src_disp = f"{src_name} ({src_path})" if src_name and src_name != src_path else src_path
+            topic = m.get("topic") or m.get("category") or "general"
+            shard_lbl = rec.get("shard") or ""
+            out.append(
+                f"[{i+1}] (Shard: {shard_lbl} | Project: {proj} | AOSP: {ver_disp} | Source: {src_disp} | Topic: {topic})\n{rec.get('text', '')}"
+            )
         return "\n\n---\n\n".join(out)
     except Exception as exc:
         return f"[ERROR querying ChromaDB] {exc}"
 
 
 def _tool_save_training_knowledge(args: dict) -> str:
-    """Save new training knowledge / notes directly to ChromaDB on disk (ai_agent/data)."""
+    """Save new training knowledge / notes directly to the matching ChromaDB shard."""
     content = str(args.get("content", "")).strip()
     if not content:
         return "[ERROR] missing 'content' to train/save"
     topic = str(args.get("topic", "general")).strip()
     source = str(args.get("source", "agent_train")).strip()
-    col = _get_chroma_collection()
-    if col is None:
-        return "[ERROR] ChromaDB is not initialized."
+    project = _clean_filter_val(args.get("project")) or _clean_filter_val(getattr(_CHAT_CTX, "project", "")) or "aosp_aaos"
+    aosp_version = _clean_filter_val(args.get("aosp_version")) or _clean_filter_val(getattr(_CHAT_CTX, "aosp_version", ""))
     try:
+        from .chroma_shards import get_shard_collection, shard_key
+        col = get_shard_collection(
+            project=project,
+            aosp_version=aosp_version,
+            collection_name=CHROMA_COLLECTION_NAME,
+            base_dir=CHROMA_DATA_DIR,
+        )
         import uuid
         import time
         doc_id = f"doc_{int(time.time())}_{uuid.uuid4().hex[:6]}"
         meta = {
             "topic": topic,
             "source": source,
+            "project": project,
+            "aosp_version": aosp_version,
             "timestamp": int(time.time()),
         }
         col.add(documents=[content], metadatas=[meta], ids=[doc_id])
-        return f"✓ Successfully persisted to ChromaDB (ai_agent/data): id={doc_id}, topic={topic}, {len(content)} chars."
+        s_key = shard_key(project, aosp_version)
+        return f"✓ Successfully persisted to ChromaDB shard '{s_key}': id={doc_id}, topic={topic}, {len(content)} chars."
     except Exception as exc:
         return f"[ERROR saving to ChromaDB] {exc}"
 
@@ -981,12 +1036,15 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "search_knowledge",
-            "description": "Search local persistent ChromaDB knowledge base (ai_agent/data) for indexed documentation, troubleshooting guides, training data, or previous solutions.",
+            "description": "Search local persistent ChromaDB knowledge base (ai_agent/data) for indexed documentation, source code, troubleshooting guides, or training data. Supports optional metadata filters (project, aosp_version, source_id) to avoid mixing code across Android versions (e.g. a12 vs a16).",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "The search keywords or question to look up"},
-                    "n_results": {"type": "integer", "description": "Number of results to return (default 4)"}
+                    "n_results": {"type": "integer", "description": "Number of results to return (default 4)"},
+                    "project": {"type": "string", "description": "Optional project filter (e.g. 'aosp_aaos', 'car_ivi')"},
+                    "aosp_version": {"type": "string", "description": "Optional AOSP version filter (e.g. 'a12', 'a14', 'a16')"},
+                    "source_id": {"type": "string", "description": "Optional knowledge source ID filter"}
                 },
                 "required": ["query"],
             },
@@ -1590,8 +1648,14 @@ def api_ai_chat():
     data = request.get_json(silent=True) or {}
     user_msg = str(data.get("message", "")).strip()
     history = data.get("history") or []
+    chat_project = _clean_filter_val(data.get("project"))
+    chat_version = _clean_filter_val(data.get("aosp_version"))
     if not user_msg:
         return jsonify({"ok": False, "error": "Missing 'message'."}), 400
+
+    # Expose active project / AOSP version to search_knowledge during this turn
+    _CHAT_CTX.project = chat_project
+    _CHAT_CTX.aosp_version = chat_version
 
     provider, model, base_url, max_iter, _active_name, _active_model = _ai_settings()
     guardrails = get_ai_guardrails()
@@ -1605,7 +1669,13 @@ def api_ai_chat():
         content = str(h.get("content", ""))[:4000]
         if role in ("user", "assistant") and content:
             messages.append({"role": role, "content": content})
-    messages.append({"role": "user", "content": user_msg})
+    ctx_parts = []
+    if chat_project:
+        ctx_parts.append(f"Project={chat_project}")
+    if chat_version:
+        ctx_parts.append(f"AOSP_Version={chat_version}")
+    effective_msg = f"[Active Context: {' | '.join(ctx_parts)}]\n{user_msg}" if ctx_parts else user_msg
+    messages.append({"role": "user", "content": effective_msg})
 
     trace = []
     turn_prompt_tokens = 0
@@ -1704,6 +1774,9 @@ def api_ai_chat():
         if turn_prompt_tokens > 0 or turn_completion_tokens > 0:
             record_ai_token_usage(turn_prompt_tokens, turn_completion_tokens, model=model, provider=provider)
         return jsonify({"ok": False, "error": f"Agent error: {exc}", "trace": trace}), 500
+    finally:
+        _CHAT_CTX.project = ""
+        _CHAT_CTX.aosp_version = ""
 
 
 @ai_bp.get("/api/ai/guardrails")
@@ -1762,28 +1835,12 @@ def api_ai_token_usage():
 
 @ai_bp.get("/api/ai/chroma/status")
 def api_ai_chroma_status():
-    """Return status of the persistent ChromaDB database in ai_agent/data."""
-    client = _get_chroma_client()
-    if client is None:
-        return jsonify({
-            "ok": True,
-            "installed": False,
-            "path": str(CHROMA_DATA_DIR),
-            "doc_count": 0,
-            "collections": [],
-        })
+    """Return aggregated status across all sharded ChromaDB databases in ai_agent/data/shards/."""
     try:
-        collections = client.list_collections()
-        col_names = [getattr(c, "name", str(c)) for c in collections]
-        col = _get_chroma_collection()
-        count = col.count() if col else 0
-        return jsonify({
-            "ok": True,
-            "installed": True,
-            "path": str(CHROMA_DATA_DIR),
-            "doc_count": count,
-            "collections": col_names,
-        })
+        from .chroma_shards import get_total_chroma_status
+        st = get_total_chroma_status(collection_name=CHROMA_COLLECTION_NAME, base_dir=CHROMA_DATA_DIR)
+        st["collections"] = [CHROMA_COLLECTION_NAME] if st.get("installed") else []
+        return jsonify(st)
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
 
@@ -1913,21 +1970,34 @@ def api_ai_chroma_train():
 
 @ai_bp.post("/api/ai/chroma/query")
 def api_ai_chroma_query():
-    """Query ChromaDB for relevant knowledge records."""
+    """Query sharded ChromaDB databases (supports optional project, aosp_version, source_id filters)."""
     data = request.get_json(silent=True) or {}
     query = str(data.get("query") or "").strip()
-    n_results = int(data.get("n_results", 4))
+    n_results = max(1, min(int(data.get("n_results", 4)), 25))
     if not query:
         return jsonify({"ok": False, "error": "Missing 'query'."}), 400
-    col = _get_chroma_collection()
-    if not col:
-        return jsonify({"ok": False, "error": "ChromaDB not available."}), 500
     try:
-        res = col.query(query_texts=[query], n_results=n_results)
-        docs = res.get("documents", [[]])[0]
-        metas = res.get("metadatas", [[]])[0]
-        records = [{"text": d, "meta": m} for d, m in zip(docs, metas)]
-        return jsonify({"ok": True, "records": records, "count": len(records)})
+        from .chroma_shards import query_shards
+        project = _clean_filter_val(data.get("project"))
+        aosp_version = _clean_filter_val(data.get("aosp_version"))
+        source_id = _clean_filter_val(data.get("source_id"))
+        where = _build_chroma_where(project=project, aosp_version=aosp_version, source_id=source_id)
+        records, queried = query_shards(
+            query_text=query,
+            n_results=n_results,
+            project=project,
+            aosp_version=aosp_version,
+            source_id=source_id,
+            collection_name=CHROMA_COLLECTION_NAME,
+            base_dir=CHROMA_DATA_DIR,
+        )
+        return jsonify({
+            "ok": True,
+            "records": records,
+            "count": len(records),
+            "shards_queried": queried,
+            "filter": where,
+        })
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
 
