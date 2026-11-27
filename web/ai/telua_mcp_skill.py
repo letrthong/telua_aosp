@@ -1087,6 +1087,25 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
         if sk not in shard_specs:
             shard_specs[sk] = (p, v)
 
+    # Always include built-in AI.md (Telua CLI reference) in the shared shard if present
+    ai_md_path = _repo_root() / "AI.md"
+    ai_md_src = None
+    if ai_md_path.is_file():
+        ai_md_src = {
+            "id": "telua_cli_ref",
+            "name": "Telua CLI Reference (AI.md)",
+            "project": "aosp_aaos",
+            "aosp_version": "",
+            "api_level": None,
+            "branch": "",
+            "visibility": "public",
+            "is_private": False,
+            "dir": _repo_root(),
+        }
+        sk_cli = _shard_key("aosp_aaos", "")
+        if sk_cli not in shard_specs:
+            shard_specs[sk_cli] = ("aosp_aaos", "")
+
     shard_queues: Dict[str, "queue.Queue"] = {
         sk: queue.Queue(maxsize=max(64, n_readers * 16))
         for sk in shard_specs
@@ -1133,6 +1152,13 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
     # ---------------- walker ----------------
     def walker():
         try:
+            if ai_md_src is not None and not stopped():
+                try:
+                    st = ai_md_path.stat()
+                    if put(file_q, (ai_md_src, str(ai_md_path), "AI.md", ".md", st.st_size, st.st_mtime)):
+                        _prog_inc(files_discovered=1, bytes_discovered=st.st_size)
+                except OSError:
+                    pass
             for src in sources:
                 if stopped():
                     break
@@ -1181,6 +1207,26 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
             # AST / Structure-Aware Semantic Chunking for source code
             chunks = CodeStructureEngine.chunk_code_for_vector_db(content, rel, metadata, max_chunk_chars=4000)
             return [(ch["id"], ch["document"], ch["metadata"]) for ch in chunks]
+        # Section-chunk AI.md by '## ' headings so search_knowledge pulls only the relevant CLI section (~200-400 tokens)
+        if s_id == "telua_cli_ref" and "\n## " in content:
+            raw_sections = re.split(r"(?m)^(?=## )", content)
+            out_recs = []
+            for idx, sec in enumerate(raw_sections):
+                sec = sec.strip()
+                if not sec:
+                    continue
+                sec_title = sec.splitlines()[0].lstrip("#").strip()
+                sec_meta = dict(metadata)
+                sec_meta["title"] = sec_title or s["title"]
+                sec_meta["category"] = "telua_cli"
+                sec_doc = (
+                    f"PROJECT: {proj} | AOSP_VERSION: generic | SOURCE: Telua CLI Reference (AI.md)\n"
+                    f"SECTION: {sec_title}\n\n"
+                    f"{sec[:4000]}"
+                )
+                out_recs.append((f"{doc_id}_sec_{idx}", sec_doc, sec_meta))
+            if out_recs:
+                return out_recs
         full_doc = (
             f"PROJECT: {proj} | AOSP_VERSION: {aosp_ver or 'generic'} | API_LEVEL: {api_lvl or 'N/A'}\n"
             f"SOURCE: {s['source_name']} ({s_id})\n"

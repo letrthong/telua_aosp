@@ -266,35 +266,6 @@ async function initAI() {
     }
   });
 
-  $("#btn-ai-target-code")?.addEventListener("click", () => {
-    const targetInput = $("#ai-target-file");
-    const targetPath = (targetInput?.value || "").trim();
-    if (!targetPath) {
-      toast("Target Path", "Please enter a file or directory path to code.", "err");
-      targetInput?.focus();
-      return;
-    }
-    const isFolder = !targetPath.includes(".") || targetPath.endsWith("/") || targetPath.endsWith("\\");
-    const input = $("#ai-input");
-    const userPrompt = (input?.value || "").trim();
-
-    let promptText = "";
-    if (isFolder) {
-      promptText = userPrompt
-        ? `Target Folder: '${targetPath}'. Coding request for directory: ${userPrompt}. Use list_files to inspect existing files, then create or update relevant files (using write_file/edit_file), and execute run_tel to build/verify syntax once complete.`
-        : `Target Folder: '${targetPath}'. Scan this directory (using list_files), consult MCP Skills (telua_skill & claude-code-java) and implement/refactor necessary files using write_file or edit_file.`;
-    } else {
-      promptText = userPrompt
-        ? `Implement/refactor code for file ${targetPath} based on: ${userPrompt}. Use write_file or edit_file to apply changes directly, and call run_tel to build/verify syntax if applicable.`
-        : `Inspect file ${targetPath}, align with architecture patterns in MCP Skills (telua_skill & claude-code-java), and use write_file or edit_file to complete the code directly.`;
-    }
-
-    if (input) {
-      input.value = promptText;
-      aiSend();
-    }
-  });
-
   // ---- Provider config modal (⚙ Config) ----
   $("#btn-ai-config")?.addEventListener("click", () => openAIConfigModal("provider"));
   $("#ai-header-token-badge")?.addEventListener("click", () => openAIConfigModal("usage"));
