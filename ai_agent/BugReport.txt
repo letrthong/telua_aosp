@@ -1,0 +1,157 @@
+================================================================================
+TELUA AOSP — AI AGENT BUG REPORT
+================================================================================
+Date:        2026-11-27
+Component:   Telua Web AI Agent (web/ai/*)
+Repo:        /home/xxx/telua_aosp
+Reporter:    Code review session (Copilot agent)
+Severity:    P1 = Critical | P2 = Major | P3 = Minor
+Status:      OPEN (all items)
+================================================================================
+
+--------------------------------------------------------------------------------
+BUG-001 [P1][Security] Private skills leak into LLM cloud context
+--------------------------------------------------------------------------------
+Module:   web/ai/telua_web_ai.py
+Location: _tool_search_knowledge (~line 647), /api/ai/chroma/query (~line 1905)
+
+Description:
+  ChromaDB queries are performed WITHOUT a visibility filter. The metadata
+  field `is_private` is written during indexing (telua_mcp_skill.py, metadata
+  block ~line 722-742) but is never used at query time:
+
+      col.query(query_texts=[...])          # no where= filter
+
+  As a result, private/OEM-confidential skills (e.g. the "da3_a12" private
+  source) are returned by semantic search and injected into the LLM prompt
+  context. When the configured provider is a cloud endpoint (Gemini, DeepSeek,
+  OpenAI), confidential OEM source code and documentation leave the machine.
+
+Impact:
+  - Confidential OEM code/docs sent to third-party cloud LLM providers.
+  - Violates data-classification expectations for private skill sources.
+
+Reproduction:
+  1. Add a private skill source (visibility=private) in the Web UI config.
+  2. Sync to ChromaDB (POST /api/ai/mcp/sync).
+  3. In the AI chat, ask a question semantically close to a private skill.
+  4. Inspect the agent trace: private skill content appears in the prompt.
+
+Suggested fix:
+  - Add where={"is_private": False} to _tool_search_knowledge and
+    /api/ai/chroma/query (or a config opt-in "allow_private_in_rag").
+  - Add unit test: index one public + one private doc, assert private doc
+    never returned by search_knowledge.
+
+--------------------------------------------------------------------------------
+BUG-002 [P1][Security] API key exposed via GET /api/ai/config (no auth)
+--------------------------------------------------------------------------------
+Module:   web/ai/telua_web_ai.py
+Location: GET /api/ai/config (~lines 1504-1509)
+
+Description:
+  The config endpoint returns the raw provider JSON including the plaintext
+  "apiKey" field over unauthenticated HTTP. Any local process (or LAN peer if
+  the server is started with --host 0.0.0.0) can read the key.
+
+  Additionally, config/overlay/ai_providers.json stores the API key in
+  plaintext on disk. python/config_crypto.py exists in the repo but is not
+  used for this file.
+
+Impact:
+  - API key theft -> billing abuse, account compromise.
+
+Reproduction:
+  curl http://127.0.0.1:8788/api/ai/config | jq '.[].apiKey'
+
+Suggested fix:
+  - Mask the key in GET responses: {"has_key": true, "key_hint": "****abcd"}.
+  - Keep round-trip of the real key server-side only (preserve old key when
+    the UI submits an empty key — this part already works).
+  - Encrypt the key at rest using python/config_crypto.py; chmod 600 the
+    overlay file as an interim measure.
+  - Consider a simple token auth for the whole ai_bp blueprint when binding
+    to a non-loopback host.
+
+--------------------------------------------------------------------------------
+BUG-003 [P2][Reliability] Global ChromaDB lock blocks HTTP requests for minutes
+--------------------------------------------------------------------------------
+Module:   web/ai/telua_mcp_skill.py
+Location: _CHROMA_LOCK (~line 654), sync_skills_to_chroma (~line 655)
+
+Description:
+  _CHROMA_LOCK is a module-level threading.Lock held for the entire duration
+  of sync_skills_to_chroma(). A full sync (embedding 134+ files) can take
+  minutes. Any concurrent request that triggers a sync — POST /api/ai/mcp/sync
+  or the startup scheduler — blocks the Flask worker thread with no timeout.
+
+  Observed 2026-11-27: web process stuck in uninterruptible 'D' state after
+  restart while a sync was in progress; HTTP requests hung.
+
+Related:
+  - _get_chroma_client (telua_web_ai.py ~line 279) initializes the
+    chromadb.PersistentClient singleton without a lock (mild race when two
+    threads first-call concurrently).
+
+Suggested fix:
+  - Use lock.acquire(timeout=N) and return a 409/503 "sync in progress"
+    response instead of blocking.
+  - Protect _get_chroma_client with double-checked locking.
+  - Consider running syncs in a single worker thread with a queue.
+
+--------------------------------------------------------------------------------
+BUG-004 [P2][Maintainability] 26+ silent "except Exception: pass" swallow errors
+--------------------------------------------------------------------------------
+Module:   web/ai/telua_web_ai.py, web/ai/telua_mcp_skill.py
+Location: e.g. telua_web_ai.py lines 107, 170, 221, 288, 301, 322, 392, 542;
+          telua_mcp_skill.py lines 93, 240, 462, 534, 620, 777
+
+Description:
+  Broad exception handlers silently discard errors (pass/continue). A corrupt
+  config JSON, a failed ChromaDB write, or a malformed skill file fails
+  silently, making debugging very hard (e.g. the 2026-11-27 SSL/model
+  download failure surfaced only via the raw Flask traceback in
+  .telua_web.log).
+
+  The scheduler logs via sys.stderr.write (telua_mcp_skill.py ~lines 843, 870)
+  instead of the logging framework; there is no log rotation.
+
+Suggested fix:
+  - Introduce module-level logging with RotatingFileHandler writing to
+    .telua_web.log.
+  - Replace bare pass/continue with logging.debug/warning including context.
+  - Migrate scheduler sys.stderr writes to logging.
+
+--------------------------------------------------------------------------------
+BUG-005 [P3][Security-hardening] Command blacklist regex is bypassable
+--------------------------------------------------------------------------------
+Module:   web/ai/telua_web_ai.py
+Location: BLOCKED_CMD_PATTERNS (~lines 226-237), _cmd_is_blocked (~line 428)
+
+Description:
+  run_tel executes commands via `bash -c` guarded by a regex blacklist.
+  Trivial variants bypass it, e.g.:
+      rm -fr /            (flag order)
+      rm -r -f /          (split flags)
+      v="rm -rf /"; $v    (shell variable)
+      echo cm0gLXJmIC8= | base64 -d | bash
+
+  Accepted risk for a local dev tool, but undocumented.
+
+Suggested fix:
+  - Document the threat model in README (local-only, trusted operator).
+  - Add heuristic warnings for pipes/redirects/command substitution.
+  - Add unit tests for _cmd_is_blocked with bypass payloads.
+  - Long term: allowlist model for destructive operations.
+
+--------------------------------------------------------------------------------
+TESTING GAPS (cross-cutting)
+--------------------------------------------------------------------------------
+  - No unit test for the /api/ai/chat agent loop with a mocked LLM
+    (tests/test_telua_web.py covers only auxiliary endpoints).
+  - No tests for: _cmd_is_blocked bypass payloads, path traversal ("../")
+    in read/write/edit tools, loop breaker, private-skill filtering (BUG-001).
+
+================================================================================
+END OF REPORT
+================================================================================
