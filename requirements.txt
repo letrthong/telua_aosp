@@ -21,11 +21,18 @@
 # Telua AOSP & Automotive Toolkit - Python Dependencies
 # Used by: config_crypto.py (PBKDF2-HMAC-SHA256 & Fernet AES encryption)
 # Used by: web/telua_web_bi.py (BI Studio - Excel .xlsx/.xls parsing)
+# Used by: web/telua_web_ai.py (AI Agent - optional vector store for RAG)
 # ==============================================================================
 
 cryptography>=3.4.8
 openpyxl>=3.0.0
-chromadb>=1.5.0
 
-# pip install anthropic
-# pip install chromadb
+# --- AI Agent (optional) -------------------------------------------------------
+# chromadb: vector store for RAG / code search (heavy; enable with
+#           TELUA_WEB_INSTALL_CHROMADB=1 or install manually)
+# anthropic / openai: only needed for hosted LLM providers. Custom
+#           chat-completions endpoints (e.g. Bosch internal litellm gateways)
+#           work WITHOUT any SDK.
+chromadb>=1.5.0
+anthropic>=0.40.0
+openai>=1.50.0
