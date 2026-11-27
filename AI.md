@@ -48,7 +48,7 @@ When assisting a developer, **ALWAYS prefer using `telua` (or `./build_apk.sh`) 
 ├── sphinx/                   # Sphinx Doc-as-Code modular template & build scripts
 ├── config/                   # Declarative global constant cheatsheets & project configs
 │   ├── apk.config            # Project-specific active profile & lunch target
-│   ├── mcp_skills_config.json # MCP multi-source directories & repositories
+│   ├── ai_agent/             # Shared AI config (tracked): ai_providers(.template).json, mcp_skills_config.json
 │   ├── target_power_state.json # Persistent hardware relay status & event log
 │   ├── const_car.config      # AAOS car & audio key injection & test harness
 │   ├── const_dumpsys.config  # System diagnostics & AAOS dumpsys targets
@@ -63,8 +63,9 @@ When assisting a developer, **ALWAYS prefer using `telua` (or `./build_apk.sh`) 
 │       ├── const_my_cli.config.example # Personal pipeline template (telua my <action>)
 │       ├── apk_overlays.config         # Local confidential project overrides (git-ignored)
 │       ├── const_my_cli.config         # Local personal pipeline macros (git-ignored)
-│       ├── ai_guardrails.json          # Custom token guardrail thresholds (git-ignored)
-│       ├── ai_token_usage.json         # Real-time & multi-month token usage history (git-ignored)
+│       ├── ai_agent/                   # Personal AI config & runtime state (git-ignored): const_ai.config,
+│       │                               #   ai_providers.json (API keys), ai_guardrails.json, ai_token_usage.json,
+│       │                               #   mcp_skills_private.json, mcp_skills_state.json, mcp_skills_hashes.json
 │       └── enc_*.config                # Encrypted private overlay backups (tel enc / tel dec)
 └── AI.md                     # This file (AI reference)
 ```
@@ -223,14 +224,14 @@ To prevent runaway token costs and infinite agent loops:
 2. **Max Iterations Cap:** Each user turn is strictly capped at a configurable number of tool turns (default 5 steps).
 3. **Chunked Line Reading:** Enforces reading in ranges (default 150 lines) so 3,000+ line files do not consume 30,000+ tokens in one turn.
 4. **Monthly Token Usage Tracking & Retention:**
-   - Logs prompt tokens, completion tokens, total tokens, and request counts per month in `config/overlay/ai_token_usage.json`.
+   - Logs prompt tokens, completion tokens, total tokens, and request counts per month in `config/overlay/ai_agent/ai_token_usage.json`.
    - Automatically retains the current month and up to 5 previous months (2–6 months history).
    - Displayed in the UI via metric summary cards and a historical monthly breakdown table.
 
 #### 4.7.4 Public vs Private Knowledge Isolation & Embedding Architecture
 * **Public vs Private Isolation:**
-  - Public sources are tracked in `config/mcp_skills_config.json` for team collaboration.
-  - Private sources are isolated in `config/overlay/mcp_skills_private.json` (`.gitignore`), preventing NDA/proprietary leakage.
+  - Public sources are tracked in `config/ai_agent/mcp_skills_config.json` for team collaboration.
+  - Private sources are isolated in `config/overlay/ai_agent/mcp_skills_private.json` (`.gitignore`), preventing NDA/proprietary leakage.
   - Web UI allows toggling visibility directly with a single click.
 * **Source-as-Code Vector DB & Incremental Hashing:**
   - `ai_agent/data/chroma.sqlite3` is kept in `.gitignore` to prevent binary repository bloat and Git merge conflicts.

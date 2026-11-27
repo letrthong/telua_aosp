@@ -30,7 +30,7 @@ An automated developer workflow script for building and deploying privileged sys
 | `web/ai/code_structure_engine.py` | AST & Pygments Perception Engine: outline mode, complete symbol extraction & boundary snapping |
 | `web/ai/telua_mcp_skill.py` | Multi-source MCP Skills manager, ChromaDB vector store & A12-A16 dual-layer versioning |
 | `web/telua_web_power_controls.py` | Hardware Power Switch: dual-output relay (Main Power & Ignition ACC) with state persistence & event history |
-| `config/mcp_skills_config.json` | MCP skills sources configuration (local paths & Git repositories) |
+| `config/ai_agent/mcp_skills_config.json` | MCP skills sources configuration (local paths & Git repositories) |
 | `config/target_power_state.json` | Persistent hardware relay state & switch history log |
 | `web/telua_web_bi.py` | BI Studio backend: Excel/CSV to JSON converter, multi-sheet consolidator & cross-tab report engine |
 | `bi_studio/` | Sample multi-tab generic business Excel workbooks (Retail, HR, IT, Finance) with dynamic auto-discovery |
@@ -1116,8 +1116,8 @@ Local engineering skills and design patterns are indexed in a persistent vector 
 ### 9.8 Public vs Private Isolation & Vector DB Architecture
 To protect proprietary company code, NDA documentation, and internal architecture while enabling seamless team sharing:
 * **Public vs Private Source Isolation:**
-  - **Public Sources** (e.g. `telua_skill`, `claude_code_java`) are saved in `config/mcp_skills_config.json` and tracked in Git for the whole team.
-  - **Private Sources** (e.g. confidential OEM rules, proprietary vehicle repos, internal specs) are automatically separated and saved into `config/overlay/mcp_skills_private.json` (protected by `.gitignore: config/overlay/*.json`).
+  - **Public Sources** (e.g. `telua_skill`, `claude_code_java`) are saved in `config/ai_agent/mcp_skills_config.json` and tracked in Git for the whole team.
+  - **Private Sources** (e.g. confidential OEM rules, proprietary vehicle repos, internal specs) are automatically separated and saved into `config/overlay/ai_agent/mcp_skills_private.json` (protected by `.gitignore: config/overlay/ai_agent/*`).
   - **Zero Git Leakage:** Teammates and public remotes never see your private file paths or internal Git URLs.
   - **Web UI Security Switch:** Click the `🌐 Public` $\leftrightarrow$ `🔒 Private` badge in the Web UI to toggle any source's visibility instantly.
 * **"Source-as-Code" Architecture & Incremental MD5 Hashing:**
@@ -1132,7 +1132,7 @@ To protect proprietary company code, NDA documentation, and internal architectur
 To prevent runaway LLM costs and context exhaustion:
 * **Loop Breaker Shield:** Intercepts and stops duplicate tool calls if the Agent attempts to invoke the same tool with identical arguments repeatedly.
 * **Max Iterations Limit:** Enforces a configurable cap (default 5 turns) per user prompt.
-* **Monthly Token Tracking:** Logs prompt tokens, completion tokens, and request counts per month into `config/overlay/ai_token_usage.json`, retaining history for the current and past 2–6 months with UI metric cards and a monthly breakdown table.
+* **Monthly Token Tracking:** Logs prompt tokens, completion tokens, and request counts per month into `config/overlay/ai_agent/ai_token_usage.json`, retaining history for the current and past 2–6 months with UI metric cards and a monthly breakdown table.
 
 ### 9.10 Hardware Relay Power Controls
 Automated dual-output hardware relay control (**Main Power** & **Ignition ACC**) for bench-test DUTs:

@@ -167,20 +167,28 @@ async function initAI() {
       btn.textContent = "⏳ Syncing...";
     }
     try {
-      const res = await api("/api/ai/mcp/sync", { method: "POST" });
+      // Returns immediately; the sync runs in a background thread on the server.
+      const res = await api("/api/ai/mcp/sync", { method: "POST", body: JSON.stringify({ incremental: true }) });
       if (res && res.ok) {
-        toast("MCP Sync Success 🎉", `Indexed ${res.indexed} skills into ChromaDB (${res.collection}).`, "ok", 4500);
-        await loadAIMcpStatus();
+        if (res.already_running) toast("Sync Running", "A sync is already in progress — showing its progress.", "ok", 3000);
+        renderAIMcpSyncProgress(res.progress);
+        startAIMcpSyncPolling();
       } else {
-        toast("Sync Error", res.error || "Failed to sync skills", "err");
+        toast("Sync Error", res.error || "Failed to start sync", "err");
+        setAIMcpSyncButtons(false);
       }
     } catch (err) {
       toast("Sync Error", err.message, "err");
-    } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = "🔄 Sync to ChromaDB";
-      }
+      setAIMcpSyncButtons(false);
+    }
+  });
+  $("#btn-ai-mcp-sync-cancel")?.addEventListener("click", async () => {
+    if (!confirm("Stop the running ChromaDB sync? Already indexed batches are kept and the next sync resumes incrementally.")) return;
+    try {
+      const res = await api("/api/ai/mcp/sync/cancel", { method: "POST" });
+      if (!res.ok) toast("Cancel", res.error || "No sync running", "err");
+    } catch (err) {
+      toast("Cancel Error", err.message, "err");
     }
   });
   $("#btn-ai-mcp-save-sources")?.addEventListener("click", async () => {
@@ -600,7 +608,7 @@ async function saveAIConfigJson() {
         activeModel: modelSel?.value || "",
       }),
     });
-    toast("AI config saved 💾", "Provider registry written to config/ai_providers.json", "ok", 4000);
+    toast("AI config saved 💾", "Provider registry written to config/ai_agent/ (keys → config/overlay/ai_agent/)", "ok", 4000);
     $("#modal-ai-config")?.classList.add("hidden");
     initAI._statusLoaded = false;
     // Refresh model badge
@@ -808,11 +816,14 @@ async function loadAIMcpStatus() {
     }
 
     const countEl = $("#ai-mcp-count");
-    if (countEl) countEl.textContent = String((skillsRes.skills || []).length);
+    if (countEl) countEl.textContent = String(skillsRes.count ?? (skillsRes.skills || []).length);
 
     const listEl = $("#ai-mcp-skills-list");
     if (listEl && Array.isArray(skillsRes.skills)) {
-      listEl.innerHTML = skillsRes.skills.map(s =>
+      const more = skillsRes.truncated
+        ? `<div class="meta" style="padding:4px 0;">… showing first ${skillsRes.skills.length} of ${skillsRes.count} files</div>`
+        : "";
+      listEl.innerHTML = (skillsRes.skills.map(s =>
         `<div style="padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
           <div>
             <span style="color:var(--accent);font-weight:600;">[${esc(s.source_id || 'skill')}:${esc(s.category)}]</span>
@@ -821,10 +832,133 @@ async function loadAIMcpStatus() {
           </div>
           <span style="color:#8b949e;font-size:10px;flex-shrink:0;">${Math.round(s.size_bytes / 1024 * 10) / 10}KB</span>
         </div>`
-      ).join("") || "(no skill files found)";
+      ).join("") + more) || "(no skill files found)";
     }
   } catch (err) {
     const info = $("#ai-mcp-sync-info");
     if (info) info.textContent = `Error reading MCP config: ${err.message}`;
   }
+  // If a sync is running (started earlier, by the scheduler, or before a page
+  // reload) re-attach the live progress view.
+  resumeAIMcpSyncProgress();
+}
+
+/* ---------------- ChromaDB sync live progress ---------------- */
+let _aiMcpSyncTimer = null;
+
+function _fmtBytes(n) {
+  if (!n) return "0 B";
+  const u = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return `${n.toFixed(i ? 1 : 0)} ${u[i]}`;
+}
+
+function _fmtDuration(s) {
+  if (s == null) return "—";
+  s = Math.round(s);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h ? `${h}h${String(m).padStart(2, "0")}m` : m ? `${m}m${String(sec).padStart(2, "0")}s` : `${sec}s`;
+}
+
+function setAIMcpSyncButtons(running) {
+  const btn = $("#btn-ai-mcp-sync");
+  if (btn) {
+    btn.disabled = !!running;
+    btn.textContent = running ? "⏳ Syncing..." : "🔄 Sync to ChromaDB";
+  }
+  $("#btn-ai-mcp-sync-cancel")?.classList.toggle("hidden", !running);
+}
+
+function renderAIMcpSyncProgress(p) {
+  const box = $("#ai-mcp-sync-progress");
+  if (!box || !p || p.phase === "idle") return;
+  box.classList.remove("hidden");
+  setAIMcpSyncButtons(p.running);
+
+  const n = (v) => Number(v || 0).toLocaleString();
+  const titles = {
+    starting: "⏳ Starting…",
+    indexing: p.scan_done ? "⚙️ Indexing into ChromaDB…" : "🔍 Scanning folders + indexing…",
+    cancelling: "⏹ Cancelling…",
+    done: "✅ Sync complete",
+    cancelled: "⏹ Sync cancelled",
+    error: "❌ Sync failed",
+  };
+  const title = $("#ai-mcp-sync-progress-title");
+  if (title) title.textContent = `${titles[p.phase] || p.phase}${p.current_source && p.running ? ` — ${p.current_source}` : ""}`;
+
+  const bar = $("#ai-mcp-sync-progress-bar");
+  const pctEl = $("#ai-mcp-sync-progress-pct");
+  let pct = p.percent;
+  if (!p.running && p.phase === "done") pct = 100;
+  if (bar) {
+    bar.style.width = `${pct != null ? pct : 0}%`;
+    bar.style.background = p.phase === "error" ? "var(--err, #f85149)" : "var(--accent)";
+  }
+  if (pctEl) {
+    pctEl.textContent = pct != null
+      ? `${pct}%${p.running && p.eta_s != null ? ` · ETA ${_fmtDuration(p.eta_s)}` : ""}`
+      : `${n(p.files_discovered)} files found…`;
+  }
+
+  const stats = $("#ai-mcp-sync-progress-stats");
+  if (stats) {
+    stats.textContent =
+      `Files ${n(p.files_processed)}/${n(p.files_discovered)}${p.scan_done ? "" : "+"}` +
+      ` · ${_fmtBytes(p.bytes_processed)}/${_fmtBytes(p.bytes_discovered)}` +
+      ` · indexed ${n(p.files_indexed)} (${n(p.chunks_written)} chunks)` +
+      ` · cached ${n(p.files_skipped)}` +
+      (p.files_too_large ? ` · too large ${n(p.files_too_large)}` : "") +
+      (p.files_failed ? ` · failed ${n(p.files_failed)}` : "") +
+      ` · ${p.files_per_s || 0} files/s, ${p.mb_per_s || 0} MB/s` +
+      ` · ${p.reader_threads || 0} readers + 1 writer` +
+      ` · elapsed ${_fmtDuration(p.elapsed_s)}`;
+  }
+  const fileEl = $("#ai-mcp-sync-progress-file");
+  if (fileEl) {
+    fileEl.textContent = p.running
+      ? (p.current_file ? `→ ${p.current_file}` : "")
+      : (p.last_error ? `Last error: ${p.last_error}` : "");
+    fileEl.title = fileEl.textContent;
+  }
+}
+
+function startAIMcpSyncPolling() {
+  if (_aiMcpSyncTimer) return;
+  const tick = async () => {
+    let p = null;
+    try {
+      const res = await api("/api/ai/mcp/sync/status");
+      p = res.progress;
+      renderAIMcpSyncProgress(p);
+    } catch (_) { /* transient network error: keep polling */ }
+    if (p && !p.running) {
+      _aiMcpSyncTimer = null;
+      setAIMcpSyncButtons(false);
+      const r = p.result || {};
+      if (p.phase === "done") {
+        toast("MCP Sync Success 🎉", `Indexed ${r.indexed ?? 0} files (${r.chunks ?? 0} chunks), ${r.skipped ?? 0} cached, in ${_fmtDuration(r.elapsed_s)}.`, "ok", 6000);
+      } else if (p.phase === "cancelled") {
+        toast("Sync Cancelled", `Indexed ${r.indexed ?? 0} files before stopping.`, "ok", 4500);
+      } else {
+        toast("Sync Error", r.error || p.last_error || "Sync failed", "err");
+      }
+      loadAIMcpStatus();
+      return;
+    }
+    _aiMcpSyncTimer = setTimeout(tick, 1000);
+  };
+  _aiMcpSyncTimer = setTimeout(tick, 300);
+}
+
+async function resumeAIMcpSyncProgress() {
+  if (_aiMcpSyncTimer) return;
+  try {
+    const res = await api("/api/ai/mcp/sync/status");
+    if (res.progress && res.progress.running) {
+      renderAIMcpSyncProgress(res.progress);
+      startAIMcpSyncPolling();
+    }
+  } catch (_) { /* ignore */ }
 }

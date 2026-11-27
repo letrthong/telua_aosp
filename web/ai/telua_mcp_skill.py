@@ -67,12 +67,17 @@ DEFAULT_AOSP_VERSIONS = [
     {"id": "a12", "name": "Android 12 (SnowCone / API 31-32)", "api_level": 32},
 ]
 
-CONFIG_FILE_CANDIDATES = [
-    "config/overlay/mcp_skills_config.json",
-    "config/mcp_skills_config.json",
-]
-STATE_FILE_PATH = "config/overlay/mcp_skills_state.json"
-PRIVATE_SOURCES_FILE_PATH = "config/overlay/mcp_skills_private.json"
+try:
+    from .ai_config_paths import candidates as _ai_cfg_candidates, overlay_file as _ai_overlay_file, \
+        shared_file as _ai_shared_file
+except ImportError:  # executed as a script: python web/ai/telua_mcp_skill.py --mcp
+    from ai_config_paths import candidates as _ai_cfg_candidates, overlay_file as _ai_overlay_file, \
+        shared_file as _ai_shared_file
+
+# Shared config: config/ai_agent/ ; personal/runtime: config/overlay/ai_agent/ (git-ignored)
+CONFIG_FILE_CANDIDATES = _ai_cfg_candidates("mcp_skills_config.json")
+STATE_FILE_PATH = "config/overlay/ai_agent/mcp_skills_state.json"
+PRIVATE_SOURCES_FILE_PATH = "config/overlay/ai_agent/mcp_skills_private.json"
 
 
 def get_private_sources() -> List[dict]:
@@ -115,7 +120,7 @@ def _config_path() -> Path:
         p = root / cand
         if p.is_file():
             return p
-    return root / "config" / "mcp_skills_config.json"
+    return _ai_shared_file("mcp_skills_config.json")
 
 
 def detect_aosp_version_from_path(dir_path: Optional[Path]) -> dict:
@@ -430,12 +435,22 @@ def resolve_skill_sources() -> List[dict]:
     return [s for s in sources if s.get("enabled", True) and s.get("exists", False)]
 
 
-def _parse_skill_metadata(file_path: Path, ext: str) -> Tuple[str, str]:
-    """Extract (title, summary) from file content or YAML frontmatter."""
-    title = file_path.name
+SKILL_VALID_EXTS = {".md", ".java", ".sh", ".bat", ".config", ".json", ".template"}
+# Directories pruned while walking (never descended into). ".repo" and "out" are
+# added for AOSP trees: they hold repo metadata / build output (tens of GB).
+SKILL_IGNORE_DIRS = {
+    ".git", ".github", ".claude", "node_modules", "target", "build", ".idea",
+    ".repo", "out", "__pycache__", ".gradle",
+}
+SKILL_CODE_EXTS = {".java", ".kt", ".kts", ".c", ".cpp", ".cc", ".cxx", ".h", ".hpp",
+                   ".py", ".js", ".ts", ".rs", ".go", ".aidl"}
+
+
+def _parse_skill_metadata_text(default_title: str, head_text: str) -> Tuple[str, str]:
+    """Extract (title, summary) from the first ~1500 chars of a file."""
+    title = default_title
     summary = ""
     try:
-        head_text = file_path.read_text(encoding="utf-8", errors="ignore")[:1500]
         # Parse YAML frontmatter if available
         if head_text.startswith("---"):
             fm_end = head_text.find("---", 3)
@@ -449,10 +464,10 @@ def _parse_skill_metadata(file_path: Path, ext: str) -> Tuple[str, str]:
                         summary = line.split(":", 1)[1].strip()
 
         # Fallback to markdown heading
-        if not summary or title == file_path.name:
+        if not summary or title == default_title:
             for line in head_text.splitlines():
                 line = line.strip()
-                if line.startswith("#") and title == file_path.name:
+                if line.startswith("#") and title == default_title:
                     title = line.lstrip("#").strip()
                     break
         if not summary:
@@ -464,8 +479,66 @@ def _parse_skill_metadata(file_path: Path, ext: str) -> Tuple[str, str]:
     return title, summary[:300]
 
 
-def scan_skills(source_id: Optional[str] = None) -> List[dict]:
-    """Scan all skill, rule, template, and script files across all configured skill sources."""
+def _parse_skill_metadata(file_path: Path, ext: str) -> Tuple[str, str]:
+    """Extract (title, summary) from file content or YAML frontmatter."""
+    try:
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as fh:
+            head_text = fh.read(1500)
+    except Exception:
+        return file_path.name, ""
+    return _parse_skill_metadata_text(file_path.name, head_text)
+
+
+def _skill_category(s_id: str, rel: str) -> str:
+    parts = rel.split("/")
+    if s_id == "claude_code_java" and parts[0] == "skills" and len(parts) > 1:
+        return parts[1]  # e.g. "concurrency-review", "spring-boot-patterns"
+    return parts[0] if len(parts) > 1 else "root"
+
+
+def _iter_source_files(base_dir, should_stop=None):
+    """Fast iterative directory walk (os.scandir) that prunes ignored dirs.
+
+    Yields (full_path, rel_posix, ext, size, mtime). Unlike Path.rglob, ignored
+    directories (.git, .repo, out, ...) are never descended into, which matters a
+    lot on 100-200 GB AOSP trees.
+    """
+    base = os.path.abspath(str(base_dir))
+    prefix = base.rstrip("\\/") + os.sep
+    stack = [base]
+    n = 0
+    while stack:
+        if should_stop is not None and should_stop():
+            return
+        cur = stack.pop()
+        try:
+            it = os.scandir(cur)
+        except OSError:
+            continue
+        with it:
+            for entry in it:
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        if entry.name not in SKILL_IGNORE_DIRS:
+                            stack.append(entry.path)
+                        continue
+                    if not entry.is_file(follow_symlinks=False):
+                        continue
+                    ext = os.path.splitext(entry.name)[1].lower()
+                    if ext not in SKILL_VALID_EXTS:
+                        continue
+                    st = entry.stat(follow_symlinks=False)
+                    full = entry.path
+                    rel = full[len(prefix):] if full.startswith(prefix) else os.path.relpath(full, base)
+                    n += 1
+                    if should_stop is not None and (n & 1023) == 0 and should_stop():
+                        return
+                    yield full, rel.replace("\\", "/"), ext, st.st_size, st.st_mtime
+                except OSError:
+                    continue
+
+
+def _resolve_sources_with_fallback() -> List[dict]:
     sources = resolve_skill_sources()
     if not sources:
         primary = resolve_skill_dir()
@@ -477,65 +550,98 @@ def scan_skills(source_id: Optional[str] = None) -> List[dict]:
                 "local_path": DEFAULT_SKILL_LOCAL_PATH,
                 "dir": primary,
             }]
+    return sources
+
+
+def _make_skill_entry(src: dict, rel: str, ext: str, size: int, title: str = "", summary: str = "") -> dict:
+    s_id = src["id"]
+    name = rel.rsplit("/", 1)[-1]
+    return {
+        "name": name,
+        "title": title or name,
+        "rel_path": rel,
+        "scoped_path": f"{s_id}/{rel}",
+        "source_id": s_id,
+        "source_name": src["name"],
+        "project": src.get("project", "aosp_aaos"),
+        "aosp_version": src.get("aosp_version", ""),
+        "api_level": src.get("api_level"),
+        "branch": src.get("branch", ""),
+        "category": _skill_category(s_id, rel),
+        "size_bytes": size,
+        "ext": ext,
+        "summary": summary,
+        "visibility": src.get("visibility", "public"),
+        "is_private": bool(src.get("visibility") == "private" or src.get("is_private")),
+    }
+
+
+# Directory listing cache: walking a 200 GB tree takes a long time, and the web UI
+# calls /api/ai/mcp/config + /api/ai/mcp/skills together on every refresh.
+_SCAN_CACHE: dict = {"key": None, "ts": 0.0, "items": None}
+_SCAN_LOCK = threading.Lock()
+SCAN_CACHE_TTL_S = 120.0
+
+
+def invalidate_skill_scan_cache() -> None:
+    with _SCAN_LOCK:
+        _SCAN_CACHE.update({"key": None, "ts": 0.0, "items": None})
+
+
+def _sources_cache_key(sources: List[dict]) -> str:
+    return json.dumps([{k: (str(v) if isinstance(v, Path) else v) for k, v in s.items()} for s in sources],
+                      sort_keys=True, default=str)
+
+
+def scan_skills(source_id: Optional[str] = None, limit: Optional[int] = None, with_meta: bool = True) -> List[dict]:
+    """Scan all skill, rule, template, and script files across all configured skill sources.
+
+    - The directory walk result is cached for SCAN_CACHE_TTL_S seconds (concurrent
+      callers wait for one walk instead of walking the tree twice).
+    - with_meta=False skips reading file heads (title/summary) -> just a listing.
+    - limit caps the number of returned entries (metadata only parsed for those).
+    """
+    sources = _resolve_sources_with_fallback()
+    if not sources:
+        return []
+
+    with _SCAN_LOCK:
+        key = _sources_cache_key(sources)
+        cached = _SCAN_CACHE.get("items")
+        if cached is not None and _SCAN_CACHE.get("key") == key and (time.time() - _SCAN_CACHE["ts"]) < SCAN_CACHE_TTL_S:
+            items = cached
         else:
-            return []
+            items = []
+            for src in sources:
+                for full, rel, ext, size, _mtime in _iter_source_files(src["dir"]):
+                    entry = _make_skill_entry(src, rel, ext, size)
+                    entry["_full"] = full
+                    items.append(entry)
+            items.sort(key=lambda s: (s["source_id"], s["category"], s["name"]))
+            _SCAN_CACHE.update({"key": key, "ts": time.time(), "items": items})
 
-    valid_exts = {".md", ".java", ".sh", ".bat", ".config", ".json", ".template"}
-    ignore_dirs = {".git", ".github", ".claude", "node_modules", "target", "build", ".idea"}
-    skills = []
+    if source_id:
+        sid = source_id.lower()
+        items = [s for s in items if s["source_id"].lower() == sid]
+    if limit is not None and limit >= 0:
+        items = items[:limit]
 
-    for src in sources:
-        if source_id and src["id"].lower() != source_id.lower():
-            continue
+    out = []
+    for s in items:
+        d = dict(s)
+        full = d.pop("_full", None)
+        if with_meta and full:
+            d["title"], d["summary"] = _parse_skill_metadata_text(d["name"], _read_head(full))
+        out.append(d)
+    return out
 
-        base_dir = src["dir"]
-        s_id = src["id"]
-        s_name = src["name"]
 
-        for file_path in base_dir.rglob("*.*"):
-            ext = file_path.suffix.lower()
-            if ext not in valid_exts:
-                continue
-            if any(part in ignore_dirs for part in file_path.parts):
-                continue
-
-            try:
-                rel = file_path.relative_to(base_dir).as_posix()
-                parts = rel.split("/")
-
-                # Determine clean category
-                if s_id == "claude_code_java" and parts[0] == "skills" and len(parts) > 1:
-                    category = parts[1]  # e.g. "concurrency-review", "spring-boot-patterns"
-                else:
-                    category = parts[0] if len(parts) > 1 else "root"
-
-                stat = file_path.stat()
-                title, summary = _parse_skill_metadata(file_path, ext)
-                scoped_path = f"{s_id}/{rel}"
-
-                skills.append({
-                    "name": file_path.name,
-                    "title": title,
-                    "rel_path": rel,
-                    "scoped_path": scoped_path,
-                    "source_id": s_id,
-                    "source_name": s_name,
-                    "project": src.get("project", "aosp_aaos"),
-                    "aosp_version": src.get("aosp_version", ""),
-                    "api_level": src.get("api_level"),
-                    "branch": src.get("branch", ""),
-                    "category": category,
-                    "size_bytes": stat.st_size,
-                    "ext": ext,
-                    "summary": summary,
-                    "visibility": src.get("visibility", "public"),
-                    "is_private": bool(src.get("visibility") == "private" or src.get("is_private")),
-                })
-            except Exception:
-                continue
-
-    skills.sort(key=lambda s: (s["source_id"], s["category"], s["name"]))
-    return skills
+def _read_head(full_path: str, n: int = 1500) -> str:
+    try:
+        with open(full_path, "r", encoding="utf-8", errors="ignore") as fh:
+            return fh.read(n)
+    except Exception:
+        return ""
 
 
 def get_skill_content(rel_path: str) -> Optional[dict]:
@@ -623,10 +729,7 @@ def get_skill_content(rel_path: str) -> Optional[dict]:
     return None
 
 
-HASH_FILE_CANDIDATES = [
-    "config/overlay/mcp_skills_hashes.json",
-    "config/mcp_skills_hashes.json",
-]
+HASH_FILE_CANDIDATES = _ai_cfg_candidates("mcp_skills_hashes.json")
 
 
 def _load_skill_hashes() -> dict:
@@ -642,169 +745,434 @@ def _load_skill_hashes() -> dict:
 
 
 def _save_skill_hashes(hashes: dict):
-    path = _repo_root() / "config" / "overlay" / "mcp_skills_hashes.json"
-    if not path.parent.is_dir():
-        path = _repo_root() / "config" / "mcp_skills_hashes.json"
+    path = _ai_overlay_file("mcp_skills_hashes.json")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(hashes, indent=2), encoding="utf-8")
+    # Compact + atomic write: the map can hold millions of entries for large
+    # sources and is checkpointed periodically during a sync.
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(hashes, separators=(",", ":")), encoding="utf-8")
+    os.replace(tmp, path)
 
 
 _CHROMA_LOCK = threading.Lock()
 
+# ------------------------------------------------------------------------------
+# Threaded sync pipeline with live progress
+#
+#   walker thread (1)  --file_q-->  reader threads (N)  --doc_q-->  writer thread (1)
+#   os.scandir, prune               read + md5 + chunk              ChromaDB upsert
+#
+# - Queues are bounded -> memory stays flat even for 100-200 GB sources.
+# - Only ONE thread writes to ChromaDB (SQLite / HNSW index is not happy with
+#   concurrent writers); readers parallelise disk I/O + chunking.
+# - Incremental: files whose (size, mtime) are unchanged are skipped WITHOUT
+#   reading them; hashes are checkpointed every 30 s so a crash/cancel resumes.
+# - Progress lives in _SYNC_PROGRESS; Flask only reads a snapshot of it.
+# ------------------------------------------------------------------------------
 
-def sync_skills_to_chroma(collection_name: str = "telua_knowledge", incremental: bool = True) -> dict:
-    """Index all skills from all configured sources into persistent ChromaDB in ai_agent/data.
-    
-    If incremental=True, uses MD5 hashes to only re-embed new or modified files.
-    """
-    with _CHROMA_LOCK:
-        sources = resolve_skill_sources()
-        if not sources:
-            primary = resolve_skill_dir()
-            if primary.is_dir():
-                sources = [{"id": "telua_skill", "name": "Telua Java/Android", "dir": primary, "local_path": DEFAULT_SKILL_LOCAL_PATH}]
-            else:
-                return {
-                    "ok": False,
-                    "error": "No active skill sources found to index.",
-                    "indexed": 0,
-                }
+_SYNC_STATE_LOCK = threading.Lock()
+_SYNC_CANCEL = threading.Event()
+_SYNC_PROGRESS: dict = {}
+_HASH_CHECKPOINT_S = 30.0
 
-        try:
-            import chromadb
-        except ImportError:
-            return {
-                "ok": False,
-                "error": "chromadb package not installed. Run: pip install chromadb",
-                "indexed": 0,
-            }
 
-        chroma_dir = _repo_root() / "ai_agent" / "data"
-        chroma_dir.mkdir(parents=True, exist_ok=True)
-        client = chromadb.PersistentClient(path=str(chroma_dir))
-        col = client.get_or_create_collection(
-            name=collection_name,
-            metadata={"description": "Telua Multi-Source Java/Android & Agent Skills Knowledge Base"}
-        )
+def _new_progress(trigger: str) -> dict:
+    return {
+        "running": True,
+        "phase": "starting",
+        "trigger": trigger,
+        "started_at": time.time(),
+        "finished_at": None,
+        "sources_total": 0,
+        "current_source": "",
+        "scan_done": False,
+        "files_discovered": 0,
+        "bytes_discovered": 0,
+        "files_processed": 0,
+        "bytes_processed": 0,
+        "files_indexed": 0,
+        "files_skipped": 0,
+        "files_too_large": 0,
+        "files_failed": 0,
+        "chunks_written": 0,
+        "batches_written": 0,
+        "current_file": "",
+        "errors": 0,
+        "last_error": "",
+        "reader_threads": 0,
+        "cancel_requested": False,
+        "result": None,
+    }
 
-        skills = scan_skills()
-        if not skills:
-            return {"ok": True, "indexed": 0, "skipped": 0, "message": "No skill files found to index."}
 
-        previous_hashes = _load_skill_hashes() if incremental else {}
-        current_hashes = dict(previous_hashes)
+def _prog_set(**kw) -> None:
+    with _SYNC_STATE_LOCK:
+        _SYNC_PROGRESS.update(kw)
 
-        docs = []
-        metas = []
-        ids = []
-        skipped_count = 0
 
-        # Mapping for source roots
-        src_map = {s["id"]: s["dir"] for s in sources}
+def _prog_inc(**kw) -> None:
+    with _SYNC_STATE_LOCK:
+        for k, v in kw.items():
+            _SYNC_PROGRESS[k] = _SYNC_PROGRESS.get(k, 0) + v
 
-        for s in skills:
-            base_dir = src_map.get(s["source_id"])
-            if not base_dir:
-                continue
-            fp = base_dir / s["rel_path"]
+
+def _prog_error(msg: str) -> None:
+    with _SYNC_STATE_LOCK:
+        _SYNC_PROGRESS["errors"] = _SYNC_PROGRESS.get("errors", 0) + 1
+        _SYNC_PROGRESS["last_error"] = msg[:500]
+
+
+def get_sync_progress() -> dict:
+    """Thread-safe snapshot of the current / last sync job (cheap; safe to poll)."""
+    with _SYNC_STATE_LOCK:
+        p = dict(_SYNC_PROGRESS)
+    if not p:
+        return {"running": False, "phase": "idle"}
+    end = p.get("finished_at") or time.time()
+    elapsed = max(0.001, end - p["started_at"])
+    fps = p["files_processed"] / elapsed
+    p["elapsed_s"] = round(elapsed, 1)
+    p["files_per_s"] = round(fps, 1)
+    p["mb_per_s"] = round(p["bytes_processed"] / elapsed / 1048576.0, 2)
+    p["percent"] = None
+    p["eta_s"] = None
+    if p["files_discovered"]:
+        if p["scan_done"]:
+            p["percent"] = round(min(100.0, 100.0 * p["files_processed"] / p["files_discovered"]), 1)
+            if p["running"] and fps > 0:
+                p["eta_s"] = round((p["files_discovered"] - p["files_processed"]) / fps)
+    return p
+
+
+def _cfg_int(cfg: dict, key: str, default: int, lo: int, hi: int) -> int:
+    try:
+        return max(lo, min(hi, int(cfg.get(key, default))))
+    except (TypeError, ValueError):
+        return default
+
+
+def _skill_doc_id(s_id: str, rel: str) -> str:
+    clean_rel = rel.replace('/', '_').replace('\\', '_').replace('.', '_').replace('-', '_')
+    return f"skill_{s_id}_{clean_rel}"
+
+
+def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
+    """Run the walker/readers/writer pipeline. Caller must hold _CHROMA_LOCK."""
+    import queue
+
+    sources = _resolve_sources_with_fallback()
+    if not sources:
+        return {"ok": False, "error": "No active skill sources found to index.", "indexed": 0}
+
+    try:
+        import chromadb
+    except ImportError:
+        return {"ok": False, "error": "chromadb package not installed. Run: pip install chromadb", "indexed": 0}
+
+    from .code_structure_engine import CodeStructureEngine
+
+    cfg = get_mcp_skill_config()
+    n_readers = _cfg_int(cfg, "sync_reader_threads", min(8, max(2, os.cpu_count() or 4)), 1, 32)
+    batch_size = _cfg_int(cfg, "sync_batch_size", 64, 8, 1000)
+    max_file_bytes = _cfg_int(cfg, "sync_max_file_kb", 2048, 16, 102400) * 1024
+
+    chroma_dir = _repo_root() / "ai_agent" / "data"
+    chroma_dir.mkdir(parents=True, exist_ok=True)
+    client = chromadb.PersistentClient(path=str(chroma_dir))
+    col = client.get_or_create_collection(
+        name=collection_name,
+        metadata={"description": "Telua Multi-Source Java/Android & Agent Skills Knowledge Base"}
+    )
+
+    previous_hashes = _load_skill_hashes()      # read-only snapshot for readers
+    current_hashes = dict(previous_hashes)      # owned by the writer thread only
+
+    _prog_set(phase="indexing", sources_total=len(sources), reader_threads=n_readers)
+
+    file_q: "queue.Queue" = queue.Queue(maxsize=50000)
+    doc_q: "queue.Queue" = queue.Queue(maxsize=max(64, n_readers * 16))
+    abort = threading.Event()
+    SENTINEL = None
+
+    def stopped() -> bool:
+        return abort.is_set() or _SYNC_CANCEL.is_set()
+
+    def put(q, item) -> bool:
+        while True:
             try:
-                content = fp.read_text(encoding="utf-8", errors="replace")
-                if not content.strip():
-                    continue
+                q.put(item, timeout=0.5)
+                return True
+            except queue.Full:
+                if stopped():
+                    return False
 
-                file_hash = hashlib.md5(content.encode("utf-8")).hexdigest()
-                clean_rel = s['rel_path'].replace('/', '_').replace('\\', '_').replace('.', '_').replace('-', '_')
-                doc_id = f"skill_{s['source_id']}_{clean_rel}"
-                if doc_id in ids:
-                    continue
+    # ---------------- walker ----------------
+    def walker():
+        try:
+            for src in sources:
+                if stopped():
+                    break
+                _prog_set(current_source=src.get("name") or src["id"])
+                for full, rel, ext, size, mtime in _iter_source_files(src["dir"], stopped):
+                    if not put(file_q, (src, full, rel, ext, size, mtime)):
+                        return
+                    _prog_inc(files_discovered=1, bytes_discovered=size)
+        except Exception as e:
+            _prog_error(f"scan: {e}")
+        finally:
+            _prog_set(scan_done=True)
+            for _ in range(n_readers):
+                put(file_q, SENTINEL)
 
-                # Incremental skip: if hash matches, no re-embedding needed
-                if incremental and previous_hashes.get(doc_id) == file_hash:
-                    skipped_count += 1
-                    continue
-
-                current_hashes[doc_id] = file_hash
-
-                is_priv = bool(s.get("visibility") == "private" or s.get("is_private"))
-                metadata = {
-                    "source_id": s["source_id"],
-                    "source_name": s["source_name"],
-                    "project": s.get("project", "aosp_aaos"),
-                    "aosp_version": s.get("aosp_version", ""),
-                    "api_level": s.get("api_level") or 0,
-                    "branch": s.get("branch", ""),
-                    "category": s["category"],
-                    "name": s["name"],
-                    "title": s["title"],
-                    "rel_path": s["rel_path"],
-                    "scoped_path": s["scoped_path"],
-                    "source": f"{s['source_id']}/{s['rel_path']}",
-                    "ext": s["ext"],
-                    "type": "agent_skill",
-                    "visibility": "private" if is_priv else "public",
-                    "is_private": is_priv,
-                    "indexed_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                }
-
-                # AST / Structure-Aware Semantic Chunking for source code
-                from .code_structure_engine import CodeStructureEngine
-                code_exts = {".java", ".kt", ".kts", ".c", ".cpp", ".cc", ".cxx", ".h", ".hpp", ".py", ".js", ".ts", ".rs", ".go", ".aidl"}
-                if s["ext"].lower() in code_exts:
-                    code_chunks = CodeStructureEngine.chunk_code_for_vector_db(
-                        content, s["rel_path"], metadata, max_chunk_chars=4000
-                    )
-                    for ch in code_chunks:
-                        if ch["id"] not in ids:
-                            docs.append(ch["document"])
-                            metas.append(ch["metadata"])
-                            ids.append(ch["id"])
-                else:
-                    # Formulate semantic embedding document with clear provenance
-                    full_doc = (
-                        f"SOURCE: {s['source_name']} ({s['source_id']})\n"
-                        f"CATEGORY: {s['category']}\n"
-                        f"TITLE: {s['title']}\n"
-                        f"FILE: {s['name']} (Path: {s['scoped_path']})\n"
-                        f"SUMMARY: {s['summary']}\n\n"
-                        f"{content}"
-                    )
-                    if len(full_doc) > 15000:
-                        full_doc = full_doc[:15000]
-
-                    docs.append(full_doc)
-                    metas.append(metadata)
-                    ids.append(doc_id)
-            except Exception:
-                continue
-
-        if docs:
-            # Batch upsert in chunks of 50 to avoid oversized payloads
-            chunk_size = 50
-            for i in range(0, len(docs), chunk_size):
-                col.upsert(
-                    documents=docs[i:i + chunk_size],
-                    metadatas=metas[i:i + chunk_size],
-                    ids=ids[i:i + chunk_size],
-                )
-
-        _save_skill_hashes(current_hashes)
-
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        save_mcp_skill_state({
-            "last_sync": timestamp,
-            "indexed_count": len(skills),
-        })
-
-        return {
-            "ok": True,
-            "indexed": len(docs),
-            "skipped": skipped_count,
-            "total_files": len(skills),
-            "sources_count": len(sources),
-            "last_sync": timestamp,
-            "collection": collection_name,
-            "chroma_path": str(chroma_dir),
+    # ---------------- readers ----------------
+    def build_records(src, rel, ext, size, content):
+        s_id = src["id"]
+        doc_id = _skill_doc_id(s_id, rel)
+        title, summary = _parse_skill_metadata_text(rel.rsplit("/", 1)[-1], content[:1500])
+        s = _make_skill_entry(src, rel, ext, size, title, summary)
+        is_priv = s["is_private"]
+        metadata = {
+            "source_id": s_id,
+            "source_name": s["source_name"],
+            "project": s.get("project") or "aosp_aaos",
+            "aosp_version": s.get("aosp_version") or "",
+            "api_level": s.get("api_level") or 0,
+            "branch": s.get("branch") or "",
+            "category": s["category"],
+            "name": s["name"],
+            "title": s["title"],
+            "rel_path": rel,
+            "scoped_path": s["scoped_path"],
+            "source": f"{s_id}/{rel}",
+            "ext": ext,
+            "type": "agent_skill",
+            "visibility": "private" if is_priv else "public",
+            "is_private": is_priv,
+            "indexed_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
+        if ext in SKILL_CODE_EXTS:
+            # AST / Structure-Aware Semantic Chunking for source code
+            chunks = CodeStructureEngine.chunk_code_for_vector_db(content, rel, metadata, max_chunk_chars=4000)
+            return [(ch["id"], ch["document"], ch["metadata"]) for ch in chunks]
+        full_doc = (
+            f"SOURCE: {s['source_name']} ({s_id})\n"
+            f"CATEGORY: {s['category']}\n"
+            f"TITLE: {s['title']}\n"
+            f"FILE: {s['name']} (Path: {s['scoped_path']})\n"
+            f"SUMMARY: {s['summary']}\n\n"
+            f"{content}"
+        )
+        return [(doc_id, full_doc[:15000], metadata)]
+
+    def reader():
+        while True:
+            try:
+                item = file_q.get(timeout=0.5)
+            except queue.Empty:
+                if stopped():
+                    return
+                continue
+            if item is SENTINEL or stopped():
+                put(doc_q, SENTINEL)
+                return
+            src, full, rel, ext, size, mtime = item
+            doc_id = _skill_doc_id(src["id"], rel)
+            try:
+                if size > max_file_bytes:
+                    _prog_inc(files_processed=1, files_too_large=1, bytes_processed=size)
+                    continue
+                prev = previous_hashes.get(doc_id) if incremental else None
+                mtime_r = round(mtime, 3)
+                # Fast path: unchanged size + mtime -> skip without reading the file
+                if isinstance(prev, dict) and prev.get("s") == size and prev.get("m") == mtime_r:
+                    _prog_inc(files_processed=1, files_skipped=1, bytes_processed=size)
+                    continue
+                with open(full, "r", encoding="utf-8", errors="replace") as fh:
+                    content = fh.read()
+                if not content.strip():
+                    _prog_inc(files_processed=1, files_skipped=1, bytes_processed=size)
+                    continue
+                file_hash = hashlib.md5(content.encode("utf-8")).hexdigest()
+                hash_entry = {"h": file_hash, "m": mtime_r, "s": size}
+                prev_h = prev.get("h") if isinstance(prev, dict) else prev
+                if incremental and prev_h == file_hash:
+                    # Content unchanged (only touched / legacy hash format) -> refresh entry only
+                    put(doc_q, ("hash", doc_id, hash_entry, None))
+                    _prog_inc(files_processed=1, files_skipped=1, bytes_processed=size)
+                    continue
+                records = build_records(src, rel, ext, size, content)
+                _prog_set(current_file=f"{src['id']}/{rel}")
+                put(doc_q, ("docs", doc_id, hash_entry, records))
+                _prog_inc(files_processed=1, bytes_processed=size)
+            except Exception as e:
+                _prog_inc(files_processed=1, files_failed=1, bytes_processed=size)
+                _prog_error(f"{src['id']}/{rel}: {e}")
+
+    # ---------------- writer (single ChromaDB writer) ----------------
+    def writer():
+        ids: list = []
+        docs: list = []
+        metas: list = []
+        seen: set = set()          # per-batch: Chroma rejects duplicate ids in one upsert
+        pending: list = []         # (doc_id, hash_entry, is_indexed_file)
+        last_save = time.time()
+
+        def flush():
+            nonlocal ids, docs, metas, seen, pending, last_save
+            ok = True
+            if ids:
+                try:
+                    col.upsert(ids=ids, documents=docs, metadatas=metas)
+                    _prog_inc(chunks_written=len(ids), batches_written=1)
+                except Exception as e:
+                    ok = False
+                    _prog_error(f"upsert: {e}")
+            n_files = sum(1 for p in pending if p[2])
+            if ok:
+                for did, he, _ in pending:
+                    current_hashes[did] = he
+                if n_files:
+                    _prog_inc(files_indexed=n_files)
+            elif n_files:
+                _prog_inc(files_failed=n_files)
+            ids, docs, metas, seen, pending = [], [], [], set(), []
+            if time.time() - last_save > _HASH_CHECKPOINT_S:
+                _save_skill_hashes(current_hashes)
+                last_save = time.time()
+
+        sentinels = 0
+        try:
+            while sentinels < n_readers:
+                try:
+                    item = doc_q.get(timeout=0.5)
+                except queue.Empty:
+                    if stopped():
+                        break
+                    continue
+                if item is SENTINEL:
+                    sentinels += 1
+                    continue
+                kind, did, he, records = item
+                if kind == "docs":
+                    for rid, doc, meta in records:
+                        if rid in seen:
+                            continue
+                        seen.add(rid)
+                        ids.append(rid)
+                        docs.append(doc)
+                        metas.append(meta)
+                    pending.append((did, he, True))
+                else:
+                    pending.append((did, he, False))
+                if len(ids) >= batch_size or len(pending) >= 2000:
+                    flush()
+            flush()
+        except Exception as e:
+            _prog_error(f"writer: {e}")
+            abort.set()
+        finally:
+            try:
+                _save_skill_hashes(current_hashes)
+            except Exception as e:
+                _prog_error(f"save hashes: {e}")
+
+    threads = [threading.Thread(target=walker, name="ChromaSyncWalker", daemon=True)]
+    threads += [threading.Thread(target=reader, name=f"ChromaSyncReader-{i}", daemon=True) for i in range(n_readers)]
+    threads.append(threading.Thread(target=writer, name="ChromaSyncWriter", daemon=True))
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    cancelled = _SYNC_CANCEL.is_set()
+    p = get_sync_progress()
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    if not cancelled and not abort.is_set():
+        save_mcp_skill_state({"last_sync": timestamp, "indexed_count": p["files_discovered"]})
+    invalidate_skill_scan_cache()
+
+    return {
+        "ok": not cancelled and not abort.is_set(),
+        "cancelled": cancelled,
+        "error": p.get("last_error", "") if abort.is_set() else "",
+        "indexed": p["files_indexed"],
+        "chunks": p["chunks_written"],
+        "skipped": p["files_skipped"],
+        "too_large": p["files_too_large"],
+        "failed": p["files_failed"],
+        "errors": p["errors"],
+        "total_files": p["files_discovered"],
+        "sources_count": len(sources),
+        "elapsed_s": p["elapsed_s"],
+        "last_sync": timestamp,
+        "collection": collection_name,
+        "chroma_path": str(chroma_dir),
+    }
+
+
+def _run_sync_job(collection_name: str, incremental: bool) -> dict:
+    """Execute a sync job (caller holds _CHROMA_LOCK and has reset the progress)."""
+    try:
+        res = _run_sync_pipeline(collection_name, incremental)
+    except Exception as e:
+        _prog_error(str(e))
+        res = {"ok": False, "error": str(e), "indexed": 0}
+    phase = "cancelled" if res.get("cancelled") else ("done" if res.get("ok") else "error")
+    _prog_set(running=False, phase=phase, finished_at=time.time(), result=res, current_file="")
+    return res
+
+
+def _reset_progress(trigger: str) -> None:
+    _SYNC_CANCEL.clear()
+    with _SYNC_STATE_LOCK:
+        _SYNC_PROGRESS.clear()
+        _SYNC_PROGRESS.update(_new_progress(trigger))
+
+
+def sync_skills_to_chroma(collection_name: str = "telua_knowledge", incremental: bool = True,
+                          trigger: str = "manual") -> dict:
+    """Blocking sync of all configured sources into ChromaDB (used by scheduler / MCP CLI).
+
+    If incremental=True, unchanged files (size+mtime, then MD5) are not re-embedded.
+    Returns immediately with busy=True if another sync is already running.
+    """
+    if not _CHROMA_LOCK.acquire(blocking=False):
+        return {"ok": False, "busy": True, "error": "A ChromaDB sync is already running.", "indexed": 0}
+    try:
+        _reset_progress(trigger)
+        return _run_sync_job(collection_name, incremental)
+    finally:
+        _CHROMA_LOCK.release()
+
+
+def start_sync_job(collection_name: str = "telua_knowledge", incremental: bool = True,
+                   trigger: str = "web") -> dict:
+    """Start a sync in a background thread and return immediately (for Flask)."""
+    if not _CHROMA_LOCK.acquire(blocking=False):
+        return {"ok": True, "started": False, "already_running": True, "progress": get_sync_progress()}
+    try:
+        _reset_progress(trigger)
+
+        def _bg():
+            try:
+                _run_sync_job(collection_name, incremental)
+            finally:
+                _CHROMA_LOCK.release()
+
+        threading.Thread(target=_bg, name="TeluaChromaSync", daemon=True).start()
+    except Exception:
+        _CHROMA_LOCK.release()
+        raise
+    return {"ok": True, "started": True, "progress": get_sync_progress()}
+
+
+def cancel_sync_job() -> dict:
+    """Request cancellation of the running sync (already-written batches are kept)."""
+    if not get_sync_progress().get("running"):
+        return {"ok": False, "error": "No sync is running."}
+    _SYNC_CANCEL.set()
+    _prog_set(cancel_requested=True, phase="cancelling")
+    return {"ok": True}
 
 
 # ==============================================================================
@@ -834,7 +1202,7 @@ def start_mcp_background_scheduler():
         cfg = get_mcp_skill_config()
         if cfg.get("auto_sync_enabled", True) and cfg.get("sync_on_startup", True):
             try:
-                res = sync_skills_to_chroma(incremental=True)
+                res = sync_skills_to_chroma(incremental=True, trigger="startup")
                 sys.stderr.write(
                     f"[Telua MCP Sync] Startup sync completed: {res.get('indexed', 0)} updated, "
                     f"{res.get('skipped', 0)} cached (total {res.get('total_files', 0)} skills across {res.get('sources_count', 0)} sources).\n"
@@ -861,7 +1229,7 @@ def start_mcp_background_scheduler():
             cfg = get_mcp_skill_config()
             if cfg.get("auto_sync_enabled", True):
                 try:
-                    res = sync_skills_to_chroma(incremental=True)
+                    res = sync_skills_to_chroma(incremental=True, trigger="scheduled")
                     if res.get("indexed", 0) > 0:
                         sys.stderr.write(
                             f"[Telua MCP Sync] Periodic ({interval_hours}h) sync: {res.get('indexed')} updated.\n"

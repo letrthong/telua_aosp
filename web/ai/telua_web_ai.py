@@ -35,14 +35,16 @@ from flask import Blueprint, jsonify, request
 
 ai_bp = Blueprint("ai", __name__)
 
+# All AI config lives in config/ai_agent (shared) and config/overlay/ai_agent
+# (git-ignored); legacy config/ and config/overlay/ files are auto-migrated.
+from .ai_config_paths import candidates as _ai_cfg_candidates, overlay_file as _ai_overlay_file, \
+    shared_file as _ai_shared_file
+
 # ------------------------------------------------------------------------------
 # Configuration
 # ------------------------------------------------------------------------------
 
-AI_CONFIG_FILE_CANDIDATES = [
-    "config/overlay/const_ai.config",
-    "config/const_ai.config",
-]
+AI_CONFIG_FILE_CANDIDATES = _ai_cfg_candidates("const_ai.config")
 
 # JSON provider config (same shape as VS Code Copilot custom endpoints):
 # [
@@ -58,15 +60,9 @@ AI_CONFIG_FILE_CANDIDATES = [
 #     ]
 #   }
 # ]
-AI_PROVIDERS_JSON_CANDIDATES = [
-    "config/overlay/ai_providers.json",
-    "config/ai_providers.json",
-]
+AI_PROVIDERS_JSON_CANDIDATES = _ai_cfg_candidates("ai_providers.json")
 
-AI_PROVIDERS_TEMPLATE_CANDIDATES = [
-    "config/overlay/ai_providers.template.json",
-    "config/ai_providers.template.json",
-]
+AI_PROVIDERS_TEMPLATE_CANDIDATES = _ai_cfg_candidates("ai_providers.template.json")
 
 DEFAULT_PROVIDER = "anthropic"
 DEFAULT_MODEL = "claude-sonnet-4-5"
@@ -80,10 +76,7 @@ DEFAULT_GUARDRAILS = {
     "loop_breaker_enabled": True,
 }
 
-AI_GUARDRAILS_CANDIDATES = [
-    "config/overlay/ai_guardrails.json",
-    "config/ai_guardrails.json",
-]
+AI_GUARDRAILS_CANDIDATES = _ai_cfg_candidates("ai_guardrails.json")
 
 
 def _ai_guardrails_path() -> Path:
@@ -92,7 +85,7 @@ def _ai_guardrails_path() -> Path:
         p = root / cand
         if p.is_file():
             return p
-    return root / "config" / "overlay" / "ai_guardrails.json"
+    return _ai_overlay_file("ai_guardrails.json")
 
 
 def get_ai_guardrails() -> dict:
@@ -121,13 +114,13 @@ def save_ai_guardrails(data: dict) -> dict:
                     cfg[k] = int(data[k])
                 except (ValueError, TypeError):
                     pass
-    p = _repo_root() / "config" / "overlay" / "ai_guardrails.json"
+    p = _ai_overlay_file("ai_guardrails.json")
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     return cfg
 
 
-AI_TOKEN_USAGE_PATH = "config/overlay/ai_token_usage.json"
+AI_TOKEN_USAGE_PATH = "config/overlay/ai_agent/ai_token_usage.json"
 
 
 def _ai_token_usage_file() -> Path:
@@ -326,15 +319,15 @@ def _read_providers_json() -> list:
 def _write_providers_json(providers: list) -> None:
     """Write provider configuration.
     
-    If any provider has an active apiKey, ALWAYS writes to config/overlay/ai_providers.json
+    If any provider has an active apiKey, ALWAYS writes to config/overlay/ai_agent/ai_providers.json
     (which is git-ignored) to guarantee zero API key leakage into tracked public Git files.
     """
     has_any_key = any(bool(p.get("apiKey")) for p in providers if isinstance(p, dict))
-    overlay_path = _repo_root() / "config" / "overlay" / "ai_providers.json"
+    overlay_path = _ai_overlay_file("ai_providers.json")
     if has_any_key or overlay_path.is_file():
         path = overlay_path
     else:
-        path = _ai_providers_json_path() or (_repo_root() / "config" / "ai_providers.json")
+        path = _ai_providers_json_path() or _ai_shared_file("ai_providers.json")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(providers, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -376,7 +369,7 @@ def _active_model_entry(provider_entry: dict, active_model_id: str = "") -> Opti
 
 
 def _read_ai_config() -> dict:
-    """Read optional config/overlay/const_ai.config (KEY=VALUE lines)."""
+    """Read optional config/overlay/ai_agent/const_ai.config (KEY=VALUE lines)."""
     root = _repo_root()
     for cand in AI_CONFIG_FILE_CANDIDATES:
         path = root / cand
@@ -1182,7 +1175,7 @@ def _call_anthropic(messages, model, base_url):
     api_key = _resolve_api_key("anthropic")
     if not api_key:
         raise RuntimeError("No API key. Set TELUA_AI_API_KEY / ANTHROPIC_API_KEY "
-                           "or add api_key=... to config/overlay/const_ai.config")
+                           "or add api_key=... to config/overlay/ai_agent/const_ai.config")
     kwargs = {}
     if base_url:
         kwargs["base_url"] = base_url
@@ -1521,8 +1514,8 @@ def api_ai_config():
 
     Accepts the full provider registry JSON (same shape as VS Code Copilot
     custom endpoints) plus optional activeProvider/activeModel selection.
-    The file is stored at config/ai_providers.json (or the overlay path if it
-    already exists there).
+    The file is stored at config/ai_agent/ai_providers.json, or in the git-ignored
+    config/overlay/ai_agent/ai_providers.json when it contains API keys.
     """
     data = request.get_json(silent=True) or {}
     providers = data.get("providers")
@@ -1554,8 +1547,7 @@ def api_ai_config():
     active_provider = str(data.get("activeProvider", "")).strip()
     active_model = str(data.get("activeModel", "")).strip()
     if active_provider or active_model:
-        root = _repo_root()
-        cfg_path = root / "config" / "overlay" / "const_ai.config"
+        cfg_path = _ai_overlay_file("const_ai.config")
         cfg_path.parent.mkdir(parents=True, exist_ok=True)
         lines = []
         if cfg_path.is_file():
@@ -1568,7 +1560,7 @@ def api_ai_config():
         cfg_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     return jsonify({"ok": True, "saved": len(providers),
-                    "path": str(_ai_providers_json_path() or "config/ai_providers.json")})
+                    "path": str(_ai_providers_json_path() or "config/ai_agent/ai_providers.json")})
 
 
 @ai_bp.post("/api/ai/key")
@@ -1805,7 +1797,7 @@ def api_ai_mcp_config_get():
     """Return MCP skill configuration and local status."""
     from .telua_mcp_skill import get_mcp_skill_config, scan_skills, get_all_configured_sources, DEFAULT_AOSP_VERSIONS
     cfg = get_mcp_skill_config()
-    skills = scan_skills()
+    skills = scan_skills(with_meta=False)  # cached listing; no file reads
     categories = sorted(set(s["category"] for s in skills))
     sources = get_all_configured_sources()
     by_src = {}
@@ -1842,26 +1834,51 @@ def api_ai_mcp_config_get():
 @ai_bp.post("/api/ai/mcp/config")
 def api_ai_mcp_config_post():
     """Save updated MCP skill configuration."""
-    from .telua_mcp_skill import save_mcp_skill_config
+    from .telua_mcp_skill import save_mcp_skill_config, invalidate_skill_scan_cache
     data = request.get_json(silent=True) or {}
     updated = save_mcp_skill_config(data)
+    invalidate_skill_scan_cache()
     return jsonify({"ok": True, "config": updated})
 
 
 @ai_bp.post("/api/ai/mcp/sync")
 def api_ai_mcp_sync():
-    """Sync all skills from telua_skill/Java_Android into ChromaDB (ai_agent/data)."""
-    from .telua_mcp_skill import sync_skills_to_chroma
-    res = sync_skills_to_chroma()
-    return jsonify(res)
+    """Start a background sync of all enabled sources into ChromaDB (ai_agent/data).
+
+    Returns immediately (202); poll GET /api/ai/mcp/sync/status for progress.
+    Body (optional): {"incremental": true}
+    """
+    from .telua_mcp_skill import start_sync_job
+    data = request.get_json(silent=True) or {}
+    res = start_sync_job(incremental=bool(data.get("incremental", True)), trigger="web")
+    return jsonify(res), (202 if res.get("started") else 200)
+
+
+@ai_bp.get("/api/ai/mcp/sync/status")
+def api_ai_mcp_sync_status():
+    """Live progress snapshot of the running / last ChromaDB sync job."""
+    from .telua_mcp_skill import get_sync_progress
+    return jsonify({"ok": True, "progress": get_sync_progress()})
+
+
+@ai_bp.post("/api/ai/mcp/sync/cancel")
+def api_ai_mcp_sync_cancel():
+    """Request cancellation of the running ChromaDB sync job."""
+    from .telua_mcp_skill import cancel_sync_job
+    return jsonify(cancel_sync_job())
 
 
 @ai_bp.get("/api/ai/mcp/skills")
 def api_ai_mcp_skills():
-    """List all scanned skills from Java_Android."""
+    """List scanned skills (capped by ?limit=, default 500; 'count' is the full total)."""
     from .telua_mcp_skill import scan_skills
-    skills = scan_skills()
-    return jsonify({"ok": True, "skills": skills, "count": len(skills)})
+    try:
+        limit = max(0, min(int(request.args.get("limit", 500)), 20000))
+    except (TypeError, ValueError):
+        limit = 500
+    total = len(scan_skills(with_meta=False))
+    skills = scan_skills(limit=limit)
+    return jsonify({"ok": True, "skills": skills, "count": total, "truncated": total > len(skills)})
 
 
 @ai_bp.get("/api/ai/mcp/skill")

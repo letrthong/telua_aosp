@@ -602,10 +602,17 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
         self.assertTrue(res_one.get_json()["ok"])
         self.assertIn("content", res_one.get_json()["skill"])
 
-        # Test sync endpoint
+        # Test sync endpoint (async: 202 when started, 200 if already running)
         res_sync = self.client.post("/api/ai/mcp/sync")
-        self.assertEqual(res_sync.status_code, 200)
+        self.assertIn(res_sync.status_code, (200, 202))
         self.assertTrue(res_sync.get_json()["ok"])
+        res_status = self.client.get("/api/ai/mcp/sync/status")
+        self.assertEqual(res_status.status_code, 200)
+        self.assertIn("progress", res_status.get_json())
+        import time as _time
+        _deadline = _time.time() + 600
+        while self.client.get("/api/ai/mcp/sync/status").get_json()["progress"].get("running") and _time.time() < _deadline:
+            _time.sleep(0.5)
 
         # Test write_file & edit_file tools
         from ai.telua_web_ai import _tool_write_file, _tool_edit_file, _tool_read_file, _repo_root
@@ -678,7 +685,7 @@ class TestTeluaWebFlaskRoutes(unittest.TestCase):
                 {"id": "claude_code_java", "name": "Claude Code Java Agent Skills", "local_path": "repos/claude-code-java", "visibility": "public"}
             ]
         })
-        p_priv = _repo_root() / "config" / "overlay" / "mcp_skills_private.json"
+        p_priv = _repo_root() / "config" / "overlay" / "ai_agent" / "mcp_skills_private.json"
         if p_priv.is_file():
             p_priv.unlink()
 
