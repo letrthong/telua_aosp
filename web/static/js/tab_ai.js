@@ -126,6 +126,8 @@ async function aiSend() {
   try {
     const chatProject = ($("#ai-chat-project")?.value || "").trim();
     const chatVersion = ($("#ai-chat-version")?.value || "").trim();
+    let sphinxDocsDir = "";
+    try { sphinxDocsDir = (localStorage.getItem("telua_web_docs_dir") || "").trim(); } catch { /* ignore */ }
     const res = await api("/api/ai/chat", {
       method: "POST",
       body: JSON.stringify({
@@ -133,6 +135,7 @@ async function aiSend() {
         history: _aiHistory.slice(-10),
         project: chatProject,
         aosp_version: chatVersion,
+        docs_dir: sphinxDocsDir,
       }),
     });
     (res.trace || []).forEach(t => aiAppendToolTrace(t.tool, t.args, t.output));
@@ -171,21 +174,46 @@ async function initAI() {
 
   $("#ai-chat-project")?.addEventListener("change", (e) => {
     try { localStorage.setItem(AI_CHAT_PROJECT_KEY, e.target.value || ""); } catch { /* ignore */ }
+    renderAIChatContextSelects();
   });
   $("#ai-chat-version")?.addEventListener("change", (e) => {
     try { localStorage.setItem(AI_CHAT_VERSION_KEY, e.target.value || ""); } catch { /* ignore */ }
   });
-  // Populate Chat Project / AOSP Version selectors immediately on tab init
+  // Populate Chat Project / AOSP Version selectors + default Target Path from AOSP tab config
   renderAIChatContextSelects();
-  api("/api/ai/mcp/config").then(cfgRes => {
+  Promise.all([
+    api("/api/ai/mcp/config").catch(() => null),
+    api("/api/ai/chroma/status").catch(() => null),
+    api("/api/aosp/config").catch(() => null),
+  ]).then(([cfgRes, chromaSt, aospCfg]) => {
     if (cfgRes?.projects || cfgRes?.config?.projects) {
       _aiProjects = cfgRes.projects || cfgRes.config?.projects || DEFAULT_PROJECTS;
     }
     if (cfgRes?.aosp_versions || cfgRes?.config?.aosp_versions) {
       _aiAospVersions = cfgRes.aosp_versions || cfgRes.config?.aosp_versions || DEFAULT_AOSP_VERSIONS;
     }
+    if (Array.isArray(cfgRes?.sources)) {
+      _aiMcpSources = cfgRes.sources;
+    }
+    if (Array.isArray(chromaSt?.shards)) {
+      _aiChromaShards = chromaSt.shards;
+    }
     renderAIChatContextSelects();
-  }).catch(() => { /* optional */ });
+
+    // Auto-populate Target Path from AOSP Root + Source Path if user hasn't entered a custom path
+    if (aospCfg && aospCfg.ok) {
+      const aospRoot = (aospCfg.aosp_root_dir || "").trim().replace(/[\\/]+$/, "");
+      const srcRel = (aospCfg.source_path || "").trim().replace(/^[\\/]+/, "");
+      const fullAospSrc = aospRoot && srcRel ? `${aospRoot}/${srcRel}` : (srcRel || aospRoot);
+      const targetEl = $("#ai-target-file");
+      if (targetEl && fullAospSrc) {
+        targetEl.placeholder = fullAospSrc;
+        if (!targetEl.value.trim()) {
+          targetEl.value = fullAospSrc;
+        }
+      }
+    }
+  });
 
   $("#btn-ai-send")?.addEventListener("click", aiSend);
   $("#ai-input")?.addEventListener("keydown", (e) => {
@@ -418,6 +446,7 @@ async function initAI() {
   $("#btn-ai-project-add")?.addEventListener("click", () => {
     const idInput = $("#ai-project-new-id");
     const nameInput = $("#ai-project-new-name");
+    const docsInput = $("#ai-project-new-docs");
     const id = (idInput?.value || "").trim().toLowerCase().replace(/[^a-z0-9_\-]/g, "_").replace(/^_+|_+$/g, "");
     if (!id) {
       toast("Invalid ID", "Please enter a valid project ID (alphanumeric, e.g. car_ivi).", "err");
@@ -430,9 +459,11 @@ async function initAI() {
       return;
     }
     const name = (nameInput?.value || "").trim() || id;
-    _aiProjects.push({ id, name, enabled: true });
+    const docsPath = (docsInput?.value || "").trim();
+    _aiProjects.push({ id, name, enabled: true, docs_path: docsPath });
     if (idInput) idInput.value = "";
     if (nameInput) nameInput.value = "";
+    if (docsInput) docsInput.value = "";
     renderAIProjectsList();
     renderAIProjectsSelect(id);
     toast("Project Added 📁", `Added "${name}" (${id}). Click "Save Projects" to persist.`, "ok", 3000);
@@ -865,32 +896,97 @@ const DEFAULT_PROJECTS = [
 let _aiProjects = [...DEFAULT_PROJECTS];
 let _aiAospVersions = [...DEFAULT_AOSP_VERSIONS];
 let _aiMcpSources = [];
+let _aiChromaShards = [];
 
 function renderAIChatContextSelects() {
   const projSel = $("#ai-chat-project");
+  const verSel = $("#ai-chat-version");
+
+  // Build map of friendly names from configured _aiProjects (respecting enabled flag)
+  const projMeta = new Map();
+  const disabledProjs = new Set();
+  for (const p of _aiProjects) {
+    const id = (p.id || "").trim().toLowerCase();
+    if (!id) continue;
+    if (p.enabled === false) {
+      disabledProjs.add(id);
+    } else {
+      projMeta.set(id, p.name || p.id);
+    }
+  }
+
+  // Collect projects that actually exist in enabled sources or VectorDB shards
+  const activeProjCounts = new Map();
+  const enabledSources = (_aiMcpSources || []).filter(s => s.enabled !== false);
+  for (const s of enabledSources) {
+    const pid = (s.project || "aosp_aaos").trim().toLowerCase();
+    if (!pid || disabledProjs.has(pid)) continue;
+    activeProjCounts.set(pid, (activeProjCounts.get(pid) || 0) + 1);
+    if (!projMeta.has(pid)) projMeta.set(pid, pid);
+  }
+  for (const sh of (_aiChromaShards || [])) {
+    if (sh.is_legacy) continue;
+    const pid = (sh.project || "").trim().toLowerCase();
+    if (!pid || disabledProjs.has(pid)) continue;
+    if (!activeProjCounts.has(pid)) activeProjCounts.set(pid, 0);
+    if (!projMeta.has(pid)) projMeta.set(pid, pid);
+  }
+  // If no sources/shards loaded yet, fall back to enabled _aiProjects
+  const projectIds = activeProjCounts.size > 0
+    ? Array.from(activeProjCounts.keys())
+    : Array.from(projMeta.keys());
+
+  let selectedProj = "";
   if (projSel) {
     let savedProj = "";
     try { savedProj = localStorage.getItem(AI_CHAT_PROJECT_KEY) || ""; } catch { /* ignore */ }
-    const cur = projSel.value || savedProj;
-    const enabledProjs = _aiProjects.filter(p => p.enabled !== false);
+    const cur = projSel.dataset.initialized ? projSel.value : savedProj;
+    selectedProj = projectIds.includes(cur) ? cur : "";
     projSel.innerHTML =
-      `<option value="">All Projects</option>` +
-      enabledProjs.map(p =>
-        `<option value="${esc(p.id)}" ${p.id === cur ? "selected" : ""}>${esc(p.name || p.id)}</option>`
-      ).join("");
+      `<option value="">All Projects (${projectIds.length})</option>` +
+      projectIds.map(pid => {
+        const label = projMeta.get(pid) || pid;
+        const cnt = activeProjCounts.get(pid);
+        const suffix = cnt ? ` (${cnt})` : "";
+        return `<option value="${esc(pid)}" ${pid === selectedProj ? "selected" : ""}>${esc(label)}${suffix}</option>`;
+      }).join("");
+    projSel.dataset.initialized = "1";
   }
 
-  const verSel = $("#ai-chat-version");
+  // Build AOSP Version options that actually exist for the selected project (or all projects)
   if (verSel) {
+    const verLabelMap = new Map();
+    for (const v of _aiAospVersions) {
+      if (v.id && v.id !== "auto") verLabelMap.set(v.id.toLowerCase(), v.name || v.id);
+    }
+    const existingVers = new Set();
+    for (const s of enabledSources) {
+      const sp = (s.project || "aosp_aaos").trim().toLowerCase();
+      if (selectedProj && sp !== selectedProj) continue;
+      const v = (s.aosp_version || "").trim().toLowerCase();
+      if (v && v !== "auto") existingVers.add(v);
+    }
+    for (const sh of (_aiChromaShards || [])) {
+      if (sh.is_legacy) continue;
+      const sp = (sh.project || "").trim().toLowerCase();
+      if (selectedProj && sp !== selectedProj) continue;
+      const v = (sh.aosp_version || "").trim().toLowerCase();
+      if (v && v !== "shared") existingVers.add(v);
+    }
+    const verIds = existingVers.size > 0
+      ? Array.from(existingVers).sort()
+      : Array.from(verLabelMap.keys());
+
     let savedVer = "";
     try { savedVer = localStorage.getItem(AI_CHAT_VERSION_KEY) || ""; } catch { /* ignore */ }
-    const cur = verSel.value || savedVer;
-    const versions = _aiAospVersions.filter(v => v.id && v.id !== "auto");
+    const curVer = verSel.dataset.initialized ? verSel.value : savedVer;
+    const selectedVer = verIds.includes(curVer) ? curVer : "";
     verSel.innerHTML =
       `<option value="">All AOSP Versions</option>` +
-      versions.map(v =>
-        `<option value="${esc(v.id)}" ${v.id === cur ? "selected" : ""}>${esc(v.name || v.id)}</option>`
+      verIds.map(vid =>
+        `<option value="${esc(vid)}" ${vid === selectedVer ? "selected" : ""}>${esc(verLabelMap.get(vid) || vid)}</option>`
       ).join("");
+    verSel.dataset.initialized = "1";
   }
 }
 
@@ -920,11 +1016,17 @@ function renderAIProjectsList() {
       ? `<span class="chip ok" style="font-size:10px;padding:1px 6px;">Enabled</span>`
       : `<span class="chip" style="font-size:10px;padding:1px 6px;background:rgba(255,255,255,0.06);color:#8b949e;">Disabled</span>`;
     return `
-      <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--bg);border:1px solid ${isEnabled ? 'var(--border)' : 'rgba(255,255,255,0.06)'};border-radius:4px;opacity:${isEnabled ? '1' : '0.6'};">
-        <input type="checkbox" class="ai-proj-toggle" data-idx="${idx}" ${isEnabled ? 'checked' : ''} title="${isEnabled ? 'Enabled (uncheck to disable)' : 'Disabled (check to enable)'}">
-        <code class="mono" style="font-size:11px;color:var(--accent);font-weight:700;flex-shrink:0;">${esc(p.id)}</code>
-        <input type="text" class="term-input ai-proj-name-input" data-idx="${idx}" value="${esc(p.name || p.id)}" style="flex:1;font-size:11px;padding:3px 6px;min-width:0;" placeholder="Project label">
-        ${statusChip}
+      <div style="display:flex;flex-direction:column;gap:4px;padding:6px 8px;background:var(--bg);border:1px solid ${isEnabled ? 'var(--border)' : 'rgba(255,255,255,0.06)'};border-radius:4px;opacity:${isEnabled ? '1' : '0.6'};">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" class="ai-proj-toggle" data-idx="${idx}" ${isEnabled ? 'checked' : ''} title="${isEnabled ? 'Enabled (uncheck to disable)' : 'Disabled (check to enable)'}">
+          <code class="mono" style="font-size:11px;color:var(--accent);font-weight:700;flex-shrink:0;">${esc(p.id)}</code>
+          <input type="text" class="term-input ai-proj-name-input" data-idx="${idx}" value="${esc(p.name || p.id)}" style="flex:1;font-size:11px;padding:3px 6px;min-width:0;" placeholder="Project label">
+          ${statusChip}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;padding-left:22px;">
+          <span class="meta" style="font-size:10px;white-space:nowrap;">📚 Docs:</span>
+          <input type="text" class="term-input mono ai-proj-docs-input" data-idx="${idx}" value="${esc(p.docs_path || '')}" style="flex:1;font-size:10px;padding:2px 6px;min-width:0;" placeholder="Sphinx docs dir (optional, e.g. docs or D:\\work\\docs)">
+        </div>
       </div>
     `;
   }).join("");
@@ -948,6 +1050,15 @@ function renderAIProjectsList() {
       }
     });
     inp.addEventListener("change", () => renderAIProjectsSelect());
+  });
+
+  container.querySelectorAll(".ai-proj-docs-input").forEach(inp => {
+    inp.addEventListener("input", (e) => {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      if (_aiProjects[idx]) {
+        _aiProjects[idx].docs_path = e.target.value.trim();
+      }
+    });
   });
 }
 
@@ -1081,12 +1192,36 @@ function renderAIMcpSourcesList() {
   });
 
   container.querySelectorAll(".ai-mcp-src-del").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      const idx = parseInt(e.target.dataset.idx, 10);
-      const name = _aiMcpSources[idx]?.name || "this source";
-      if (!confirm(`Are you sure you want to remove source "${name}"?`)) return;
-      _aiMcpSources.splice(idx, 1);
+    btn.addEventListener("click", async (e) => {
+      const idx = parseInt(e.currentTarget.dataset.idx, 10);
+      const src = _aiMcpSources[idx];
+      if (!src) return;
+      const name = src.name || src.id || "this source";
+      const ok = await confirmDialog({
+        title: "Delete Knowledge Source?",
+        message: `Are you sure you want to permanently remove "${name}"?`,
+        detail: `Path: ${src.local_path || "—"}\nProject: ${src.project || "aosp_aaos"} | AOSP: ${src.aosp_version || "shared"}`,
+        hint: "⚠️ All indexed VectorDB chunks & hash cache for this source will also be deleted. Uncheck the source instead if you only want to disable it.",
+        confirmText: "Yes, Delete",
+        cancelText: "No",
+        icon: "🗑",
+      });
+      if (!ok) return;
+
+      const [removed] = _aiMcpSources.splice(idx, 1);
       renderAIMcpSourcesList();
+      try {
+        await api("/api/ai/mcp/config", {
+          method: "POST",
+          body: JSON.stringify({ sources: _aiMcpSources }),
+        });
+        toast("Source Deleted 🗑", `Removed "${name}" and cleaned its VectorDB data.`, "ok", 4000);
+        await loadAIMcpStatus();
+      } catch (err) {
+        _aiMcpSources.splice(idx, 0, removed);
+        renderAIMcpSourcesList();
+        toast("Delete Source Error", err.message, "err");
+      }
     });
   });
 }
@@ -1116,17 +1251,21 @@ async function loadAIMcpStatus() {
       }
     }
 
+    if (Array.isArray(st.shards)) {
+      _aiChromaShards = st.shards;
+    }
+
     if (cfgRes.projects || cfgRes.config?.projects) {
       _aiProjects = cfgRes.projects || cfgRes.config?.projects || DEFAULT_PROJECTS;
     }
-    renderAIProjectsSelect();
 
     if (cfgRes.aosp_versions || cfgRes.config?.aosp_versions) {
       _aiAospVersions = cfgRes.aosp_versions || cfgRes.config?.aosp_versions || DEFAULT_AOSP_VERSIONS;
     }
-    renderAIAospVersionsSelect();
 
     _aiMcpSources = cfgRes.sources || [];
+    renderAIProjectsSelect();
+    renderAIAospVersionsSelect();
     renderAIMcpSourcesList();
 
     const schedSel = $("#ai-mcp-schedule-select");

@@ -223,6 +223,7 @@ function confirmDialog({
   detail = "",
   hint = "💡 After deleting, remember to click '💾 Save all' to write changes to disk.",
   confirmText = "🗑 Confirm Delete",
+  cancelText = "Cancel",
   icon = "🗑",
 } = {}) {
   const modal = $("#modal-confirm");
@@ -246,6 +247,8 @@ function confirmDialog({
     hintEl.classList.add("hidden");
   }
   $("#btn-confirm-ok").textContent = confirmText;
+  const cancelBtn = $("#btn-confirm-cancel");
+  if (cancelBtn) cancelBtn.textContent = cancelText;
   modal.classList.remove("hidden");
   $("#btn-confirm-ok").focus();
 

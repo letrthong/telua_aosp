@@ -1693,11 +1693,15 @@
         style="background:rgba(255,255,255,0.02);border:1px dashed var(--border);border-radius:6px;padding:8px;">
         <span style="font-size:11px;font-weight:600;color:var(--accent);display:block;margin-bottom:6px;">➕ Add New
           Project:</span>
-        <div style="display:grid;grid-template-columns:1fr 1.6fr auto;gap:6px;align-items:center;">
+        <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:6px;align-items:center;margin-bottom:6px;">
           <input type="text" id="ai-project-new-id" class="term-input mono" style="font-size:11px;padding:4px 6px;"
             placeholder="ID (e.g. aosp_ivi)">
           <input type="text" id="ai-project-new-name" class="term-input" style="font-size:11px;padding:4px 6px;"
             placeholder="Label (e.g. OEM Car IVI)">
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="text" id="ai-project-new-docs" class="term-input mono" style="flex:1;font-size:11px;padding:4px 6px;"
+            placeholder="Sphinx Docs Path (optional, e.g. docs or D:\work\car_docs)">
           <button type="button" class="btn primary" id="btn-ai-project-add"
             style="font-size:11px;padding:4px 10px;white-space:nowrap;">➕ Add</button>
         </div>
@@ -1813,7 +1817,7 @@
   </div>
 
   <!-- ============ Confirm modal ============ -->
-  <div class="modal hidden" id="modal-confirm">
+  <div class="modal hidden" id="modal-confirm" style="z-index:1200;">
     <div class="modal-box confirm-modal">
       <div class="confirm-head">
         <span class="confirm-icon" id="confirm-icon">🗑</span>

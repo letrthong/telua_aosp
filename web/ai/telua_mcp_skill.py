@@ -68,7 +68,7 @@ DEFAULT_AOSP_VERSIONS = [
 ]
 
 DEFAULT_PROJECTS = [
-    {"id": "aosp_aaos", "name": "AOSP AAOS (Android Automotive)", "enabled": True},
+    {"id": "aosp_aaos", "name": "AOSP AAOS (Android Automotive)", "enabled": True, "docs_path": ""},
 ]
 
 try:
@@ -259,6 +259,7 @@ def get_mcp_skill_config() -> dict:
                                     "id": pid,
                                     "name": str(item.get("name") or pid).strip(),
                                     "enabled": bool(item.get("enabled", True)),
+                                    "docs_path": str(item.get("docs_path") or "").strip(),
                                 })
                                 seen_pids.add(pid)
                     for dp in DEFAULT_PROJECTS:
@@ -327,6 +328,7 @@ def save_mcp_skill_config(cfg: dict) -> dict:
                 "id": p_id,
                 "name": str(p.get("name") or p_id).strip(),
                 "enabled": bool(p.get("enabled", True)),
+                "docs_path": str(p.get("docs_path") or "").strip(),
             })
         # Preserve any previously saved project that was omitted (no deletion allowed)
         for pid, old_p in existing_projs.items():
@@ -335,13 +337,17 @@ def save_mcp_skill_config(cfg: dict) -> dict:
                     "id": pid,
                     "name": str(old_p.get("name") or pid).strip(),
                     "enabled": bool(old_p.get("enabled", False)),
+                    "docs_path": str(old_p.get("docs_path") or "").strip(),
                 })
         cleaned["projects"] = incoming_order
 
     # Clean and validate sources if passed
+    removed_sources = []
     if "sources" in cleaned and isinstance(cleaned["sources"], list):
+        prev_all_sources = get_all_configured_sources()
         public_sources = []
         private_sources = []
+        kept_ids = set()
         for i, s in enumerate(cleaned["sources"]):
             if not isinstance(s, dict):
                 continue
@@ -352,6 +358,7 @@ def save_mcp_skill_config(cfg: dict) -> dict:
             s_id = str(s.get("id", "")).strip()
             if not s_id:
                 s_id = local_path.replace("\\", "/").rstrip("/").split("/")[-1].lower().replace("-", "_").replace(".", "_")
+            kept_ids.add(s_id.lower())
             is_priv = bool(s.get("visibility") == "private" or s.get("is_private"))
             entry = {
                 "id": s_id,
@@ -371,6 +378,7 @@ def save_mcp_skill_config(cfg: dict) -> dict:
             else:
                 public_sources.append(entry)
 
+        removed_sources = [ps for ps in prev_all_sources if str(ps.get("id", "")).lower() not in kept_ids]
         save_private_sources(private_sources)
         cleaned["sources"] = public_sources
         if public_sources and not cleaned.get("local_path"):
@@ -391,7 +399,113 @@ def save_mcp_skill_config(cfg: dict) -> dict:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(current, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    # If any source was permanently deleted (not just disabled), purge its VectorDB chunks & hash cache.
+    if removed_sources:
+        try:
+            purge_removed_sources(removed_sources)
+        except Exception:
+            pass
+
     return get_mcp_skill_config()
+
+
+def purge_removed_sources(removed_sources: List[dict], collection_name: str = "telua_knowledge") -> dict:
+    """Remove VectorDB chunks, hash cache entries, and any newly-empty shards for deleted sources."""
+    if not removed_sources:
+        return {"deleted_docs": 0, "dropped_shards": [], "purged_hashes": 0}
+    try:
+        from .db import get_vector_db, shard_key as _shard_key
+    except ImportError:
+        from db import get_vector_db, shard_key as _shard_key
+
+    vdb = get_vector_db(base_dir=_repo_root() / "ai_agent" / "data")
+    backend = vdb.backend_name
+    deleted_docs = 0
+    dropped_shards = []
+    affected_shards = set()
+    removed_ids = []
+
+    db_ok, _ = vdb.is_available()
+    for src in removed_sources:
+        s_id = str(src.get("id") or "").strip()
+        if not s_id:
+            continue
+        removed_ids.append(s_id)
+        proj = str(src.get("project") or "aosp_aaos")
+        ver = str(src.get("aosp_version") or "")
+        affected_shards.add((proj, ver, _shard_key(proj, ver)))
+        if db_ok:
+            try:
+                deleted_docs += vdb.delete_by_source(
+                    source_id=s_id,
+                    project=proj,
+                    aosp_version=ver,
+                    collection_name=collection_name,
+                )
+            except Exception:
+                pass
+
+    # Drop any affected shard that now has 0 docs remaining
+    if db_ok and affected_shards:
+        try:
+            st = vdb.status(collection_name=collection_name)
+            shard_counts = {sh["key"]: sh.get("doc_count", 0) for sh in (st.get("shards") or [])}
+            for proj, ver, sk in affected_shards:
+                if sk in shard_counts and shard_counts[sk] == 0:
+                    if vdb.drop_shard(project=proj, aosp_version=ver, collection_name=collection_name):
+                        dropped_shards.append(sk)
+        except Exception:
+            pass
+
+    # Purge hash cache entries for deleted sources so re-adding later indexes cleanly
+    purged_hashes = 0
+    if removed_ids:
+        hashes = _load_skill_hashes(backend=backend)
+        prefixes = tuple(f"skill_{sid}_" for sid in removed_ids)
+        to_del = [k for k in hashes if k.startswith(prefixes)]
+        for k in to_del:
+            hashes.pop(k, None)
+        purged_hashes = len(to_del)
+        if purged_hashes:
+            _save_skill_hashes(hashes, backend=backend)
+
+    return {
+        "deleted_docs": deleted_docs,
+        "dropped_shards": dropped_shards,
+        "purged_hashes": purged_hashes,
+    }
+
+
+def resolve_project_docs_dir(project_id: str = "") -> Optional[Path]:
+    """Resolve the active Sphinx docs directory for a project (used by AI Agent & tel docs).
+
+    Lookup order:
+      1. Project's configured `docs_path` in mcp_skills_config.json
+      2. Default `./docs` under repo root if it contains Sphinx markers (index.rst/metadata.json/conf.py)
+    """
+    root = _repo_root()
+    cfg = get_mcp_skill_config()
+    pid = str(project_id or "").strip().lower()
+    for p in (cfg.get("projects") or []):
+        if not isinstance(p, dict):
+            continue
+        if pid and str(p.get("id", "")).strip().lower() != pid:
+            continue
+        dp = str(p.get("docs_path") or "").strip()
+        if dp:
+            # Preserve POSIX paths like /home/... without mangling on Windows
+            if os.name == "nt" and dp.startswith("/"):
+                return Path(dp)
+            cand = Path(dp)
+            return cand.resolve() if cand.is_absolute() else (root / dp).resolve()
+        if pid:
+            break
+    # Fallback: ./docs if it is a Sphinx docs directory
+    default_docs = (root / "docs").resolve()
+    if default_docs.is_dir() and any((default_docs / f).is_file() for f in ("index.rst", "metadata.json", "conf.py")):
+        return default_docs
+    return None
 
 
 def resolve_skill_dir() -> Path:
@@ -490,12 +604,16 @@ def resolve_skill_sources() -> List[dict]:
     return [s for s in sources if s.get("enabled", True) and s.get("exists", False)]
 
 
-SKILL_VALID_EXTS = {".md", ".java", ".sh", ".bat", ".config", ".json", ".template"}
+SKILL_VALID_EXTS = {
+    ".md", ".rst", ".puml", ".mmd",
+    ".java", ".kt", ".aidl", ".c", ".cpp", ".h", ".hpp", ".py",
+    ".sh", ".bat", ".config", ".json", ".template",
+}
 # Directories pruned while walking (never descended into). ".repo" and "out" are
-# added for AOSP trees: they hold repo metadata / build output (tens of GB).
+# added for AOSP trees; "_build" skips Sphinx compiled HTML output.
 SKILL_IGNORE_DIRS = {
-    ".git", ".github", ".claude", "node_modules", "target", "build", ".idea",
-    ".repo", "out", "__pycache__", ".gradle",
+    ".git", ".github", ".claude", "node_modules", "target", "build", "_build",
+    ".idea", ".repo", "out", "__pycache__", ".gradle",
 }
 SKILL_CODE_EXTS = {".java", ".kt", ".kts", ".c", ".cpp", ".cc", ".cxx", ".h", ".hpp",
                    ".py", ".js", ".ts", ".rs", ".go", ".aidl"}
@@ -518,12 +636,22 @@ def _parse_skill_metadata_text(default_title: str, head_text: str) -> Tuple[str,
                     elif line.startswith("description:"):
                         summary = line.split(":", 1)[1].strip()
 
-        # Fallback to markdown heading
+        # Fallback to markdown heading, RST underlined title, or PlantUML title
         if not summary or title == default_title:
-            for line in head_text.splitlines():
-                line = line.strip()
+            raw_lines = [l.strip() for l in head_text.splitlines()]
+            for i, line in enumerate(raw_lines):
                 if line.startswith("#") and title == default_title:
                     title = line.lstrip("#").strip()
+                    break
+                if line.lower().startswith("title ") and title == default_title:
+                    title = line[6:].strip()
+                    break
+                # RST heading: non-empty line followed by === or --- or ~~~ underline
+                if (title == default_title and line and i + 1 < len(raw_lines)
+                        and len(raw_lines[i + 1]) >= 3
+                        and len(set(raw_lines[i + 1])) == 1
+                        and raw_lines[i + 1][0] in "=-~^*+#"):
+                    title = line
                     break
         if not summary:
             # Pick first non-empty lines
@@ -1098,17 +1226,24 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
                         _prog_inc(files_processed=1, files_skipped=1, bytes_processed=size)
                         continue
                     file_hash = hashlib.md5(content.encode("utf-8")).hexdigest()
-                    hash_entry = {"h": file_hash, "m": mtime_r, "s": size, "k": s_key}
                     prev_h = prev.get("h") if isinstance(prev, dict) else prev
                     prev_k = prev.get("k") if isinstance(prev, dict) else None
+                    prev_ids = list(prev.get("ids") or []) if isinstance(prev, dict) else []
                     if incremental and prev_h == file_hash and prev_k == s_key:
                         # Content & shard unchanged (only touched) -> refresh mtime entry only
-                        put(target_q, ("hash", doc_id, hash_entry, None))
+                        hash_entry = {"h": file_hash, "m": mtime_r, "s": size, "k": s_key, "ids": prev_ids}
+                        put(target_q, ("hash", doc_id, hash_entry, None, None, None))
                         _prog_inc(files_processed=1, files_skipped=1, bytes_processed=size)
                         continue
                     records = build_records(src, rel, ext, size, content)
+                    new_ids = [r[0] for r in records]
+                    new_id_set = set(new_ids)
+                    hash_entry = {"h": file_hash, "m": mtime_r, "s": size, "k": s_key, "ids": new_ids}
+                    # Identify stale chunk IDs (e.g. deleted/renamed/shifted methods or moved shard)
+                    stale_same = [oid for oid in prev_ids if oid not in new_id_set] if prev_k == s_key else []
+                    stale_other = (prev_k, prev_ids) if (prev_k and prev_k != s_key and prev_ids) else None
                     _prog_set(current_file=f"[{s_key}] {src['id']}/{rel}")
-                    put(target_q, ("docs", doc_id, hash_entry, records))
+                    put(target_q, ("docs", doc_id, hash_entry, records, stale_same, stale_other))
                     _prog_inc(files_processed=1, bytes_processed=size)
                 except Exception as e:
                     _prog_inc(files_processed=1, files_failed=1, bytes_processed=size)
@@ -1118,6 +1253,11 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
                 put(q, SENTINEL)
 
     # ---------------- writers (1 dedicated writer thread per VectorDB shard) ----------------
+    try:
+        from .db import parse_shard_key as _parse_shard_key
+    except ImportError:
+        from db import parse_shard_key as _parse_shard_key
+
     def make_writer(s_key: str):
         s_proj, s_ver = shard_specs[s_key]
         doc_q = shard_queues[s_key]
@@ -1127,11 +1267,25 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
             docs: list = []
             metas: list = []
             seen: set = set()          # per-batch: VectorDB rejects duplicate ids in one upsert
+            stale_ids: list = []       # old chunk IDs in this shard to delete
+            stale_other_map: Dict[str, list] = {}  # old_shard_key -> [ids] if source changed shard
             pending: list = []         # (doc_id, hash_entry, is_indexed_file)
 
             def flush():
-                nonlocal ids, docs, metas, seen, pending
+                nonlocal ids, docs, metas, seen, stale_ids, stale_other_map, pending
                 ok = True
+                if stale_ids:
+                    try:
+                        vdb.delete_ids(stale_ids, project=s_proj, aosp_version=s_ver, collection_name=collection_name)
+                    except Exception as e:
+                        _prog_error(f"delete_stale[{s_key}]: {e}")
+                if stale_other_map:
+                    for old_sk, oids in stale_other_map.items():
+                        try:
+                            op, ov = _parse_shard_key(old_sk)
+                            vdb.delete_ids(oids, project=op, aosp_version=ov, collection_name=collection_name)
+                        except Exception as e:
+                            _prog_error(f"delete_moved[{old_sk}]: {e}")
                 if ids:
                     try:
                         vdb.upsert(
@@ -1155,7 +1309,7 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
                         _prog_inc(files_indexed=n_files)
                 elif n_files:
                     _prog_inc(files_failed=n_files)
-                ids, docs, metas, seen, pending = [], [], [], set(), []
+                ids, docs, metas, seen, stale_ids, stale_other_map, pending = [], [], [], set(), [], {}, []
                 checkpoint_hashes(force=False)
 
             sentinels = 0
@@ -1170,8 +1324,13 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
                     if item is SENTINEL:
                         sentinels += 1
                         continue
-                    kind, did, he, records = item
+                    kind, did, he, records, s_same, s_other = item
                     if kind == "docs":
+                        if s_same:
+                            stale_ids.extend(s_same)
+                        if s_other:
+                            old_sk, oids = s_other
+                            stale_other_map.setdefault(old_sk, []).extend(oids)
                         for rid, doc, meta in records:
                             if rid in seen:
                                 continue

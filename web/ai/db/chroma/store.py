@@ -208,6 +208,27 @@ class ChromaVectorDB(VectorDB):
         hits.sort(key=lambda h: h["distance"])
         return hits[:n_results], queried
 
+    def delete_ids(
+        self,
+        ids: List[str],
+        project: str = "",
+        aosp_version: str = "",
+        collection_name: str = DEFAULT_COLLECTION_NAME,
+    ) -> int:
+        if not ids:
+            return 0
+        sk = shard_key(project, aosp_version)
+        db_path = self.shards_dir / sk
+        if not (db_path / "chroma.sqlite3").is_file():
+            return 0
+        try:
+            col = self._get_collection(project, aosp_version, collection_name)
+            before = col.count()
+            col.delete(ids=list(dict.fromkeys(ids)))
+            return max(0, before - col.count())
+        except Exception:
+            return 0
+
     def delete_by_source(
         self,
         source_id: str,
@@ -236,13 +257,23 @@ class ChromaVectorDB(VectorDB):
         aosp_version: str = "",
         collection_name: str = DEFAULT_COLLECTION_NAME,
     ) -> bool:
+        import gc
         sk = shard_key(project, aosp_version)
         target = (self.shards_dir / sk).resolve()
         with self._lock:
-            self._clients.pop(str(target), None)
+            client = self._clients.pop(str(target), None)
+        if client is not None:
+            try:
+                sys_obj = getattr(client, "_system", None)
+                if sys_obj is not None and hasattr(sys_obj, "stop"):
+                    sys_obj.stop()
+            except Exception:
+                pass
+            del client
+            gc.collect()
         if target.is_dir():
             shutil.rmtree(target, ignore_errors=True)
-            return True
+            return not target.exists()
         return False
 
     def status(self, collection_name: str = DEFAULT_COLLECTION_NAME) -> dict:

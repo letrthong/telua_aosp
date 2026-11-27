@@ -244,6 +244,8 @@ Rules:
 - Use save_training_knowledge to persist verified solutions or architectural notes for long-term recall.
 - You can create, write, and edit code files directly using write_file and edit_file.
 - Use grep_search to quickly find symbol definitions, callers, strings, or regex matches across files and directories before reading full files.
+- Use get_aosp_project_info to inspect the active AOSP tab configuration (ACTIVE_PROJECT, AOSP_ROOT_DIR, lunch target, module name, source path, deploy path, and build/deploy commands) before running `tel build` / `tel deploy` / `tel logcat`.
+- For Sphinx documentation (`.rst`, `.puml`, `.mmd`, `metadata.json` in `Active_Docs_Dir`): treat docs as READ-ONLY reference context — consult existing docs via search_knowledge, grep_search, or read_file before coding, and NEVER modify or overwrite `.rst` documentation files automatically unless the user explicitly instructs you to update docs.
 - Use get_file_git_history to inspect commit history (hash, author, date, message) of a specific file.
 - Use get_commit_diff to inspect lines added/removed in a specific commit when investigating regressions, bug causes, or historical changes.
 - When a bug, crash, or regression is discovered during inspection or build, use create_github_issue to report an issue with stack traces and AST context.
@@ -449,15 +451,67 @@ def _tool_run_tel(args: dict) -> str:
         return f"[ERROR] {exc}"
 
 
+def _resolve_workspace_or_docs_path(
+    raw_path: str,
+    allow_sources: bool = False,
+    allow_docs: bool = True,
+    allow_aosp_root: bool = True,
+) -> Tuple[Optional[Path], str]:
+    """Resolve a path inside toolkit root, configured AOSP_ROOT_DIR, or (read-only) project docs / MCP sources."""
+    root = _repo_root().resolve()
+    p_str = str(raw_path or "").strip()
+    if not p_str:
+        return None, "[ERROR] missing 'path'"
+    cand = Path(p_str)
+    target = cand.resolve() if cand.is_absolute() else (root / p_str.lstrip("/\\")).resolve()
+
+    allowed = [root]
+    if allow_aosp_root:
+        try:
+            aosp_info = _get_aosp_build_info()
+            aosp_root = str(aosp_info.get("aosp_root_dir") or "").strip()
+            if aosp_root:
+                p_aosp = Path(aosp_root)
+                allowed.append((p_aosp if p_aosp.is_absolute() else (root / aosp_root)).resolve())
+        except Exception:
+            pass
+    if allow_docs or allow_sources:
+        try:
+            from .telua_mcp_skill import get_mcp_skill_config, get_all_configured_sources
+            if allow_docs:
+                active_dd = str(getattr(_CHAT_CTX, "docs_dir", "") or "").strip()
+                if active_dd:
+                    p_dd = Path(active_dd)
+                    allowed.append((p_dd if p_dd.is_absolute() else (root / active_dd)).resolve())
+                cfg = get_mcp_skill_config()
+                for proj in (cfg.get("projects") or []):
+                    dp = str((proj or {}).get("docs_path") or "").strip()
+                    if dp:
+                        p_dp = Path(dp)
+                        allowed.append((p_dp if p_dp.is_absolute() else (root / dp)).resolve())
+            if allow_sources:
+                for s in get_all_configured_sources():
+                    d = s.get("dir")
+                    if d and Path(d).is_dir():
+                        allowed.append(Path(d).resolve())
+        except Exception:
+            pass
+
+    for base in allowed:
+        try:
+            target.relative_to(base)
+            return target, ""
+        except ValueError:
+            continue
+    return None, "[ERROR] path outside toolkit root and configured AOSP_ROOT_DIR is not allowed"
+
+
 def _tool_read_file(args: dict) -> str:
     """Read file content with line numbers, constrained by guardrails to prevent token burning."""
-    root = _repo_root()
-    rel = str(args.get("path", "")).strip().lstrip("/")
-    if not rel:
-        return "[ERROR] missing 'path'"
-    path = (root / rel).resolve()
-    if not str(path).startswith(str(root.resolve())):
-        return "[ERROR] path outside toolkit root is not allowed"
+    rel = str(args.get("path", "")).strip()
+    path, err = _resolve_workspace_or_docs_path(rel, allow_sources=True)
+    if err or path is None:
+        return err
     if not path.is_file():
         return f"[ERROR] file not found: {rel}"
 
@@ -566,17 +620,14 @@ def _tool_read_file(args: dict) -> str:
 
 
 def _tool_write_file(args: dict) -> str:
-    """Create a new file or overwrite an existing file in the workspace."""
-    root = _repo_root()
-    rel = str(args.get("path", "")).strip().lstrip("/")
-    if not rel:
-        return "[ERROR] missing 'path'"
+    """Create a new file or overwrite an existing file in the workspace (project docs are read-only)."""
+    rel = str(args.get("path", "")).strip()
     content = args.get("content", "")
     if content is None:
         return "[ERROR] missing 'content'"
-    path = (root / rel).resolve()
-    if not str(path).startswith(str(root.resolve())):
-        return "[ERROR] path outside toolkit root is not allowed"
+    path, err = _resolve_workspace_or_docs_path(rel, allow_sources=False, allow_docs=False)
+    if err or path is None:
+        return err
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
@@ -586,18 +637,15 @@ def _tool_write_file(args: dict) -> str:
 
 
 def _tool_edit_file(args: dict) -> str:
-    """Replace an exact target snippet in an existing file with replacement code."""
-    root = _repo_root()
-    rel = str(args.get("path", "")).strip().lstrip("/")
-    if not rel:
-        return "[ERROR] missing 'path'"
+    """Replace an exact target snippet in an existing workspace file (project docs are read-only)."""
+    rel = str(args.get("path", "")).strip()
     target = args.get("target", "")
     replacement = args.get("replacement", "")
     if not target:
         return "[ERROR] missing 'target' snippet to replace"
-    path = (root / rel).resolve()
-    if not str(path).startswith(str(root.resolve())):
-        return "[ERROR] path outside toolkit root is not allowed"
+    path, err = _resolve_workspace_or_docs_path(rel, allow_sources=False, allow_docs=False)
+    if err or path is None:
+        return err
     if not path.is_file():
         return f"[ERROR] file not found: {rel}"
     try:
@@ -612,11 +660,10 @@ def _tool_edit_file(args: dict) -> str:
 
 
 def _tool_list_files(args: dict) -> str:
-    root = _repo_root()
-    rel = str(args.get("path", "")).strip().lstrip("/") or "."
-    path = (root / rel).resolve()
-    if not str(path).startswith(str(root.resolve())):
-        return "[ERROR] path outside toolkit root is not allowed"
+    rel = str(args.get("path", "") or ".").strip() or "."
+    path, err = _resolve_workspace_or_docs_path(rel, allow_sources=True, allow_docs=True, allow_aosp_root=True)
+    if err or path is None:
+        return err
     if not path.is_dir():
         return f"[ERROR] not a directory: {rel}"
     try:
@@ -641,29 +688,13 @@ _GREP_BINARY_EXTS = {
 
 
 def _resolve_grep_target(raw_path: str) -> Tuple[Optional[Path], str]:
-    """Allow searching inside toolkit root or any configured MCP knowledge source."""
-    root = _repo_root().resolve()
-    p_str = (raw_path or ".").strip()
-    cand = Path(p_str)
-    target = cand.resolve() if cand.is_absolute() else (root / p_str.lstrip("/\\")).resolve()
-
-    allowed_roots = [root]
-    try:
-        from .telua_mcp_skill import get_all_configured_sources
-        for s in get_all_configured_sources():
-            d = s.get("dir")
-            if d and Path(d).is_dir():
-                allowed_roots.append(Path(d).resolve())
-    except Exception:
-        pass
-
-    for base in allowed_roots:
-        try:
-            target.relative_to(base)
-            return target, ""
-        except ValueError:
-            continue
-    return None, "[ERROR] path outside toolkit root and configured knowledge sources is not allowed"
+    """Allow searching inside toolkit root, configured AOSP_ROOT_DIR, project docs, or MCP sources."""
+    return _resolve_workspace_or_docs_path(
+        raw_path or ".",
+        allow_sources=True,
+        allow_docs=True,
+        allow_aosp_root=True,
+    )
 
 
 def _tool_grep_search(args: dict) -> str:
@@ -786,6 +817,46 @@ def _tool_grep_search(args: dict) -> str:
     return f"Found {len(matches)}{more} match(es) for '{query}' in {raw_path}:\n" + "\n".join(matches)
 
 
+def _get_aosp_build_info() -> dict:
+    """Safely load active AOSP project build/deploy info from the AOSP tab backend."""
+    try:
+        import telua_web_aosp as _aosp
+        return _aosp._parse_aosp_info() or {}
+    except Exception:
+        try:
+            from .. import telua_web_aosp as _aosp
+            return _aosp._parse_aosp_info() or {}
+        except Exception:
+            return {}
+
+
+def _tool_get_aosp_project_info(args: dict) -> str:
+    """Return active AOSP tab configuration (project profile, lunch target, module, paths, build/deploy commands)."""
+    info = _get_aosp_build_info()
+    if not info:
+        return "[WARNING] Could not read AOSP configuration from config/apk.config."
+    active = info.get("active_project") or "—"
+    prod = info.get("target_product") or ""
+    var = info.get("target_variant") or ""
+    lunch = f"{prod}-{var}" if prod and var else (prod or "—")
+    profs = ", ".join(info.get("profiles") or []) or "—"
+    return (
+        f"ACTIVE_PROJECT: {active}\n"
+        f"AOSP_ROOT_DIR: {info.get('aosp_root_dir') or '(auto-detect)'}\n"
+        f"LUNCH_TARGET: {lunch}\n"
+        f"MODULE_NAME: {info.get('module_name') or '—'} (type: {info.get('module_type') or 'apk'})\n"
+        f"SOURCE_PATH: {info.get('source_path') or '—'}\n"
+        f"OUTPUT_FILE: {info.get('apk_name') or '—'}\n"
+        f"DEPLOY_PATH: {info.get('deploy_path') or '—'}\n"
+        f"AVAILABLE_PROFILES: {profs}\n"
+        f"BUILD_DEPLOY_COMMANDS:\n"
+        f"  - Build active project: tel -y build  (or: tel -p {active} -y build)\n"
+        f"  - Deploy to board:      tel -y deploy (or: tel -p {active} -y deploy)\n"
+        f"  - Build + Deploy:       tel -p {active} -y\n"
+        f"  - Capture logcat:       tel logcat"
+    )
+
+
 def _clean_filter_val(val) -> str:
     s = str(val or "").strip().lower()
     return "" if s in ("", "all", "auto", "any", "*") else s
@@ -808,8 +879,38 @@ def _build_chroma_where(project: str = "", aosp_version: str = "", source_id: st
     return conds[0] if len(conds) == 1 else {"$and": conds}
 
 
+def _parse_version_list(raw) -> List[str]:
+    """Normalize aosp_versions (list or comma-separated string) into deduplicated version tags."""
+    if not raw:
+        return []
+    items = raw if isinstance(raw, (list, tuple)) else str(raw).split(",")
+    out = []
+    for item in items:
+        v = _clean_filter_val(item)
+        if v and v not in out:
+            out.append(v)
+    return out
+
+
+def _format_knowledge_hit(idx: int, rec: dict) -> str:
+    m = rec.get("meta") or {}
+    proj = m.get("project") or "—"
+    ver = m.get("aosp_version") or "generic"
+    api_lvl = m.get("api_level")
+    ver_disp = f"{ver} (API {api_lvl})" if api_lvl else ver
+    src_name = m.get("source_name") or ""
+    src_path = m.get("source") or "user_train"
+    src_disp = f"{src_name} ({src_path})" if src_name and src_name != src_path else src_path
+    topic = m.get("topic") or m.get("category") or "general"
+    shard_lbl = rec.get("shard") or ""
+    return f"[{idx}] (Shard: {shard_lbl} | Project: {proj} | AOSP: {ver_disp} | Source: {src_disp} | Topic: {topic})\n{rec.get('text', '')}"
+
+
 def _tool_search_knowledge(args: dict) -> str:
-    """Search sharded VectorDB knowledge base with automatic project / aosp_version / source_id isolation."""
+    """Search sharded VectorDB knowledge base with automatic project / aosp_version(s) / source_id isolation.
+
+    Pass `aosp_versions: ["a12", "a14", "a16"]` to compare multiple Android versions in a single call.
+    """
     query = str(args.get("query", "")).strip()
     if not query:
         return "[ERROR] missing 'query' parameter"
@@ -817,10 +918,35 @@ def _tool_search_knowledge(args: dict) -> str:
         from .db import get_vector_db
         vdb = get_vector_db(base_dir=CHROMA_DATA_DIR)
         n_results = max(1, min(int(args.get("n_results", 4)), 10))
-        # Explicit tool arguments override active chat UI context
         project = _clean_filter_val(args.get("project")) or _clean_filter_val(getattr(_CHAT_CTX, "project", ""))
-        aosp_version = _clean_filter_val(args.get("aosp_version")) or _clean_filter_val(getattr(_CHAT_CTX, "aosp_version", ""))
         source_id = _clean_filter_val(args.get("source_id"))
+
+        versions = _parse_version_list(args.get("aosp_versions"))
+        if len(versions) >= 2:
+            # Multi-version comparison mode: query each version shard independently and group results
+            per_ver = max(1, min(n_results, 5))
+            sections = []
+            for ver in versions[:6]:
+                recs, _ = vdb.query(
+                    query_text=query,
+                    n_results=per_ver,
+                    project=project,
+                    aosp_version=ver,
+                    source_id=source_id,
+                    collection_name=CHROMA_COLLECTION_NAME,
+                )
+                if not recs:
+                    sections.append(f"=== AOSP VERSION: {ver} (0 matches) ===")
+                else:
+                    body = "\n\n---\n\n".join(_format_knowledge_hit(i + 1, r) for i, r in enumerate(recs))
+                    sections.append(f"=== AOSP VERSION: {ver} ({len(recs)} match(es)) ===\n{body}")
+            return "\n\n".join(sections)
+
+        aosp_version = (
+            (versions[0] if len(versions) == 1 else "")
+            or _clean_filter_val(args.get("aosp_version"))
+            or _clean_filter_val(getattr(_CHAT_CTX, "aosp_version", ""))
+        )
         where = _build_chroma_where(project=project, aosp_version=aosp_version, source_id=source_id)
 
         records, _queried_shards = vdb.query(
@@ -834,22 +960,7 @@ def _tool_search_knowledge(args: dict) -> str:
         if not records:
             filt_str = f" with filter {where}" if where else ""
             return f"(No knowledge records matched query: '{query}'{filt_str})"
-        out = []
-        for i, rec in enumerate(records):
-            m = rec.get("meta") or {}
-            proj = m.get("project") or "—"
-            ver = m.get("aosp_version") or "generic"
-            api_lvl = m.get("api_level")
-            ver_disp = f"{ver} (API {api_lvl})" if api_lvl else ver
-            src_name = m.get("source_name") or ""
-            src_path = m.get("source") or "user_train"
-            src_disp = f"{src_name} ({src_path})" if src_name and src_name != src_path else src_path
-            topic = m.get("topic") or m.get("category") or "general"
-            shard_lbl = rec.get("shard") or ""
-            out.append(
-                f"[{i+1}] (Shard: {shard_lbl} | Project: {proj} | AOSP: {ver_disp} | Source: {src_disp} | Topic: {topic})\n{rec.get('text', '')}"
-            )
-        return "\n\n---\n\n".join(out)
+        return "\n\n---\n\n".join(_format_knowledge_hit(i + 1, rec) for i, rec in enumerate(records))
     except Exception as exc:
         return f"[ERROR querying VectorDB] {exc}"
 
@@ -1138,6 +1249,7 @@ def _tool_create_git_fix_branch(args: dict) -> str:
 
 TOOL_EXECUTORS = {
     "run_tel": _tool_run_tel,
+    "get_aosp_project_info": _tool_get_aosp_project_info,
     "read_file": _tool_read_file,
     "write_file": _tool_write_file,
     "edit_file": _tool_edit_file,
@@ -1194,15 +1306,31 @@ TOOL_SCHEMAS = [
     {
         "type": "function",
         "function": {
+            "name": "get_aosp_project_info",
+            "description": "Read the active AOSP tab configuration (ACTIVE_PROJECT, AOSP_ROOT_DIR, lunch target, module name/type, source path, APK/binary output, device deploy path, available profiles, and exact tel build/deploy commands).",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "search_knowledge",
-            "description": "Search local persistent ChromaDB knowledge base (ai_agent/data) for indexed documentation, source code, troubleshooting guides, or training data. Supports optional metadata filters (project, aosp_version, source_id) to avoid mixing code across Android versions (e.g. a12 vs a16).",
+            "description": "Search sharded VectorDB knowledge base for indexed documentation, source code, troubleshooting guides, or training data. Supports filtering by project, single aosp_version, or multiple aosp_versions (e.g. ['a12', 'a14', 'a16']) to compare Android versions side-by-side in a single call.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "The search keywords or question to look up"},
-                    "n_results": {"type": "integer", "description": "Number of results to return (default 4)"},
+                    "n_results": {"type": "integer", "description": "Number of results to return (or per version when aosp_versions is used; default 4)"},
                     "project": {"type": "string", "description": "Optional project filter (e.g. 'aosp_aaos', 'car_ivi')"},
-                    "aosp_version": {"type": "string", "description": "Optional AOSP version filter (e.g. 'a12', 'a14', 'a16')"},
+                    "aosp_version": {"type": "string", "description": "Optional single AOSP version filter (e.g. 'a12', 'a14', 'a16')"},
+                    "aosp_versions": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of AOSP versions to query & compare side-by-side in one call (e.g. ['a12', 'a14', 'a16'])"
+                    },
                     "source_id": {"type": "string", "description": "Optional knowledge source ID filter"}
                 },
                 "required": ["query"],
@@ -1831,9 +1959,20 @@ def api_ai_chat():
     if not user_msg:
         return jsonify({"ok": False, "error": "Missing 'message'."}), 400
 
-    # Expose active project / AOSP version to search_knowledge during this turn
+    # Expose active project / AOSP version / Docs dir to tools during this turn.
+    # Priority: Sphinx Docs tab's active dir (docs_dir from UI) -> Project's docs_path -> ./docs
+    active_docs_dir = str(data.get("docs_dir") or "").strip()
+    if not active_docs_dir:
+        try:
+            from .telua_mcp_skill import resolve_project_docs_dir
+            dd = resolve_project_docs_dir(chat_project)
+            if dd is not None:
+                active_docs_dir = str(dd)
+        except Exception:
+            pass
     _CHAT_CTX.project = chat_project
     _CHAT_CTX.aosp_version = chat_version
+    _CHAT_CTX.docs_dir = active_docs_dir
 
     provider, model, base_url, max_iter, _active_name, _active_model = _ai_settings()
     guardrails = get_ai_guardrails()
@@ -1852,6 +1991,24 @@ def api_ai_chat():
         ctx_parts.append(f"Project={chat_project}")
     if chat_version:
         ctx_parts.append(f"AOSP_Version={chat_version}")
+    if active_docs_dir:
+        ctx_parts.append(f"Active_Docs_Dir={active_docs_dir}")
+    aosp_info = _get_aosp_build_info()
+    if aosp_info and aosp_info.get("active_project"):
+        ap = aosp_info["active_project"]
+        mod = aosp_info.get("module_name") or ""
+        prod = aosp_info.get("target_product") or ""
+        var = aosp_info.get("target_variant") or ""
+        lunch = f"{prod}-{var}" if prod and var else prod
+        src_p = aosp_info.get("source_path") or ""
+        dep_p = aosp_info.get("deploy_path") or ""
+        details = ", ".join(x for x in [
+            f"module={mod}" if mod else "",
+            f"target={lunch}" if lunch else "",
+            f"src={src_p}" if src_p else "",
+            f"deploy={dep_p}" if dep_p else "",
+        ] if x)
+        ctx_parts.append(f"AOSP_Tab_Profile={ap}({details})" if details else f"AOSP_Tab_Profile={ap}")
     effective_msg = f"[Active Context: {' | '.join(ctx_parts)}]\n{user_msg}" if ctx_parts else user_msg
     messages.append({"role": "user", "content": effective_msg})
 
@@ -1955,6 +2112,7 @@ def api_ai_chat():
     finally:
         _CHAT_CTX.project = ""
         _CHAT_CTX.aosp_version = ""
+        _CHAT_CTX.docs_dir = ""
 
 
 @ai_bp.get("/api/ai/guardrails")
@@ -2157,8 +2315,35 @@ def api_ai_chroma_query():
         from .db import get_vector_db
         vdb = get_vector_db(base_dir=CHROMA_DATA_DIR)
         project = _clean_filter_val(data.get("project"))
-        aosp_version = _clean_filter_val(data.get("aosp_version"))
         source_id = _clean_filter_val(data.get("source_id"))
+        versions = _parse_version_list(data.get("aosp_versions"))
+        if len(versions) >= 2:
+            by_version = {}
+            all_records = []
+            queried = []
+            for ver in versions[:6]:
+                recs, q = vdb.query(
+                    query_text=query,
+                    n_results=n_results,
+                    project=project,
+                    aosp_version=ver,
+                    source_id=source_id,
+                    collection_name=CHROMA_COLLECTION_NAME,
+                )
+                by_version[ver] = recs
+                all_records.extend(recs)
+                queried.extend(q)
+            return jsonify({
+                "ok": True,
+                "backend": vdb.backend_name,
+                "records": all_records,
+                "by_version": by_version,
+                "count": len(all_records),
+                "shards_queried": list(dict.fromkeys(queried)),
+                "filter": {"project": project, "aosp_versions": versions, "source_id": source_id},
+            })
+
+        aosp_version = (versions[0] if len(versions) == 1 else "") or _clean_filter_val(data.get("aosp_version"))
         where = _build_chroma_where(project=project, aosp_version=aosp_version, source_id=source_id)
         records, queried = vdb.query(
             query_text=query,

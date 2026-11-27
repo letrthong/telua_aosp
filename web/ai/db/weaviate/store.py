@@ -96,6 +96,16 @@ class WeaviateVectorDB(VectorDB):
         #       applying Filter.by_property("source_id").equal(source_id) when source_id is set.
         raise NotImplementedError("WeaviateVectorDB.query() is not implemented yet.")
 
+    def delete_ids(
+        self,
+        ids: List[str],
+        project: str = "",
+        aosp_version: str = "",
+        collection_name: str = DEFAULT_COLLECTION_NAME,
+    ) -> int:
+        # TODO: Convert each id to uuid5 and delete from tenant `shard_key(project, aosp_version)`.
+        raise NotImplementedError("WeaviateVectorDB.delete_ids() is not implemented yet.")
+
     def delete_by_source(
         self,
         source_id: str,

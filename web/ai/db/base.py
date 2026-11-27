@@ -102,6 +102,16 @@ class VectorDB(ABC):
         """
 
     @abstractmethod
+    def delete_ids(
+        self,
+        ids: List[str],
+        project: str = "",
+        aosp_version: str = "",
+        collection_name: str = DEFAULT_COLLECTION_NAME,
+    ) -> int:
+        """Delete specific document/chunk IDs from the (project, aosp_version) shard."""
+
+    @abstractmethod
     def delete_by_source(
         self,
         source_id: str,
