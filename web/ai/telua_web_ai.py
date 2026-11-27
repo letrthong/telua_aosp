@@ -651,13 +651,13 @@ def _build_chroma_where(project: str = "", aosp_version: str = "", source_id: st
 
 
 def _tool_search_knowledge(args: dict) -> str:
-    """Search sharded persistent ChromaDB knowledge base in ai_agent/data/shards/
-    with automatic project / aosp_version / source_id isolation."""
+    """Search sharded VectorDB knowledge base with automatic project / aosp_version / source_id isolation."""
     query = str(args.get("query", "")).strip()
     if not query:
         return "[ERROR] missing 'query' parameter"
     try:
-        from .chroma_shards import query_shards
+        from .db import get_vector_db
+        vdb = get_vector_db(base_dir=CHROMA_DATA_DIR)
         n_results = max(1, min(int(args.get("n_results", 4)), 10))
         # Explicit tool arguments override active chat UI context
         project = _clean_filter_val(args.get("project")) or _clean_filter_val(getattr(_CHAT_CTX, "project", ""))
@@ -665,14 +665,13 @@ def _tool_search_knowledge(args: dict) -> str:
         source_id = _clean_filter_val(args.get("source_id"))
         where = _build_chroma_where(project=project, aosp_version=aosp_version, source_id=source_id)
 
-        records, queried_shards = query_shards(
+        records, _queried_shards = vdb.query(
             query_text=query,
             n_results=n_results,
             project=project,
             aosp_version=aosp_version,
             source_id=source_id,
             collection_name=CHROMA_COLLECTION_NAME,
-            base_dir=CHROMA_DATA_DIR,
         )
         if not records:
             filt_str = f" with filter {where}" if where else ""
@@ -694,11 +693,11 @@ def _tool_search_knowledge(args: dict) -> str:
             )
         return "\n\n---\n\n".join(out)
     except Exception as exc:
-        return f"[ERROR querying ChromaDB] {exc}"
+        return f"[ERROR querying VectorDB] {exc}"
 
 
 def _tool_save_training_knowledge(args: dict) -> str:
-    """Save new training knowledge / notes directly to the matching ChromaDB shard."""
+    """Save new training knowledge / notes directly to the matching VectorDB shard."""
     content = str(args.get("content", "")).strip()
     if not content:
         return "[ERROR] missing 'content' to train/save"
@@ -707,13 +706,8 @@ def _tool_save_training_knowledge(args: dict) -> str:
     project = _clean_filter_val(args.get("project")) or _clean_filter_val(getattr(_CHAT_CTX, "project", "")) or "aosp_aaos"
     aosp_version = _clean_filter_val(args.get("aosp_version")) or _clean_filter_val(getattr(_CHAT_CTX, "aosp_version", ""))
     try:
-        from .chroma_shards import get_shard_collection, shard_key
-        col = get_shard_collection(
-            project=project,
-            aosp_version=aosp_version,
-            collection_name=CHROMA_COLLECTION_NAME,
-            base_dir=CHROMA_DATA_DIR,
-        )
+        from .db import get_vector_db
+        vdb = get_vector_db(base_dir=CHROMA_DATA_DIR)
         import uuid
         import time
         doc_id = f"doc_{int(time.time())}_{uuid.uuid4().hex[:6]}"
@@ -724,11 +718,17 @@ def _tool_save_training_knowledge(args: dict) -> str:
             "aosp_version": aosp_version,
             "timestamp": int(time.time()),
         }
-        col.add(documents=[content], metadatas=[meta], ids=[doc_id])
-        s_key = shard_key(project, aosp_version)
-        return f"✓ Successfully persisted to ChromaDB shard '{s_key}': id={doc_id}, topic={topic}, {len(content)} chars."
+        s_key = vdb.add(
+            doc_id=doc_id,
+            document=content,
+            metadata=meta,
+            project=project,
+            aosp_version=aosp_version,
+            collection_name=CHROMA_COLLECTION_NAME,
+        )
+        return f"✓ Successfully persisted to VectorDB ({vdb.backend_name}) shard '{s_key}': id={doc_id}, topic={topic}, {len(content)} chars."
     except Exception as exc:
-        return f"[ERROR saving to ChromaDB] {exc}"
+        return f"[ERROR saving to VectorDB] {exc}"
 
 
 def _tool_get_file_git_history(args: dict) -> str:
@@ -1835,12 +1835,11 @@ def api_ai_token_usage():
 
 @ai_bp.get("/api/ai/chroma/status")
 def api_ai_chroma_status():
-    """Return aggregated status across all sharded ChromaDB databases in ai_agent/data/shards/."""
+    """Return aggregated status across all sharded VectorDB databases."""
     try:
-        from .chroma_shards import get_total_chroma_status
-        st = get_total_chroma_status(collection_name=CHROMA_COLLECTION_NAME, base_dir=CHROMA_DATA_DIR)
-        st["collections"] = [CHROMA_COLLECTION_NAME] if st.get("installed") else []
-        return jsonify(st)
+        from .db import get_vector_db
+        vdb = get_vector_db(base_dir=CHROMA_DATA_DIR)
+        return jsonify(vdb.status(collection_name=CHROMA_COLLECTION_NAME))
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
 
@@ -1970,29 +1969,30 @@ def api_ai_chroma_train():
 
 @ai_bp.post("/api/ai/chroma/query")
 def api_ai_chroma_query():
-    """Query sharded ChromaDB databases (supports optional project, aosp_version, source_id filters)."""
+    """Query sharded VectorDB databases (supports optional project, aosp_version, source_id filters)."""
     data = request.get_json(silent=True) or {}
     query = str(data.get("query") or "").strip()
     n_results = max(1, min(int(data.get("n_results", 4)), 25))
     if not query:
         return jsonify({"ok": False, "error": "Missing 'query'."}), 400
     try:
-        from .chroma_shards import query_shards
+        from .db import get_vector_db
+        vdb = get_vector_db(base_dir=CHROMA_DATA_DIR)
         project = _clean_filter_val(data.get("project"))
         aosp_version = _clean_filter_val(data.get("aosp_version"))
         source_id = _clean_filter_val(data.get("source_id"))
         where = _build_chroma_where(project=project, aosp_version=aosp_version, source_id=source_id)
-        records, queried = query_shards(
+        records, queried = vdb.query(
             query_text=query,
             n_results=n_results,
             project=project,
             aosp_version=aosp_version,
             source_id=source_id,
             collection_name=CHROMA_COLLECTION_NAME,
-            base_dir=CHROMA_DATA_DIR,
         )
         return jsonify({
             "ok": True,
+            "backend": vdb.backend_name,
             "records": records,
             "count": len(records),
             "shards_queried": queried,

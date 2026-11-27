@@ -919,16 +919,11 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
     if not sources:
         return {"ok": False, "error": "No active skill sources found to index.", "indexed": 0}
 
-    try:
-        import chromadb  # noqa: F401
-    except ImportError:
-        return {"ok": False, "error": "chromadb package not installed. Run: pip install chromadb", "indexed": 0}
-
     from .code_structure_engine import CodeStructureEngine
     try:
-        from .chroma_shards import shard_key as _shard_key, get_shard_collection as _get_shard_collection
+        from .db import get_vector_db, shard_key as _shard_key
     except ImportError:
-        from chroma_shards import shard_key as _shard_key, get_shard_collection as _get_shard_collection
+        from db import get_vector_db, shard_key as _shard_key
 
     cfg = get_mcp_skill_config()
     n_readers = _cfg_int(cfg, "sync_reader_threads", min(8, max(2, os.cpu_count() or 4)), 1, 32)
@@ -937,8 +932,12 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
 
     chroma_base = _repo_root() / "ai_agent" / "data"
     chroma_base.mkdir(parents=True, exist_ok=True)
+    vdb = get_vector_db(base_dir=chroma_base)
+    db_ok, db_err = vdb.is_available()
+    if not db_ok:
+        return {"ok": False, "error": db_err or "VectorDB backend not available.", "indexed": 0}
 
-    # Sharded ChromaDB: 1 independent SQLite DB & 1 dedicated writer thread per (project, aosp_version)
+    # Sharded VectorDB: 1 dedicated writer thread per (project, aosp_version) shard
     shard_specs: Dict[str, Tuple[str, str]] = {}
     for src in sources:
         p = str(src.get("project") or "aosp_aaos")
@@ -947,10 +946,6 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
         if sk not in shard_specs:
             shard_specs[sk] = (p, v)
 
-    shard_cols = {
-        sk: _get_shard_collection(p, v, collection_name=collection_name, base_dir=chroma_base)
-        for sk, (p, v) in shard_specs.items()
-    }
     shard_queues: Dict[str, "queue.Queue"] = {
         sk: queue.Queue(maxsize=max(64, n_readers * 16))
         for sk in shard_specs
@@ -1107,16 +1102,16 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
             for q in shard_queues.values():
                 put(q, SENTINEL)
 
-    # ---------------- writers (1 dedicated writer thread per ChromaDB shard) ----------------
+    # ---------------- writers (1 dedicated writer thread per VectorDB shard) ----------------
     def make_writer(s_key: str):
-        col = shard_cols[s_key]
+        s_proj, s_ver = shard_specs[s_key]
         doc_q = shard_queues[s_key]
 
         def writer():
             ids: list = []
             docs: list = []
             metas: list = []
-            seen: set = set()          # per-batch: Chroma rejects duplicate ids in one upsert
+            seen: set = set()          # per-batch: VectorDB rejects duplicate ids in one upsert
             pending: list = []         # (doc_id, hash_entry, is_indexed_file)
 
             def flush():
@@ -1124,7 +1119,14 @@ def _run_sync_pipeline(collection_name: str, incremental: bool) -> dict:
                 ok = True
                 if ids:
                     try:
-                        col.upsert(ids=ids, documents=docs, metadatas=metas)
+                        vdb.upsert(
+                            ids=ids,
+                            documents=docs,
+                            metadatas=metas,
+                            project=s_proj,
+                            aosp_version=s_ver,
+                            collection_name=collection_name,
+                        )
                         _prog_inc(chunks_written=len(ids), batches_written=1)
                     except Exception as e:
                         ok = False
