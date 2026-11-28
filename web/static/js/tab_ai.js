@@ -227,7 +227,7 @@ async function initAI() {
     clearAIChatCache();
     const log = $("#ai-chat-log");
     if (log) log.innerHTML =
-      `<div class="ai-msg ai-msg-assistant">🧹 Conversation cleared. How can I help you with AOSP?</div>`;
+      `<div class="ai-msg ai-msg-assistant">✨ New session started. Conversation history cleared — how can I help you with AOSP?</div>`;
   });
 
   // ---- Target Path (File / Folder) Quick Actions & LocalStorage Cache ----
