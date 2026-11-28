@@ -26,7 +26,10 @@ An automated developer workflow script for building and deploying privileged sys
 | `python/clean_java.py` | Enforces Java whitespace, tab expansion, keyword spacing, K&R braces & Google Java Style |
 | `python/unused_methods_report.py` | 6-in-1 static Java report: unused methods, unused params, whitespace, `google-java-format`, unused imports & unused private fields (`tel java report`) |
 | `src/telua_web.sh` & `web/telua_web.py` | Config Manager, BI Studio, Hardware Power & AI Agent Web UI (`tel web start`) |
-| `web/ai/telua_web_ai.py` | Autonomous AI Agent engine: tool-calling loop (`grep_search`, AST `read_file`, Git, `run_tel`), token guardrails & monthly usage tracker |
+| `web/ai/telua_web_ai.py` | Autonomous AI Agent blueprint & ReAct loop (modularized with `llm_providers.py`, `agent_tools.py`, `ai_notify.py`) |
+| `web/ai/ai_notify.py` | Telegram error alerts, **🛡 Safe Mode** (redacts logs/code), `read_telegram_messages` & 2-way remote listener |
+| `web/ai/telua_web_tasks.py` | Task Manager (`Today` / `1–2w Sprint` / `3M Roadmap`) with comments (`👤 User` / `🤖 AI`) & monthly/yearly archives in `ai_agent/data/task/` |
+| `web/ai/telua_web_schedule.py` | Background scheduler for recurring AI Agent triggers (Daily / Weekdays / Interval) with optional Telegram summary |
 | `web/ai/code_structure_engine.py` | AST & Pygments Perception Engine: outline mode, complete symbol extraction & boundary snapping |
 | `web/ai/telua_mcp_skill.py` | Multi-source MCP Skills manager, multi-threaded background sync (live progress + cancel) & A12-A16 versioning |
 | `web/ai/db/` | Pluggable sharded `VectorDB` interface (`base.py`), sharded ChromaDB backend (`chroma/`) & Weaviate template (`weaviate/`) |
@@ -1146,6 +1149,39 @@ To prevent runaway LLM costs and context exhaustion:
 Automated dual-output hardware relay control (**Main Power** & **Ignition ACC**) for bench-test DUTs:
 * Toggle power outputs directly from the Web UI or via `web/telua_web_power_controls.py`.
 * Power states and timestamped switch events are persisted in `config/target_power_state.json`.
+
+### 9.11 Telegram Notifications, Safe Mode & 2-Way Remote Control
+Receive instant error alerts, scheduled task summaries, and send remote instructions to **Tel Agent** from your phone while away (`web/ai/ai_notify.py`, zero external dependencies — pure `urllib`):
+
+#### Step 1: Create a Telegram Bot Token (`@BotFather`)
+1. Open Telegram, search for **`@BotFather`** (verified blue checkmark), and send `/newbot`.
+2. Choose a display name (e.g., `Telua AOSP Bot`) and a username ending in `bot` (e.g., `my_telua_bot`).
+3. Copy the generated **Bot Token** (format: `123456789:AAHxxx...`).
+
+#### Step 2: Activate Your Bot & Get Your Numeric `Chat ID`
+1. **Important:** Open your new bot link (`t.me/<your_bot_username>`) and click **Start** (or send `hi`). Telegram blocks bots from messaging you first until you initiate the chat.
+2. **Personal Chat ID:** Search for **`@userinfobot`** on Telegram, click **Start**, and copy the numeric **`Id`** (e.g., `123456789` — must be digits, not `@username`).
+3. **Group Chat ID (optional):** Add your bot to the group, send a message in the group, leave `Chat ID` blank in Telua Web, and click **📥 Read Messages** to inspect the negative group ID (e.g., `-1001234567890`).
+
+#### Step 3: Configure in Telua Web UI
+1. Open **🤖 AI Agent** → **⚙ Config** → **🔔 Notify** tab.
+2. Paste your **Telegram Bot Token** and **Telegram Chat ID**.
+3. Keep **🛡 Safe Mode (No Logs / No Code)** checked *(recommended for corporate projects)*:
+   - Sends only concise status titles and timestamps (e.g., `✅ Completed`, `🚨 Tool Error: run_tel`) — automatically strips source code blocks, file paths, and error stack traces.
+4. Choose triggers:
+   - **🚨 Agent / LLM Errors** & **🔧 Tool / Build Errors**: instant alerts on failure.
+   - **🤖 2-Way Telegram Listener**: polls `getUpdates` strictly for your authorized `Chat ID` (strangers are ignored) so you can text commands from your phone (e.g., *"Hôm nay còn task nào chưa xong?"* or *"Tạo task fix CarAudio"*).
+   - Pair with **⏰ Schedule** tab to send automated morning plans / evening progress updates.
+5. Click **💾 Save Notify Settings**, then click **🧪 Send Test Message** and **📥 Read Messages** to verify both directions.
+   - Credentials are stored privately in `config/overlay/ai_agent/ai_notify.json` (git-ignored, masked in API responses).
+
+#### Troubleshooting Telegram
+| Symptom / Error | Cause & Fix |
+|---|---|
+| `403 Forbidden: bot can't initiate conversation` | You haven't clicked **Start** in your new bot's chat yet. Open `t.me/<your_bot>` and send `/start`. |
+| `SSL: CERTIFICATE_VERIFY_FAILED` (corporate proxy) | Corporate HTTPS proxy uses an internal root CA. Export `SSL_CERT_FILE=/path/to/company_ca.pem` before running `tel web start` (or run `telua web` on your Linux build host with system CA certificates installed). |
+| `400 Bad Request: chat not found` | `Chat ID` is wrong or uses `@username` instead of the numeric ID from `@userinfobot`. |
+| Bot doesn't reply to phone messages | Ensure **🤖 2-Way Telegram Listener** is checked, **💾 Save Notify Settings** was clicked, and `telua web` is running. |
 
 ---
 
