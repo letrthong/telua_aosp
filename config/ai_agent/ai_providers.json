@@ -1,6 +1,32 @@
 [
   {
     "apiKey": "",
+    "apiType": "anthropic",
+    "models": [
+      {
+        "id": "claude-sonnet-4-5-20250929",
+        "name": "Claude Sonnet 4.5 (Best for Coding ⚡)",
+        "toolCalling": true,
+        "url": "https://api.anthropic.com/v1/messages"
+      },
+      {
+        "id": "claude-3-7-sonnet-20250219",
+        "name": "Claude 3.7 Sonnet",
+        "toolCalling": true,
+        "url": "https://api.anthropic.com/v1/messages"
+      },
+      {
+        "id": "claude-opus-4-1-20250805",
+        "name": "Claude Opus 4.1 (Deep Reasoning)",
+        "toolCalling": true,
+        "url": "https://api.anthropic.com/v1/messages"
+      }
+    ],
+    "name": "Anthropic (Claude Official)",
+    "vendor": "anthropic"
+  },
+  {
+    "apiKey": "",
     "apiType": "chat-completions",
     "models": [
       {
