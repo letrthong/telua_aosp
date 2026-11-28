@@ -4,56 +4,8 @@
   "current_a": 1.33,
   "mode": "config_simulation",
   "target_name": "AOSP Target Board",
-  "last_changed": "2026-11-27T23:26:57.367172",
+  "last_changed": "2026-11-27T23:30:47.278018",
   "history": [
-    {
-      "output": "out1",
-      "from": "OFF",
-      "to": "OFF",
-      "timestamp": "2026-11-27T23:26:05.420888",
-      "client_ip": "127.0.0.1",
-      "reason": "output_switch_click"
-    },
-    {
-      "output": "out2",
-      "from": "ON",
-      "to": "ON",
-      "timestamp": "2026-11-27T23:26:05.443739",
-      "client_ip": "127.0.0.1",
-      "reason": "output_switch_click"
-    },
-    {
-      "output": "all",
-      "to": "ON",
-      "timestamp": "2026-11-27T23:26:05.469238",
-      "client_ip": "127.0.0.1",
-      "reason": "switch_toggle",
-      "from": "ON"
-    },
-    {
-      "output": "all",
-      "to": "OFF",
-      "timestamp": "2026-11-27T23:26:28.471803",
-      "client_ip": "127.0.0.1",
-      "reason": "switch_toggle",
-      "from": "ON"
-    },
-    {
-      "output": "all",
-      "to": "ON",
-      "timestamp": "2026-11-27T23:26:28.498929",
-      "client_ip": "127.0.0.1",
-      "reason": "switch_toggle",
-      "from": "OFF"
-    },
-    {
-      "output": "out1",
-      "from": "ON",
-      "to": "OFF",
-      "timestamp": "2026-11-27T23:26:28.521633",
-      "client_ip": "127.0.0.1",
-      "reason": "output_switch_click"
-    },
     {
       "output": "out1",
       "from": "OFF",
@@ -122,6 +74,54 @@
       "output": "all",
       "to": "ON",
       "timestamp": "2026-11-27T23:26:57.367172",
+      "client_ip": "127.0.0.1",
+      "reason": "switch_toggle",
+      "from": "ON"
+    },
+    {
+      "output": "all",
+      "to": "OFF",
+      "timestamp": "2026-11-27T23:30:47.170919",
+      "client_ip": "127.0.0.1",
+      "reason": "switch_toggle",
+      "from": "ON"
+    },
+    {
+      "output": "all",
+      "to": "ON",
+      "timestamp": "2026-11-27T23:30:47.190781",
+      "client_ip": "127.0.0.1",
+      "reason": "switch_toggle",
+      "from": "OFF"
+    },
+    {
+      "output": "out1",
+      "from": "ON",
+      "to": "OFF",
+      "timestamp": "2026-11-27T23:30:47.213667",
+      "client_ip": "127.0.0.1",
+      "reason": "output_switch_click"
+    },
+    {
+      "output": "out1",
+      "from": "OFF",
+      "to": "OFF",
+      "timestamp": "2026-11-27T23:30:47.235788",
+      "client_ip": "127.0.0.1",
+      "reason": "output_switch_click"
+    },
+    {
+      "output": "out2",
+      "from": "ON",
+      "to": "ON",
+      "timestamp": "2026-11-27T23:30:47.259229",
+      "client_ip": "127.0.0.1",
+      "reason": "output_switch_click"
+    },
+    {
+      "output": "all",
+      "to": "ON",
+      "timestamp": "2026-11-27T23:30:47.278018",
       "client_ip": "127.0.0.1",
       "reason": "switch_toggle",
       "from": "ON"

@@ -1,0 +1,13 @@
+{
+  "dataset": "test.xlsx",
+  "visuals": [
+    {
+      "id": "vis_1",
+      "type": "bar",
+      "title": "Test Bar",
+      "x": "Category",
+      "y": "Amount",
+      "agg": "sum"
+    }
+  ]
+}

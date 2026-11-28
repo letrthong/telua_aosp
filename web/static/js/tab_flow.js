@@ -8,13 +8,30 @@
 
 const FLOW_STAGES = [
   {
-    id: "docs",
+    id: "requirement",
     step: 1,
+    icon: "📋",
+    title: "Requirement",
+    subtitle: "User Story / OEM Ticket",
+    cmd: "parse_requirement(ticket, project, aosp_version)",
+    inputs: "Jira/OEM ticket, user prompt, target Android release (A12–A16)",
+    outputs: "Structured acceptance criteria, impacted modules & constraints",
+    hook: "Future hook: ingest Jira / GitHub Issue / user brief into structured spec",
+    demoLogs: [
+      "[Requirement] Received task: Add per-zone volume group ducking for AOSP A16",
+      "[Requirement] Target Project: aosp_aaos | Target Version: a16 (API 36)",
+      "[Requirement] Extracted 3 acceptance criteria & 2 safety constraints",
+      "[Requirement] ✓ Requirement validated and handed off to Docs.",
+    ],
+  },
+  {
+    id: "docs",
+    step: 2,
     icon: "📚",
     title: "Docs (Spec)",
     subtitle: "Read Sphinx .rst & VectorDB",
     cmd: "read_file(Active_Docs_Dir) + search_knowledge(project, aosp_version)",
-    inputs: "Sphinx .rst/.puml specs, VectorDB shard (A12–A16)",
+    inputs: "Requirement criteria, Sphinx .rst/.puml specs, VectorDB shard (A12–A16)",
     outputs: "Design constraints, API contracts, target symbols",
     hook: "Future hook: auto-load Active_Docs_Dir + shard context",
     demoLogs: [
@@ -26,7 +43,7 @@ const FLOW_STAGES = [
   },
   {
     id: "code",
-    step: 2,
+    step: 3,
     icon: "💻",
     title: "Code",
     subtitle: "Edit & Refactor Module",
@@ -43,7 +60,7 @@ const FLOW_STAGES = [
   },
   {
     id: "build",
-    step: 3,
+    step: 4,
     icon: "🔨",
     title: "Build",
     subtitle: "Compile via tel b -y",
@@ -60,7 +77,7 @@ const FLOW_STAGES = [
   },
   {
     id: "run",
-    step: 4,
+    step: 5,
     icon: "🚀",
     title: "Run / Deploy",
     subtitle: "Push & Watch Logcat",
@@ -77,7 +94,7 @@ const FLOW_STAGES = [
   },
   {
     id: "unittest",
-    step: 5,
+    step: 6,
     icon: "🧪",
     title: "Unit Test",
     subtitle: "Verify via tel t",
@@ -95,7 +112,7 @@ const FLOW_STAGES = [
 ];
 
 let _flowInitialized = false;
-let _flowSelectedId = "docs";
+let _flowSelectedId = "requirement";
 let _flowStates = {};       // stageId -> "idle" | "running" | "done" | "error"
 let _flowRunning = false;
 let _flowCancelFlag = false;
@@ -348,11 +365,11 @@ async function runFlowDemo(withRetry = false) {
   setFlowButtons(true);
   flowLog(withRetry
     ? "Starting Flowchart Demo (with Build Fail -> Auto-Fix Retry Loop)..."
-    : "Starting Flowchart Demo (Docs -> Code -> Build -> Run -> Unit Test)...");
+    : "Starting Flowchart Demo (Requirement -> Docs -> Code -> Build -> Run -> Unit Test)...");
 
   const sequence = withRetry
-    ? ["docs", "code", "build:fail", "code:fix", "build", "run", "unittest"]
-    : ["docs", "code", "build", "run", "unittest"];
+    ? ["requirement", "docs", "code", "build:fail", "code:fix", "build", "run", "unittest"]
+    : ["requirement", "docs", "code", "build", "run", "unittest"];
 
   for (const token of sequence) {
     if (_flowCancelFlag) break;

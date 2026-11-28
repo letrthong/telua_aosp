@@ -52,7 +52,7 @@ const SETTINGS_TABS = [
   { id: "docs", icon: "📚", label: "Docs", desc: "Sphinx Doc-as-Code" },
   { id: "bi", icon: "📊", label: "BI Studio", desc: "Excel → JSON & Dashboard" },
   { id: "ai", icon: "🤖", label: "AI Agent", desc: "LLM chat + tel/adb tools" },
-  { id: "flow", icon: "🔀", label: "Flow", desc: "Docs → Code → Build → Run → UnitTest demo" },
+  { id: "flow", icon: "🔀", label: "Flow", desc: "Requirement → Docs → Code → Build → Run → UnitTest demo" },
 ];
 
 function loadTabsVisible() {
