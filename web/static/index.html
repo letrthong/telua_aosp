@@ -1061,6 +1061,12 @@
             title="Click to open config &amp; view detailed token statistics">📊 This month: 0 tokens</span>
         </div>
         <div class="editor-actions">
+          <label id="ai-auto-confirm-pill" class="chip"
+            style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-size:11px;user-select:none;"
+            title="When OFF (default), AI Agent asks for your confirmation with a diff preview before write_file / edit_file. Turn ON for autonomous coding.">
+            <input type="checkbox" id="ai-auto-confirm-coding" style="margin:0;cursor:pointer;">
+            <span>⚡ Auto-Confirm Coding</span>
+          </label>
           <button class="btn" id="btn-ai-config" title="⚙ Configure AI Provider — endpoint, model &amp; API key">⚙
             Config</button>
           <button class="btn" id="btn-ai-clear" title="Start a new chat session (resets conversation history &amp; LLM context)">✨ New Session</button>

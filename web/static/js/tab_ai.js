@@ -10,6 +10,7 @@ const AI_CHAT_LOG_KEY = "telua_web_ai_chat_log";
 const AI_INPUT_DRAFT_KEY = "telua_web_ai_input_draft";
 const AI_CHAT_PROJECT_KEY = "telua_web_ai_chat_project";
 const AI_CHAT_VERSION_KEY = "telua_web_ai_chat_version";
+const AI_AUTO_CONFIRM_KEY = "telua_web_ai_auto_confirm";
 
 let _aiInitialized = false;
 let _aiBusy = false;
@@ -103,6 +104,90 @@ function aiAppendToolTrace(tool, args, output, persist = true) {
   }
 }
 
+function aiRenderDiffPreviewHtml(preview) {
+  return String(preview || "").split("\n").map(line => {
+    const safe = esc(line);
+    if (line.startsWith("+") && !line.startsWith("+++")) {
+      return `<span style="color:#3fb950;">${safe}</span>`;
+    }
+    if (line.startsWith("-") && !line.startsWith("---")) {
+      return `<span style="color:#f85149;">${safe}</span>`;
+    }
+    if (line.startsWith("@@")) {
+      return `<span style="color:#58a6ff;">${safe}</span>`;
+    }
+    return safe;
+  }).join("\n");
+}
+
+function aiAppendApprovalCard(item) {
+  const log = $("#ai-chat-log");
+  if (!log || !item || !item.id) return;
+  const card = document.createElement("div");
+  card.className = "ai-msg ai-msg-tool";
+  card.style.cssText = "border:1px solid rgba(210,153,34,0.55);background:rgba(210,153,34,0.07);border-radius:8px;padding:10px 12px;";
+  const badge = item.is_new ? "NEW FILE" : item.tool.toUpperCase();
+  card.innerHTML =
+    `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px;">` +
+      `<div style="display:flex;align-items:center;gap:6px;min-width:0;">` +
+        `<span>📝</span>` +
+        `<span class="chip" style="font-size:10px;padding:1px 6px;background:rgba(210,153,34,0.2);color:#e3b341;">${esc(badge)}</span>` +
+        `<code class="mono" style="font-size:11px;font-weight:700;word-break:break-all;">${esc(item.path)}</code>` +
+        `<span class="meta" style="font-size:11px;">— ${esc(item.summary || "")}</span>` +
+      `</div>` +
+      `<div class="ai-approval-actions" style="display:flex;gap:6px;flex-shrink:0;">` +
+        `<button class="btn primary ai-btn-approve" style="font-size:11px;padding:4px 10px;">✅ Approve &amp; Write</button>` +
+        `<button class="btn ai-btn-reject" style="font-size:11px;padding:4px 10px;">❌ Reject</button>` +
+      `</div>` +
+    `</div>` +
+    `<pre class="ai-tool-out" style="max-height:260px;overflow:auto;margin:0;font-size:11px;line-height:1.45;">${aiRenderDiffPreviewHtml(item.preview)}</pre>` +
+    `<div class="ai-approval-status meta" style="font-size:11px;margin-top:6px;">⏳ Waiting for your confirmation before writing to disk…</div>`;
+
+  const approveBtn = card.querySelector(".ai-btn-approve");
+  const rejectBtn = card.querySelector(".ai-btn-reject");
+  const statusEl = card.querySelector(".ai-approval-status");
+
+  const setPendingButtons = (disabled) => {
+    if (approveBtn) approveBtn.disabled = disabled;
+    if (rejectBtn) rejectBtn.disabled = disabled;
+  };
+
+  approveBtn?.addEventListener("click", async () => {
+    setPendingButtons(true);
+    if (statusEl) statusEl.textContent = "⏳ Writing file…";
+    try {
+      const res = await api(`/api/ai/approvals/${encodeURIComponent(item.id)}/approve`, { method: "POST" });
+      card.style.borderColor = "rgba(63,185,80,0.55)";
+      card.style.background = "rgba(63,185,80,0.07)";
+      card.querySelector(".ai-approval-actions")?.remove();
+      if (statusEl) statusEl.innerHTML = `<span style="color:#3fb950;font-weight:600;">✅ Approved &amp; written:</span> ${esc(res.result || item.path)}`;
+      toast("File Written ✅", res.result || item.path, "ok", 3000);
+    } catch (err) {
+      setPendingButtons(false);
+      if (statusEl) statusEl.innerHTML = `<span style="color:#f85149;">⚠️ Write failed:</span> ${esc(err.message)}`;
+      toast("Approve Failed", err.message, "err");
+    }
+  });
+
+  rejectBtn?.addEventListener("click", async () => {
+    setPendingButtons(true);
+    try {
+      await api(`/api/ai/approvals/${encodeURIComponent(item.id)}/reject`, { method: "POST" });
+      card.style.borderColor = "rgba(248,81,73,0.45)";
+      card.style.background = "rgba(248,81,73,0.06)";
+      card.querySelector(".ai-approval-actions")?.remove();
+      if (statusEl) statusEl.innerHTML = `<span style="color:#f85149;font-weight:600;">❌ Rejected:</span> Discarded without modifying <code>${esc(item.path)}</code>.`;
+      toast("Change Rejected", `Skipped writing ${item.path}`, "ok", 2500);
+    } catch (err) {
+      setPendingButtons(false);
+      if (statusEl) statusEl.innerHTML = `<span style="color:#f85149;">⚠️ Reject failed:</span> ${esc(err.message)}`;
+    }
+  });
+
+  log.appendChild(card);
+  log.scrollTop = log.scrollHeight;
+}
+
 async function aiSend() {
   if (_aiBusy) return;
   const input = $("#ai-input");
@@ -128,6 +213,7 @@ async function aiSend() {
     const chatVersion = ($("#ai-chat-version")?.value || "").trim();
     let sphinxDocsDir = "";
     try { sphinxDocsDir = (localStorage.getItem("telua_web_docs_dir") || "").trim(); } catch { /* ignore */ }
+    const autoConfirm = Boolean($("#ai-auto-confirm-coding")?.checked);
     const res = await api("/api/ai/chat", {
       method: "POST",
       body: JSON.stringify({
@@ -137,11 +223,13 @@ async function aiSend() {
         aosp_version: chatVersion,
         docs_dir: sphinxDocsDir,
         target_path: targetFile,
+        auto_confirm: autoConfirm,
       }),
     });
     (res.trace || []).forEach(t => aiAppendToolTrace(t.tool, t.args, t.output));
     const answer = res.answer || res.error || "(no answer)";
     aiAppendMsg("assistant", esc(answer).replace(/\n/g, "<br>"));
+    (res.pending_approvals || []).forEach(aiAppendApprovalCard);
     _aiHistory.push({ role: "assistant", content: answer });
     saveAIChatCache();
     loadAITokenUsage();
@@ -266,6 +354,35 @@ async function initAI() {
       aiSend();
     }
   });
+
+  // ---- Auto-Confirm Coding toggle (default OFF: ask before write_file / edit_file) ----
+  const autoConfirmCb = $("#ai-auto-confirm-coding");
+  const autoConfirmPill = $("#ai-auto-confirm-pill");
+  const syncAutoConfirmStyle = () => {
+    if (!autoConfirmPill || !autoConfirmCb) return;
+    const on = autoConfirmCb.checked;
+    autoConfirmPill.style.background = on ? "rgba(63,185,80,0.18)" : "rgba(255,255,255,0.06)";
+    autoConfirmPill.style.borderColor = on ? "rgba(63,185,80,0.55)" : "";
+    autoConfirmPill.style.color = on ? "#3fb950" : "";
+  };
+  if (autoConfirmCb) {
+    try {
+      autoConfirmCb.checked = localStorage.getItem(AI_AUTO_CONFIRM_KEY) === "1";
+    } catch { /* ignore */ }
+    syncAutoConfirmStyle();
+    autoConfirmCb.addEventListener("change", () => {
+      try { localStorage.setItem(AI_AUTO_CONFIRM_KEY, autoConfirmCb.checked ? "1" : "0"); } catch { /* ignore */ }
+      syncAutoConfirmStyle();
+      toast(
+        autoConfirmCb.checked ? "⚡ Auto-Confirm Coding: ON" : "🛡 Auto-Confirm Coding: OFF",
+        autoConfirmCb.checked
+          ? "Agent will write/edit files immediately without asking."
+          : "Agent will show a diff preview and ask before writing/editing files.",
+        "ok",
+        3000
+      );
+    });
+  }
 
   // ---- Provider config modal (⚙ Config) ----
   $("#btn-ai-config")?.addEventListener("click", () => openAIConfigModal("provider"));

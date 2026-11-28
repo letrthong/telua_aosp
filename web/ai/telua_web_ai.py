@@ -23,11 +23,13 @@
 #   2. Decrypted via python/config_crypto.py from config/overlay/ (tel crypto)
 # ==============================================================================
 
+import difflib
 import json
 import os
 import re
 import subprocess
 import threading
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -711,6 +713,101 @@ def _tool_edit_file(args: dict) -> str:
         return f"[SUCCESS] updated {rel} (replaced target snippet)"
     except Exception as exc:
         return f"[ERROR] failed to edit file: {exc}"
+
+
+# Pending file write/edit approvals (used when Auto-Confirm Coding is OFF).
+_PENDING_WRITES_LOCK = threading.Lock()
+_PENDING_WRITES: dict = {}
+_MAX_PENDING_WRITES = 100
+
+
+def _build_write_preview(rel: str, old_text: Optional[str], new_text: str) -> str:
+    """Build a compact unified diff (or new-file preview) for the UI approval card."""
+    if old_text is None:
+        lines = new_text.splitlines()
+        head = lines[:60]
+        body = "\n".join(f"+ {ln}" for ln in head)
+        if len(lines) > 60:
+            body += f"\n... (+{len(lines) - 60} more lines)"
+        return body or "(empty file)"
+    diff_lines = list(difflib.unified_diff(
+        old_text.splitlines(),
+        new_text.splitlines(),
+        fromfile=f"a/{rel}",
+        tofile=f"b/{rel}",
+        lineterm="",
+        n=3,
+    ))
+    if not diff_lines:
+        return "(no textual changes)"
+    if len(diff_lines) > 120:
+        diff_lines = diff_lines[:120] + [f"... ({len(diff_lines) - 120} more diff lines truncated)"]
+    return "\n".join(diff_lines)
+
+
+def _stage_pending_write(tool_name: str, args: dict) -> Tuple[str, Optional[dict]]:
+    """Validate a write_file / edit_file call and stage it for user confirmation without touching disk."""
+    rel = str(args.get("path", "")).strip()
+    path, err = _resolve_workspace_or_docs_path(rel, allow_sources=False, allow_docs=False)
+    if err or path is None:
+        return err, None
+
+    is_new = not path.is_file()
+    if tool_name == "write_file":
+        content = args.get("content", "")
+        if content is None:
+            return "[ERROR] missing 'content'", None
+        old_text = None if is_new else path.read_text(encoding="utf-8", errors="replace")
+        new_text = str(content)
+        summary = f"Create new file ({len(new_text)} chars)" if is_new else f"Overwrite file ({len(new_text)} chars)"
+    elif tool_name == "edit_file":
+        target = args.get("target", "")
+        replacement = args.get("replacement", "")
+        if not target:
+            return "[ERROR] missing 'target' snippet to replace", None
+        if is_new:
+            return f"[ERROR] file not found: {rel}", None
+        old_text = path.read_text(encoding="utf-8", errors="replace")
+        if target not in old_text:
+            return f"[ERROR] target snippet not found in {rel}", None
+        new_text = old_text.replace(target, replacement, 1)
+        summary = "Edit file (replace snippet)"
+    else:
+        return f"[ERROR] unsupported approval tool: {tool_name}", None
+
+    preview = _build_write_preview(rel, old_text, new_text)
+    approval_id = uuid.uuid4().hex[:12]
+    record = {
+        "id": approval_id,
+        "tool": tool_name,
+        "path": rel,
+        "args": dict(args),
+        "is_new": is_new,
+        "summary": summary,
+        "preview": preview,
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    with _PENDING_WRITES_LOCK:
+        if len(_PENDING_WRITES) >= _MAX_PENDING_WRITES:
+            oldest_key = next(iter(_PENDING_WRITES))
+            _PENDING_WRITES.pop(oldest_key, None)
+        _PENDING_WRITES[approval_id] = record
+
+    public_item = {
+        "id": approval_id,
+        "tool": tool_name,
+        "path": rel,
+        "is_new": is_new,
+        "summary": summary,
+        "preview": preview,
+    }
+    llm_msg = (
+        f"[PENDING USER APPROVAL id={approval_id}] Proposed {tool_name} on '{rel}' was staged "
+        f"and NOT written to disk yet because Auto-Confirm Coding is OFF. "
+        f"Do NOT retry writing this file; summarize your proposed change and wait for the user "
+        f"to click Approve or Reject in the UI."
+    )
+    return llm_msg, public_item
 
 
 def _tool_list_files(args: dict) -> str:
@@ -2180,7 +2277,9 @@ def api_ai_chat():
     guardrails = get_ai_guardrails()
     loop_breaker = bool(guardrails.get("loop_breaker_enabled", True))
     max_output = max(1000, min(int(guardrails.get("max_tool_output_chars", 6000)), 20000))
+    auto_confirm = bool(data.get("auto_confirm", False))
     seen_calls = {}
+    pending_approvals = []
 
     messages = []
     for h in history[-10:]:
@@ -2233,6 +2332,7 @@ def api_ai_chat():
                     "ok": True,
                     "answer": resp["text"] or "(empty response)",
                     "trace": trace,
+                    "pending_approvals": pending_approvals,
                     "model": resp.get("model", model),
                     "provider": resp.get("provider", provider),
                     "usage": {
@@ -2262,6 +2362,13 @@ def api_ai_chat():
                         f"{call_count} times in this turn. To protect token limits and prevent infinite loops, "
                         f"do not repeat this tool call. Please synthesize your final response now.]"
                     )
+                elif not auto_confirm and tool_name in ("write_file", "edit_file"):
+                    try:
+                        result, approval_item = _stage_pending_write(tool_name, args)
+                        if approval_item is not None:
+                            pending_approvals.append(approval_item)
+                    except Exception as exc:
+                        result = f"[ERROR staging {tool_name}] {exc}"
                 else:
                     fn = TOOL_EXECUTORS.get(tool_name)
                     if fn:
@@ -2295,6 +2402,7 @@ def api_ai_chat():
             "answer": f"⏹ Đã dừng sau {max_iter} bước agent (Guardrail Limit: Max {max_iter} iterations). "
                       "Agent đã thực hiện các bước ở trên để tránh đốt token.",
             "trace": trace,
+            "pending_approvals": pending_approvals,
             "model": model,
             "provider": provider,
             "usage": {
@@ -2566,6 +2674,32 @@ def api_ai_chroma_query():
         })
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@ai_bp.post("/api/ai/approvals/<approval_id>/approve")
+def api_ai_approval_approve(approval_id: str):
+    """Execute a staged write_file / edit_file change after user confirmation."""
+    with _PENDING_WRITES_LOCK:
+        item = _PENDING_WRITES.pop(approval_id, None)
+    if not item:
+        return jsonify({"ok": False, "error": "Pending approval not found or already handled."}), 404
+    tool_name = item["tool"]
+    fn = _tool_write_file if tool_name == "write_file" else _tool_edit_file
+    result = fn(item["args"])
+    if result.startswith("[ERROR"):
+        return jsonify({"ok": False, "error": result, "path": item["path"]}), 400
+    return jsonify({"ok": True, "result": result, "path": item["path"], "tool": tool_name})
+
+
+@ai_bp.post("/api/ai/approvals/<approval_id>/reject")
+def api_ai_approval_reject(approval_id: str):
+    """Discard a staged write_file / edit_file change without modifying disk."""
+    with _PENDING_WRITES_LOCK:
+        item = _PENDING_WRITES.pop(approval_id, None)
+    if not item:
+        return jsonify({"ok": False, "error": "Pending approval not found or already handled."}), 404
+    return jsonify({"ok": True, "rejected": True, "path": item["path"], "tool": item["tool"]})
+
 
 
 
