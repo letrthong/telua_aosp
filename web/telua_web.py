@@ -175,6 +175,11 @@ app.register_blueprint(ai_bp)
 app.register_blueprint(tasks_bp)
 app.register_blueprint(schedule_bp)
 _ensure_ai_scheduler_started()
+try:
+    from ai.ai_notify import ensure_telegram_poller_started as _ensure_tg_poller
+    _ensure_tg_poller()
+except Exception:
+    pass
 
 
 @app.errorhandler(HTTPException)

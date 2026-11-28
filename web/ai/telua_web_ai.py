@@ -39,7 +39,10 @@ from .ai_notify import (  # noqa: F401
     _notify_cfg_file,
     _notify_telegram_async,
     _send_telegram_message,
+    _tool_read_telegram_messages,
     _tool_send_telegram_notify,
+    ensure_telegram_poller_started,
+    fetch_telegram_messages,
     get_ai_notify_config,
     save_ai_notify_config,
 )
@@ -650,6 +653,7 @@ def api_ai_notify_get():
             "bot_token_masked": _mask_secret(tok),
             "chat_id": str(cfg.get("chat_id") or ""),
             "safe_mode": bool(cfg.get("safe_mode", True)),
+            "bot_listen_enabled": bool(cfg.get("bot_listen_enabled", False)),
             "notify_on_agent_error": bool(cfg.get("notify_on_agent_error", True)),
             "notify_on_tool_error": bool(cfg.get("notify_on_tool_error", True)),
             "notify_on_guardrail_stop": bool(cfg.get("notify_on_guardrail_stop", False)),
@@ -674,6 +678,7 @@ def api_ai_notify_post():
             "bot_token_masked": _mask_secret(tok),
             "chat_id": str(cfg.get("chat_id") or ""),
             "safe_mode": bool(cfg.get("safe_mode", True)),
+            "bot_listen_enabled": bool(cfg.get("bot_listen_enabled", False)),
             "notify_on_agent_error": bool(cfg.get("notify_on_agent_error", True)),
             "notify_on_tool_error": bool(cfg.get("notify_on_tool_error", True)),
             "notify_on_guardrail_stop": bool(cfg.get("notify_on_guardrail_stop", False)),
@@ -693,6 +698,16 @@ def api_ai_notify_test():
     if not ok:
         return jsonify({"ok": False, "error": info}), 400
     return jsonify({"ok": True, "message": info})
+
+
+@ai_bp.get("/api/ai/notify/messages")
+def api_ai_notify_messages():
+    """Read recent incoming Telegram messages from the authorized Chat ID."""
+    limit = max(1, min(int(request.args.get("limit", 10) or 10), 30))
+    ok, msgs, err, _ = fetch_telegram_messages(limit=limit)
+    if not ok:
+        return jsonify({"ok": False, "error": err}), 400
+    return jsonify({"ok": True, "messages": msgs, "count": len(msgs)})
 
 
 @ai_bp.post("/api/ai/guardrails")

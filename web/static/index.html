@@ -2003,13 +2003,21 @@
                   <input type="checkbox" id="ai-notify-on-guardrail-stop">
                   <span>⏹ <b>Guardrail Limit Stop</b> (when Agent stops at Max Tool Turns)</span>
                 </label>
+                <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" id="ai-notify-bot-listen">
+                  <span>🤖 <b>2-Way Telegram Listener</b> (read messages from your Chat ID → run AI Agent &amp; reply)</span>
+                </label>
               </div>
             </div>
 
-            <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+            <div style="display:flex;gap:8px;align-items:center;margin-top:4px;flex-wrap:wrap;">
               <button type="button" class="btn primary" id="btn-ai-notify-save">💾 Save Notify Settings</button>
               <button type="button" class="btn" id="btn-ai-notify-test">🧪 Send Test Message</button>
+              <button type="button" class="btn" id="btn-ai-notify-read">📥 Read Messages</button>
               <span id="ai-notify-test-result" class="meta" style="font-size:11px;"></span>
+            </div>
+            <div id="ai-notify-messages-box" class="hidden"
+              style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;max-height:150px;overflow-y:auto;font-size:11px;">
             </div>
           </div>
         </div>

@@ -371,6 +371,7 @@ async function initAI() {
     $("#btn-ai-save-guardrails")?.addEventListener("click", saveAIGuardrails);
     $("#btn-ai-notify-save")?.addEventListener("click", saveAINotifyConfig);
     $("#btn-ai-notify-test")?.addEventListener("click", testAINotifyTelegram);
+    $("#btn-ai-notify-read")?.addEventListener("click", readAINotifyMessages);
     $("#btn-ai-schedule-refresh")?.addEventListener("click", loadAISchedules);
     $("#btn-ai-schedule-test-tg")?.addEventListener("click", async () => {
       const btn = $("#btn-ai-schedule-test-tg");
@@ -834,6 +835,8 @@ async function initAI() {
         if (cbTool) cbTool.checked = n.notify_on_tool_error !== false;
         const cbGuard = $("#ai-notify-on-guardrail-stop");
         if (cbGuard) cbGuard.checked = Boolean(n.notify_on_guardrail_stop);
+        const cbListen = $("#ai-notify-bot-listen");
+        if (cbListen) cbListen.checked = Boolean(n.bot_listen_enabled);
         const testRes = $("#ai-notify-test-result");
         if (testRes) testRes.textContent = "";
         _renderAINotifyStatusBadge(n);
@@ -850,6 +853,7 @@ async function initAI() {
         bot_token: ($("#ai-notify-bot-token")?.value || "").trim(),
         chat_id: ($("#ai-notify-chat-id")?.value || "").trim(),
         safe_mode: Boolean($("#ai-notify-safe-mode")?.checked),
+        bot_listen_enabled: Boolean($("#ai-notify-bot-listen")?.checked),
         notify_on_agent_error: Boolean($("#ai-notify-on-agent-error")?.checked),
         notify_on_tool_error: Boolean($("#ai-notify-on-tool-error")?.checked),
         notify_on_guardrail_stop: Boolean($("#ai-notify-on-guardrail-stop")?.checked),
@@ -888,6 +892,34 @@ async function initAI() {
       toast("Telegram Test Failed", err.message, "err");
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = "🧪 Send Test Message"; }
+    }
+  }
+
+  async function readAINotifyMessages() {
+    const btn = $("#btn-ai-notify-read");
+    const box = $("#ai-notify-messages-box");
+    const out = $("#ai-notify-test-result");
+    if (btn) { btn.disabled = true; btn.textContent = "⏳ Reading…"; }
+    try {
+      const res = await api("/api/ai/notify/messages?limit=10", { cache: "no-store" });
+      const msgs = res.messages || [];
+      if (box) {
+        box.classList.remove("hidden");
+        box.innerHTML = msgs.length
+          ? msgs.map(m =>
+              `<div style="padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);">` +
+                `<span class="mono meta" style="font-size:10px;">[${esc(m.date)}]</span> ` +
+                `<b style="color:var(--accent);">@${esc(m.from)}</b>: ${esc(m.text)}` +
+              `</div>`
+            ).join("")
+          : `<div class="meta">(No recent messages from your Chat ID yet. Send a message to your bot on Telegram and click 📥 Read Messages again.)</div>`;
+      }
+      if (out) { out.textContent = `📥 Loaded ${msgs.length} msg(s)`; out.style.color = "#3fb950"; }
+    } catch (err) {
+      if (out) { out.textContent = `❌ ${err.message}`; out.style.color = "#f85149"; }
+      toast("Read Telegram Failed", err.message, "err");
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = "📥 Read Messages"; }
     }
   }
 

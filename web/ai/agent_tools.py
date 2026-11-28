@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from .ai_notify import _tool_send_telegram_notify
+from .ai_notify import _tool_read_telegram_messages, _tool_send_telegram_notify
 from .llm_providers import DEFAULT_MAX_TOOL_OUTPUT, _repo_root, get_ai_guardrails
 
 _CHAT_CTX = threading.local()
@@ -1068,6 +1068,7 @@ TOOL_EXECUTORS = {
     "update_task": lambda args: _tool_update_task(args),
     "add_task_comment": lambda args: _tool_add_task_comment(args),
     "send_telegram_notify": lambda args: _tool_send_telegram_notify(args),
+    "read_telegram_messages": lambda args: _tool_read_telegram_messages(args),
 }
 
 def _tool_list_tasks(args: dict) -> str:
@@ -1506,6 +1507,19 @@ TOOL_SCHEMAS = [
                     "message": {"type": "string", "description": "Notification text to send to Telegram"}
                 },
                 "required": ["message"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_telegram_messages",
+            "description": "Read recent incoming messages sent by the user to the configured Telegram Bot (strictly filtered to the authorized Chat ID).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Maximum number of recent messages to fetch (default 10, max 30)"}
+                },
             },
         },
     },
