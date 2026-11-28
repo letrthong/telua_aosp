@@ -171,7 +171,7 @@ async function uploadOverlayFile(file, targetName) {
     if (!res.ok || !data.ok) {
       throw new Error(data.error || data.description || "Upload failed");
     }
-    toast("Overlay Uploaded 💾", `Saved ${data.filename} to config/overlay/!`, "ok", 4000);
+    toast("Overlay Uploaded 💾", `Saved to ${data.path || `config/overlay/${data.filename}`}!`, "ok", 4000);
     if (data.filename === "apk_overlays.config") {
       await loadAospConfig();
       openAospConfigModal();
