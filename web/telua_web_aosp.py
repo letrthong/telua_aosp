@@ -562,6 +562,13 @@ def api_overlay_upload():
         f = request.files["file"]
         filename = f.filename or ""
         target_name = request.form.get("target") or filename
+        # The uploaded file's own name must match the requested target overlay
+        # (prevents saving e.g. my_settings.config as apk_overlays.config).
+        if target_name and filename and Path(filename).name != Path(str(target_name)).name:
+            abort(400, description=(
+                "Filename mismatch: uploaded '%s' but target overlay is '%s'. "
+                "Rename the file to '%s' and upload again."
+                % (Path(filename).name, Path(str(target_name)).name, Path(str(target_name)).name)))
         raw_bytes = f.read()
         try:
             content_str = raw_bytes.decode("utf-8")
@@ -578,8 +585,7 @@ def api_overlay_upload():
     target_name = Path(str(target_name).strip()).name
     allowed_targets = ("apk_overlays.config", "const_my_cli.config")
     if target_name not in allowed_targets:
-        if not re.fullmatch(r"[A-Za-z0-9_-]+\.config", target_name):
-            abort(400, description="Invalid overlay file name '%s'. Allowed: %s" % (target_name, ", ".join(allowed_targets)))
+        abort(400, description="Invalid overlay file name '%s'. Allowed: %s" % (target_name, ", ".join(allowed_targets)))
 
     if content_str is None:
         abort(400, description="Empty file content.")

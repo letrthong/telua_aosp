@@ -158,6 +158,11 @@ async function saveAospConfigFromModal() {
 
 async function uploadOverlayFile(file, targetName) {
   if (!file) return;
+  // Strict filename check: only the exact private overlay names are accepted.
+  if (targetName && file.name !== targetName) {
+    toast("Wrong file name ❌", `Expected "${targetName}", got "${file.name}". Rename the file and try again.`, "danger", 6000);
+    return;
+  }
   const formData = new FormData();
   formData.append("file", file);
   if (targetName) formData.append("target", targetName);
