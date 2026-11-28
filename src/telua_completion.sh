@@ -78,6 +78,12 @@ _telua_completions() {
             COMPREPLY=($(compgen -W "$web_actions" -- "$cur"))
             return 0
             ;;
+        start|restart)
+            if [ "${COMP_WORDS[1]:-}" = "web" ] || [ "${COMP_WORDS[1]:-}" = "--web" ]; then
+                COMPREPLY=($(compgen -W "-public --public" -- "$cur"))
+                return 0
+            fi
+            ;;
         crypto|--crypto)
             local crypto_actions="status check encrypt decrypt enc dec help"
             COMPREPLY=($(compgen -W "$crypto_actions" -- "$cur"))

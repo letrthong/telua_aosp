@@ -21,17 +21,19 @@
 #
 # telua_web.sh - Web UI (Flask) module for the Telua toolkit.
 # Single source of truth for the code behind 'telua web <action>':
-#   - 'telua web start [port]' : install Flask if missing, launch the web UI
-#                                server in the background & open the browser
-#   - 'telua web stop'         : stop the background web UI server
-#   - 'telua web status'       : show server state (PID, port, URL, health)
-#   - 'telua web restart'      : stop + start
-#   - 'telua web log'          : tail the server log file
-#   - 'telua web help'         : this help
+#   - 'telua web start [port] [-public]'   : install Flask if missing, launch the web UI
+#                                           server in the background & open the browser
+#                                           (-public / --public binds 0.0.0.0 for LAN)
+#   - 'telua web stop'                    : stop the background web UI server
+#   - 'telua web status'                  : show server state (PID, port, URL, health)
+#   - 'telua web restart [port] [-public]': stop + start
+#   - 'telua web log'                     : tail the server log file
+#   - 'telua web help'                    : this help
 #
 # Server engine : web/telua_web.py (Flask backend, stdlib-free besides Flask)
 # Frontend      : web/static/ (index.html + app.js + style.css, vanilla JS)
 # Default port  : 8788 (override via CLI arg or TELUA_WEB_PORT)
+# Default host  : 127.0.0.1 (override via -public/--public, --host, or TELUA_WEB_HOST)
 # PID / log file: .telua_web.pid / .telua_web.log (in the toolkit root)
 #
 # Usage (source, never execute):
@@ -57,6 +59,7 @@ TELUA_WEB_SOURCED=1
 WEB_DIR_NAME="web"
 WEB_SERVER_PY="telua_web.py"
 WEB_DEFAULT_PORT="${TELUA_WEB_PORT:-8788}"
+WEB_DEFAULT_HOST="${TELUA_WEB_HOST:-127.0.0.1}"
 WEB_PID_FILE=".telua_web.pid"
 WEB_LOG_FILE=".telua_web.log"
 
@@ -185,10 +188,53 @@ _web_open_browser() {
     ) &
 }
 
+# Best-effort primary LAN IPv4 address for display when binding 0.0.0.0.
+_web_lan_ip() {
+    local ip=""
+    if command -v hostname >/dev/null 2>&1; then
+        ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    fi
+    if [ -z "$ip" ] && command -v ip >/dev/null 2>&1; then
+        ip="$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
+    fi
+    echo "$ip"
+}
+
 # Action: start (launch the Flask web UI server in the background)
 web_cmd_start() {
-    local port="${1:-$WEB_DEFAULT_PORT}"
+    local port="$WEB_DEFAULT_PORT"
+    local host="$WEB_DEFAULT_HOST"
     local root server_py py_cmd pid
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -public|--public|--lan)
+                host="0.0.0.0"
+                shift
+                ;;
+            --host)
+                if [ -n "${2:-}" ]; then
+                    host="$2"
+                    shift 2
+                else
+                    log_error "--host requires an IP/hostname value."
+                    return 1
+                fi
+                ;;
+            --host=*)
+                host="${1#--host=}"
+                shift
+                ;;
+            *[!0-9]*|"")
+                log_warn "Ignoring unrecognized option '$1' (use [port] [-public])."
+                shift
+                ;;
+            *)
+                port="$1"
+                shift
+                ;;
+        esac
+    done
 
     root="$(_web_toolkit_root)"
     server_py="$(_web_server_script)"
@@ -217,7 +263,7 @@ web_cmd_start() {
         local running_port
         running_port="$(_web_server_port)"
         log_warn "Web UI is already running (PID: $pid, port: $running_port)."
-        log_info "Open: http://localhost:$running_port  (use 'telua web stop' to stop it)"
+        log_info "Open: http://localhost:$running_port  (use 'telua web stop' or 'telua web restart' to change bind/port)"
         return 0
     fi
 
@@ -230,14 +276,14 @@ web_cmd_start() {
         return 1
     fi
 
-    log_info "Starting Telua Web UI (Flask) on port $port..."
+    log_info "Starting Telua Web UI (Flask) on $host:$port..."
     log_info "Server script : $server_py"
     log_info "Toolkit root  : $root"
     log_info "Log file      : $root/$WEB_LOG_FILE"
 
     (
         cd "$root" || exit 1
-        nohup "$py_cmd" "$server_py" --host 127.0.0.1 --port "$port" \
+        nohup "$py_cmd" "$server_py" --host "$host" --port "$port" \
             > "$WEB_LOG_FILE" 2>&1 &
         echo $! > "$WEB_PID_FILE"
     )
@@ -267,6 +313,14 @@ web_cmd_start() {
     echo ""
     log_success "Telua Web UI is running!"
     printf "  \033[1;37m%-14s\033[0m \033[1;32m%s\033[0m\n" "URL:" "http://localhost:$port"
+    if [ "$host" = "0.0.0.0" ] || [ "$host" = "::" ]; then
+        local lan_ip
+        lan_ip="$(_web_lan_ip)"
+        printf "  \033[1;37m%-14s\033[0m \033[1;33m%s\033[0m\n" "Bind:" "$host (all interfaces / LAN)"
+        printf "  \033[1;37m%-14s\033[0m \033[1;36m%s\033[0m\n" "LAN URL:" "http://${lan_ip:-<host-ip>}:$port"
+    else
+        printf "  \033[1;37m%-14s\033[0m %s\n" "Bind:" "$host (local only; use '-public' for LAN)"
+    fi
     printf "  \033[1;37m%-14s\033[0m %s\n" "PID:" "$pid"
     printf "  \033[1;37m%-14s\033[0m %s\n" "Toolkit root:" "$root"
     printf "  \033[1;37m%-14s\033[0m %s\n" "Stop server:" "telua web stop"
@@ -327,6 +381,14 @@ web_cmd_status() {
         port="$(_web_server_port)"
         printf "  \033[1;37m%-14s\033[0m \033[1;32mRUNNING (PID: %s)\033[0m\n" "State:" "$pid"
         printf "  \033[1;37m%-14s\033[0m \033[1;36mhttp://localhost:%s\033[0m\n" "URL:" "$port"
+        if grep -q "LAN access" "$root/$WEB_LOG_FILE" 2>/dev/null; then
+            local lan_ip
+            lan_ip="$(_web_lan_ip)"
+            printf "  \033[1;37m%-14s\033[0m \033[1;33m0.0.0.0 (all interfaces / LAN)\033[0m\n" "Bind:"
+            printf "  \033[1;37m%-14s\033[0m \033[1;36mhttp://%s:%s\033[0m\n" "LAN URL:" "${lan_ip:-<host-ip>}" "$port"
+        else
+            printf "  \033[1;37m%-14s\033[0m %s\n" "Bind:" "127.0.0.1 (local only)"
+        fi
         if command -v curl >/dev/null 2>&1; then
             if curl -sf "http://127.0.0.1:$port/api/ping" >/dev/null 2>&1; then
                 printf "  \033[1;37m%-14s\033[0m \033[1;32mhealthy (/api/ping OK)\033[0m\n" "Health:"
@@ -345,10 +407,9 @@ web_cmd_status() {
 
 # Action: restart (stop + start)
 web_cmd_restart() {
-    local port="${1:-$WEB_DEFAULT_PORT}"
     web_cmd_stop
     sleep 1
-    web_cmd_start "$port"
+    web_cmd_start "$@"
 }
 
 # Action: log (tail the server log)
@@ -370,15 +431,15 @@ show_web_help() {
     echo -e "\033[1;36m================================================================================\033[0m"
     echo -e "\033[1;32m  TELUA WEB — Config Manager Web UI (Flask)\033[0m"
     echo -e "\033[1;36m================================================================================\033[0m"
-    echo -e "  Usage: \033[1;33mtelua web <action> [port]\033[0m"
+    echo -e "  Usage: \033[1;33mtelua web <action> [port] [-public]\033[0m"
     echo ""
     echo -e "\033[1;33mAVAILABLE ACTIONS:\033[0m"
-    printf "  \033[1;36m%-22s\033[0m %s\n" "start [port]" "Launch the Web UI server & open browser (default port: $WEB_DEFAULT_PORT)"
-    printf "  \033[1;36m%-22s\033[0m %s\n" "stop" "Stop the background Web UI server"
-    printf "  \033[1;36m%-22s\033[0m %s\n" "status" "Show server state (PID, port, URL, health)"
-    printf "  \033[1;36m%-22s\033[0m %s\n" "restart [port]" "Restart the Web UI server"
-    printf "  \033[1;36m%-22s\033[0m %s\n" "log" "Tail the server log file"
-    printf "  \033[1;36m%-22s\033[0m %s\n" "help" "Show this help message"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "start [port] [-public]" "Launch the Web UI server (default: 127.0.0.1:$WEB_DEFAULT_PORT; -public binds 0.0.0.0)"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "stop" "Stop the background Web UI server"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "status" "Show server state (PID, port, bind, URL, health)"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "restart [port] [-public]" "Restart the Web UI server (pass -public for all interfaces)"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "log" "Tail the server log file"
+    printf "  \033[1;36m%-28s\033[0m %s\n" "help" "Show this help message"
     echo ""
     echo -e "\033[1;33mWHAT YOU CAN DO IN THE UI:\033[0m"
     echo -e "  \033[0;90m-\033[0m Browse & edit every \033[1;37m*.config\033[0m / \033[1;37m*.json\033[0m file (apk.config, const_*.config, ...)"
@@ -390,7 +451,7 @@ show_web_help() {
     echo -e "\033[1;36m--------------------------------------------------------------------------------\033[0m"
     echo -e "  \033[0;90mServer engine :\033[0m $WEB_DIR_NAME/$WEB_SERVER_PY (Flask backend)"
     echo -e "  \033[0;90mFrontend      :\033[0m $WEB_DIR_NAME/static/ (vanilla JS, no build step)"
-    echo -e "  \033[0;90mEnv overrides :\033[0m TELUA_WEB_PORT=8788  TELUA_WEB_SKIP_PIP=1"
+    echo -e "  \033[0;90mEnv overrides :\033[0m TELUA_WEB_PORT=8788  TELUA_WEB_HOST=0.0.0.0  TELUA_WEB_SKIP_PIP=1"
     echo -e "\033[1;36m================================================================================\033[0m"
     echo ""
 }
