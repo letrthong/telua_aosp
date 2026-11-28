@@ -415,7 +415,7 @@ def _ai_settings():
         DEFAULT_MODEL if provider == "anthropic" else "gpt-4o-mini")
     base_url = cfg.get("base_url") or os.environ.get("TELUA_AI_BASE_URL") or ""
     guardrails = get_ai_guardrails()
-    max_iter = max(1, min(int(guardrails.get("max_iterations", DEFAULT_MAX_ITERATIONS)), 20))
+    max_iter = max(1, min(int(guardrails.get("max_iterations", DEFAULT_MAX_ITERATIONS)), 1024))
     active_name = cfg.get("active_provider", "")
     active_model = cfg.get("active_model", "")
     return provider, model, base_url, max_iter, active_name, active_model
@@ -1743,13 +1743,154 @@ def _call_llm(messages, provider, model, base_url):
         entry = _active_provider_entry(providers, cfg.get("active_provider", ""))
         model_entry = _active_model_entry(entry or {}, cfg.get("active_model", ""))
         if entry and model_entry:
-            res = _call_chat_completions(messages, entry, model_entry)
+            api_type = str(entry.get("apiType") or "").strip().lower()
+            primary_url = str(model_entry.get("url") or "").strip().lower()
+            if api_type == "anthropic" or primary_url.endswith("/v1/messages"):
+                res = _call_anthropic_http(messages, entry, model_entry)
+            else:
+                res = _call_chat_completions(messages, entry, model_entry)
             res["model"] = model_entry.get("id") or model_entry.get("name")
             res["provider"] = entry.get("name")
             return res
     if provider == "openai":
         return _call_openai(messages, model, base_url)
     return _call_anthropic(messages, model, base_url)
+
+
+def _call_anthropic_http(messages, provider_entry, model_entry):
+    """Direct Anthropic Messages API call via urllib (zero external SDK required).
+
+    Supports Claude Sonnet / Opus with full tool_use & tool_result multi-turn loops.
+    """
+    urls = [model_entry.get(k) for k in ("url", "url1", "url2") if model_entry.get(k)]
+    if not urls:
+        urls = ["https://api.anthropic.com/v1/messages"]
+    api_key = provider_entry.get("apiKey") or ""
+    m = re.match(r"\$\{input:([^}]+)\}", api_key)
+    if m:
+        api_key = os.environ.get(m.group(1), "")
+    if not api_key:
+        api_key = _resolve_api_key("anthropic")
+    if not api_key:
+        raise RuntimeError(
+            "Missing Anthropic API key. Paste your key in ⚙ Config -> API Key & Provider, "
+            "or set ANTHROPIC_API_KEY / TELUA_AI_API_KEY."
+        )
+    model_id = model_entry.get("id") or model_entry.get("name") or "claude-sonnet-4-5-20250929"
+
+    # Convert OpenAI-style tool schemas -> Anthropic tools format
+    anthropic_tools = [
+        {
+            "name": t["function"]["name"],
+            "description": t["function"]["description"],
+            "input_schema": t["function"]["parameters"],
+        }
+        for t in TOOL_SCHEMAS
+    ]
+
+    # Convert message history -> Anthropic Messages format (group consecutive tool results into one user turn)
+    converted = []
+    for msg in messages:
+        role = msg.get("role")
+        if role == "tool":
+            block = {
+                "type": "tool_result",
+                "tool_use_id": msg.get("tool_call_id") or "",
+                "content": str(msg.get("content") or ""),
+            }
+            if converted and converted[-1]["role"] == "user" and isinstance(converted[-1]["content"], list):
+                converted[-1]["content"].append(block)
+            else:
+                converted.append({"role": "user", "content": [block]})
+        elif role == "assistant" and msg.get("tool_calls"):
+            blocks = []
+            if msg.get("content"):
+                blocks.append({"type": "text", "text": str(msg["content"])})
+            for tc in msg["tool_calls"]:
+                fn = tc.get("function") if isinstance(tc.get("function"), dict) else {}
+                name = fn.get("name") or tc.get("name") or ""
+                raw_args = fn.get("arguments") if fn else tc.get("arguments", "{}")
+                try:
+                    parsed_args = json.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
+                except json.JSONDecodeError:
+                    parsed_args = {}
+                blocks.append({
+                    "type": "tool_use",
+                    "id": tc.get("id") or f"toolu_{len(blocks)}",
+                    "name": name,
+                    "input": parsed_args,
+                })
+            converted.append({"role": "assistant", "content": blocks})
+        else:
+            converted.append({"role": role if role in ("user", "assistant") else "user", "content": str(msg.get("content") or "")})
+
+    payload = {
+        "model": model_id,
+        "max_tokens": int(model_entry.get("max_tokens") or 8192),
+        "system": SYSTEM_PROMPT,
+        "tools": anthropic_tools,
+        "messages": converted,
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+    }
+
+    import urllib.request
+    last_err = None
+    for url in urls:
+        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            break
+        except Exception as exc:
+            err_detail = str(exc)
+            if hasattr(exc, "read"):
+                try:
+                    raw_body = exc.read().decode("utf-8", errors="replace")
+                    err_json = json.loads(raw_body)
+                    if isinstance(err_json, dict) and isinstance(err_json.get("error"), dict):
+                        err_detail = f"{getattr(exc, 'code', 'HTTP Error')}: {err_json['error'].get('message', raw_body)}"
+                except Exception:
+                    pass
+            last_err = err_detail
+            continue
+    else:
+        raise RuntimeError(f"Anthropic endpoint failed for {model_id}: {last_err}")
+
+    text_parts = []
+    tool_calls = []
+    for block in (data.get("content") or []):
+        btype = block.get("type")
+        if btype == "text" and block.get("text"):
+            text_parts.append(block["text"])
+        elif btype == "tool_use":
+            tool_calls.append({
+                "id": block.get("id", f"toolu_{len(tool_calls)}"),
+                "name": block.get("name", ""),
+                "arguments": json.dumps(block.get("input") or {}),
+            })
+
+    text = "\n".join(text_parts).strip()
+    raw_msg = {"role": "assistant", "content": text}
+    if tool_calls:
+        raw_msg["tool_calls"] = [
+            {"id": tc["id"], "type": "function", "function": {"name": tc["name"], "arguments": tc["arguments"]}}
+            for tc in tool_calls
+        ]
+
+    u = data.get("usage") or {}
+    return {
+        "text": text,
+        "tool_calls": tool_calls,
+        "raw_assistant_message": raw_msg,
+        "usage": {
+            "prompt_tokens": int(u.get("input_tokens") or 0),
+            "completion_tokens": int(u.get("output_tokens") or 0),
+        },
+    }
 
 
 def _call_chat_completions(messages, provider_entry, model_entry):
