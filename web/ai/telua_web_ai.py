@@ -20,12 +20,14 @@
 #   - web/ai/telua_web_schedule.py : Scheduled background AI triggers
 # ==============================================================================
 
+import io
 import json
 import os
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 
 from .ai_config_paths import (
     candidates as _ai_cfg_candidates,
@@ -823,6 +825,92 @@ def api_ai_mcp_config_post():
     return jsonify({"ok": True, "config": updated})
 
 
+@ai_bp.post("/api/ai/mcp/config/import")
+def api_ai_mcp_config_import():
+    """Import knowledge sources from an uploaded JSON file (export format).
+
+    Accepts multipart 'file' upload or a JSON body. The JSON may be:
+      - {"sources": [...]} (export format), or
+      - a bare list of source objects.
+    Imported entries are merged by id (existing sources with the same id are
+    updated, new ones appended); nothing is deleted.
+    """
+    from .telua_mcp_skill import (
+        save_mcp_skill_config,
+        invalidate_skill_scan_cache,
+        get_all_configured_sources,
+    )
+
+    if "file" in request.files:
+        raw = request.files["file"].read()
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError) as exc:
+            return jsonify({"ok": False, "error": f"Invalid JSON file: {exc}"}), 400
+    else:
+        data = request.get_json(silent=True)
+    if isinstance(data, list):
+        data = {"sources": data}
+    if not isinstance(data, dict) or not isinstance(data.get("sources"), list) or not data["sources"]:
+        return jsonify({"ok": False, "error": "JSON must contain a non-empty 'sources' list."}), 400
+
+    def _clean(s, i):
+        is_priv = bool(s.get("visibility") == "private" or s.get("is_private"))
+        local_path = str(s.get("local_path", "")).strip()
+        return {
+            "id": str(s.get("id", "")).strip() or f"imported_{i + 1}",
+            "name": str(s.get("name", "")).strip() or f"Imported source {i + 1}",
+            "local_path": local_path,
+            "repo_url": str(s.get("repo_url", "")).strip(),
+            "project": str(s.get("project", "")).strip() or "aosp_aaos",
+            "aosp_version": str(s.get("aosp_version", "")).strip(),
+            "api_level": int(s["api_level"]) if s.get("api_level") else None,
+            "branch": str(s.get("branch", "")).strip(),
+            "enabled": bool(s.get("enabled", True)),
+            "visibility": "private" if is_priv else "public",
+            "is_private": is_priv,
+        }
+
+    incoming = {}
+    order = []
+    for i, s in enumerate(data["sources"]):
+        if not isinstance(s, dict):
+            continue
+        entry = _clean(s, i)
+        if not entry["local_path"]:
+            continue
+        key = entry["id"].lower()
+        if key not in incoming:
+            order.append(key)
+        incoming[key] = entry
+    if not incoming:
+        return jsonify({"ok": False, "error": "No valid sources (with 'local_path') found in the uploaded file."}), 400
+
+    # Merge with existing sources: imported overrides same-id, others appended.
+    merged = {}
+    merged_order = []
+    for s in get_all_configured_sources():
+        key = str(s.get("id", "")).strip().lower()
+        if not key or key in merged:
+            continue
+        merged[key] = _clean(s, len(merged_order))
+        merged_order.append(key)
+    for key in order:
+        if key in merged:
+            merged_order.remove(key)
+        merged[key] = incoming[key]
+        merged_order.append(key)
+
+    updated = save_mcp_skill_config({"sources": [merged[k] for k in merged_order]})
+    invalidate_skill_scan_cache()
+    return jsonify({
+        "ok": True,
+        "imported": len(incoming),
+        "total": len(merged_order),
+        "config": updated,
+    })
+
+
 @ai_bp.post("/api/ai/mcp/sync")
 def api_ai_mcp_sync():
     """Start a background sync of all enabled sources into ChromaDB (ai_agent/data).
@@ -848,6 +936,208 @@ def api_ai_mcp_sync_cancel():
     """Request cancellation of the running ChromaDB sync job."""
     from .telua_mcp_skill import cancel_sync_job
     return jsonify(cancel_sync_job())
+
+
+# ------------------------------------------------------------------------------
+# Knowledge Bundle (ZIP) export / import
+#
+# One .zip containing up to 3 files:
+#   knowledge_sources.json  — MCP knowledge sources (public + private)
+#   ai_providers.json       — AI provider/model config (API keys included)
+#   mcp_state.json          — last sync / indexed count runtime state
+# ------------------------------------------------------------------------------
+
+@ai_bp.get("/api/ai/mcp/bundle/export")
+def api_ai_mcp_bundle_export():
+    """Download a single .zip bundling knowledge sources + AI provider config + MCP state."""
+    from .telua_mcp_skill import get_all_configured_sources, get_mcp_skill_state
+
+    def _clean_src(s):
+        is_priv = bool(s.get("visibility") == "private" or s.get("is_private"))
+        return {
+            "id": s.get("id", ""),
+            "name": s.get("name", ""),
+            "local_path": s.get("local_path", ""),
+            "repo_url": s.get("repo_url", ""),
+            "project": s.get("project", "aosp_aaos"),
+            "aosp_version": s.get("aosp_version", ""),
+            "api_level": s.get("api_level"),
+            "branch": s.get("branch", ""),
+            "enabled": bool(s.get("enabled", True)),
+            "visibility": "private" if is_priv else "public",
+        }
+
+    sources = [_clean_src(s) for s in get_all_configured_sources()]
+    providers = _read_providers_json()
+    state = get_mcp_skill_state()
+
+    manifest = {
+        "bundle": "telua_knowledge_bundle",
+        "version": 1,
+        "exported_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "files": ["knowledge_sources.json", "ai_providers.json", "mcp_state.json"],
+        "counts": {"sources": len(sources), "providers": len(providers)},
+    }
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False))
+        zf.writestr("knowledge_sources.json", json.dumps({"sources": sources}, indent=2, ensure_ascii=False))
+        zf.writestr("ai_providers.json", json.dumps(providers, indent=2, ensure_ascii=False))
+        zf.writestr("mcp_state.json", json.dumps(state, indent=2, ensure_ascii=False))
+    buf.seek(0)
+
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return send_file(
+        buf,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=f"telua_knowledge_bundle_{stamp}.zip",
+    )
+
+
+@ai_bp.post("/api/ai/mcp/bundle/import")
+def api_ai_mcp_bundle_import():
+    """Upload a knowledge bundle .zip (or a single JSON) and merge its contents.
+
+    - knowledge_sources.json -> merged into MCP sources by id (nothing deleted)
+    - ai_providers.json      -> merged by provider name (existing apiKey kept when omitted)
+    - mcp_state.json         -> last_sync / indexed_count restored
+    """
+    from .telua_mcp_skill import (
+        save_mcp_skill_config,
+        save_mcp_skill_state,
+        invalidate_skill_scan_cache,
+        get_all_configured_sources,
+    )
+
+    if "file" not in request.files:
+        return jsonify({"ok": False, "error": "No file uploaded."}), 400
+    f = request.files["file"]
+    fname = (f.filename or "").lower()
+    raw = f.read()
+
+    parts = {}  # name -> parsed JSON
+    if fname.endswith(".zip"):
+        try:
+            with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+                for name in zf.namelist():
+                    base = os.path.basename(name).lower()
+                    if base.endswith(".json") and not base.startswith("."):
+                        try:
+                            parts[base] = json.loads(zf.read(name).decode("utf-8"))
+                        except (UnicodeDecodeError, ValueError):
+                            continue
+        except zipfile.BadZipFile:
+            return jsonify({"ok": False, "error": "Invalid ZIP file."}), 400
+    elif fname.endswith(".json"):
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError) as exc:
+            return jsonify({"ok": False, "error": f"Invalid JSON file: {exc}"}), 400
+        if isinstance(data, dict) and isinstance(data.get("sources"), list):
+            parts["knowledge_sources.json"] = data
+        elif isinstance(data, list):
+            parts["ai_providers.json"] = data
+        else:
+            return jsonify({"ok": False, "error": "Unrecognized JSON content."}), 400
+    else:
+        return jsonify({"ok": False, "error": "Expected a .zip bundle or .json file."}), 400
+
+    if not parts:
+        return jsonify({"ok": False, "error": "No usable JSON files found in the bundle."}), 400
+
+    summary = {"imported_sources": 0, "imported_providers": 0, "state_restored": False}
+
+    def _clean_src(s, i):
+        is_priv = bool(s.get("visibility") == "private" or s.get("is_private"))
+        local_path = str(s.get("local_path", "")).strip()
+        return {
+            "id": str(s.get("id", "")).strip() or f"imported_{i + 1}",
+            "name": str(s.get("name", "")).strip() or f"Imported source {i + 1}",
+            "local_path": local_path,
+            "repo_url": str(s.get("repo_url", "")).strip(),
+            "project": str(s.get("project", "")).strip() or "aosp_aaos",
+            "aosp_version": str(s.get("aosp_version", "")).strip(),
+            "api_level": int(s["api_level"]) if s.get("api_level") else None,
+            "branch": str(s.get("branch", "")).strip(),
+            "enabled": bool(s.get("enabled", True)),
+            "visibility": "private" if is_priv else "public",
+            "is_private": is_priv,
+        }
+
+    # 1. Knowledge sources (merge by id, nothing deleted)
+    src_data = parts.get("knowledge_sources.json")
+    if isinstance(src_data, dict) and isinstance(src_data.get("sources"), list):
+        incoming = {}
+        order = []
+        for i, s in enumerate(src_data["sources"]):
+            if not isinstance(s, dict):
+                continue
+            entry = _clean_src(s, i)
+            if not entry["local_path"]:
+                continue
+            key = entry["id"].lower()
+            if key not in incoming:
+                order.append(key)
+            incoming[key] = entry
+        if incoming:
+            merged = {}
+            merged_order = []
+            for s in get_all_configured_sources():
+                key = str(s.get("id", "")).strip().lower()
+                if not key or key in merged:
+                    continue
+                merged[key] = _clean_src(s, len(merged_order))
+                merged_order.append(key)
+            for key in order:
+                if key in merged:
+                    merged_order.remove(key)
+                merged[key] = incoming[key]
+                merged_order.append(key)
+            save_mcp_skill_config({"sources": [merged[k] for k in merged_order]})
+            summary["imported_sources"] = len(incoming)
+
+    # 2. AI providers (merge by name; keep stored apiKey when omitted)
+    prov_data = parts.get("ai_providers.json")
+    if isinstance(prov_data, list) and prov_data:
+        existing = {p.get("name"): dict(p) for p in _read_providers_json() if isinstance(p, dict) and p.get("name")}
+        merged_provs = []
+        seen = set()
+        for p in prov_data:
+            if not isinstance(p, dict) or not p.get("name"):
+                continue
+            name = p["name"]
+            prev = existing.get(name) or {}
+            if not p.get("apiKey") and prev.get("apiKey"):
+                p["apiKey"] = prev["apiKey"]
+            merged_provs.append(p)
+            seen.add(name)
+        for name, p in existing.items():
+            if name not in seen:
+                merged_provs.append(p)
+        if merged_provs:
+            try:
+                _write_providers_json(merged_provs)
+                summary["imported_providers"] = len(merged_provs)
+            except Exception as exc:
+                summary["providers_error"] = str(exc)
+
+    # 3. MCP runtime state (last_sync / indexed_count)
+    st_data = parts.get("mcp_state.json")
+    if isinstance(st_data, dict) and ("last_sync" in st_data or "indexed_count" in st_data):
+        try:
+            save_mcp_skill_state({
+                "last_sync": str(st_data.get("last_sync", "")),
+                "indexed_count": int(st_data.get("indexed_count") or 0),
+            })
+            summary["state_restored"] = True
+        except Exception:
+            pass
+
+    invalidate_skill_scan_cache()
+    summary["ok"] = True
+    return jsonify(summary)
 
 
 @ai_bp.get("/api/ai/mcp/skills")

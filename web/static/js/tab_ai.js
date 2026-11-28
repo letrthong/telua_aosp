@@ -461,6 +461,52 @@ async function initAI() {
       }
     });
 
+    // Export knowledge bundle as a downloadable .zip
+    // (knowledge sources + AI provider config + MCP sync state)
+    $("#btn-ai-mcp-export-bundle")?.addEventListener("click", () => {
+      const a = document.createElement("a");
+      a.href = "/api/ai/mcp/bundle/export";
+      a.download = "telua_knowledge_bundle.zip";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast("Exporting Bundle ⬇", "Downloading knowledge_sources + ai_providers + state as one ZIP.", "ok", 3500);
+    });
+
+    // Import knowledge bundle from an uploaded .zip (or .json) — merge by id/name
+    $("#btn-ai-mcp-import-bundle")?.addEventListener("click", () => $("#ai-mcp-import-bundle-file")?.click());
+    $("#ai-mcp-import-bundle-file")?.addEventListener("change", async (e) => {
+      const f = e.target.files?.[0];
+      e.target.value = "";
+      if (!f) return;
+      const lname = f.name.toLowerCase();
+      if (!lname.endsWith(".zip") && !lname.endsWith(".json")) {
+        toast("Wrong file type ❌", `Expected a .zip bundle or .json file, got "${f.name}".`, "danger", 5000);
+        return;
+      }
+      const fd = new FormData();
+      fd.append("file", f);
+      try {
+        const res = await fetch("/api/ai/mcp/bundle/import", { method: "POST", body: fd });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || data.description || "Import failed");
+        const bits = [];
+        if (data.imported_sources) bits.push(`${data.imported_sources} source(s)`);
+        if (data.imported_providers) bits.push(`${data.imported_providers} provider(s)`);
+        if (data.state_restored) bits.push("sync state");
+        toast("Bundle Imported ⬆", `Merged: ${bits.join(", ") || "nothing new"}.`, "ok", 4500);
+        await loadAIMcpStatus();
+        // Refresh the model badge (provider config may have changed)
+        try {
+          const st = await api("/api/ai/status");
+          const badge = $("#ai-model-badge");
+          if (badge && st.model) badge.textContent = `model: ${st.model}`;
+        } catch { /* ignore */ }
+      } catch (err) {
+        toast("Import Failed ❌", String(err.message || err), "danger", 5000);
+      }
+    });
+
     $("#btn-ai-mcp-add-source")?.addEventListener("click", async () => {
       const addBtn = $("#btn-ai-mcp-add-source");
       const nameInput = $("#ai-mcp-new-name");

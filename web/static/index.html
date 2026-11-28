@@ -1684,8 +1684,16 @@
               style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;">
               <span class="meta" style="font-size:10px;opacity:0.85;">After toggling enable/disable, visibility, or
                 removing a source above, save changes:</span>
-              <button class="btn btn-3d" id="btn-ai-mcp-save-sources" style="font-size:11px;padding:5px 12px;"
-                title="Save enable/disable or visibility changes to the source list">💾 Save Sources</button>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                <button class="btn btn-xs ghost" id="btn-ai-mcp-export-bundle"
+                  title="Download one .zip bundle: knowledge sources + AI provider config + sync state">⬇ Export ZIP</button>
+                <button class="btn btn-xs ghost" id="btn-ai-mcp-import-bundle"
+                  title="Upload a .zip bundle (or .json) to merge knowledge sources, providers & state">⬆ Import ZIP</button>
+                <input type="file" id="ai-mcp-import-bundle-file" accept=".zip,.json"
+                  class="hidden">
+                <button class="btn btn-3d" id="btn-ai-mcp-save-sources" style="font-size:11px;padding:5px 12px;"
+                  title="Save enable/disable or visibility changes to the source list">💾 Save Sources</button>
+              </div>
             </div>
           </div>
 
