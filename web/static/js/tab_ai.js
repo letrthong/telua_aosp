@@ -292,11 +292,12 @@ async function initAI() {
       }
       renderAIChatContextSelects();
 
-      // Auto-populate Target Path from AOSP Root + Source Path if user hasn't entered a custom path
+      // Auto-populate Target Path from AOSP tab (source_dir already includes
+      // AOSP_TOP_REL_PATH like android/qssi — never compose root+source_path here)
       if (aospCfg && aospCfg.ok) {
-        const aospRoot = (aospCfg.aosp_root_dir || "").trim().replace(/[\\/]+$/, "");
-        const srcRel = (aospCfg.source_path || "").trim().replace(/^[\\/]+/, "");
-        const fullAospSrc = aospRoot && srcRel ? `${aospRoot}/${srcRel}` : (srcRel || aospRoot);
+        const fullAospSrc = (aospCfg.source_dir || "").trim()
+          || ((aospCfg.aosp_root_dir || "").trim().replace(/[\\/]+$/, "")
+              + "/" + (aospCfg.source_path || "").trim().replace(/^[\\/]+/, ""));
         const targetEl = $("#ai-target-file");
         if (targetEl && fullAospSrc) {
           targetEl.placeholder = fullAospSrc;

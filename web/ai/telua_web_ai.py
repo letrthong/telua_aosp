@@ -96,6 +96,7 @@ from .agent_tools import (  # noqa: F401
     _get_chroma_client,
     _get_chroma_collection,
     _parse_version_list,
+    _resolve_aosp_source_dir,
     _resolve_grep_target,
     _resolve_target_project_dir,
     _resolve_workspace_or_docs_path,
@@ -460,7 +461,15 @@ def api_ai_chat():
     _CHAT_CTX.project = chat_project
     _CHAT_CTX.aosp_version = chat_version
     _CHAT_CTX.docs_dir = active_docs_dir
-    _CHAT_CTX.target_dir = _resolve_target_project_dir(data.get("target_path", ""))
+    # Resolve Target Path; if the given dir doesn't exist, fall back to the
+    # AOSP tab's resolved source dir (auto-detects android/qssi like tel CLI).
+    raw_target = str(data.get("target_path", "") or "").strip()
+    resolved_target = _resolve_target_project_dir(raw_target)
+    if raw_target and (not resolved_target or not Path(resolved_target).is_dir()):
+        aosp_dir = _resolve_aosp_source_dir()
+        if aosp_dir and Path(aosp_dir).is_dir():
+            resolved_target = aosp_dir
+    _CHAT_CTX.target_dir = resolved_target
 
     provider, model, base_url, max_iter, _active_name, _active_model = _ai_settings()
     guardrails = get_ai_guardrails()

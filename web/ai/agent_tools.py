@@ -84,8 +84,45 @@ _TEL_NEEDS_PROJECT_CWD_RE = re.compile(
 )
 
 
+def _resolve_aosp_source_dir(info: dict = None) -> str:
+    """Resolve the active project's full source directory from AOSP tab info.
+
+    Prefers the pre-computed 'source_dir' (already includes AOSP_TOP_REL_PATH,
+    e.g. <root>/android/qssi/vendor/...); falls back to manual composition, then
+    to tel-CLI-style auto-detection (android/qssi -> qssi -> android) mirroring
+    resolve_android_paths() in src/telua_android.sh.
+    """
+    info = info if info is not None else _get_aosp_build_info()
+    # 1. Backend already resolved the full path (includes aosp_top_rel_path)
+    src_dir = str(info.get("source_dir") or "").strip()
+    if src_dir and Path(src_dir).is_dir():
+        return src_dir.rstrip("/\\")
+    # 2. Manual composition: root / aosp_top_rel_path / source_path
+    aosp_root = str(info.get("aosp_root_dir") or "").strip().rstrip("/\\")
+    top_rel = str(info.get("aosp_top_rel_path") or "").strip().strip("/\\")
+    src_rel = str(info.get("source_path") or "").strip().strip("/\\")
+    parts = [aosp_root] + [p for p in (top_rel, src_rel) if p]
+    candidate = "/".join(parts) if aosp_root else ""
+    if candidate and Path(candidate).is_dir():
+        return candidate
+    # 3. Auto-detect AOSP top like tel CLI does (android/qssi -> qssi -> android)
+    if aosp_root and src_rel:
+        for top in ("android/qssi", "qssi", "android"):
+            cand = f"{aosp_root}/{top}/{src_rel}"
+            if Path(cand).is_dir():
+                return cand
+        cand = f"{aosp_root}/{src_rel}"
+        if Path(cand).is_dir():
+            return cand
+    return candidate
+
+
 def _resolve_target_project_dir(raw_target: str = "") -> str:
-    """Resolve the working directory for `tel b` / `tel t` from Target Path or AOSP config."""
+    """Resolve the working directory for `tel b` / `tel t` from Target Path or AOSP config.
+
+    If the given path doesn't exist on disk (e.g. missing the android/qssi
+    layer), auto-detect the AOSP top like tel CLI does and re-resolve.
+    """
     t = str(raw_target or "").strip()
     if t:
         p = Path(t)
@@ -97,14 +134,20 @@ def _resolve_target_project_dir(raw_target: str = "") -> str:
         base = t.rstrip("/\\")
         last = base.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
         if "." in last and not last.startswith("."):
-            return base[: -(len(last) + 1)] or base
+            base = base[: -(len(last) + 1)] or base
+        # Path doesn't exist as-is: try inserting the AOSP top layer
+        # (android/qssi -> qssi -> android) between root and source path,
+        # mirroring resolve_android_paths() in src/telua_android.sh.
+        info = _get_aosp_build_info()
+        aosp_root = str(info.get("aosp_root_dir") or "").strip().rstrip("/\\")
+        if aosp_root and base.startswith(aosp_root):
+            src_rel = base[len(aosp_root):].strip("/\\")
+            for top in ("android/qssi", "qssi", "android"):
+                cand = f"{aosp_root}/{top}/{src_rel}"
+                if Path(cand).is_dir():
+                    return cand
         return base
-    info = _get_aosp_build_info()
-    aosp_root = str(info.get("aosp_root_dir") or "").strip().rstrip("/\\")
-    src_rel = str(info.get("source_path") or "").strip().lstrip("/\\")
-    if aosp_root and src_rel:
-        return f"{aosp_root}/{src_rel}"
-    return aosp_root
+    return _resolve_aosp_source_dir()
 
 
 def _tool_run_tel(args: dict) -> str:
@@ -124,13 +167,12 @@ def _tool_run_tel(args: dict) -> str:
         else:
             return f"[ERROR] cwd directory not found: {req_cwd}"
     elif _TEL_NEEDS_PROJECT_CWD_RE.match(cmd):
-        # Fallback chain: active Target Path dir -> AOSP_ROOT_DIR/<SOURCE_PATH> -> AOSP_ROOT_DIR
+        # Fallback chain: active Target Path dir -> resolved AOSP source dir -> AOSP_ROOT_DIR
         info = _get_aosp_build_info()
         aosp_root = str(info.get("aosp_root_dir") or "").strip().rstrip("/\\")
-        src_rel = str(info.get("source_path") or "").strip().lstrip("/\\")
         candidates = [
             str(getattr(_CHAT_CTX, "target_dir", "") or "").strip(),
-            f"{aosp_root}/{src_rel}" if (aosp_root and src_rel) else "",
+            _resolve_aosp_source_dir(info),
             aosp_root,
         ]
         for cand_dir in candidates:
@@ -638,7 +680,7 @@ def _tool_get_aosp_project_info(args: dict) -> str:
     profs = ", ".join(info.get("profiles") or []) or "—"
     aosp_root = str(info.get("aosp_root_dir") or "").strip().rstrip("/\\")
     src_rel = str(info.get("source_path") or "").strip().lstrip("/\\")
-    work_dir = f"{aosp_root}/{src_rel}" if (aosp_root and src_rel) else (aosp_root or "<AOSP_ROOT_DIR>")
+    work_dir = _resolve_aosp_source_dir(info) or (aosp_root or "<AOSP_ROOT_DIR>")
     return (
         f"ACTIVE_PROJECT: {active}\n"
         f"AOSP_ROOT_DIR: {aosp_root or '(auto-detect)'}\n"
