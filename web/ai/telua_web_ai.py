@@ -44,6 +44,7 @@ from .ai_notify import (  # noqa: F401
     _tool_read_telegram_messages,
     _tool_send_telegram_notify,
     ensure_telegram_poller_started,
+    fetch_telegram_chat_ids,
     fetch_telegram_messages,
     get_ai_notify_config,
     save_ai_notify_config,
@@ -719,6 +720,21 @@ def api_ai_notify_messages():
     if not ok:
         return jsonify({"ok": False, "error": err}), 400
     return jsonify({"ok": True, "messages": msgs, "count": len(msgs)})
+
+
+@ai_bp.post("/api/ai/notify/get-chat-id")
+def api_ai_notify_get_chat_id():
+    """Call Telegram getUpdates using submitted or saved Bot Token to detect Chat ID(s) and return raw JSON."""
+    data = request.get_json(silent=True) or {}
+    bot_token = str(data.get("bot_token") or "").strip()
+    ok, result, err = fetch_telegram_chat_ids(bot_token=bot_token or None)
+    if not ok:
+        return jsonify({"ok": False, "error": err, "raw": result.get("raw") if isinstance(result, dict) else None}), 400
+    return jsonify({
+        "ok": True,
+        "chats": result.get("chats", []),
+        "raw": result.get("raw", {}),
+    })
 
 
 @ai_bp.post("/api/ai/guardrails")

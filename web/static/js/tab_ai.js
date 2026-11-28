@@ -373,6 +373,8 @@ async function initAI() {
     $("#btn-ai-notify-save")?.addEventListener("click", saveAINotifyConfig);
     $("#btn-ai-notify-test")?.addEventListener("click", testAINotifyTelegram);
     $("#btn-ai-notify-read")?.addEventListener("click", readAINotifyMessages);
+    $("#btn-ai-notify-get-chat-id")?.addEventListener("click", fetchAINotifyChatId);
+    $("#ai-notify-bot-token")?.addEventListener("input", () => _updateAIGetChatIdBtn());
     $("#btn-ai-schedule-refresh")?.addEventListener("click", loadAISchedules);
     $("#btn-ai-schedule-test-tg")?.addEventListener("click", async () => {
       const btn = $("#btn-ai-schedule-test-tg");
@@ -849,9 +851,23 @@ async function initAI() {
   }
 }
 
+  let _aiNotifyHasSavedToken = false;
+
+  function _updateAIGetChatIdBtn() {
+    const btn = $("#btn-ai-notify-get-chat-id");
+    if (!btn) return;
+    const typed = ($("#ai-notify-bot-token")?.value || "").trim();
+    const hasToken = _aiNotifyHasSavedToken || Boolean(typed);
+    btn.disabled = !hasToken;
+    btn.title = hasToken
+      ? "Call Telegram getUpdates with your Bot Token to detect Chat ID(s) and inspect raw JSON"
+      : "Enter or save a Telegram Bot Token first";
+  }
+
   function _renderAINotifyStatusBadge(n) {
     const badge = $("#ai-notify-status-badge");
     const tokStatus = $("#ai-notify-token-status");
+    _aiNotifyHasSavedToken = Boolean(n && n.has_token);
     if (badge) {
       const active = Boolean(n && n.enabled && n.has_token && n.chat_id);
       badge.textContent = active ? "● Active" : (n && n.enabled ? "⚠ Incomplete" : "○ Disabled");
@@ -861,6 +877,7 @@ async function initAI() {
       tokStatus.textContent = (n && n.has_token) ? `✓ Saved (${n.bot_token_masked || "***"})` : "Not set";
       tokStatus.style.color = (n && n.has_token) ? "#3fb950" : "";
     }
+    _updateAIGetChatIdBtn();
   }
 
   async function loadAINotifyConfig() {
@@ -939,6 +956,79 @@ async function initAI() {
       toast("Telegram Test Failed", err.message, "err");
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = "🧪 Send Test Message"; }
+    }
+  }
+
+  async function fetchAINotifyChatId() {
+    const btn = $("#btn-ai-notify-get-chat-id");
+    const box = $("#ai-notify-chatid-box");
+    const cidInput = $("#ai-notify-chat-id");
+    const out = $("#ai-notify-test-result");
+    if (btn) { btn.disabled = true; btn.textContent = "⏳ Fetching…"; }
+    try {
+      const res = await api("/api/ai/notify/get-chat-id", {
+        method: "POST",
+        body: JSON.stringify({
+          bot_token: ($("#ai-notify-bot-token")?.value || "").trim(),
+        }),
+      });
+      const chats = res.chats || [];
+      const rawJson = JSON.stringify(res.raw || {}, null, 2);
+
+      if (chats.length > 0 && cidInput) {
+        cidInput.value = chats[0].chat_id;
+      }
+
+      if (box) {
+        box.classList.remove("hidden");
+        const chatButtons = chats.length
+          ? `<div style="margin-bottom:6px;">` +
+              `<div class="meta" style="font-size:10px;margin-bottom:4px;">Detected Chat ID(s) — click to fill:</div>` +
+              `<div style="display:flex;flex-wrap:wrap;gap:6px;">` +
+              chats.map(c => {
+                const label = c.username ? `${c.title} (@${c.username})` : c.title;
+                const badge = c.type ? ` [${c.type}]` : "";
+                return `<button type="button" class="btn btn-xs ai-tg-pick-cid" data-cid="${esc(c.chat_id)}" ` +
+                  `title="${esc(c.last_text || 'Click to use this Chat ID')}">` +
+                  `💬 <span class="mono">${esc(c.chat_id)}</span> — ${esc(label)}${esc(badge)}</button>`;
+              }).join("") +
+              `</div></div>`
+          : `<div class="meta" style="margin-bottom:6px;color:#d29922;">` +
+              `⚠ No chats found in <code>getUpdates</code> yet. Send any message (e.g. <code>/start</code>) to your bot on Telegram and click <b>🔍 Get Chat ID</b> again.` +
+            `</div>`;
+
+        const openAttr = chats.length === 0 ? " open" : "";
+        box.innerHTML = chatButtons +
+          `<details${openAttr}>` +
+            `<summary class="meta" style="cursor:pointer;font-size:10px;">Raw Telegram <code>getUpdates</code> JSON (${(res.raw?.result || []).length} update(s))</summary>` +
+            `<pre class="mono" style="margin:6px 0 0 0;max-height:180px;overflow:auto;font-size:10px;white-space:pre-wrap;word-break:break-all;">${esc(rawJson)}</pre>` +
+          `</details>`;
+
+        box.querySelectorAll(".ai-tg-pick-cid").forEach(pickBtn => {
+          pickBtn.addEventListener("click", () => {
+            const val = pickBtn.getAttribute("data-cid") || "";
+            if (cidInput) cidInput.value = val;
+            toast("Chat ID Selected 💬", `Filled Chat ID: ${val}`, "ok", 2500);
+          });
+        });
+      }
+
+      if (chats.length > 0) {
+        if (out) { out.textContent = `✅ Found ${chats.length} chat(s), filled ${chats[0].chat_id}`; out.style.color = "#3fb950"; }
+        toast("Chat ID Detected ✅", `Auto-filled Chat ID: ${chats[0].chat_id}`, "ok", 3500);
+      } else {
+        if (out) { out.textContent = "⚠ No updates yet — message your bot first"; out.style.color = "#d29922"; }
+      }
+    } catch (err) {
+      if (box) {
+        box.classList.remove("hidden");
+        box.innerHTML = `<div style="color:#f85149;">❌ ${esc(err.message)}</div>`;
+      }
+      if (out) { out.textContent = `❌ ${err.message}`; out.style.color = "#f85149"; }
+      toast("Get Chat ID Failed", err.message, "err");
+    } finally {
+      if (btn) { btn.textContent = "🔍 Get Chat ID"; }
+      _updateAIGetChatIdBtn();
     }
   }
 

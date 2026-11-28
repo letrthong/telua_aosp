@@ -1973,12 +1973,20 @@
               <label class="meta"
                 style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Telegram Chat
                 ID</label>
-              <input type="text" id="ai-notify-chat-id" class="term-input mono"
-                style="width:100%;box-sizing:border-box;"
-                placeholder="e.g. 123456789 (personal) or -1001234567890 (group/channel)" autocomplete="off">
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input type="text" id="ai-notify-chat-id" class="term-input mono"
+                  style="flex:1;min-width:0;box-sizing:border-box;"
+                  placeholder="e.g. 123456789 (personal) or -1001234567890 (group/channel)" autocomplete="off">
+                <button type="button" class="btn" id="btn-ai-notify-get-chat-id" disabled
+                  style="white-space:nowrap;"
+                  title="Enter or save a Telegram Bot Token first">🔍 Get Chat ID</button>
+              </div>
+              <div id="ai-notify-chatid-box" class="hidden"
+                style="margin-top:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:11px;">
+              </div>
               <div class="meta" style="font-size:10px;margin-top:4px;">
-                Tip: Message <code>@BotFather</code> to create a bot, then message your bot and check
-                <code>@userinfobot</code> to get your Chat ID.
+                Tip: Send a message to your bot on Telegram first, then click <b>🔍 Get Chat ID</b> to auto-detect it from
+                <code>getUpdates</code> JSON (or check <code>@userinfobot</code>).
               </div>
             </div>
 

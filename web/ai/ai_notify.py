@@ -515,3 +515,70 @@ def ensure_telegram_poller_started() -> None:
         _POLLER_STARTED = True
         threading.Thread(target=_telegram_poller_loop, name="telua-tg-poller", daemon=True).start()
 
+
+def fetch_telegram_chat_ids(bot_token: Optional[str] = None, limit: int = 30) -> Tuple[bool, dict, str]:
+    """Call Telegram getUpdates using submitted or saved bot_token and return
+    both extracted unique chats and the raw JSON response for inspection.
+
+    Returns: (ok, {"chats": [...], "raw": body}, error_msg)
+    """
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    cfg = get_ai_notify_config()
+    token = (bot_token or "").strip() or str(cfg.get("bot_token") or "").strip()
+    if not token:
+        return False, {}, "Missing Telegram Bot Token. Paste your Bot Token first."
+
+    params = {"limit": max(1, min(int(limit or 30), 100))}
+    url = f"https://api.telegram.org/bot{token}/getUpdates?{urllib.parse.urlencode(params)}"
+    req = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            body = json.loads(resp.read().decode("utf-8", errors="replace"))
+    except urllib.error.HTTPError as exc:
+        err_body = ""
+        try:
+            err_body = exc.read().decode("utf-8", errors="replace")[:400]
+        except Exception:
+            pass
+        return False, {}, f"HTTP {exc.code}: {err_body or exc.reason}"
+    except Exception as exc:
+        return False, {}, str(exc)
+
+    if not body.get("ok"):
+        return False, {"raw": body}, str(body.get("description") or "Telegram getUpdates failed")
+
+    chats_map = {}
+    for upd in (body.get("result") or []):
+        msg = (
+            upd.get("message")
+            or upd.get("edited_message")
+            or upd.get("channel_post")
+            or (upd.get("callback_query") or {}).get("message")
+            or {}
+        )
+        chat = msg.get("chat") or (upd.get("my_chat_member") or {}).get("chat") or {}
+        cid = str(chat.get("id") or "").strip()
+        if not cid:
+            continue
+        first = str(chat.get("first_name") or "").strip()
+        last = str(chat.get("last_name") or "").strip()
+        full_name = f"{first} {last}".strip()
+        title = str(chat.get("title") or full_name or chat.get("username") or cid).strip()
+        username = str(chat.get("username") or "").strip()
+        text = str(msg.get("text") or msg.get("caption") or "").strip()
+        chats_map[cid] = {
+            "chat_id": cid,
+            "type": str(chat.get("type") or ""),
+            "title": title,
+            "username": username,
+            "last_text": text[:80],
+        }
+
+    # Most recently seen chat first
+    chats = list(reversed(list(chats_map.values())))
+    return True, {"chats": chats, "raw": body}, ""
+
+
