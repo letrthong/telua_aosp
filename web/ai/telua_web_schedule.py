@@ -227,25 +227,38 @@ def _set_schedule_run_state(sid: str, status: str, output: str = "", run_at: Opt
 def _execute_schedule_worker(item: dict) -> None:
     sid = item["id"]
     try:
-        from .telua_web_ai import run_ai_agent_headless, _send_telegram_message
+        from .telua_web_ai import run_ai_agent_headless, _send_telegram_message, get_ai_notify_config
         res = run_ai_agent_headless(
             user_msg=item["prompt"],
             project=item.get("project", ""),
             aosp_version=item.get("aosp_version", ""),
             auto_confirm=bool(item.get("auto_confirm", False)),
         )
+        safe_mode = bool(get_ai_notify_config().get("safe_mode", True))
         if res.get("ok"):
             ans = str(res.get("answer") or "(empty response)")
             _set_schedule_run_state(sid, "ok", ans)
             if item.get("notify_telegram"):
                 ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-                _send_telegram_message(f"⏰ [Telua AI Schedule: {item['name']}]\n🕒 {ts}\n\n{ans[:3200]}")
+                if safe_mode:
+                    _send_telegram_message(
+                        f"⏰ [Telua AI Schedule] {item['name']}: ✅ Completed\n"
+                        f"🕒 {ts}\n🛡 Safe Mode: open Telua Web → Schedule to view details."
+                    )
+                else:
+                    _send_telegram_message(f"⏰ [Telua AI Schedule: {item['name']}]\n🕒 {ts}\n\n{ans[:3200]}")
         else:
             err = str(res.get("error") or "Unknown error")
             _set_schedule_run_state(sid, "error", err)
             if item.get("notify_telegram"):
                 ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-                _send_telegram_message(f"🚨 [Telua AI Schedule FAILED: {item['name']}]\n🕒 {ts}\n\n{err[:2000]}")
+                if safe_mode:
+                    _send_telegram_message(
+                        f"🚨 [Telua AI Schedule] {item['name']}: ❌ Failed\n"
+                        f"🕒 {ts}\n🛡 Safe Mode: error log hidden — open Telua Web → Schedule to inspect."
+                    )
+                else:
+                    _send_telegram_message(f"🚨 [Telua AI Schedule FAILED: {item['name']}]\n🕒 {ts}\n\n{err[:2000]}")
     except Exception as exc:
         _set_schedule_run_state(sid, "error", str(exc))
     finally:

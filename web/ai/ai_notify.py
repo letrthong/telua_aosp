@@ -24,6 +24,7 @@ _DEFAULT_NOTIFY_CFG = {
     "enabled": False,
     "bot_token": "",
     "chat_id": "",
+    "safe_mode": True,
     "notify_on_agent_error": True,
     "notify_on_tool_error": True,
     "notify_on_guardrail_stop": False,
@@ -58,7 +59,7 @@ def save_ai_notify_config(updates: dict) -> dict:
             cfg["bot_token"] = str(updates["bot_token"]).strip()
         if "chat_id" in updates:
             cfg["chat_id"] = str(updates["chat_id"] or "").strip()
-        for key in ("notify_on_agent_error", "notify_on_tool_error", "notify_on_guardrail_stop"):
+        for key in ("safe_mode", "notify_on_agent_error", "notify_on_tool_error", "notify_on_guardrail_stop"):
             if key in updates:
                 cfg[key] = bool(updates[key])
 
@@ -121,6 +122,17 @@ def _send_telegram_message(text: str, bot_token: Optional[str] = None, chat_id: 
         return False, str(exc)
 
 
+def _sanitize_for_safe_mode(text: str) -> str:
+    """Strip code blocks, file paths, and long log lines when Telegram Safe Mode is ON."""
+    import re
+    s = str(text or "")
+    s = re.sub(r"```[\s\S]*?```", "[code omitted]", s)
+    s = re.sub(r"(?:[A-Za-z]:\\|/(?:home|usr|var|opt|etc|packages|frameworks|vendor|device)/)[^\s\"'<>]+", "[path]", s)
+    lines = [ln.strip() for ln in s.splitlines() if ln.strip() and not ln.lstrip().startswith(("at ", "File ", "Traceback"))]
+    summary = " | ".join(lines)[:240]
+    return summary or "(status update)"
+
+
 def _notify_telegram_async(title: str, detail: str, category: str = "agent_error") -> None:
     """Fire-and-forget Telegram alert if enabled for the given error category."""
     try:
@@ -138,7 +150,14 @@ def _notify_telegram_async(title: str, detail: str, category: str = "agent_error
         if flag and not cfg.get(flag, False):
             return
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        msg = f"🚨 [Telua AI Agent] {title}\n🕒 {ts}\n\n{str(detail or '')[:2500]}"
+        if cfg.get("safe_mode", True):
+            msg = (
+                f"🚨 [Telua AI Agent] {title}\n"
+                f"🕒 {ts}\n"
+                f"🛡 Safe Mode: log & code details are hidden — open Telua Web to inspect."
+            )
+        else:
+            msg = f"🚨 [Telua AI Agent] {title}\n🕒 {ts}\n\n{str(detail or '')[:2500]}"
         threading.Thread(
             target=_send_telegram_message,
             args=(msg,),
@@ -153,6 +172,9 @@ def _tool_send_telegram_notify(args: dict) -> str:
     msg = str(args.get("message") or "").strip()
     if not msg:
         return "[ERROR] missing 'message' parameter"
+    cfg = get_ai_notify_config()
+    if cfg.get("safe_mode", True):
+        msg = f"🔔 [Telua AI] {_sanitize_for_safe_mode(msg)}\n(🛡 Safe Mode: code/paths redacted)"
     ok, info = _send_telegram_message(msg)
     return f"[SUCCESS] {info}" if ok else f"[ERROR] Telegram send failed: {info}"
 

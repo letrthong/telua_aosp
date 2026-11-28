@@ -826,6 +826,8 @@ async function initAI() {
         if (cid) cid.value = n.chat_id || "";
         const tok = $("#ai-notify-bot-token");
         if (tok) tok.value = "";
+        const cbSafe = $("#ai-notify-safe-mode");
+        if (cbSafe) cbSafe.checked = n.safe_mode !== false;
         const cbAgent = $("#ai-notify-on-agent-error");
         if (cbAgent) cbAgent.checked = n.notify_on_agent_error !== false;
         const cbTool = $("#ai-notify-on-tool-error");
@@ -847,6 +849,7 @@ async function initAI() {
         enabled: Boolean($("#ai-notify-enabled")?.checked),
         bot_token: ($("#ai-notify-bot-token")?.value || "").trim(),
         chat_id: ($("#ai-notify-chat-id")?.value || "").trim(),
+        safe_mode: Boolean($("#ai-notify-safe-mode")?.checked),
         notify_on_agent_error: Boolean($("#ai-notify-on-agent-error")?.checked),
         notify_on_tool_error: Boolean($("#ai-notify-on-tool-error")?.checked),
         notify_on_guardrail_stop: Boolean($("#ai-notify-on-guardrail-stop")?.checked),
