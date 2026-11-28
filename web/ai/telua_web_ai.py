@@ -803,7 +803,7 @@ def _stage_pending_write(tool_name: str, args: dict) -> Tuple[str, Optional[dict
     }
     llm_msg = (
         f"[PENDING USER APPROVAL id={approval_id}] Proposed {tool_name} on '{rel}' was staged "
-        f"and NOT written to disk yet because Auto-Confirm Coding is OFF. "
+        f"and NOT written to disk yet because Auto-Apply Edits is OFF. "
         f"Do NOT retry writing this file; summarize your proposed change and wait for the user "
         f"to click Approve or Reject in the UI."
     )
@@ -1418,7 +1418,240 @@ TOOL_EXECUTORS = {
     "create_git_fix_branch": _tool_create_git_fix_branch,
     "get_telua_skill": lambda args: _tool_get_telua_skill(args),
     "list_telua_skills": lambda args: _tool_list_telua_skills(args),
+    "list_tasks": lambda args: _tool_list_tasks(args),
+    "create_task": lambda args: _tool_create_task(args),
+    "update_task": lambda args: _tool_update_task(args),
+    "add_task_comment": lambda args: _tool_add_task_comment(args),
+    "send_telegram_notify": lambda args: _tool_send_telegram_notify(args),
 }
+
+# ------------------------------------------------------------------------------
+# Telegram Notification (stored in config/overlay/ai_agent/ai_notify.json)
+# ------------------------------------------------------------------------------
+
+_NOTIFY_LOCK = threading.Lock()
+_DEFAULT_NOTIFY_CFG = {
+    "enabled": False,
+    "bot_token": "",
+    "chat_id": "",
+    "notify_on_agent_error": True,
+    "notify_on_tool_error": True,
+    "notify_on_guardrail_stop": False,
+}
+
+
+def _notify_cfg_file() -> Path:
+    return _ai_overlay_file("ai_notify.json")
+
+
+def get_ai_notify_config() -> dict:
+    cfg = dict(_DEFAULT_NOTIFY_CFG)
+    path = _notify_cfg_file()
+    if path.is_file():
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                cfg.update(raw)
+        except Exception:
+            pass
+    return cfg
+
+
+def save_ai_notify_config(updates: dict) -> dict:
+    with _NOTIFY_LOCK:
+        cfg = get_ai_notify_config()
+        if "enabled" in updates:
+            cfg["enabled"] = bool(updates["enabled"])
+        if updates.get("clear_token"):
+            cfg["bot_token"] = ""
+        elif "bot_token" in updates and str(updates["bot_token"] or "").strip():
+            cfg["bot_token"] = str(updates["bot_token"]).strip()
+        if "chat_id" in updates:
+            cfg["chat_id"] = str(updates["chat_id"] or "").strip()
+        for key in ("notify_on_agent_error", "notify_on_tool_error", "notify_on_guardrail_stop"):
+            if key in updates:
+                cfg[key] = bool(updates[key])
+
+        path = _notify_cfg_file()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        os.replace(str(tmp), str(path))
+        return cfg
+
+
+def _mask_secret(token: str) -> str:
+    t = str(token or "").strip()
+    if not t:
+        return ""
+    if len(t) <= 10:
+        return "*" * len(t)
+    return t[:6] + "..." + t[-4:]
+
+
+def _send_telegram_message(text: str, bot_token: Optional[str] = None, chat_id: Optional[str] = None) -> Tuple[bool, str]:
+    """Send a Telegram message via Bot API using stdlib urllib (no extra dependencies)."""
+    import urllib.error
+    import urllib.request
+
+    cfg = get_ai_notify_config()
+    token = (bot_token or "").strip() or str(cfg.get("bot_token") or "").strip()
+    cid = (chat_id or "").strip() or str(cfg.get("chat_id") or "").strip()
+    if not token:
+        return False, "Missing Telegram Bot Token."
+    if not cid:
+        return False, "Missing Telegram Chat ID."
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = json.dumps({
+        "chat_id": cid,
+        "text": str(text or "")[:3900],
+        "disable_web_page_preview": True,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            body = json.loads(resp.read().decode("utf-8", errors="replace"))
+            if body.get("ok"):
+                return True, "Telegram notification sent."
+            return False, str(body.get("description") or "Telegram API returned ok=false")
+    except urllib.error.HTTPError as exc:
+        err_body = ""
+        try:
+            err_body = exc.read().decode("utf-8", errors="replace")[:300]
+        except Exception:
+            pass
+        return False, f"HTTP {exc.code}: {err_body or exc.reason}"
+    except Exception as exc:
+        return False, str(exc)
+
+
+def _notify_telegram_async(title: str, detail: str, category: str = "agent_error") -> None:
+    """Fire-and-forget Telegram alert if enabled for the given error category."""
+    try:
+        cfg = get_ai_notify_config()
+        if not cfg.get("enabled"):
+            return
+        if not cfg.get("bot_token") or not cfg.get("chat_id"):
+            return
+        flag_map = {
+            "agent_error": "notify_on_agent_error",
+            "tool_error": "notify_on_tool_error",
+            "guardrail_stop": "notify_on_guardrail_stop",
+        }
+        flag = flag_map.get(category)
+        if flag and not cfg.get(flag, False):
+            return
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        msg = f"🚨 [Telua AI Agent] {title}\n🕒 {ts}\n\n{str(detail or '')[:2500]}"
+        threading.Thread(
+            target=_send_telegram_message,
+            args=(msg,),
+            daemon=True,
+        ).start()
+    except Exception:
+        pass
+
+
+def _tool_send_telegram_notify(args: dict) -> str:
+    """Send a Telegram alert message using the configured Bot Token & Chat ID."""
+    msg = str(args.get("message") or "").strip()
+    if not msg:
+        return "[ERROR] missing 'message' parameter"
+    ok, info = _send_telegram_message(msg)
+    return f"[SUCCESS] {info}" if ok else f"[ERROR] Telegram send failed: {info}"
+
+def _tool_list_tasks(args: dict) -> str:
+    """List personal tasks from the Tasks tab (Today / 1-2w Sprint / 3-Month Roadmap / monthly or yearly archive)."""
+    from .telua_web_tasks import list_tasks as _list_tasks
+    horizon = str(args.get("horizon") or "current").strip()
+    status = str(args.get("status") or "").strip()
+    year = str(args.get("year") or "").strip()
+    month = str(args.get("month") or "").strip()
+    today_only = bool(args.get("today_only", False))
+    include_done = bool(args.get("include_done", True))
+    if (year or month) and not args.get("horizon"):
+        horizon = "all"
+    tasks, stats = _list_tasks(
+        horizon=horizon,
+        status=status,
+        today_only=today_only,
+        include_done=include_done,
+        year=year,
+        month=month,
+    )
+    period_lbl = f", month={month}" if month else (f", year={year}" if year else "")
+    header = (
+        f"=== TASKS SUMMARY (scope={horizon}{period_lbl}) ===\n"
+        f"Today: {stats['today_done']}/{stats['today_count']} done (avg {stats['today_avg_progress']}%) | "
+        f"Current Sprint (1-2w): {stats['sprint_done']}/{stats['sprint_count']} done (avg {stats['sprint_avg_progress']}%) | "
+        f"3-Month Roadmap: {stats['quarter_count']} task(s) | "
+        f"In-Progress: {stats['in_progress_count']} | Blocked: {stats['blocked_count']}\n"
+    )
+    if not tasks:
+        return header + "(No tasks matched this filter.)"
+    lines = []
+    for t in tasks:
+        today_tag = " [TODAY]" if (t.get("is_today") or t.get("horizon") == "today") else ""
+        due = f" due:{t['due_date']}" if t.get("due_date") else ""
+        done_at = f" done:{t['completed_at'][:10]}" if t.get("completed_at") else ""
+        proj = f" proj:{t['project']}" if t.get("project") else ""
+        cmts = t.get("comments") or []
+        cmt_info = f" comments:{len(cmts)}" if cmts else ""
+        notes = f" — {t['notes'][:120]}" if t.get("notes") else ""
+        lines.append(
+            f"- [{t['id']}] ({t['horizon']}{today_tag} | {t['status']} {t['progress']}% | {t['priority']}){due}{done_at}{proj}{cmt_info}: "
+            f"{t['title']}{notes}"
+        )
+    return header + "\n".join(lines)
+
+
+def _tool_create_task(args: dict) -> str:
+    """Create a new task in the Tasks tab (Today / 1-2w Sprint / 3-Month Roadmap)."""
+    from .telua_web_tasks import create_task as _create_task
+    task, err, _ = _create_task(args, created_by="ai")
+    if err or not task:
+        return f"[ERROR] {err}"
+    return (
+        f"[SUCCESS] Created task {task['id']}: '{task['title']}' "
+        f"(horizon={task['horizon']}, is_today={task['is_today']}, status={task['status']}, "
+        f"progress={task['progress']}%, priority={task['priority']})"
+    )
+
+
+def _tool_update_task(args: dict) -> str:
+    """Update an existing task's status, progress (0-100%), is_today pin, horizon, notes, or optional comment."""
+    from .telua_web_tasks import add_task_comment as _add_task_comment, update_task as _update_task
+    tid = str(args.get("task_id") or args.get("id") or "").strip()
+    task, err, _ = _update_task(tid, args)
+    if err or not task:
+        return f"[ERROR] {err}"
+    cmt_text = str(args.get("comment") or "").strip()
+    cmt_note = ""
+    if cmt_text:
+        c, _, c_err = _add_task_comment(tid, cmt_text, author="ai")
+        if c and not c_err:
+            cmt_note = f", added AI comment {c['id']}"
+    return (
+        f"[SUCCESS] Updated task {task['id']}: '{task['title']}' -> "
+        f"status={task['status']}, progress={task['progress']}%, horizon={task['horizon']}, is_today={task['is_today']}{cmt_note}"
+    )
+
+
+def _tool_add_task_comment(args: dict) -> str:
+    """Add a comment (tagged author='ai') to an existing task."""
+    from .telua_web_tasks import add_task_comment as _add_task_comment
+    tid = str(args.get("task_id") or args.get("id") or "").strip()
+    text = str(args.get("comment") or args.get("text") or "").strip()
+    comment, task, err = _add_task_comment(tid, text, author="ai")
+    if err or not comment:
+        return f"[ERROR] {err}"
+    return f"[SUCCESS] Added AI comment ({comment['id']}) to task {tid} ('{task['title'] if task else tid}')"
 
 def _tool_get_telua_skill(args: dict) -> str:
     """Retrieve raw content of a specific Java/Android or Claude Code Java skill/pattern."""
@@ -1678,6 +1911,97 @@ TOOL_SCHEMAS = [
                     "remote": {"type": "string", "description": "Remote name (default 'origin')"}
                 },
                 "required": ["branch_name", "commit_msg"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_tasks",
+            "description": "List tasks from the Tasks tab (active.json + YYYY/YYYY-MM.json archives) to check Today's plan, current 1-2w sprint, 3-month roadmap, or monthly/yearly history.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "horizon": {"type": "string", "description": "Filter scope: 'current' (default: today + 1-2w sprint), 'today', 'sprint_2w', 'quarter_3m', or 'all'"},
+                    "status": {"type": "string", "description": "Optional status filter: 'todo', 'in_progress', 'blocked', 'done'"},
+                    "year": {"type": "string", "description": "Optional year filter for archive/summary (e.g. '2026')"},
+                    "month": {"type": "string", "description": "Optional month filter for archive/summary (e.g. '2026-11')"},
+                    "today_only": {"type": "boolean", "description": "If true, only return tasks pinned to Today"},
+                    "include_done": {"type": "boolean", "description": "Whether to include completed tasks (default true)"}
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_task",
+            "description": "Create a new task in the Tasks tab (Today focus, 1-2 week sprint, or 3-month roadmap). Use this when the user asks you to plan, break down, or add tasks.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Concise, actionable task title"},
+                    "horizon": {"type": "string", "description": "'today', 'sprint_2w' (1-2 weeks, default), or 'quarter_3m' (3-month roadmap)"},
+                    "is_today": {"type": "boolean", "description": "Pin this task to Today's focus list"},
+                    "priority": {"type": "string", "description": "'high', 'medium' (default), or 'low'"},
+                    "progress": {"type": "integer", "description": "Initial completion percentage 0-100 (default 0)"},
+                    "status": {"type": "string", "description": "'todo' (default), 'in_progress', 'blocked', or 'done'"},
+                    "due_date": {"type": "string", "description": "Optional due date (YYYY-MM-DD)"},
+                    "project": {"type": "string", "description": "Optional project/module tag (e.g. 'aosp_aaos', 'CarAudio')"},
+                    "notes": {"type": "string", "description": "Optional implementation notes or sub-steps"}
+                },
+                "required": ["title"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_task",
+            "description": "Update an existing task's progress (e.g. 50%), status ('todo'/'in_progress'/'blocked'/'done'), is_today flag, horizon, priority, or notes.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID from list_tasks (e.g. 'tsk_a1b2c3d4')"},
+                    "status": {"type": "string", "description": "'todo', 'in_progress', 'blocked', or 'done'"},
+                    "progress": {"type": "integer", "description": "Completion percentage 0-100"},
+                    "is_today": {"type": "boolean", "description": "Pin/unpin task for Today"},
+                    "horizon": {"type": "string", "description": "'today', 'sprint_2w', or 'quarter_3m'"},
+                    "priority": {"type": "string", "description": "'high', 'medium', or 'low'"},
+                    "due_date": {"type": "string", "description": "Due date (YYYY-MM-DD)"},
+                    "notes": {"type": "string", "description": "Updated notes"},
+                    "comment": {"type": "string", "description": "Optional progress comment to log on this task (recorded as author='ai')"}
+                },
+                "required": ["task_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_task_comment",
+            "description": "Add a comment / progress log entry to an existing task in the Tasks tab (automatically recorded as comment by AI).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID from list_tasks (e.g. 'tsk_a1b2c3d4')"},
+                    "comment": {"type": "string", "description": "Comment text (findings, build result, blocker, next step)"}
+                },
+                "required": ["task_id", "comment"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_telegram_notify",
+            "description": "Send a Telegram notification message to the user using the Telegram Bot configured in AI Config -> Notify (useful for alerting on build/test errors or long task completion).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "Notification text to send to Telegram"}
+                },
+                "required": ["message"],
             },
         },
     },
@@ -2245,6 +2569,83 @@ def api_ai_key():
     return jsonify({"ok": True, "provider": name, "has_key": bool(key)})
 
 
+def run_ai_agent_headless(
+    user_msg: str,
+    project: str = "",
+    aosp_version: str = "",
+    auto_confirm: bool = False,
+) -> dict:
+    """Run one headless AI Agent turn (used by scheduled triggers without Flask request context)."""
+    chat_project = _clean_filter_val(project)
+    chat_version = _clean_filter_val(aosp_version)
+    _CHAT_CTX.project = chat_project
+    _CHAT_CTX.aosp_version = chat_version
+    _CHAT_CTX.docs_dir = ""
+    _CHAT_CTX.target_dir = _resolve_target_project_dir("")
+
+    provider, model, base_url, max_iter, _active_name, _active_model = _ai_settings()
+    guardrails = get_ai_guardrails()
+    loop_breaker = bool(guardrails.get("loop_breaker_enabled", True))
+    max_output = max(1000, min(int(guardrails.get("max_tool_output_chars", 6000)), 20000))
+    seen_calls = {}
+    messages = [{"role": "user", "content": str(user_msg or "").strip()}]
+    turn_prompt_tokens = 0
+    turn_completion_tokens = 0
+    try:
+        for _ in range(max_iter):
+            resp = _call_llm(messages, provider, model, base_url)
+            u = resp.get("usage") or {}
+            turn_prompt_tokens += int(u.get("prompt_tokens") or 0)
+            turn_completion_tokens += int(u.get("completion_tokens") or 0)
+            if not resp["tool_calls"]:
+                if turn_prompt_tokens > 0 or turn_completion_tokens > 0:
+                    record_ai_token_usage(
+                        turn_prompt_tokens, turn_completion_tokens,
+                        model=resp.get("model", model), provider=resp.get("provider", provider),
+                    )
+                return {"ok": True, "answer": resp["text"] or "(empty response)", "model": resp.get("model", model)}
+
+            messages.append(resp["raw_assistant_message"])
+            for tc in resp["tool_calls"]:
+                try:
+                    args = json.loads(tc["arguments"] or "{}")
+                except json.JSONDecodeError:
+                    args = {}
+                tool_name = tc["name"]
+                call_key = f"{tool_name}:{json.dumps(args, sort_keys=True)}"
+                call_count = seen_calls.get(call_key, 0) + 1
+                seen_calls[call_key] = call_count
+                if loop_breaker and call_count >= 2:
+                    result = f"[LOOP BREAKER SHIELD: duplicate call to '{tool_name}'. Synthesize final response now.]"
+                elif not auto_confirm and tool_name in ("write_file", "edit_file"):
+                    result, _ = _stage_pending_write(tool_name, args)
+                else:
+                    fn = TOOL_EXECUTORS.get(tool_name)
+                    if fn:
+                        try:
+                            result = fn(args)
+                        except Exception as exc:
+                            result = f"[ERROR executing {tool_name}] {exc}"
+                    else:
+                        result = f"[ERROR] unknown tool: {tool_name}"
+                if len(result) > max_output:
+                    result = result[:max_output] + f"\n... [Truncated at {max_output} chars]"
+                messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
+
+        if turn_prompt_tokens > 0 or turn_completion_tokens > 0:
+            record_ai_token_usage(turn_prompt_tokens, turn_completion_tokens, model=model, provider=provider)
+        return {"ok": True, "answer": f"⏹ Stopped at guardrail limit ({max_iter} turns)."}
+    except Exception as exc:
+        if turn_prompt_tokens > 0 or turn_completion_tokens > 0:
+            record_ai_token_usage(turn_prompt_tokens, turn_completion_tokens, model=model, provider=provider)
+        return {"ok": False, "error": str(exc)}
+    finally:
+        _CHAT_CTX.project = ""
+        _CHAT_CTX.aosp_version = ""
+        _CHAT_CTX.docs_dir = ""
+        _CHAT_CTX.target_dir = ""
+
+
 @ai_bp.post("/api/ai/chat")
 def api_ai_chat():
     """Run the agent loop for one user message. Returns the final answer plus a
@@ -2388,6 +2789,12 @@ def api_ai_chat():
                     "args": args,
                     "output": result[:2000],
                 })
+                if isinstance(result, str) and result.startswith("[ERROR"):
+                    _notify_telegram_async(
+                        f"Tool Error: {tool_name}",
+                        f"Model: {model}\nTool: {tool_name}\nOutput: {result[:1200]}",
+                        category="tool_error",
+                    )
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc["id"],
@@ -2397,6 +2804,11 @@ def api_ai_chat():
         if turn_prompt_tokens > 0 or turn_completion_tokens > 0:
             record_ai_token_usage(turn_prompt_tokens, turn_completion_tokens,
                                   model=model, provider=provider)
+        _notify_telegram_async(
+            f"Guardrail Stop ({max_iter} turns)",
+            f"Model: {model}\nUser prompt: {user_msg[:400]}",
+            category="guardrail_stop",
+        )
         return jsonify({
             "ok": True,
             "answer": f"⏹ Đã dừng sau {max_iter} bước agent (Guardrail Limit: Max {max_iter} iterations). "
@@ -2414,10 +2826,20 @@ def api_ai_chat():
     except RuntimeError as exc:
         if turn_prompt_tokens > 0 or turn_completion_tokens > 0:
             record_ai_token_usage(turn_prompt_tokens, turn_completion_tokens, model=model, provider=provider)
+        _notify_telegram_async(
+            "Agent Runtime Error",
+            f"Provider: {provider} | Model: {model}\nError: {exc}\nPrompt: {user_msg[:400]}",
+            category="agent_error",
+        )
         return jsonify({"ok": False, "error": str(exc), "trace": trace}), 400
     except Exception as exc:  # pragma: no cover
         if turn_prompt_tokens > 0 or turn_completion_tokens > 0:
             record_ai_token_usage(turn_prompt_tokens, turn_completion_tokens, model=model, provider=provider)
+        _notify_telegram_async(
+            "Agent Unexpected Error",
+            f"Provider: {provider} | Model: {model}\nError: {exc}\nPrompt: {user_msg[:400]}",
+            category="agent_error",
+        )
         return jsonify({"ok": False, "error": f"Agent error: {exc}", "trace": trace}), 500
     finally:
         _CHAT_CTX.project = ""
@@ -2430,6 +2852,62 @@ def api_ai_chat():
 def api_ai_guardrails_get():
     """Get current token guardrails configuration."""
     return jsonify({"ok": True, "guardrails": get_ai_guardrails()})
+
+
+@ai_bp.get("/api/ai/notify")
+def api_ai_notify_get():
+    """Get Telegram notification configuration (bot token masked)."""
+    cfg = get_ai_notify_config()
+    tok = str(cfg.get("bot_token") or "")
+    return jsonify({
+        "ok": True,
+        "notify": {
+            "enabled": bool(cfg.get("enabled", False)),
+            "has_token": bool(tok),
+            "bot_token_masked": _mask_secret(tok),
+            "chat_id": str(cfg.get("chat_id") or ""),
+            "notify_on_agent_error": bool(cfg.get("notify_on_agent_error", True)),
+            "notify_on_tool_error": bool(cfg.get("notify_on_tool_error", True)),
+            "notify_on_guardrail_stop": bool(cfg.get("notify_on_guardrail_stop", False)),
+        },
+    })
+
+
+@ai_bp.post("/api/ai/notify")
+def api_ai_notify_post():
+    """Save Telegram notification configuration into config/overlay/ai_agent/ai_notify.json."""
+    data = request.get_json(silent=True) or {}
+    try:
+        cfg = save_ai_notify_config(data)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": f"Failed to save notify config: {exc}"}), 500
+    tok = str(cfg.get("bot_token") or "")
+    return jsonify({
+        "ok": True,
+        "notify": {
+            "enabled": bool(cfg.get("enabled", False)),
+            "has_token": bool(tok),
+            "bot_token_masked": _mask_secret(tok),
+            "chat_id": str(cfg.get("chat_id") or ""),
+            "notify_on_agent_error": bool(cfg.get("notify_on_agent_error", True)),
+            "notify_on_tool_error": bool(cfg.get("notify_on_tool_error", True)),
+            "notify_on_guardrail_stop": bool(cfg.get("notify_on_guardrail_stop", False)),
+        },
+    })
+
+
+@ai_bp.post("/api/ai/notify/test")
+def api_ai_notify_test():
+    """Send a test Telegram notification using submitted or saved Bot Token & Chat ID."""
+    data = request.get_json(silent=True) or {}
+    bot_token = str(data.get("bot_token") or "").strip()
+    chat_id = str(data.get("chat_id") or "").strip()
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    text = f"✅ [Telua AI Agent] Test Telegram notification successful!\n🕒 {ts}"
+    ok, info = _send_telegram_message(text, bot_token=bot_token or None, chat_id=chat_id or None)
+    if not ok:
+        return jsonify({"ok": False, "error": info}), 400
+    return jsonify({"ok": True, "message": info})
 
 
 @ai_bp.post("/api/ai/guardrails")

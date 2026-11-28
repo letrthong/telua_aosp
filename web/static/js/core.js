@@ -41,17 +41,18 @@ function applyTheme(theme) {
 /* ---------------- Settings: tab visibility (default: all visible) -------- */
 const TABS_VISIBLE_KEY = "telua_web_tabs_visible";   // JSON { tabId: bool } — missing = visible (default)
 const SETTINGS_TABS = [
-  { id: "files", icon: "📄", label: "Files", desc: "Browse & edit config files" },
-  { id: "pipelines", icon: "⚡", label: "Pipelines", desc: "MY_CMD_* / MULTI / CAR / DUMP" },
-  { id: "system", icon: "🖥", label: "System", desc: "System & Docker CLI pipelines" },
+  { id: "ai", icon: "🤖", label: "AI Agent", desc: "LLM chat + tel/adb tools" },
+  { id: "docs", icon: "📚", label: "Docs", desc: "Sphinx Doc-as-Code" },
+  { id: "tasks", icon: "📋", label: "Tasks", desc: "Today, 1–2w Sprint & 3M Roadmap" },
   { id: "aosp", icon: "🤖", label: "AOSP", desc: "Build, Deploy & Test Center" },
   { id: "terminal", icon: "💻", label: "Terminal", desc: "Interactive Web CLI" },
   { id: "logcat", icon: "📱", label: "Logcat", desc: "Live logcat stream & filter" },
   { id: "mirror", icon: "🖥", label: "Mirror", desc: "Screen mirroring & control" },
   { id: "power", icon: "⚡", label: "Power", desc: "Target power controls" },
-  { id: "docs", icon: "📚", label: "Docs", desc: "Sphinx Doc-as-Code" },
   { id: "bi", icon: "📊", label: "BI Studio", desc: "Excel → JSON & Dashboard" },
-  { id: "ai", icon: "🤖", label: "AI Agent", desc: "LLM chat + tel/adb tools" },
+  { id: "files", icon: "📄", label: "Files", desc: "Browse & edit config files" },
+  { id: "system", icon: "🖥", label: "System", desc: "System & Docker CLI pipelines" },
+  { id: "pipelines", icon: "⚡", label: "Pipelines", desc: "MY_CMD_* / MULTI / CAR / DUMP" },
   { id: "flow", icon: "🔀", label: "Flow", desc: "Requirement → Docs → Code → Build → Run → UnitTest demo" },
 ];
 
@@ -674,13 +675,14 @@ function switchTab(tab) {
   const isDocs = tab === "docs";
   const isBi = tab === "bi";
   const isAi = tab === "ai";
+  const isTasks = tab === "tasks";
   const isFlow = tab === "flow";
   const isMirror = tab === "mirror";
   const isPower = tab === "power";
-  const isPipelinesView = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isAi && !isFlow && !isMirror && !isPower;
+  const isPipelinesView = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isAi && !isTasks && !isFlow && !isMirror && !isPower;
 
-  // Collapse Config Files sidebar in Docs, AOSP, Terminal, Logcat, BI, Mirror, Power & Flow views to give maximum full-width canvas
-  $(".layout")?.classList.toggle("no-sidebar", isDocs || isAosp || isTerminal || isLogcat || isBi || isAi || isFlow || isMirror || isPower);
+  // Collapse Config Files sidebar in Docs, AOSP, Terminal, Logcat, BI, Mirror, Power, Tasks & Flow views to give maximum full-width canvas
+  $(".layout")?.classList.toggle("no-sidebar", isDocs || isAosp || isTerminal || isLogcat || isBi || isAi || isTasks || isFlow || isMirror || isPower);
 
   $("#view-files")?.classList.toggle("hidden", !isFiles);
   $("#view-aosp")?.classList.toggle("hidden", !isAosp);
@@ -690,6 +692,7 @@ function switchTab(tab) {
   $("#view-docs")?.classList.toggle("hidden", !isDocs);
   $("#view-bi")?.classList.toggle("hidden", !isBi);
   $("#view-ai")?.classList.toggle("hidden", !isAi);
+  $("#view-tasks")?.classList.toggle("hidden", !isTasks);
   $("#view-flow")?.classList.toggle("hidden", !isFlow);
   $("#view-mirror")?.classList.toggle("hidden", !isMirror);
   $("#view-power")?.classList.toggle("hidden", !isPower);
@@ -717,6 +720,10 @@ function switchTab(tab) {
   if (isAi) {
     initAI();
     setTimeout(() => $("#ai-input")?.focus(), 40);
+    return;
+  }
+  if (isTasks) {
+    if (typeof initTasksTab === "function") initTasksTab();
     return;
   }
   if (isFlow) {

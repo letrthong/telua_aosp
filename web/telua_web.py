@@ -103,9 +103,23 @@ try:
     from ai.telua_web_ai import (  # noqa: E402
         ai_bp,
     )
+    from ai.telua_web_tasks import (  # noqa: E402
+        tasks_bp,
+    )
+    from ai.telua_web_schedule import (  # noqa: E402
+        schedule_bp,
+        ensure_scheduler_started as _ensure_ai_scheduler_started,
+    )
 except ImportError:
     from telua_web_ai import (  # noqa: E402
         ai_bp,
+    )
+    from telua_web_tasks import (  # noqa: E402
+        tasks_bp,
+    )
+    from telua_web_schedule import (  # noqa: E402
+        schedule_bp,
+        ensure_scheduler_started as _ensure_ai_scheduler_started,
     )
 
 try:
@@ -158,6 +172,9 @@ app.register_blueprint(bi_bp)
 app.register_blueprint(mirror_bp)
 app.register_blueprint(power_bp)
 app.register_blueprint(ai_bp)
+app.register_blueprint(tasks_bp)
+app.register_blueprint(schedule_bp)
+_ensure_ai_scheduler_started()
 
 
 @app.errorhandler(HTTPException)

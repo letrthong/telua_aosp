@@ -26,12 +26,13 @@
         </div>
       </div>
       <nav class="tabs">
-        <button class="tab" id="tab-files" title="Browse &amp; edit config files">📄 Files</button>
-        <button class="tab active" id="tab-pipelines" title="Edit MY_CMD_* / MULTI / CAR / DUMP pipelines">⚡
-          Pipelines</button>
-        <button class="tab" id="tab-system"
-          title="System &amp; Docker CLI pipelines (config/const_system_cli.config — telua system <action>)">🖥
-          System</button>
+        <button class="tab" id="tab-ai"
+          title="AI Agent — chat với LLM, tự chạy tel/adb/file tools để build &amp; debug">🤖 AI Agent</button>
+        <button class="tab" id="tab-docs" title="Sphinx Doc-as-Code — WYSIWYG Quill.js &amp; RST Converter">📚
+          Docs</button>
+        <button class="tab" id="tab-tasks"
+          title="Task Manager — quản lý công việc Today, Sprint 1–2 tuần &amp; Roadmap 3 tháng (hỗ trợ AI Agent)">📋
+          Tasks</button>
         <button class="tab" id="tab-aosp"
           title="AOSP Android Build, Deploy &amp; Test Center (tel b, tel test, apk.config)">🤖 AOSP</button>
         <button class="tab" id="tab-terminal"
@@ -42,13 +43,16 @@
           Mirror</button>
         <button class="tab" id="tab-power"
           title="Target Power Controls — Dual Output Hardware Switches (Ngõ ra 1 &amp; Ngõ ra 2)">⚡ Power</button>
-        <button class="tab" id="tab-docs" title="Sphinx Doc-as-Code — WYSIWYG Quill.js &amp; RST Converter">📚
-          Docs</button>
         <button class="tab" id="tab-bi" title="Excel to JSON &amp; Power BI Interactive Dashboard">📊 BI Studio</button>
-        <button class="tab" id="tab-ai"
-          title="AI Agent — chat với LLM, tự chạy tel/adb/file tools để build &amp; debug">🤖 AI Agent</button>
+        <button class="tab" id="tab-files" title="Browse &amp; edit config files">📄 Files</button>
+        <button class="tab" id="tab-system"
+          title="System &amp; Docker CLI pipelines (config/const_system_cli.config — telua system <action>)">🖥
+          System</button>
+        <button class="tab active" id="tab-pipelines" title="Edit MY_CMD_* / MULTI / CAR / DUMP pipelines">⚡
+          Pipelines</button>
         <button class="tab" id="tab-flow"
-          title="Interactive Pipeline Flowchart Demo (Requirement → Docs → Code → Build → Run → Unit Test)">🔀 Flow</button>
+          title="Interactive Pipeline Flowchart Demo (Requirement → Docs → Code → Build → Run → Unit Test)">🔀
+          Flow</button>
       </nav>
     </div>
     <div class="statusbar">
@@ -1065,24 +1069,27 @@
             style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-size:11px;user-select:none;"
             title="When OFF (default), AI Agent asks for your confirmation with a diff preview before write_file / edit_file. Turn ON for autonomous coding.">
             <input type="checkbox" id="ai-auto-confirm-coding" style="margin:0;cursor:pointer;">
-            <span>⚡ Auto-Confirm Coding</span>
+            <span>⚡ Auto-Apply Edits</span>
           </label>
           <button class="btn" id="btn-ai-config" title="⚙ Configure AI Provider — endpoint, model &amp; API key">⚙
             Config</button>
-          <button class="btn" id="btn-ai-clear" title="Start a new chat session (resets conversation history &amp; LLM context)">✨ New Session</button>
+          <button class="btn" id="btn-ai-clear"
+            title="Start a new chat session (resets conversation history &amp; LLM context)">✨ New Session</button>
         </div>
       </div>
       <!-- Target File & Auto-Coding Bar + Context Filter (Project / AOSP Version) -->
       <div class="ai-target-bar"
         style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:rgba(255,255,255,0.025);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;">
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-          <span class="mono" style="font-size:11px;font-weight:700;color:var(--accent);white-space:nowrap;">🎯 Context:</span>
+          <span class="mono" style="font-size:11px;font-weight:700;color:var(--accent);white-space:nowrap;">🎯
+            Context:</span>
           <select id="ai-chat-project" class="theme-select" style="font-size:11px;padding:3px 6px;max-width:165px;"
             title="Filter ChromaDB knowledge search by Project"></select>
           <select id="ai-chat-version" class="theme-select" style="font-size:11px;padding:3px 6px;max-width:170px;"
             title="Filter ChromaDB knowledge search by AOSP Version (avoids mixing A12 vs A16)"></select>
         </div>
-        <span class="mono" style="font-size:11px;font-weight:700;color:var(--accent);white-space:nowrap;">📁 Target Path:</span>
+        <span class="mono" style="font-size:11px;font-weight:700;color:var(--accent);white-space:nowrap;">📁 Target
+          Path:</span>
         <input type="text" id="ai-target-file" class="term-input mono"
           style="flex:1;font-size:11px;padding:4px 8px;min-width:180px;"
           placeholder="Path to file or folder (e.g., src/com/android/car/ or src/CarService.java)">
@@ -1112,9 +1119,12 @@
           <span id="flow-status-badge" class="run-badge">Demo Ready</span>
         </div>
         <div class="editor-actions" style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button class="btn btn-3d btn-3d-violet" id="btn-flow-random" title="Continuously animate random running steps for live demo">🎲 Random Live</button>
-          <button class="btn btn-3d btn-3d-emerald" id="btn-flow-run-ok" title="Simulate full happy-path flow">▶ Run Demo</button>
-          <button class="btn btn-3d btn-3d-amber" id="btn-flow-run-retry" title="Simulate Build fail -> Auto-Fix loop -> Pass">🔁 Demo Retry Loop</button>
+          <button class="btn btn-3d btn-3d-violet" id="btn-flow-random"
+            title="Continuously animate random running steps for live demo">🎲 Random Live</button>
+          <button class="btn btn-3d btn-3d-emerald" id="btn-flow-run-ok" title="Simulate full happy-path flow">▶ Run
+            Demo</button>
+          <button class="btn btn-3d btn-3d-amber" id="btn-flow-run-retry"
+            title="Simulate Build fail -> Auto-Fix loop -> Pass">🔁 Demo Retry Loop</button>
           <button class="btn" id="btn-flow-step" title="Advance one stage at a time">⏭ Step Next</button>
           <button class="btn ghost" id="btn-flow-reset" title="Reset flowchart">↺ Reset</button>
         </div>
@@ -1122,14 +1132,16 @@
 
       <div style="padding:14px 16px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:14px;">
         <p class="meta" style="margin:0;">
-          Visual demo of the end-to-end AOSP engineering loop (<b>Requirement → Docs → Code → Build → Run → Unit Test</b>). Click any stage card to inspect its inputs, commands, and future integration hooks.
+          Visual demo of the end-to-end AOSP engineering loop (<b>Requirement → Docs → Code → Build → Run → Unit
+            Test</b>). Click any stage card to inspect its inputs, commands, and future integration hooks.
         </p>
 
         <!-- 5-Stage Flowchart Canvas -->
         <div class="flow-board">
           <div id="flow-canvas" class="flow-canvas"></div>
           <div id="flow-retry-loop" class="flow-retry-loop">
-            <span>↩ Self-Healing Retry Loop: if <b>Build</b> or <b>Unit Test</b> fails → loop back to <b>💻 Code</b> → rebuild &amp; re-verify</span>
+            <span>↩ Self-Healing Retry Loop: if <b>Build</b> or <b>Unit Test</b> fails → loop back to <b>💻 Code</b> →
+              rebuild &amp; re-verify</span>
           </div>
         </div>
 
@@ -1138,14 +1150,254 @@
 
         <!-- Simulated Execution Log -->
         <div class="flow-card" style="flex:1;display:flex;flex-direction:column;min-height:140px;">
-          <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px;" class="mono">📟 Demo Execution Trace</div>
+          <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px;" class="mono">📟 Demo
+            Execution Trace</div>
           <div id="flow-demo-log" class="flow-demo-log mono">
             <div class="meta">(Click ▶ Run Demo, 🔁 Demo Retry Loop, or ⏭ Step Next to preview the pipeline flow.)</div>
           </div>
         </div>
       </div>
     </section>
+
+    <!-- ============ Tasks Manager Pane (Today / 1-2w Sprint / 3M Roadmap) ============ -->
+    <section class="editor-pane hidden" id="view-tasks">
+      <div class="editor-head">
+        <div class="editor-title" style="flex-wrap:wrap;gap:6px;">
+          <span class="mono" style="color:var(--accent);font-weight:700">📋 Tasks</span>
+          <span id="tasks-stat-today" class="chip" style="font-size:11px;color:#e3b341;">☀ Today: 0/0 (0%)</span>
+          <span id="tasks-stat-sprint" class="chip" style="font-size:11px;color:#58a6ff;">🏃 1–2w: 0/0 (0%)</span>
+          <span id="tasks-stat-quarter" class="chip" style="font-size:11px;color:#bc8cff;">🗓 3M Roadmap: 0</span>
+        </div>
+        <div class="editor-actions" style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-3d btn-3d-violet" id="btn-tasks-ai-today"
+            title="Ask AI Agent to review current tasks and suggest Today's plan">🤖 AI Plan Today</button>
+          <button class="btn" id="btn-tasks-ai-report" title="Ask AI Agent for a full progress &amp; blocker report">📊
+            AI Progress</button>
+          <button class="btn primary" id="btn-tasks-new" title="Create a new task with full details">➕ New Task</button>
+          <button class="btn ghost" id="btn-tasks-refresh" title="Reload tasks">⟳</button>
+        </div>
+      </div>
+
+      <!-- Scope Filter Bar (default: Current = Today + 1-2w Sprint) -->
+      <div
+        style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 14px;background:rgba(255,255,255,0.025);border-bottom:1px solid var(--border);flex-wrap:wrap;">
+        <div class="src-switch" id="tasks-scope-bar">
+          <button class="src-btn active" data-scope="current"
+            title="Default view: only show Today &amp; current 1–2 week sprint tasks">📅 Current (1–2w)</button>
+          <button class="src-btn" data-scope="today" title="Only tasks pinned for Today">☀ Today</button>
+          <button class="src-btn" data-scope="sprint_2w" title="1–2 week sprint tasks">🏃 1–2 Weeks</button>
+          <button class="src-btn" data-scope="quarter_3m" title="3-month roadmap &amp; backlog">🗓 3 Months</button>
+          <button class="src-btn" data-scope="all" title="Show all tasks across all horizons">📋 All</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <select id="tasks-filter-year" class="theme-select mono" style="font-size:11px;padding:3px 6px;"
+            title="Filter archive by Year (e.g. 2026)">
+            <option value="">📅 Active (Now)</option>
+          </select>
+          <select id="tasks-filter-month" class="theme-select mono" style="font-size:11px;padding:3px 6px;"
+            title="Filter archive by Month (YYYY-MM)">
+            <option value="">All Months</option>
+          </select>
+          <label style="font-size:11px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;">
+            <input type="checkbox" id="tasks-hide-done"> Hide Done
+          </label>
+          <input type="search" id="tasks-search" class="term-input" placeholder="Filter tasks…"
+            style="font-size:11px;padding:4px 8px;width:160px;">
+        </div>
+      </div>
+
+      <!-- Quick Add Bar -->
+      <div
+        style="display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap;">
+        <input type="text" id="task-quick-title" class="term-input"
+          style="flex:1;min-width:220px;font-size:12px;padding:6px 10px;"
+          placeholder="Quick add task… (Enter to add, e.g. Fix CarAudioService mute bug)">
+        <select id="task-quick-horizon" class="theme-select" style="font-size:11px;padding:5px 8px;"
+          title="Time horizon">
+          <option value="today">☀ Today</option>
+          <option value="sprint_2w" selected>🏃 1–2 Weeks (Current)</option>
+          <option value="quarter_3m">🗓 3 Months (Roadmap)</option>
+        </select>
+        <select id="task-quick-priority" class="theme-select" style="font-size:11px;padding:5px 8px;" title="Priority">
+          <option value="high">🔴 High</option>
+          <option value="medium" selected>🟡 Medium</option>
+          <option value="low">🔵 Low</option>
+        </select>
+        <input type="date" id="task-quick-due" class="term-input" style="font-size:11px;padding:4px 6px;"
+          title="Optional due date">
+        <button class="btn primary" id="btn-task-quick-add" style="font-size:12px;padding:5px 12px;">➕ Add</button>
+      </div>
+
+      <!-- Main Scrollable Body -->
+      <div style="padding:12px 14px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:10px;">
+        <!-- Today Focus Progress Strip -->
+        <div id="tasks-today-strip" class="flow-card"
+          style="padding:10px 14px;border-color:rgba(227,179,65,0.4);background:rgba(227,179,65,0.06);">
+          <div
+            style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+            <span class="mono" style="font-size:12px;font-weight:700;color:#e3b341;">☀ Today Focus</span>
+            <span id="tasks-today-summary-text" class="meta" style="font-size:11px;">Loading…</span>
+          </div>
+          <div style="height:6px;background:rgba(255,255,255,0.08);border-radius:999px;overflow:hidden;">
+            <div id="tasks-today-bar-fill"
+              style="height:100%;width:0%;background:linear-gradient(90deg,#e3b341,#3fb950);transition:width 0.25s;">
+            </div>
+          </div>
+        </div>
+
+        <!-- Task Cards -->
+        <div id="tasks-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+    </section>
   </main>
+
+  <!-- ============ Task Create / Edit Modal ============ -->
+  <div class="modal hidden" id="modal-task-edit">
+    <div class="modal-box" style="max-width:540px;">
+      <h3 id="task-edit-modal-title">➕ New Task</h3>
+      <input type="hidden" id="task-edit-id">
+      <div style="display:flex;flex-direction:column;gap:10px;margin:12px 0;">
+        <div>
+          <label class="meta" style="font-size:11px;display:block;margin-bottom:4px;">Title *</label>
+          <input type="text" id="task-edit-title" class="term-input" style="width:100%;box-sizing:border-box;"
+            placeholder="What needs to be done?">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+          <div>
+            <label class="meta" style="font-size:11px;display:block;margin-bottom:4px;">Horizon</label>
+            <select id="task-edit-horizon" class="theme-select" style="width:100%;">
+              <option value="today">☀ Today</option>
+              <option value="sprint_2w">🏃 1–2 Weeks</option>
+              <option value="quarter_3m">🗓 3 Months</option>
+            </select>
+          </div>
+          <div>
+            <label class="meta" style="font-size:11px;display:block;margin-bottom:4px;">Priority</label>
+            <select id="task-edit-priority" class="theme-select" style="width:100%;">
+              <option value="high">🔴 High</option>
+              <option value="medium">🟡 Medium</option>
+              <option value="low">🔵 Low</option>
+            </select>
+          </div>
+          <div>
+            <label class="meta" style="font-size:11px;display:block;margin-bottom:4px;">Status</label>
+            <select id="task-edit-status" class="theme-select" style="width:100%;">
+              <option value="todo">Todo</option>
+              <option value="in_progress">In Progress</option>
+              <option value="blocked">Blocked</option>
+              <option value="done">Done</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <label class="meta" style="font-size:11px;white-space:nowrap;">Progress:</label>
+          <input type="range" id="task-edit-progress" min="0" max="100" step="5" value="0" style="flex:1;">
+          <span id="task-edit-progress-val" class="mono"
+            style="font-size:12px;font-weight:700;min-width:36px;">0%</span>
+          <label
+            style="font-size:11px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;">
+            <input type="checkbox" id="task-edit-today"> ☀ Pin Today
+          </label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div>
+            <label class="meta" style="font-size:11px;display:block;margin-bottom:4px;">Due Date</label>
+            <input type="date" id="task-edit-due" class="term-input" style="width:100%;box-sizing:border-box;">
+          </div>
+          <div>
+            <label class="meta" style="font-size:11px;display:block;margin-bottom:4px;">Project / Module Tag</label>
+            <input type="text" id="task-edit-project" class="term-input mono" style="width:100%;box-sizing:border-box;"
+              placeholder="e.g. aosp_aaos, CarAudio">
+          </div>
+        </div>
+        <div>
+          <label class="meta" style="font-size:11px;display:block;margin-bottom:4px;">Notes / Checklist</label>
+          <textarea id="task-edit-notes" rows="3" class="term-input"
+            style="width:100%;box-sizing:border-box;resize:vertical;"
+            placeholder="Context, sub-steps, blockers…"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="btn-task-edit-cancel">Cancel</button>
+        <button class="btn primary" id="btn-task-edit-save">💾 Save Task</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Task Detail Dialog (click any task card) ============ -->
+  <div class="modal hidden" id="modal-task-detail">
+    <div class="modal-box" style="max-width:580px;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+        <div style="min-width:0;">
+          <h3 id="task-detail-title" style="margin:0 0 6px 0;word-break:break-word;">Task Title</h3>
+          <div id="task-detail-badges" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;"></div>
+        </div>
+        <button class="btn ghost" id="btn-task-detail-close-x" title="Close" style="padding:2px 8px;">✕</button>
+      </div>
+
+      <div style="margin:14px 0;display:flex;flex-direction:column;gap:12px;">
+        <!-- Progress Section -->
+        <div
+          style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span class="meta" style="font-size:11px;font-weight:600;color:var(--text);">Progress</span>
+            <span id="task-detail-progress-pct" class="mono" style="font-size:13px;font-weight:700;">0%</span>
+          </div>
+          <div
+            style="height:8px;background:rgba(255,255,255,0.08);border-radius:999px;overflow:hidden;margin-bottom:8px;">
+            <div id="task-detail-progress-bar" style="height:100%;width:0%;transition:width 0.2s;"></div>
+          </div>
+          <div id="task-detail-quick-pcts" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+        </div>
+
+        <!-- Metadata Grid -->
+        <div id="task-detail-meta"
+          style="display:grid;grid-template-columns:repeat(2, 1fr);gap:8px;font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">
+        </div>
+
+        <!-- Notes / Description -->
+        <div>
+          <div class="meta" style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:4px;">📝 Notes &amp;
+            Details</div>
+          <div id="task-detail-notes"
+            style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.55;white-space:pre-wrap;max-height:220px;overflow-y:auto;">
+            style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px
+            12px;font-size:12px;line-height:1.55;white-space:pre-wrap;max-height:160px;overflow-y:auto;">
+          </div>
+        </div>
+
+        <!-- Comments (User & AI) -->
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span class="meta" style="font-size:11px;font-weight:600;color:var(--text);">💬 Comments (<span
+                id="task-detail-comment-count">0</span>)</span>
+            <span class="meta" style="font-size:10px;">👤 User · 🤖 AI Agent</span>
+          </div>
+          <div id="task-detail-comments-list"
+            style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;margin-bottom:8px;">
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input type="text" id="task-detail-comment-input" class="term-input"
+              style="flex:1;font-size:12px;padding:6px 10px;" placeholder="Write a comment… (Enter to post as 👤 User)">
+            <button class="btn primary" id="btn-task-detail-comment-send"
+              style="font-size:11px;padding:6px 10px;white-space:nowrap;">💬 Post</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions"
+        style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;gap:6px;">
+          <button class="btn" id="btn-task-detail-ask-ai" title="Ask AI Agent to help with this task">🤖 Ask AI</button>
+          <button class="btn ghost" id="btn-task-detail-delete" style="color:#f85149;">🗑 Delete</button>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn primary" id="btn-task-detail-edit">✎ Edit</button>
+          <button class="btn" id="btn-task-detail-close">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ============ Docs Directory Modal ============ -->
   <div class="modal hidden" id="modal-docs-dir">
@@ -1353,7 +1605,7 @@
         Shared config: <code>config/ai_agent/</code> · Personal/keys: <code>config/overlay/ai_agent/</code>
         (git-ignored).</p>
 
-      <!-- 4 Sub-tabs -->
+      <!-- 6 Sub-tabs -->
       <div class="ai-cfg-tabs" role="tablist">
         <button type="button" class="ai-cfg-tab active" data-ai-cfg-tab="provider" role="tab" aria-selected="true">🔑
           API Key &amp; Provider</button>
@@ -1363,6 +1615,10 @@
           Shield</button>
         <button type="button" class="ai-cfg-tab" data-ai-cfg-tab="usage" role="tab" aria-selected="false">📊 Token
           Usage</button>
+        <button type="button" class="ai-cfg-tab" data-ai-cfg-tab="notify" role="tab" aria-selected="false">🔔
+          Notify</button>
+        <button type="button" class="ai-cfg-tab" data-ai-cfg-tab="schedule" role="tab" aria-selected="false">⏰
+          Schedule</button>
       </div>
 
       <!-- Tab 1: API Key & Provider -->
@@ -1677,6 +1933,141 @@
         </div>
       </div>
 
+      <!-- Tab 5: Telegram Error Notifications -->
+      <div class="ai-cfg-pane hidden" id="ai-cfg-pane-notify" data-ai-cfg-pane="notify">
+        <div class="settings-section">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <h4 style="margin:0;">🔔 Telegram Error Notifications</h4>
+            <span class="chip" id="ai-notify-status-badge" style="font-size:11px;">○ Disabled</span>
+          </div>
+          <p class="meta" style="margin-bottom:10px;">
+            Automatically send alerts to your Telegram Bot when AI Agent or build/tool calls encounter errors.
+            Stored privately in <code>config/overlay/ai_agent/ai_notify.json</code> (git-ignored).
+          </p>
+
+          <label
+            style="display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:12px;">
+            <input type="checkbox" id="ai-notify-enabled"> Enable Telegram Error Notifications
+          </label>
+
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <label class="meta" style="font-size:11px;font-weight:600;color:var(--text);">Telegram Bot Token</label>
+                <span id="ai-notify-token-status" class="meta mono" style="font-size:10px;">Not set</span>
+              </div>
+              <input type="password" id="ai-notify-bot-token" class="term-input mono"
+                style="width:100%;box-sizing:border-box;"
+                placeholder="Paste Bot Token from @BotFather (leave empty to keep saved token)" autocomplete="off">
+            </div>
+
+            <div>
+              <label class="meta"
+                style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;">Telegram Chat
+                ID</label>
+              <input type="text" id="ai-notify-chat-id" class="term-input mono"
+                style="width:100%;box-sizing:border-box;"
+                placeholder="e.g. 123456789 (personal) or -1001234567890 (group/channel)" autocomplete="off">
+              <div class="meta" style="font-size:10px;margin-top:4px;">
+                Tip: Message <code>@BotFather</code> to create a bot, then message your bot and check
+                <code>@userinfobot</code> to get your Chat ID.
+              </div>
+            </div>
+
+            <div
+              style="background:rgba(255,255,255,0.025);border:1px solid var(--border);border-radius:6px;padding:10px 12px;">
+              <div class="meta" style="font-size:11px;font-weight:600;color:var(--text);margin-bottom:6px;">Notify
+                Triggers:</div>
+              <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;">
+                <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" id="ai-notify-on-agent-error" checked>
+                  <span>🚨 <b>Agent / LLM Errors</b> (API failure, auth error, unexpected crash)</span>
+                </label>
+                <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" id="ai-notify-on-tool-error" checked>
+                  <span>🔧 <b>Tool / Build Errors</b> (<code>[ERROR]</code> returned by <code>run_tel</code>,
+                    <code>write_file</code>, <code>edit_file</code>…)</span>
+                </label>
+                <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" id="ai-notify-on-guardrail-stop">
+                  <span>⏹ <b>Guardrail Limit Stop</b> (when Agent stops at Max Tool Turns)</span>
+                </label>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+              <button type="button" class="btn primary" id="btn-ai-notify-save">💾 Save Notify Settings</button>
+              <button type="button" class="btn" id="btn-ai-notify-test">🧪 Send Test Message</button>
+              <span id="ai-notify-test-result" class="meta" style="font-size:11px;"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 6: Scheduled AI Triggers -->
+      <div class="ai-cfg-pane hidden" id="ai-cfg-pane-schedule" data-ai-cfg-pane="schedule">
+        <div class="settings-section">
+          <div
+            style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px;">
+            <h4 style="margin:0;">⏰ Scheduled AI Triggers</h4>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="chip mono" id="ai-schedule-server-time" style="font-size:10px;">🕒 Server: —</span>
+              <button type="button" class="btn ghost" id="btn-ai-schedule-refresh"
+                style="font-size:11px;padding:2px 8px;">⟳ Refresh</button>
+            </div>
+          </div>
+          <p class="meta" style="margin-bottom:10px;">
+            Automatically trigger Telua AI Agent on a recurring schedule (e.g. morning Today plan, evening progress
+            report, periodic health check) and optionally send results to Telegram.
+            Stored in <code>config/overlay/ai_agent/ai_schedules.json</code> (git-ignored).
+          </p>
+
+          <!-- Active Schedules List -->
+          <div id="ai-schedule-list"
+            style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto;margin-bottom:12px;">
+            <div class="meta" style="font-size:11px;">Loading schedules…</div>
+          </div>
+
+          <!-- Add New Schedule Form -->
+          <div
+            style="background:rgba(255,255,255,0.025);border:1px dashed var(--border);border-radius:8px;padding:10px 12px;">
+            <div
+              style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+              <span style="font-size:11px;font-weight:700;color:var(--accent);">➕ New Scheduled Trigger</span>
+              <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                <button type="button" class="term-chip" id="btn-ai-sched-preset-morning" style="font-size:10px;">☀
+                  Morning Plan</button>
+                <button type="button" class="term-chip" id="btn-ai-sched-preset-evening" style="font-size:10px;">📊
+                  Evening Report</button>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1.4fr 1fr 110px;gap:6px;margin-bottom:8px;">
+              <input type="text" id="ai-sched-name" class="term-input" style="font-size:11px;padding:5px 8px;"
+                placeholder="Schedule name (e.g. Morning Today Plan)">
+              <select id="ai-sched-mode" class="theme-select" style="font-size:11px;padding:4px 6px;">
+                <option value="weekdays">Mon–Fri (Weekdays)</option>
+                <option value="daily">Every Day (Daily)</option>
+                <option value="interval">Every N Minutes</option>
+              </select>
+              <input type="time" id="ai-sched-time" class="term-input mono" value="08:30"
+                style="font-size:11px;padding:4px 6px;">
+              <input type="number" id="ai-sched-interval" class="term-input mono hidden" value="60" min="5" max="1440"
+                style="font-size:11px;padding:4px 6px;" placeholder="Minutes">
+            </div>
+            <textarea id="ai-sched-prompt" rows="2" class="term-input"
+              style="width:100%;box-sizing:border-box;font-size:11px;padding:6px 8px;resize:vertical;margin-bottom:8px;"
+              placeholder="Instruction for AI Agent when triggered (e.g. Dùng list_tasks lập kế hoạch hôm nay và báo cáo tiến độ)..."></textarea>
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+              <label style="font-size:11px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" id="ai-sched-telegram" checked> 🔔 Send AI result to Telegram
+              </label>
+              <button type="button" class="btn primary" id="btn-ai-sched-add" style="font-size:11px;padding:5px 12px;">➕
+                Add Schedule</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="modal-actions">
         <button class="btn" id="btn-ai-cfg-cancel">Close</button>
         <button class="btn primary" id="btn-ai-cfg-save" title="Save entire provider JSON registry">💾 Save
@@ -1756,7 +2147,8 @@
             placeholder="Label (e.g. OEM Car IVI)">
         </div>
         <div style="display:flex;gap:6px;align-items:center;">
-          <input type="text" id="ai-project-new-docs" class="term-input mono" style="flex:1;font-size:11px;padding:4px 6px;"
+          <input type="text" id="ai-project-new-docs" class="term-input mono"
+            style="flex:1;font-size:11px;padding:4px 6px;"
             placeholder="Sphinx Docs Path (optional, e.g. docs or D:\work\car_docs)">
           <button type="button" class="btn primary" id="btn-ai-project-add"
             style="font-size:11px;padding:4px 10px;white-space:nowrap;">➕ Add</button>
@@ -2384,6 +2776,7 @@ RANK,FASKey,BRAND,Vehicle Series,Vehicle Type,Latest Popul.,MY,% of VIO,MVP,Bran
   <script src="/static/js/tab_power.js"></script>
   <script src="/static/js/tab_bi.js"></script>
   <script src="/static/js/tab_ai.js"></script>
+  <script src="/static/js/tab_tasks.js"></script>
   <script src="/static/js/tab_flow.js"></script>
   <script src="/static/js/app.js"></script>
 </body>

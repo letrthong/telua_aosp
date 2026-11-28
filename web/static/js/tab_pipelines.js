@@ -42,11 +42,12 @@ function syncTopTabs() {
   const isDocs = !$("#view-docs")?.classList.contains("hidden");
   const isBi = !$("#view-bi")?.classList.contains("hidden");
   const isAi = !$("#view-ai")?.classList.contains("hidden");
+  const isTasks = !$("#view-tasks")?.classList.contains("hidden");
   const isFlow = !$("#view-flow")?.classList.contains("hidden");
   const isMirror = !$("#view-mirror")?.classList.contains("hidden");
   const isPower = !$("#view-power")?.classList.contains("hidden");
-  const isSystem = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isAi && !isFlow && !isMirror && !isPower && (state.plSource === "system" || state.plSource === "docker");
-  const isPipelines = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isAi && !isFlow && !isMirror && !isPower && !isSystem;
+  const isSystem = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isAi && !isTasks && !isFlow && !isMirror && !isPower && (state.plSource === "system" || state.plSource === "docker");
+  const isPipelines = !isFiles && !isAosp && !isTerminal && !isLogcat && !isDocs && !isBi && !isAi && !isTasks && !isFlow && !isMirror && !isPower && !isSystem;
   $("#tab-files")?.classList.toggle("active", isFiles);
   $("#tab-pipelines")?.classList.toggle("active", isPipelines);
   $("#tab-system")?.classList.toggle("active", isSystem);
@@ -66,9 +67,10 @@ function syncTopTabs() {
   $("#tab-power")?.classList.toggle("active", isPower);
   $("#tab-bi")?.classList.toggle("active", isBi);
   $("#tab-ai")?.classList.toggle("active", isAi);
+  $("#tab-tasks")?.classList.toggle("active", isTasks);
   $("#tab-flow")?.classList.toggle("active", isFlow);
   try {
-    const activeTabName = isFiles ? "files" : (isAosp ? "aosp" : (isTerminal ? "terminal" : (isLogcat ? "logcat" : (isDocs ? "docs" : (isBi ? "bi" : (isAi ? "ai" : (isFlow ? "flow" : (isMirror ? "mirror" : (isPower ? "power" : (isSystem ? "system" : "pipelines"))))))))));
+    const activeTabName = isFiles ? "files" : (isAosp ? "aosp" : (isTerminal ? "terminal" : (isLogcat ? "logcat" : (isDocs ? "docs" : (isBi ? "bi" : (isAi ? "ai" : (isTasks ? "tasks" : (isFlow ? "flow" : (isMirror ? "mirror" : (isPower ? "power" : (isSystem ? "system" : "pipelines")))))))))));
     localStorage.setItem(LAST_TAB_KEY, activeTabName);
     localStorage.setItem(LAST_SOURCE_KEY, state.plSource);
   } catch { /* ignore */ }
@@ -85,6 +87,7 @@ function switchPipelineSource(source) {
   $("#view-logcat")?.classList.add("hidden");
   $("#view-mirror")?.classList.add("hidden");
   $("#view-power")?.classList.add("hidden");
+  $("#view-tasks")?.classList.add("hidden");
   $("#view-pipelines")?.classList.remove("hidden");
   if (state.plSource === source) {
     syncTopTabs();

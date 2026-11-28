@@ -4,16 +4,27 @@
 /* ---------------- File list ---------------- */
 // Files that have a dedicated Pipelines GUI view, mapped to their source key.
 const PIPELINE_GUI_FILES = {
+  "config/overlay/cli/const_my_cli.config": "my",
+  "config/overlay/cli/const_my_cli.config.example": "my",
   "config/overlay/const_my_cli.config": "my",
   "config/overlay/const_my_cli.config.example": "my",
+  "config/cli/const_my_cli.config": "my",
   "config/const_my_cli.config": "my",
   "config/const_my_cli.config.example": "my",
+  "config/cli/const_multi_cli.config": "multi",
+  "config/cli/const_multi_cli.config.example": "multi",
   "config/const_multi_cli.config": "multi",
   "config/const_multi_cli.config.example": "multi",
+  "config/cli/const_system_cli.config": "system",
+  "config/overlay/cli/const_system_cli.config": "system",
   "config/const_system_cli.config": "system",
   "config/overlay/const_system_cli.config": "system",
+  "config/cli/const_car.config": "car",
+  "config/overlay/cli/const_car.config": "car",
   "config/const_car.config": "car",
   "config/overlay/const_car.config": "car",
+  "config/cli/const_dumpsys.config": "dump",
+  "config/overlay/cli/const_dumpsys.config": "dump",
   "config/const_dumpsys.config": "dump",
   "config/overlay/const_dumpsys.config": "dump",
 };

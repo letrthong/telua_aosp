@@ -97,6 +97,7 @@ function wire() {
   $("#tab-docs")?.addEventListener("click", () => switchTab("docs"));
   $("#tab-bi")?.addEventListener("click", () => switchTab("bi"));
   $("#tab-ai")?.addEventListener("click", () => switchTab("ai"));
+  $("#tab-tasks")?.addEventListener("click", () => switchTab("tasks"));
   $("#tab-flow")?.addEventListener("click", () => switchTab("flow"));
   $("#tab-mirror")?.addEventListener("click", () => switchTab("mirror"));
   $("#tab-power")?.addEventListener("click", () => switchTab("power"));
@@ -501,6 +502,8 @@ function wire() {
       if ($("#modal-run") && !$("#modal-run").classList.contains("hidden")) cancelRunAutoClose();
       $("#modal-run")?.classList.add("hidden");
       $("#modal-crypto")?.classList.add("hidden");
+      $("#modal-task-detail")?.classList.add("hidden");
+      $("#modal-task-edit")?.classList.add("hidden");
     }
   });
 
@@ -595,6 +598,8 @@ async function boot() {
     switchTab("bi");
   } else if (savedTab === "ai") {
     switchTab("ai");
+  } else if (savedTab === "tasks") {
+    switchTab("tasks");
   } else if (savedTab === "flow") {
     switchTab("flow");
   } else if (savedTab === "files") {
