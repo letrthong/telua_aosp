@@ -486,7 +486,7 @@ def api_ai_chat():
         content = str(h.get("content", ""))[:4000]
         if role in ("user", "assistant") and content:
             messages.append({"role": role, "content": content})
-    ctx_parts = []
+    ctx_parts = [f"Current_DateTime={datetime.now().strftime('%Y-%m-%d %H:%M:%S (%A)')}"]
     if chat_project:
         ctx_parts.append(f"Project={chat_project}")
     if chat_version:

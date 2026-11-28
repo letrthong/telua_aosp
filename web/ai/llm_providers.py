@@ -10,6 +10,7 @@
 import json
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -23,6 +24,18 @@ from .ai_config_paths import (
 def _get_tool_schemas():
     from .agent_tools import TOOL_SCHEMAS
     return TOOL_SCHEMAS
+
+
+def _build_system_prompt() -> str:
+    """Return SYSTEM_PROMPT augmented with the live local date/time so the LLM
+    never hallucinates dates when creating tasks or schedules."""
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S (%A)")
+    return (
+        f"{SYSTEM_PROMPT}\n\n"
+        f"Current local date & time: {now_str}. "
+        f"Always use this exact current date when setting `due_date` (YYYY-MM-DD) "
+        f"or interpreting relative dates (today, tomorrow, this week) — never guess a date."
+    )
 
 
 # ------------------------------------------------------------------------------
@@ -296,7 +309,7 @@ def _call_anthropic(messages, model, base_url):
     resp = client.messages.create(
         model=model,
         max_tokens=4096,
-        system=SYSTEM_PROMPT,
+        system=_build_system_prompt(),
         messages=converted,
         tools=[{
             "name": t["function"]["name"],
@@ -378,7 +391,7 @@ def _call_openai(messages, model, base_url):
 
     resp = client.chat.completions.create(
         model=model,
-        messages=[{"role": "system", "content": SYSTEM_PROMPT}] + converted,
+        messages=[{"role": "system", "content": _build_system_prompt()}] + converted,
         tools=_get_tool_schemas(),
     )
     choice = resp.choices[0]
@@ -503,7 +516,7 @@ def _call_anthropic_http(messages, provider_entry, model_entry):
     payload = {
         "model": model_id,
         "max_tokens": int(model_entry.get("max_tokens") or 8192),
-        "system": SYSTEM_PROMPT,
+        "system": _build_system_prompt(),
         "tools": anthropic_tools,
         "messages": converted,
     }
@@ -617,7 +630,7 @@ def _call_chat_completions(messages, provider_entry, model_entry):
 
     payload = {
         "model": model_id,
-        "messages": [{"role": "system", "content": SYSTEM_PROMPT}] + converted,
+        "messages": [{"role": "system", "content": _build_system_prompt()}] + converted,
         "tools": _get_tool_schemas(),
     }
     headers = {"Content-Type": "application/json"}

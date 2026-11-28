@@ -1161,13 +1161,18 @@ def _tool_list_tasks(args: dict) -> str:
 def _tool_create_task(args: dict) -> str:
     """Create a new task in the Tasks tab (Today / 1-2w Sprint / 3-Month Roadmap)."""
     from .telua_web_tasks import create_task as _create_task
-    task, err, _ = _create_task(args, created_by="ai")
+    payload = dict(args or {})
+    if not str(payload.get("due_date") or "").strip():
+        if bool(payload.get("is_today")) or str(payload.get("horizon") or "").strip().lower() == "today":
+            payload["due_date"] = datetime.now().strftime("%Y-%m-%d")
+    task, err, _ = _create_task(payload, created_by="ai")
     if err or not task:
         return f"[ERROR] {err}"
+    due_str = f", due_date={task['due_date']}" if task.get("due_date") else ""
     return (
         f"[SUCCESS] Created task {task['id']}: '{task['title']}' "
         f"(horizon={task['horizon']}, is_today={task['is_today']}, status={task['status']}, "
-        f"progress={task['progress']}%, priority={task['priority']})"
+        f"progress={task['progress']}%, priority={task['priority']}{due_str})"
     )
 
 

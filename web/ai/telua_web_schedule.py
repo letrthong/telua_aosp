@@ -320,7 +320,7 @@ def api_ai_schedules_list():
     return jsonify({
         "ok": True,
         "schedules": list_schedules(),
-        "server_time": datetime.now().strftime("%H:%M:%S"),
+        "server_time": datetime.now().strftime("%d/%m %H:%M:%S"),
     })
 
 

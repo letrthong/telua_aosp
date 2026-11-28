@@ -170,10 +170,13 @@ function renderTasksList() {
       ? `<span class="chip" style="font-size:10px;padding:1px 6px;background:rgba(163,113,247,0.18);color:#d2a8ff;">🤖 AI</span>`
       : "";
     const dueChip = t.due_date
-      ? `<span class="chip mono" style="font-size:10px;padding:1px 6px;">📅 ${esc(t.due_date)}</span>`
+      ? `<span class="chip mono" style="font-size:10px;padding:1px 6px;" title="Due: ${esc(t.due_date)}">📅 ${esc(fmtDateTimeDM(t.due_date))}</span>`
+      : "";
+    const createdChip = t.created_at
+      ? `<span class="chip mono" style="font-size:10px;padding:1px 6px;opacity:0.85;" title="Created: ${esc(fmtDateTimeDM(t.created_at))}${t.updated_at ? ` | Updated: ${esc(fmtDateTimeDM(t.updated_at))}` : ""}">🕒 ${esc(fmtDateTimeDM(t.created_at))}</span>`
       : "";
     const doneChip = t.completed_at
-      ? `<span class="chip ok mono" style="font-size:10px;padding:1px 6px;">✓ ${esc(String(t.completed_at).slice(0, 10))}</span>`
+      ? `<span class="chip ok mono" style="font-size:10px;padding:1px 6px;">✓ ${esc(fmtDateTimeDM(t.completed_at))}</span>`
       : "";
     const projChip = t.project
       ? `<span class="chip mono" style="font-size:10px;padding:1px 6px;color:var(--accent);">#${esc(t.project)}</span>`
@@ -199,6 +202,7 @@ function renderTasksList() {
               ${aiBadge}
               ${projChip}
               ${dueChip}
+              ${createdChip}
               ${doneChip}
               ${cmtChip}
             </div>
@@ -401,7 +405,7 @@ function openTaskDetailModal(task) {
 
   const metaEl = $("#task-detail-meta");
   if (metaEl) {
-    const fmt = (s) => s ? esc(String(s).replace("T", " ")) : "—";
+    const fmt = (s) => s ? esc(fmtDateTimeDM(s)) : "—";
     metaEl.innerHTML =
       `<div><span class="meta">📁 Project:</span> <code class="mono">${esc(task.project || "—")}</code></div>` +
       `<div><span class="meta">📅 Due Date:</span> <code class="mono">${esc(task.due_date || "—")}</code></div>` +
@@ -444,7 +448,7 @@ function renderTaskDetailComments(task) {
     const badge = isAi
       ? `<span class="chip" style="font-size:10px;padding:1px 6px;background:rgba(163,113,247,0.18);color:#d2a8ff;">🤖 AI</span>`
       : `<span class="chip" style="font-size:10px;padding:1px 6px;background:rgba(88,166,255,0.16);color:#58a6ff;">👤 User</span>`;
-    const ts = c.created_at ? esc(String(c.created_at).replace("T", " ").slice(0, 16)) : "";
+    const ts = c.created_at ? esc(fmtDateTimeDM(c.created_at)) : "";
     return `
       <div style="background:var(--bg);border:1px solid var(--border);border-left:3px solid ${isAi ? "#bc8cff" : "#58a6ff"};border-radius:6px;padding:7px 10px;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px;">

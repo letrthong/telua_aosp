@@ -1080,7 +1080,7 @@ async function initAI() {
         const stBadge = s.last_status
           ? `<span class="chip mono" style="font-size:10px;padding:1px 6px;color:${stColor};">${s.last_status === "ok" ? "✅" : (s.last_status === "error" ? "❌" : "⏳")} ${esc(s.last_status)}</span>`
           : "";
-        const lastRun = s.last_run_at ? `Last: ${esc(String(s.last_run_at).replace("T", " "))}` : "Never run";
+        const lastRun = s.last_run_at ? `Last: ${esc(fmtDateTimeDM(s.last_run_at))}` : "Never run";
         const outSnippet = s.last_output
           ? `<div class="meta mono" style="font-size:10px;margin-top:4px;max-height:48px;overflow:hidden;text-overflow:ellipsis;white-space:pre-wrap;opacity:0.8;">${esc(s.last_output.slice(0, 220))}</div>`
           : "";

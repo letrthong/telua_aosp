@@ -178,6 +178,21 @@ function draftTime(iso) {
   try { return new Date(iso).toLocaleString(); } catch { return ""; }
 }
 
+function fmtDateTimeDM(val) {
+  if (!val) return "";
+  const s = String(val).trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  if (m) {
+    const dd = m[3], mm = m[2];
+    if (m[4] && m[5]) {
+      const ss = m[6] || "00";
+      return `${dd}/${mm} ${m[4]}:${m[5]}:${ss}`;
+    }
+    return `${dd}/${mm}`;
+  }
+  return s;
+}
+
 function updateDraftChip() {
   const chip = $("#chip-draft");
   const hasDraft = state.dirty || state.plDirty || !!draftLoadFile() || !!draftLoadPipelines();
