@@ -372,6 +372,22 @@ async function initAI() {
     $("#btn-ai-notify-save")?.addEventListener("click", saveAINotifyConfig);
     $("#btn-ai-notify-test")?.addEventListener("click", testAINotifyTelegram);
     $("#btn-ai-schedule-refresh")?.addEventListener("click", loadAISchedules);
+    $("#btn-ai-schedule-test-tg")?.addEventListener("click", async () => {
+      const btn = $("#btn-ai-schedule-test-tg");
+      const st = $("#ai-sched-form-status");
+      if (btn) { btn.disabled = true; btn.textContent = "⏳ Testing…"; }
+      if (st) { st.textContent = "⏳ Sending test Telegram…"; st.style.color = ""; }
+      try {
+        const res = await api("/api/ai/notify/test", { method: "POST", body: JSON.stringify({}) });
+        if (st) { st.textContent = "✅ Telegram OK!"; st.style.color = "#3fb950"; }
+        toast("Telegram OK ✅", res.message || "Test message delivered to Telegram.", "ok", 3500);
+      } catch (err) {
+        if (st) { st.textContent = `❌ Telegram: ${err.message}`; st.style.color = "#f85149"; }
+        toast("Telegram Test Failed", err.message, "err");
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "🧪 Test Notification"; }
+      }
+    });
     $("#btn-ai-sched-add")?.addEventListener("click", addAISchedule);
     $("#ai-sched-mode")?.addEventListener("change", () => {
       const isInterval = $("#ai-sched-mode")?.value === "interval";
@@ -384,6 +400,9 @@ async function initAI() {
       if ($("#ai-sched-time")) $("#ai-sched-time").value = "08:30";
       if ($("#ai-sched-prompt")) $("#ai-sched-prompt").value =
         "Dùng list_tasks(horizon='current') xem các task đang làm và đề xuất kế hoạch Today ngắn gọn (top 3 việc ưu tiên nhất hôm nay).";
+      const st = $("#ai-sched-form-status");
+      if (st) { st.textContent = "✓ Đã điền mẫu — bấm '➕ Add Schedule' để lưu"; st.style.color = "#58a6ff"; }
+      $("#btn-ai-sched-add")?.focus();
     });
     $("#btn-ai-sched-preset-evening")?.addEventListener("click", () => {
       if ($("#ai-sched-name")) $("#ai-sched-name").value = "Evening Progress Summary";
@@ -391,6 +410,9 @@ async function initAI() {
       if ($("#ai-sched-time")) $("#ai-sched-time").value = "17:30";
       if ($("#ai-sched-prompt")) $("#ai-sched-prompt").value =
         "Dùng list_tasks(horizon='current') tổng hợp tiến độ hôm nay: việc đã xong, việc còn dở %, blocker (nếu có) và gợi ý cho ngày mai.";
+      const st = $("#ai-sched-form-status");
+      if (st) { st.textContent = "✓ Đã điền mẫu — bấm '➕ Add Schedule' để lưu"; st.style.color = "#58a6ff"; }
+      $("#btn-ai-sched-add")?.focus();
     });
     $("#btn-ai-key-save")?.addEventListener("click", saveAIKey);
     $("#btn-ai-cfg-save")?.addEventListener("click", saveAIConfigJson);
@@ -964,12 +986,15 @@ async function initAI() {
     const intervalMinutes = parseInt($("#ai-sched-interval")?.value || "60", 10);
     const prompt = ($("#ai-sched-prompt")?.value || "").trim();
     const notifyTelegram = Boolean($("#ai-sched-telegram")?.checked);
+    const st = $("#ai-sched-form-status");
     if (!name || !prompt) {
+      if (st) { st.textContent = "⚠️ Nhập Name & Prompt trước."; st.style.color = "#f85149"; }
       toast("Missing Fields", "Please enter both a schedule name and a prompt.", "err");
       return;
     }
     const btn = $("#btn-ai-sched-add");
     if (btn) { btn.disabled = true; btn.textContent = "⏳ Saving…"; }
+    if (st) { st.textContent = "⏳ Saving…"; st.style.color = ""; }
     try {
       await api("/api/ai/schedules", {
         method: "POST",
@@ -985,10 +1010,14 @@ async function initAI() {
       });
       if ($("#ai-sched-name")) $("#ai-sched-name").value = "";
       if ($("#ai-sched-prompt")) $("#ai-sched-prompt").value = "";
+      if (st) { st.textContent = `✅ Đã thêm "${name}"`; st.style.color = "#3fb950"; }
       toast("Schedule Added ⏰", `"${name}" is now active.`, "ok", 3000);
       await loadAISchedules();
     } catch (err) {
-      toast("Add Schedule Failed", err.message, "err");
+      const msg = String(err.message || err);
+      const hint = msg.includes("404") ? " (Hãy restart lại 'telua web' để nạp API /api/ai/schedules)" : "";
+      if (st) { st.textContent = `❌ ${msg}${hint}`; st.style.color = "#f85149"; }
+      toast("Add Schedule Failed", msg + hint, "err");
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = "➕ Add Schedule"; }
     }

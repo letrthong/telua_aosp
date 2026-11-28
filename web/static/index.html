@@ -2012,6 +2012,8 @@
             <h4 style="margin:0;">⏰ Scheduled AI Triggers</h4>
             <div style="display:flex;align-items:center;gap:6px;">
               <span class="chip mono" id="ai-schedule-server-time" style="font-size:10px;">🕒 Server: —</span>
+              <button type="button" class="btn" id="btn-ai-schedule-test-tg"
+                style="font-size:11px;padding:2px 8px;" title="Send a live test notification message to verify Telegram Bot config">🧪 Test Notification</button>
               <button type="button" class="btn ghost" id="btn-ai-schedule-refresh"
                 style="font-size:11px;padding:2px 8px;">⟳ Refresh</button>
             </div>
@@ -2061,8 +2063,11 @@
               <label style="font-size:11px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
                 <input type="checkbox" id="ai-sched-telegram" checked> 🔔 Send AI result to Telegram
               </label>
-              <button type="button" class="btn primary" id="btn-ai-sched-add" style="font-size:11px;padding:5px 12px;">➕
-                Add Schedule</button>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span id="ai-sched-form-status" class="meta" style="font-size:11px;"></span>
+                <button type="button" class="btn primary" id="btn-ai-sched-add" style="font-size:11px;padding:5px 12px;">➕
+                  Add Schedule</button>
+              </div>
             </div>
           </div>
         </div>
